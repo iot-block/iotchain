@@ -8,6 +8,28 @@ scalaVersion in ThisBuild := "2.12.3"
 
 cancelable in Global := true
 
+lazy val V = new {
+  val circe    = "0.9.1"
+  val akka     = "2.5.11"
+  val akkaHttp = "10.1.0"
+}
+
+lazy val circe = Seq(
+  "io.circe" %% "circe-core",
+  "io.circe" %% "circe-generic",
+  "io.circe" %% "circe-parser"
+).map(_ % V.circe)
+
+lazy val akka = Seq(
+  "com.typesafe.akka" %% "akka-actor"          % V.akka,
+  "com.typesafe.akka" %% "akka-stream"         % V.akka,
+  "com.typesafe.akka" %% "akka-slf4j"          % V.akka,
+  "com.typesafe.akka" %% "akka-http"           % V.akkaHttp,
+  "com.typesafe.akka" %% "akka-testkit"        % V.akka % "test",
+  "com.typesafe.akka" %% "akka-stream-testkit" % V.akka % "test",
+  "com.typesafe.akka" %% "akka-http-testkit"   % V.akkaHttp % "test"
+)
+
 lazy val tests = Seq(
   "org.scalatest"  %% "scalatest"  % "3.0.5",
   "org.scalacheck" %% "scalacheck" % "1.13.4"
@@ -25,7 +47,7 @@ lazy val jbok = project
 lazy val p2p = project
   .settings(
     name := "jbok-p2p",
-    libraryDependencies ++= logging ++ tests ++ Seq(
+    libraryDependencies ++= logging ++ tests ++ akka ++ Seq(
       "com.lihaoyi"   %% "fastparse" % "1.0.0",
       "org.typelevel" %% "cats-core" % "1.1.0"
     )
