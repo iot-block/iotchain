@@ -1,10 +1,10 @@
-package jbok.p2p
+package jbok.p2p.address
 
 import java.net.{Inet4Address, Inet6Address, InetAddress}
 
 import cats.data.NonEmptyList
 import fastparse.all._
-import jbok.p2p.MultiAddr._
+import jbok.p2p.address.MultiAddr._
 
 case class MultiAddr(addr: NonEmptyList[(Proto, Value)]) {
   override def toString =

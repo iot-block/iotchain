@@ -1,5 +1,6 @@
 package jbok.p2p
 
+import jbok.p2p.address.MultiAddr
 import org.scalatest.Matchers
 
 class MultiAddressTest extends org.scalatest.FunSuite with Matchers {
@@ -46,6 +47,7 @@ class MultiAddressTest extends org.scalatest.FunSuite with Matchers {
   test("decode from string") {
     succeeds.map(s => s -> MultiAddr.parseString(s)).foreach {
       case (str, result) =>
+        println(str, result.right.get.addr)
         result.right.get.toString shouldBe str.stripSuffix("/")
     }
   }
