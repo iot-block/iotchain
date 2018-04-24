@@ -9,15 +9,20 @@ trait TransportActor extends Actor with Transport {
     case TransportOp.Unbind                   => unbind()
     case TransportOp.Dial(remote)             => dial(remote)
     case TransportOp.Close(remote, direction) => close(remote, direction)
-    case TransportOp.Write(data)              => write(data)
   }
 
   def receiveTransportEvt: Receive = {
-    case TransportEvent.Bound(local)              => bound(local)
-    case TransportEvent.BindingFailed(local)      => bindingFailed(local)
-    case TransportEvent.Connected(conn)           => connected(conn)
-    case TransportEvent.ConnectingFailed(remote)  => connectingFailed(remote)
-    case TransportEvent.Disconnected(conn, cause) => disconnected(conn, cause)
+    case x: TransportEvent =>
+      x match {
+        case TransportEvent.Bound(local)                    => bound(local)
+        case TransportEvent.BindingFailed(local)            => bindingFailed(local)
+        case TransportEvent.Unbound(local)                  => unbound(local)
+        case TransportEvent.Connected(conn, session)        => connected(conn, session)
+        case TransportEvent.ConnectingFailed(remote, cause) => connectingFailed(remote, cause)
+        case TransportEvent.Disconnected(conn, cause)       => disconnected(conn, cause)
+      }
+
+      context.parent ! x
   }
 
   override def receive: Receive = LoggingReceive {
