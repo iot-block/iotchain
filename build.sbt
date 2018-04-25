@@ -76,7 +76,7 @@ lazy val p2p = project
       "org.typelevel" %% "cats-core" % "1.1.0"
     )
   )
-  .dependsOn(common)
+  .dependsOn(common, crypto)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 
