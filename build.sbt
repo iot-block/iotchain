@@ -41,6 +41,13 @@ lazy val logging = Seq(
   "com.typesafe.scala-logging" %% "scala-logging" % "3.8.0"
 )
 
+lazy val tsec = Seq(
+  "io.github.jmcardon" %% "tsec-common" % V.tsec,
+  "io.github.jmcardon" %% "tsec-hash-jca" % V.tsec,
+  "io.github.jmcardon" %% "tsec-hash-bouncy" % V.tsec,
+  "io.github.jmcardon" %% "tsec-signatures" % V.tsec
+)
+
 lazy val jbok = project
   .in(file("."))
   .aggregate(p2p)
@@ -48,9 +55,7 @@ lazy val jbok = project
 lazy val crypto = project
   .settings(
     name := "jbok-crypto",
-    libraryDependencies ++= logging ++ tests ++ Seq(
-      "io.github.jmcardon" %% "tsec-hash-jca" % V.tsec,
-      "io.github.jmcardon" %% "tsec-hash-bouncy" % V.tsec,
+    libraryDependencies ++= logging ++ tests ++ tsec ++ Seq(
       "org.scodec" %% "scodec-bits" % "1.1.5",
       "org.scodec" %% "scodec-core" % "1.10.3"
     )
