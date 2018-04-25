@@ -1,12 +1,11 @@
 package jbok.crypto.signature
 
+import jbok.crypto.PropertyTest
 import jbok.crypto.signature.Signatures.Secp256k1Sig
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{FunSuite, Matchers}
 import tsec.common._
 import tsec.signature.jca._
 
-class SignaturesTest extends FunSuite with Matchers with PropertyChecks {
+class SignaturesTest extends PropertyTest {
   test("same keys") {
     forAll { s: String =>
       val toSign = s.utf8Bytes

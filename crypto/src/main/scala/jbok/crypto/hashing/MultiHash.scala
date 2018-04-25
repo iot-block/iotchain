@@ -8,7 +8,7 @@ import tsec.common._
 import tsec.hashing.CryptoHasher
 
 case class MultiHash(code: Byte, size: Int, digest: ByteVector) {
-  lazy val name = HashType.codeNameMap(code)
+  lazy val name = Constants.codeNameMap(code)
 
   override def toString: String = s"MultiHash($name, $size, $digest)"
 }
