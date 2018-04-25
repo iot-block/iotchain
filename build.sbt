@@ -50,7 +50,13 @@ lazy val tsec = Seq(
 
 lazy val jbok = project
   .in(file("."))
-  .aggregate(p2p)
+  .aggregate(crypto, p2p)
+
+lazy val common = project
+  .settings(
+    name := "jbok-common",
+    libraryDependencies ++= logging ++ tests
+  )
 
 lazy val crypto = project
   .settings(
@@ -60,6 +66,7 @@ lazy val crypto = project
       "org.scodec" %% "scodec-core" % "1.10.3"
     )
   )
+  .dependsOn(common)
 
 lazy val p2p = project
   .settings(
@@ -69,6 +76,7 @@ lazy val p2p = project
       "org.typelevel" %% "cats-core" % "1.1.0"
     )
   )
+  .dependsOn(common)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 
