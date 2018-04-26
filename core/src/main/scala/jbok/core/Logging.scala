@@ -1,4 +1,4 @@
-package jbok.common
+package jbok.core
 
 import com.typesafe.scalalogging.StrictLogging
 

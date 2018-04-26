@@ -54,11 +54,11 @@ lazy val cats = Seq(
 
 lazy val jbok = project
   .in(file("."))
-  .aggregate(common, crypto, p2p)
+  .aggregate(core, crypto, p2p)
 
-lazy val common = project
+lazy val core = project
   .settings(
-    name := "jbok-common",
+    name := "jbok-core",
     libraryDependencies ++= logging ++ tests ++ cats
   )
 
@@ -70,7 +70,7 @@ lazy val crypto = project
       "org.scodec" %% "scodec-core" % "1.10.3"
     )
   )
-  .dependsOn(common % CompileAndTest)
+  .dependsOn(core % CompileAndTest)
 
 lazy val p2p = project
   .settings(
@@ -79,7 +79,7 @@ lazy val p2p = project
       "com.lihaoyi" %% "fastparse" % "1.0.0"
     )
   )
-  .dependsOn(common % CompileAndTest, crypto)
+  .dependsOn(core % CompileAndTest, crypto)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 
