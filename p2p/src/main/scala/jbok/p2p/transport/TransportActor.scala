@@ -2,8 +2,9 @@ package jbok.p2p.transport
 
 import akka.actor.Actor
 import akka.event.LoggingReceive
+import cats.Id
 
-trait TransportActor extends Actor with Transport {
+trait TransportActor extends Actor with Transport[Id] {
   def receiveTransportOp: Receive = {
     case TransportOp.Bind(local)              => bind(local)
     case TransportOp.Unbind                   => unbind()

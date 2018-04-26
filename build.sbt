@@ -48,35 +48,38 @@ lazy val tsec = Seq(
   "io.github.jmcardon" %% "tsec-signatures" % V.tsec
 )
 
+lazy val cats = Seq(
+  "org.typelevel" %% "cats-core" % "1.1.0"
+)
+
 lazy val jbok = project
   .in(file("."))
-  .aggregate(crypto, p2p)
+  .aggregate(common, crypto, p2p)
 
 lazy val common = project
   .settings(
     name := "jbok-common",
-    libraryDependencies ++= logging ++ tests
+    libraryDependencies ++= logging ++ tests ++ cats
   )
 
 lazy val crypto = project
   .settings(
     name := "jbok-crypto",
-    libraryDependencies ++= logging ++ tests ++ tsec ++ Seq(
+    libraryDependencies ++= tsec ++ Seq(
       "org.scodec" %% "scodec-bits" % "1.1.5",
       "org.scodec" %% "scodec-core" % "1.10.3"
     )
   )
-  .dependsOn(common)
+  .dependsOn(common % CompileAndTest)
 
 lazy val p2p = project
   .settings(
     name := "jbok-p2p",
-    libraryDependencies ++= logging ++ tests ++ akka ++ Seq(
-      "com.lihaoyi" %% "fastparse" % "1.0.0",
-      "org.typelevel" %% "cats-core" % "1.1.0"
+    libraryDependencies ++= akka ++ Seq(
+      "com.lihaoyi" %% "fastparse" % "1.0.0"
     )
   )
-  .dependsOn(common, crypto)
+  .dependsOn(common % CompileAndTest, crypto)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 

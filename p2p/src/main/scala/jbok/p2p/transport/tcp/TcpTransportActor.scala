@@ -6,6 +6,7 @@ import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props, SupervisorStrategy}
 import akka.io.Tcp
 import akka.stream.scaladsl.{Keep, Sink, Tcp => STcp}
 import akka.stream.{Materializer, OverflowStrategy}
+import cats.Id
 import jbok.p2p.connection.{Connection, Direction}
 import jbok.p2p.protocol.Protocol
 import jbok.p2p.transport.{Session, TransportActor, TransportEvent}
@@ -30,25 +31,25 @@ class TcpTransportActor[M: ClassTag](protocol: Protocol[M])(implicit system: Act
   def filterConnections(remote: Option[InetSocketAddress], direction: Option[Direction]) = {
     val filterByRemote = remote match {
       case Some(addr) => connections.filterKeys(_.remote == addr)
-      case None       => connections
+      case None => connections
     }
 
     val filtered = direction match {
       case Some(d) => filterByRemote.filterKeys(_.direction == d)
-      case None    => filterByRemote
+      case None => filterByRemote
     }
 
     filtered
   }
 
-  override def bind(local: InetSocketAddress): Unit = {
+  override def bind(local: InetSocketAddress): Id[Unit] = {
     val binding = STcp()
       .bind(local.getHostName, local.getPort)
       .to(Sink.foreach(ic => {
         val flow = protocol
           .flow(16, OverflowStrategy.backpressure)
           .mapMaterializedValue(queue => {
-            val conn    = Connection(ic.remoteAddress, ic.localAddress, Direction.Inbound)
+            val conn = Connection(ic.remoteAddress, ic.localAddress, Direction.Inbound)
             val session = context.actorOf(Props(new Session(conn, queue)), "inbound-session")
             self ! TransportEvent.Connected(conn, session)
           })
@@ -58,35 +59,34 @@ class TcpTransportActor[M: ClassTag](protocol: Protocol[M])(implicit system: Act
 
     binding.onComplete {
       case Success(bind) => self ! TransportEvent.Bound(bind.localAddress)
-      case Failure(_)    => self ! TransportEvent.BindingFailed(local)
+      case Failure(_) => self ! TransportEvent.BindingFailed(local)
     }
   }
 
-  override def bound(local: InetSocketAddress): Unit = {
+  override def bound(local: InetSocketAddress): Id[Unit] = {
     listenAddr = Some(local)
     bindingActor = Some(sender)
   }
 
-  override def bindingFailed(local: InetSocketAddress): Unit = context stop self
+  override def bindingFailed(local: InetSocketAddress): Id[Unit] = context.stop(self)
 
-  override def unbind(): Unit = {
+  override def unbind(): Id[Unit] =
     if (bindingActor.isDefined) {
       bindingActor.get ! Tcp.Unbind
     }
-  }
 
-  override def unbound(local: InetSocketAddress): Unit = {
+  override def unbound(local: InetSocketAddress): Id[Unit] = {
     listenAddr = None
     bindingActor = None
   }
 
-  override def dial(remote: InetSocketAddress): Unit = {
+  override def dial(remote: InetSocketAddress): Id[Unit] = {
     val (ocFut, queue) =
       STcp().outgoingConnection(remote).joinMat(protocol.flow(16, OverflowStrategy.backpressure))(Keep.both).run()
 
     ocFut.onComplete {
       case Success(oc) =>
-        val conn    = Connection(oc.remoteAddress, oc.localAddress, Direction.Outbound)
+        val conn = Connection(oc.remoteAddress, oc.localAddress, Direction.Outbound)
         val session = context.actorOf(Props(new Session(conn, queue)), "outbound-session")
         self ! TransportEvent.Connected(conn, session)
 
@@ -95,16 +95,15 @@ class TcpTransportActor[M: ClassTag](protocol: Protocol[M])(implicit system: Act
     }
   }
 
-  override def connected(conn: Connection, session: ActorRef): Unit = connections += conn -> session
+  override def connected(conn: Connection, session: ActorRef): Id[Unit] = connections += conn -> session
 
-  override def connectingFailed(remote: InetSocketAddress, cause: Throwable): Unit = ()
+  override def connectingFailed(remote: InetSocketAddress, cause: Throwable): Id[Unit] = ()
 
-  override def close(remote: Option[InetSocketAddress], direction: Option[Direction]): Unit = {
+  override def close(remote: Option[InetSocketAddress], direction: Option[Direction]): Id[Unit] = {
     val filtered = filterConnections(remote, direction)
     filtered.foreach(_._2 ! PoisonPill)
   }
 
-  override def disconnected(conn: Connection, cause: String): Unit = {
+  override def disconnected(conn: Connection, cause: String): Id[Unit] =
     connections -= conn
-  }
 }
