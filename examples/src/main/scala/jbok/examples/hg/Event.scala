@@ -52,7 +52,6 @@ case class Event(
   def isDecided = this.isFamous.isDefined
 
   def divided(round: Round, isWitness: Boolean): Event = {
-    require(!isDivided)
     this.copy(round = round, isWitness = isWitness)
   }
 

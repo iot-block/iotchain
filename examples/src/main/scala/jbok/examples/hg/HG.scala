@@ -67,7 +67,7 @@ abstract class HG[F[_]: Monad, P](
 
   /**
     * @param x event
-    * @return the max round of {x.selfParent, x.otherParent}
+    * @return the max of {selfParentRound, otherParentRound}
     */
   def parentRound(x: Event): F[ParentRoundInfo] =
     for {
@@ -118,7 +118,7 @@ abstract class HG[F[_]: Monad, P](
   }
 
   /**
-    * @param x event hash
+    * @param x event
     * @return true if round of x should be incremented by 1
     * S is the witness events at parentRound(x)
     * ∃S ⊆ E , manyCreators(S) ∧ (∀y ∈ S, round(y) = parentRound(x) ∧ stronglySee(x, y))
@@ -163,7 +163,7 @@ abstract class HG[F[_]: Monad, P](
 
   def isFirstEvent(ex: Event): F[Boolean] =
     for {
-      root <- pool.getRoot(ex.hash)
+      root <- pool.getRoot(ex.body.creator)
     } yield ex.body.selfParent == root.sp && ex.body.otherParent == root.op
 
   /**
@@ -174,12 +174,7 @@ abstract class HG[F[_]: Monad, P](
     * (selfParent(x) = ∅) ∨ (round(x) > round(selfParent(x))
     */
   def witness(x: Event): F[Boolean] = {
-    require(!x.isDivided)
-
-    isFirstEvent(x) || (for {
-      r <- round(x)
-      spr <- round(x)
-    } yield r > spr)
+    isFirstEvent(x) || pool.getEvent(x.body.selfParent).map(sp => x.round > sp.round)
   }
 
   /**
@@ -287,22 +282,21 @@ abstract class HG[F[_]: Monad, P](
   def divideRounds(events: List[Event]): F[List[Event]] = {
     require(events.forall(!_.isDivided))
     for {
-      divided <- events.traverse(divideRound)
+      divided <- events.traverse(divide)
       _ <- divided.traverse(e => pool.putRoundInfo(e))
     } yield divided
   }
 
   /**
     * @param event Event
-    * @return
+    * @return event with divided round and witness
     *
-    * divide round and witness for an event
     */
-  def divideRound(event: Event): F[Event] = {
+  def divide(event: Event): F[Event] = {
     require(!event.isDivided)
     for {
       r <- round(event)
-      wit <- witness(event)
+      wit <- witness(event.copy(round = r))
     } yield event.divided(r, wit)
   }
 
