@@ -4,6 +4,8 @@ import cats.Id
 import jbok.crypto.PropertyTest
 import scodec.Codec
 import tsec.hashing.CryptoHasher
+import tsec.hashing.bouncy._
+import tsec.hashing.jca._
 
 class MultiHashTest extends PropertyTest {
   val str = "multihash"
