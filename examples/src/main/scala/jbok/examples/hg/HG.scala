@@ -8,6 +8,9 @@ import jbok.common._
 import jbok.crypto.hashing.MultiHash
 import scodec.bits.BitVector
 
+import scala.annotation.tailrec
+import scala.collection.mutable
+
 case class HGConfig(
     n: Int, // the number of members in the population
     c: Int = 10, // frequency of coin rounds (such as c = 10)
@@ -173,9 +176,8 @@ abstract class HG[F[_]: Monad, P](
     *
     * (selfParent(x) = ∅) ∨ (round(x) > round(selfParent(x))
     */
-  def witness(x: Event): F[Boolean] = {
+  def witness(x: Event): F[Boolean] =
     isFirstEvent(x) || pool.getEvent(x.body.selfParent).map(sp => x.round > sp.round)
-  }
 
   /**
     * @param x event
@@ -185,92 +187,9 @@ abstract class HG[F[_]: Monad, P](
   def diff(x: Event, y: Event): Round = {
     require(x.isDivided)
     require(y.isDivided)
-    x.round - y.round
-  }
-
-  /**
-    *
-    * @param x event
-    * @param y event
-    * @return
-    *
-    * |{z ∈ Z | diff(x, z) = 1 ∧ witness(z) ∧ stronglySee(x, z) ∧ vote(z, y) = v}|
-    *
-    * if x can strongly sees z, and z have voted y
-    * then x vote y (copy from z vote y)
-    */
-  def votes(x: Event, y: Event): F[(Int, Int)] =
-    for {
-      witnesses <- pool.getWitnessesAt(x.round - 1)
-      ssWitnesses = witnesses.filter(z => stronglySee(x, z))
-      counts <- ssWitnesses.traverse(z => vote(z, y))
-    } yield {
-      val yays = counts.count(_ == true)
-      val nays = counts.count(_ == false)
-      (yays, nays)
-    }
-
-  /**
-    *
-    * @param x witness event
-    * @param y witness event
-    * @return yays / (yays + nays)
-    *
-    */
-  def fractTrue(x: Event, y: Event): F[Double] =
-    for {
-      vs <- votes(x, y)
-    } yield {
-      val (yays, nays) = vs
-      yays.toDouble / (yays + nays)
-    }
-
-  /**
-    *
-    * @param x witness event
-    * @param y witness event
-    * @return (selfParent(x) ̸= ∅ ∧ decide(selfParent(x), y)
-    */
-  def copyVote(x: Event, y: Event): F[Boolean] = {
-    require(x.isWitness)
-    require(y.isWitness)
-    !isFirstEvent(x) && decide(x, y)
-  }
-
-  /**
-    * @param x witness event
-    * @param y witness event
-    * @return true if x votes y
-    *
-    * - vote(selfParent(x), y) => copyVote(x)
-    * - vote(x, y) => see(x, y) if diff(x, y) == d
-    * - vote(x, y) => middleBit(x) if diff(x, y) != d && diff(x, y) % c == 0
-    * - vote(x, y) => fractTrue(x, y) >= 0.5
-    */
-  def vote(x: Event, y: Event): F[Boolean] = {
-    require(x.isWitness)
-    require(y.isWitness)
-
-    val d = diff(x, y)
-
-    if (d == config.d) {
-      see(x, y).pure[F] // direct voting
-    } else {
-      copyVote(x, y).flatMap(cp =>
-        if (cp) {
-          pool.getEvent(x.body.selfParent).flatMap(spe => vote(spe, y)) // copy vote from selfParent
-        } else {
-          for {
-            ft <- fractTrue(x, y)
-          } yield {
-            if (ft >= 1 / 3.0 && ft <= 2 / 3.0 && d % config.c == 0) {
-              middleBit(x.body.creator.digest.toArray) // coin round
-            } else {
-              ft >= 0.5 // super majority
-            }
-          }
-      })
-    }
+    val d = x.round - y.round
+    require(d >= 0)
+    d
   }
 
   /**
@@ -283,7 +202,6 @@ abstract class HG[F[_]: Monad, P](
     require(events.forall(!_.isDivided))
     for {
       divided <- events.traverse(divide)
-      _ <- divided.traverse(e => pool.putRoundInfo(e))
     } yield divided
   }
 
@@ -300,61 +218,98 @@ abstract class HG[F[_]: Monad, P](
     } yield event.divided(r, wit)
   }
 
+  def decide(
+      x: Event,
+      round: Round,
+      lastRound: Round,
+      votes: mutable.Map[MultiHash, Boolean] = mutable.Map()): F[Event] =
+    if (x.isDecided || round > lastRound) {
+      x.pure[F]
+    } else {
+      for {
+        ys <- pool.getWitnessesAt(round)
+        witnesses <- pool.getWitnessesAt(round - 1)
+        (decided, votes) = decide(x, ys, witnesses, votes)
+        n <- decide(decided, round + 1, lastRound, votes)
+      } yield n
+    }
+
+  @tailrec
+  final def decide(x: Event, ys: List[Event], witnesses: List[Event], votes: mutable.Map[MultiHash, Boolean]): Event =
+    if (x.isDecided || ys.isEmpty) {
+      x
+    } else {
+      val (decided, votes) = decide(x, ys.head, witnesses, votes)
+      if (decided.isDecided)
+        decided
+      else
+        decide(x, ys.tail, witnesses, votes)
+    }
+
   /**
+    *
     * @param x event
     * @param y event
-    * @return true if x's famous if decided by y
-    *
-    *  (selfParent(x) ̸= ∅ ∧ decide(selfParent(x), y)) ∨(witness(x) ∧ witness(y)
-    *  ∧diff(x,y)>d∧(diff(x,y)modc>0)∧(∃v∈B,votes(x,y,v)> 2n)))
+    * @param witnesses witness events at round (y.round - 1)
+    * @param votes all votes for x
+    * @return
     */
-  def decide(x: Event, y: Event): F[Boolean] = {
-    val cond2 = (diff(x, y) > config.d && diff(x, y) % config.c != 0).pure[F] &&
-      votes(x, y).map {
-        case (yays, nays) =>
-          yays > superMajority() || nays > superMajority()
-      }
-
-    isFirstEvent(x).flatMap {
-      case true => cond2
-      case false => pool.getEvent(x.body.selfParent).flatMap(spe => decide(spe, y))
-    }
-  }
-
-  def decideWitnessFame(x: Event): F[Event] = {
-    require(x.isDivided)
-
-    for {
-      lastRound <- pool.lastRound
-      wits <- (x.round + 1 to lastRound).toList.flatTraverse(r => pool.getWitnessesAt(r))
-      decided <- wits.traverse(y =>
-        decide(y, x).flatMap {
-          case true => vote(y, x).map(_.some)
-          case false => none[Boolean].pure[F]
+  def decide(
+      x: Event,
+      y: Event,
+      witnesses: List[Event],
+      votes: mutable.Map[MultiHash, Boolean]): (Event, mutable.Map[MultiHash, Boolean]) =
+    if (x.isDecided) {
+      (x, votes)
+    } else if (y.round - x.round == config.d) {
+      // direct voting
+      (x, votes += y.hash -> see(y, x))
+    } else {
+      val ssByY = witnesses.filter(w => stronglySee(y, w))
+      val (yays, nays) = ssByY.foldLeft((0, 0))((acc, cur) => {
+        if (votes(cur.hash))
+          (acc._1 + 1, acc._2)
+        else
+          (acc._1, acc._2 + 1)
       })
-    } yield {
-      x.decided(decided.find(_.isDefined).flatten.getOrElse(false))
+
+      val vote = yays >= nays
+      val majority = math.max(yays, nays)
+
+      if (y.round - x.round % config.c != 0) {
+        // normal round
+        if (majority >= superMajority()) {
+          // decided
+          val decided = x.decided(vote)
+          (decided, votes += y.hash -> vote)
+        } else {
+          (x, votes += y.hash -> vote)
+        }
+      } else {
+        // coin round
+        if (majority >= superMajority()) {
+          // still folow superMajority
+          (x, votes += y.hash -> vote)
+        } else {
+          // random bit
+          val randomVote = middleBit(y.hash.digest.toArray)
+          (x, votes += y.hash -> randomVote)
+        }
+      }
     }
-  }
 
   /**
     * @param r round
-    * @return true if round r is fully decided
+    * @return decided witness events at round r
     *
     * decide if witnesses are famous
     */
-  def decideFameAt(r: Round): F[Unit] =
+  def decideFameAt(r: Round): F[List[Event]] =
     for {
-      wits <- pool.getWitnessesAt(r)
-      updated <- wits.traverse(decideWitnessFame)
-      _ <- updated.traverse(pool.putEvent)
-    } yield ()
-
-  def decideFame(): F[Unit] =
-    for {
-      rounds <- pool.undecidedRounds
-      _ <- rounds.traverse(decideFameAt)
-    } yield ()
+      wits <- pool.getWitnessesAt(r).map(_.filter(!_.isDecided))
+      lastRound <- pool.lastRound
+      decided <- wits.traverse(x => decide(x, r + 1, lastRound)).map(_.filter(_.isDecided))
+    } yield decided
 
   /**
     * once all the witnesses in round r have their fame decided
@@ -406,7 +361,7 @@ abstract class HG[F[_]: Monad, P](
     for {
       events <- pool.undividedEventsAt(r)
       received <- events.traverse(x => receive(x, r + 1))
-      consensused = events.zip(received).map { case (e, r) => e.consensused(r, 0L) }
+      consensused = events.zip(received).map { case (e, r) => e.consensused(r, 0L) } // TODO
       _ <- consensused.traverse(pool.putEvent)
     } yield ()
   }
@@ -441,7 +396,7 @@ abstract class HG[F[_]: Monad, P](
       verified <- verifyEvent(event)
     } yield {
       verified match {
-        case Valid(e) => ???
+        case Valid(_) => ???
         case Invalid(nel) => ???
       }
     }
