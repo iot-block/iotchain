@@ -33,18 +33,15 @@ abstract class HG[F[_]: Monad, P](
     x == y || x.lastAncestors(y.body.creator).index >= y.body.index
 
   /**
-    * @param x event hash
-    * @param y event hash
-    * @return true if y is an selfAncestor of x
+    * @param x event
+    * @param y event
+    * @return true if y is a selfAncestor of x
     *
     * x and y are created by a same creator
     * x == y ∨ (selfParent(x) ̸= ∅ ∧ selfAncestor(selfParent(x), y))
     */
-  def selfAncestor(x: E, y: E): F[Boolean] =
-    (x == y).pure[F] || (for {
-      ex <- pool.getEvent(x)
-      ey <- pool.getEvent(y)
-    } yield ex.body.creator == ey.body.creator && ex.body.index >= ey.body.index)
+  def selfAncestor(x: Event, y: Event): Boolean =
+    x == y || x.body.creator == y.body.creator && x.body.index >= y.body.index
 
   /**
     * @param x event
