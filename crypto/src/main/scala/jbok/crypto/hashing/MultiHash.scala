@@ -10,7 +10,7 @@ import tsec.hashing.CryptoHasher
 case class MultiHash(code: Byte, size: Int, digest: ByteVector) {
   lazy val name = Constants.codeNameMap(code)
 
-  override def toString: String = s"MultiHash($name, $size, $digest)"
+  override def toString: String = s"$name@${digest.toHex.take(7)}"
 }
 
 object MultiHash {
@@ -25,6 +25,12 @@ object MultiHash {
     hash(str.utf8Bytes, ht)
 
   def hash[A](bytes: Array[Byte], ht: HashType[A])(implicit C: CryptoHasher[Id, A]): MultiHash = {
+    val digest = ht.cryptoHashAPI.hash[Id](bytes)(C)
+    MultiHash(ht.code, ht.size, ByteVector(digest))
+  }
+
+  def hash[A, H](x: A, ht: HashType[H])(implicit codec: Codec[A], C: CryptoHasher[Id, H]): MultiHash = {
+    val bytes = codec.encode(x).require.toByteArray
     val digest = ht.cryptoHashAPI.hash[Id](bytes)(C)
     MultiHash(ht.code, ht.size, ByteVector(digest))
   }
