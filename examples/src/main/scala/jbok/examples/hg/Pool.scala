@@ -5,51 +5,80 @@ import cats.implicits._
 import jbok.core.store.KVStore
 import jbok.crypto.hashing.MultiHash
 
+import scala.collection.mutable
+
 class Pool[F[_]: Monad](
     events: KVStore[F, MultiHash, Event],
-    rounds: KVStore[F, Round, Map[MultiHash, RoundInfo]],
-    roots: KVStore[F, MultiHash, Root],
-    tip: KVStore[F, MultiHash, MultiHash]
+    rounds: KVStore[F, Round, Map[MultiHash, EventInfo]]
 ) {
+  private val undividedEvents = mutable.ListBuffer[MultiHash]()
+
   def getEvent(hash: MultiHash): F[Event] = events.get(hash)
+
+  def allEvents: F[List[Event]] = {
+    for {
+      keys <- events.keys
+      es <- keys.traverse(events.get)
+    } yield es
+  }
 
   def getEventOpt(hash: MultiHash): F[Option[Event]] = events.getOpt(hash)
 
-  def putEvent(event: Event): F[Unit] = events.put(event.hash, event)
+  def putEvent(event: Event): F[Unit] = {
+    if (!event.isDivided) {
+      if (!undividedEvents.contains(event.hash)) {
+        undividedEvents += event.hash
+      }
+      for {
+        _ <- events.put(event.hash, event)
+      } yield ()
+    } else {
+      undividedEvents -= event.hash
+      for {
+        _ <- putRoundInfo(event)
+        _ <- events.put(event.hash, event)
+      } yield ()
+    }
+  }
 
-  def getEventsAt(r: Round, eventsFilter: RoundInfo => Boolean): F[List[Event]] =
+  def getEventsAt(r: Round, eventsFilter: EventInfo => Boolean): F[List[Event]] = {
     for {
-      hashes <- rounds.get(r).map(_.filter { case (_, ri) => eventsFilter(ri) }.keys.toList)
+      hashes <- getRoundInfo(r).map(_.filter { case (_, ri) => eventsFilter(ri) }.keys.toList)
       xs <- hashes.traverse(getEvent)
     } yield xs
+  }
 
   def getWitnessesAt(r: Round): F[List[Event]] = getEventsAt(r, _.isWitness)
 
   def getFamousWitnessAt(r: Round): F[List[Event]] = getEventsAt(r, _.isFamous.contains(true))
 
-  def getRoot(hash: MultiHash): F[Root] = roots.get(hash)
+  def getUndividedEvents: F[List[Event]] = {
+    undividedEvents.toList.traverse(h => getEvent(h))
+  }
 
-  def putRoot(hash: MultiHash, root: Root): F[Unit] = roots.put(hash, root)
+  def getUndividedEventsAt(r: Round): F[List[Event]] = getEventsAt(r, _.isFamous.isDefined)
 
-  def lastEventFrom(creator: MultiHash): F[Option[MultiHash]] =
-    tip.getOpt(creator)
+  private def getRoundInfo(r: Round): F[Map[MultiHash, EventInfo]] = {
+    for {
+      ri <- rounds.getOpt(r)
+    } yield ri.getOrElse(Map.empty)
+  }
 
-  def undividedEvents: F[List[Event]] = ???
-
-  def undividedEventsAt(r: Round): F[List[Event]] = getEventsAt(r, _.isFamous.isDefined)
-
-  def getRoundInfo(r: Round): F[Map[MultiHash, RoundInfo]] =
-    rounds.get(r)
-
-  def putRoundInfo(event: Event): F[Unit] = {
+  private def putRoundInfo(event: Event): F[Unit] = {
     require(event.isDivided)
     for {
       roundInfo <- getRoundInfo(event.round)
-      _ <- rounds.put(event.round, roundInfo ++ Map(event.hash -> RoundInfo(event.hash, event.round, event.isWitness)))
+      _ <- rounds.put(
+        event.round,
+        roundInfo + (event.hash -> EventInfo(event.hash, event.round, event.isWitness, event.isFamous, event.isOrdered)))
     } yield ()
   }
 
-  def undecidedRounds: F[List[Round]] = ???
+  def undecidedRounds: F[List[Round]] =
+    for {
+      rs <- rounds.keys
+      ri <- rs.traverse(rounds.get)
+    } yield ri.filter(_.exists(_._2.isFamous.isEmpty)).map(_.head._2.round).sorted
 
   def lastRound: F[Round] = rounds.keys.map(_.max)
 }

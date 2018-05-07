@@ -1,28 +1,23 @@
 package jbok.examples.hg
 
 import cats.Monad
-import cats.data.Validated.{Invalid, Valid}
-import cats.data._
 import cats.implicits._
-import jbok.common._
-import jbok.crypto.hashing.MultiHash
+import jbok.crypto.hashing.{HashType, MultiHash}
 import scodec.bits.BitVector
 
 import scala.annotation.tailrec
 import scala.collection.mutable
 
 case class HGConfig(
-    n: Int, // the number of members in the population
+    n: Int,      // the number of members in the population
     c: Int = 10, // frequency of coin rounds (such as c = 10)
-    d: Int = 1 // rounds delayed before start of election (such as d = 1)
+    d: Int = 1   // rounds delayed before start of election (such as d = 1)
 )
 
-abstract class HG[F[_]: Monad, P](
-    pool: Pool[F],
-    config: HGConfig
+abstract class HG[F[_]: Monad](
+    val pool: Pool[F],
+    val config: HGConfig
 ) {
-  type E = MultiHash
-
   def superMajority(n: Int = config.n): Int = 2 * n / 3
 
   /**
@@ -32,8 +27,9 @@ abstract class HG[F[_]: Monad, P](
     *
     * x == y ∨ ∃z ∈ parents(x), ancestor(z, y)
     */
-  def ancestor(x: Event, y: Event): Boolean =
-    x == y || x.lastAncestors(y.body.creator).index >= y.body.index
+  def ancestor(x: Event, y: Event): Boolean = {
+    x == y || x.lastAncestorIndex(y.body.creator) >= y.body.index
+  }
 
   /**
     * @param x event
@@ -43,8 +39,9 @@ abstract class HG[F[_]: Monad, P](
     * x and y are created by a same creator
     * x == y ∨ (selfParent(x) ̸= ∅ ∧ selfAncestor(selfParent(x), y))
     */
-  def selfAncestor(x: Event, y: Event): Boolean =
+  def selfAncestor(x: Event, y: Event): Boolean = {
     x == y || x.body.creator == y.body.creator && x.body.index >= y.body.index
+  }
 
   /**
     * @param x event
@@ -57,66 +54,62 @@ abstract class HG[F[_]: Monad, P](
   /**
     * @param x event
     * @param y event
-    * @return true if ex strongly sees ey
+    * @return true if x strongly sees y
     *
     * see(x, y) ∧ (∃S ⊆ E, manyCreators(S) ∧(z∈S => (see(x,z)∧see(z,y))))
     */
   def stronglySee(x: Event, y: Event): Boolean = {
     val c = x.lastAncestors
-      .map { case (h, coord) => coord.index >= y.firstDescendants(h).index }
+      .map {
+        case (creator, coord) => coord.index >= y.firstDescendants.get(creator).map(_.index).getOrElse(Int.MaxValue)
+      }
       .count(_ == true)
-    c >= superMajority(config.n)
+    c > superMajority()
+  }
+
+  /**
+    * @param x event
+    * @param y event
+    */
+  def paths(x: Event, y: Event) = {
+    val xs = x.lastAncestors
+    val ys = y.firstDescendants
+
+    val joined = for {
+      (k, va) <- xs
+      vb <- ys.get(k)
+    } yield k -> (va, vb)
+    joined
   }
 
   /**
     * @param x event
     * @return the max of {selfParentRound, otherParentRound}
     */
-  def parentRound(x: Event): F[ParentRoundInfo] =
+  def parentRound(x: Event): F[ParentRoundInfo] = {
     for {
-      root <- pool.getRoot(x.body.creator)
-      spr <- selfParentRound(x, root)
-      opr <- otherParentRound(x, root)
+      spr <- selfParentRound(x)
+      opr <- otherParentRound(x)
     } yield {
       if (spr.round >= opr.round) spr else opr
     }
+  }
 
-  def selfParentRound(e: Event, root: Root): F[ParentRoundInfo] = {
-    val sp = e.body.selfParent
-    if (sp == root.sp) {
-      // If it is the creator's first Event, use the corresponding Root
-      ParentRoundInfo(root.round, isRoot = true).pure[F]
+  def selfParentRound(x: Event): F[ParentRoundInfo] = {
+    val sp = x.body.selfParent
+    if (sp == HG.genesis.hash) {
+      ParentRoundInfo(0, isRoot = true).pure[F]
     } else {
-      // get the thr round of the self parent
-      for {
-        spe <- pool.getEvent(sp)
-        spr <- round(spe)
-      } yield {
-        ParentRoundInfo(spr, isRoot = false)
-      }
+      pool.getEvent(sp).map(spe => ParentRoundInfo(spe.round, isRoot = false))
     }
   }
 
-  def otherParentRound(e: Event, root: Root): F[ParentRoundInfo] = {
-    val op = e.body.otherParent
-    for {
-      ope <- pool.getEventOpt(op)
-    } yield {
-      if (ope.isDefined) {
-        //if we known the other-parent, fetch its Round directly
-        ParentRoundInfo(ope.get.round, isRoot = false)
-      } else if (op == root.op) {
-        //we do not know the other-parent but it is referenced in Root.Y
-        ParentRoundInfo(root.round, isRoot = true)
-      } else {
-        //we do not know the other-parent but it is referenced in root.others
-        //we use the root's round
-        //in reality the OtherParent Round is not necessarily the same as the
-        //Root's but it is necessarily smaller. Since We are interest in the
-        //max between self-parent and other-parent rounds, this shortcut is
-        //acceptable.
-        ParentRoundInfo(root.round, isRoot = false)
-      }
+  def otherParentRound(x: Event): F[ParentRoundInfo] = {
+    val op = x.body.otherParent
+    if (op == HG.genesis.hash) {
+      ParentRoundInfo(0, isRoot = true).pure[F]
+    } else {
+      pool.getEvent(op).map(ope => ParentRoundInfo(ope.round, isRoot = false))
     }
   }
 
@@ -126,9 +119,8 @@ abstract class HG[F[_]: Monad, P](
     * S is the witness events at parentRound(x)
     * ∃S ⊆ E , manyCreators(S) ∧ (∀y ∈ S, round(y) = parentRound(x) ∧ stronglySee(x, y))
     */
-  def roundInc(x: Event): F[Boolean] =
+  def roundInc(pr: ParentRoundInfo, x: Event): F[Boolean] = {
     for {
-      pr <- parentRound(x)
       inc <- if (pr.isRoot) {
         // If parent-round was obtained from a Root, then x is the Event that sits
         // right on top of the Root. RoundInc is true.
@@ -139,45 +131,29 @@ abstract class HG[F[_]: Monad, P](
         for {
           roundWits <- pool.getWitnessesAt(pr.round)
           ss = roundWits.map(w => stronglySee(x, w))
-        } yield ss.count(_ == true) >= superMajority(config.n)
+        } yield ss.count(_ == true) > superMajority()
       }
     } yield inc
+  }
 
-  /**
-    * @param x event
-    * @return the round of x
-    *
-    * parentRound(x) + (1 if roundInc(x) 0 otherwise)
-    */
-  def round(x: Event): F[Round] = {
+  def roundAndWitness(x: Event): F[Event] = {
     require(!x.isDivided)
 
     for {
-      pr <- parentRound(x).map(_.round)
-      inc <- roundInc(x)
+      sp <- pool.getEvent(x.sp)
+      pri <- parentRound(x)
+      inc <- roundInc(pri, x)
     } yield {
+      val isWitness = inc || pri.round > sp.round
       if (inc) {
-        pr + 1
+        x.divided(pri.round + 1, isWitness = isWitness)
       } else {
-        pr
+        // not witness => not famous
+        val isFamous = if (isWitness) None else Some(false)
+        x.divided(pri.round, isWitness = isWitness, isFamous = isFamous)
       }
     }
   }
-
-  def isFirstEvent(ex: Event): F[Boolean] =
-    for {
-      root <- pool.getRoot(ex.body.creator)
-    } yield ex.body.selfParent == root.sp && ex.body.otherParent == root.op
-
-  /**
-    *
-    * @param x event
-    * @return true if x is a witness (first event of a round for the owner)
-    *
-    * (selfParent(x) = ∅) ∨ (round(x) > round(selfParent(x))
-    */
-  def witness(x: Event): F[Boolean] =
-    isFirstEvent(x) || pool.getEvent(x.body.selfParent).map(sp => x.round > sp.round)
 
   /**
     * @param x event
@@ -187,19 +163,19 @@ abstract class HG[F[_]: Monad, P](
   def diff(x: Event, y: Event): Round = {
     require(x.isDivided)
     require(y.isDivided)
-    val d = x.round - y.round
-    require(d >= 0)
-    d
+    require(x.round >= y.round)
+    x.round - y.round
   }
 
   /**
-    * The divideRounds procedure.
+    *
+    * @param events undivided events
+    * @return divided events
     * As soon as an event x is known, it is assigned a round number x.round,
     * and the boolean value x.witness is calculated, indicating whether it is a “witness”,
-    * the first event that a member created in that round.
+    * i.e. the first event that a member created in that round.
     */
   def divideRounds(events: List[Event]): F[List[Event]] = {
-    require(events.forall(!_.isDivided))
     for {
       divided <- events.traverse(divide)
     } yield divided
@@ -213,52 +189,63 @@ abstract class HG[F[_]: Monad, P](
   def divide(event: Event): F[Event] = {
     require(!event.isDivided)
     for {
-      r <- round(event)
-      wit <- witness(event.copy(round = r))
-    } yield event.divided(r, wit)
+      divided <- roundAndWitness(event)
+      _ <- pool.putEvent(divided)
+    } yield divided
   }
 
+  /**
+    * @param x witness event
+    * @param round start round, must greater than x.round
+    * @param lastRound the last round so far
+    * @param votes accumulated votes for x
+    * @return decided witness event
+    */
   def decide(
       x: Event,
       round: Round,
       lastRound: Round,
-      votes: mutable.Map[MultiHash, Boolean] = mutable.Map()): F[Event] =
+      votes: mutable.Map[MultiHash, Boolean] = mutable.Map()
+  ): F[Event] = {
     if (x.isDecided || round > lastRound) {
       x.pure[F]
     } else {
       for {
         ys <- pool.getWitnessesAt(round)
         witnesses <- pool.getWitnessesAt(round - 1)
-        (decided, votes) = decide(x, ys, witnesses, votes)
-        n <- decide(decided, round + 1, lastRound, votes)
-      } yield n
+        (decided, vs) = decideByRound(x, ys, witnesses, votes)
+        d <- decide(decided, round + 1, lastRound, vs)
+      } yield d
     }
+  }
 
   @tailrec
-  final def decide(x: Event, ys: List[Event], witnesses: List[Event], votes: mutable.Map[MultiHash, Boolean]): Event =
+  final def decideByRound(
+      x: Event,
+      ys: List[Event],
+      witnesses: List[Event],
+      votes: mutable.Map[MultiHash, Boolean]): (Event, mutable.Map[MultiHash, Boolean]) = {
     if (x.isDecided || ys.isEmpty) {
-      x
+      (x, votes)
     } else {
-      val (decided, votes) = decide(x, ys.head, witnesses, votes)
-      if (decided.isDecided)
-        decided
-      else
-        decide(x, ys.tail, witnesses, votes)
+      val (decided, vs) = decideByEvent(x, ys.head, witnesses, votes)
+      decideByRound(decided, ys.tail, witnesses, vs)
     }
+  }
 
   /**
     *
     * @param x event
     * @param y event
     * @param witnesses witness events at round (y.round - 1)
-    * @param votes all votes for x
+    * @param votes accumulated votes for x
     * @return
     */
-  def decide(
+  def decideByEvent(
       x: Event,
       y: Event,
       witnesses: List[Event],
-      votes: mutable.Map[MultiHash, Boolean]): (Event, mutable.Map[MultiHash, Boolean]) =
+      votes: mutable.Map[MultiHash, Boolean]): (Event, mutable.Map[MultiHash, Boolean]) = {
     if (x.isDecided) {
       (x, votes)
     } else if (y.round - x.round == config.d) {
@@ -288,7 +275,7 @@ abstract class HG[F[_]: Monad, P](
       } else {
         // coin round
         if (majority >= superMajority()) {
-          // still folow superMajority
+          // still follow superMajority
           (x, votes += y.hash -> vote)
         } else {
           // random bit
@@ -297,6 +284,7 @@ abstract class HG[F[_]: Monad, P](
         }
       }
     }
+  }
 
   /**
     * @param r round
@@ -304,66 +292,52 @@ abstract class HG[F[_]: Monad, P](
     *
     * decide if witnesses are famous
     */
-  def decideFameAt(r: Round): F[List[Event]] =
+  def decideFameAt(r: Round): F[List[Event]] = {
     for {
       wits <- pool.getWitnessesAt(r).map(_.filter(!_.isDecided))
       lastRound <- pool.lastRound
       decided <- wits.traverse(x => decide(x, r + 1, lastRound)).map(_.filter(_.isDecided))
+      _ <- decided.traverse(pool.putEvent)
     } yield decided
+  }
 
-  /**
-    * once all the witnesses in round r have their fame decided
-    * find the set of famous witnesses in that round
-    * then remove from that set any famous witness that has the
-    * same creator as any other in that set
-    *
-    * the remaining famous witnesses are the *unique famous witnesses*
-    * they act as the judges to assign earlier events a *round received* and *consensus timestamp*
-    *
-    * once these have been calculated,
-    * the events are sorted by round received.
-    * any ties are subsorted by consensus timestamp.
-    * any remaining ties are subsorted by whitened signature.
-    *
-    * The whitened signature is the signature XORed with
-    * the signatures of all unique famous witnesses in the received round
-    */
-  def findOrderAt(r: Round): F[Unit] =
+  def decideFame(): F[Unit] = {
     for {
-      _ <- roundReceived(r)
-      events <- pool.undividedEventsAt(r)
+      rs <- pool.undecidedRounds
+      _ <- rs.traverse(decideFameAt)
+    } yield ()
+  }
+
+  def findOrderAt(r: Round): F[List[Event]] =
+    for {
+      events <- decideOrderAt(r)
       sorted = events.sortBy(x => (x.roundReceived, x.consensusTimestamp))
-      _ <- handleNewConsensusEvents(sorted)
-    } yield ()
+    } yield sorted
 
-  def findOrder(): F[Unit] =
-    for {
-      rounds <- pool.undecidedRounds
-      _ <- rounds.traverse(findOrderAt)
-    } yield ()
-
-  /**
-    * assign round received and timestamp to events
-    */
-  def roundReceived(r: Round): F[Unit] = {
-    def receive(x: Event, round: Round, roundReceived: Option[Round] = None): F[Round] =
-      roundReceived match {
-        case Some(r) => r.pure[F]
-        case None =>
-          for {
-            fws <- pool.getFamousWitnessAt(round + 1)
-            sees = fws.map(w => see(w, x))
-            rc = if (sees.count(_ == true) > sees.length / 2) Some(round + 1) else None
-            nr <- receive(x, round + 1, rc)
-          } yield nr
+  def decideOrderAt(r: Round): F[List[Event]] = {
+    def decideEvent(x: Event, round: Round, lastRound: Round): F[Event] = {
+      if (x.isOrdered || round > lastRound) {
+        x.pure[F]
+      } else {
+        for {
+          fws <- pool.getFamousWitnessAt(round)
+          sees = fws.filter(w => see(w, x))
+          r <- if (sees.length >= fws.length / 2) {
+            val timestamp = HG.median(sees.map(_.body.timestamp))
+            decideEvent(x.ordered(round, timestamp), round + 1, lastRound)
+          } else {
+            decideEvent(x, round + 1, lastRound)
+          }
+        } yield r
       }
+    }
 
     for {
-      events <- pool.undividedEventsAt(r)
-      received <- events.traverse(x => receive(x, r + 1))
-      consensused = events.zip(received).map { case (e, r) => e.consensused(r, 0L) } // TODO
-      _ <- consensused.traverse(pool.putEvent)
-    } yield ()
+      events <- pool.getEventsAt(r, !_.isOrdered)
+      lastRound <- pool.lastRound
+      ordered <- events.traverse(x => decideEvent(x, r + 1, lastRound))
+      _ <- ordered.traverse(pool.putEvent)
+    } yield ordered
   }
 
   def middleBit(bytes: Array[Byte]): Boolean = {
@@ -371,58 +345,66 @@ abstract class HG[F[_]: Monad, P](
     bv(bv.length / 2)
   }
 
-  def runConsensus(): F[Unit] =
-    for {
-      undivided <- pool.undividedEvents
-      divided <- divideRounds(undivided)
-      _ <- divided.traverse(pool.putEvent)
-      rounds <- pool.undecidedRounds
-      _ <- rounds.traverse(r => decideFameAt(r).flatMap(_ => findOrderAt(r)))
-    } yield ()
-
-  def consensusAt(r: Round): F[Unit] =
-    for {
-      undivided <- pool.undividedEvents
-      divided <- divideRounds(undivided)
-      _ <- divided.traverse(pool.putEvent)
-      _ <- decideFameAt(r)
-      _ <- findOrderAt(r)
-    } yield ()
-
-  def handleNewConsensusEvents(events: List[Event]): F[Unit] = ???
-
-  def insetEvent(event: Event): F[ValidatedNel[HGError, Unit]] =
-    for {
-      verified <- verifyEvent(event)
-    } yield {
-      verified match {
-        case Valid(_) => ???
-        case Invalid(nel) => ???
+  def updateLastAncestors(event: Event): F[Event] = {
+    if (event.hash == HG.genesis.hash) {
+      event.pure[F]
+    } else {
+      for {
+        sp <- pool.getEvent(event.body.selfParent)
+        op <- pool.getEvent(event.body.otherParent)
+      } yield {
+        val self = Map(event.body.creator -> (EventCoordinates(event.hash, event.body.index) :: Nil))
+        val lastAncestors = self |+| sp.lastAncestors.mapValues(_ :: Nil) |+| op.lastAncestors.mapValues(_ :: Nil)
+        val r = lastAncestors.mapValues(_.maxBy(_.index))
+        event.updateLastAncestors(r)
       }
-    }
-
-  def verifyEvent(event: Event): F[ValidatedNel[HGError, Unit]] =
-    for {
-      verifySp <- verifySelfParent(event)
-    } yield verifySp
-
-  def verifySelfParent(event: Event): F[ValidatedNel[HGError, Unit]] = {
-    val sp = event.body.selfParent
-    val creator = event.body.creator
-    for {
-      creatorLastKnown <- pool.lastEventFrom(creator)
-    } yield {
-      val legit = creatorLastKnown.contains(sp)
-      if (legit)
-        ().validNel
-      else SelfParentError.invalidNel
     }
   }
 
-  def verifyOtherParent(event: Event): F[ValidatedNel[HGError, Unit]] =
-    ().validNel[HGError].pure[F]
+  def updateFirstDescendants(event: Event): F[Unit] = {
+    def update(ancestor: Option[Event]): F[Unit] = {
+      if (ancestor.isEmpty || ancestor.get.firstDescendants.contains(event.body.creator)) {
+        ().pure[F]
+      } else {
+        val updated =
+          ancestor.get.updateFirstDescendant(event.body.creator, EventCoordinates(event.hash, event.body.index))
+        for {
+          _ <- pool.putEvent(updated)
+          sp <- pool.getEventOpt(updated.body.selfParent)
+          op <- pool.getEventOpt(updated.body.otherParent)
+          _ <- update(sp)
+          _ <- update(op)
+        } yield ()
+      }
+    }
 
+    for {
+      ancestors <- event.lastAncestors.toList.traverse(t => pool.getEvent(t._2.hash))
+      _ <- ancestors.traverse(x => update(Some(x)))
+    } yield ()
+  }
+
+  def insertEvent(event: Event): F[Unit] = {
+    // TODO verify
+    for {
+      updated <- updateLastAncestors(event)
+      _ <- pool.putEvent(updated)
+      _ <- updateFirstDescendants(updated)
+    } yield ()
+  }
 }
 
-sealed trait HGError
-case object SelfParentError extends HGError
+object HG {
+  def median[A: Ordering](xs: Seq[A]): A = {
+    require(xs.nonEmpty)
+    xs.sorted(implicitly[Ordering[A]])(xs.length / 2)
+  }
+
+  val genesis: Event = {
+    val nil = MultiHash.hash("", HashType.sha256)
+    val god = MultiHash.hash("god", HashType.sha256)
+    val body = EventBody(nil, nil, god, 0L, 0, Nil)
+    val hash = MultiHash.hash(body, HashType.sha256)
+    Event(body, hash)(0, isWitness = true, isFamous = Some(true))
+  }
+}

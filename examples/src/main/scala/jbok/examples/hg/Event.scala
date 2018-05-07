@@ -11,6 +11,7 @@ import scodec.{Codec, _}
   * @param creator creator's proposition
   * @param timestamp creator's creating timestamp
   * @param txs optional payload
+  *
   */
 case class EventBody(
     selfParent: MultiHash,
@@ -19,9 +20,7 @@ case class EventBody(
     timestamp: Long,
     index: Int,
     txs: List[Transaction]
-) {
-  lazy val parents: List[MultiHash] = List(selfParent, otherParent)
-}
+)
 
 object EventBody {
   implicit val codec: Codec[EventBody] = {
@@ -38,32 +37,71 @@ case class EventCoordinates(hash: MultiHash, index: Int)
 
 case class Event(
     body: EventBody,
-    hash: MultiHash,
-    round: Round = -1,
-    isWitness: Boolean = false,
-    isFamous: Option[Boolean] = None,
-    roundReceived: Round = -1,
-    consensusTimestamp: Long = 0L,
-    lastAncestors: Map[MultiHash, EventCoordinates],
-    firstDescendants: Map[MultiHash, EventCoordinates]
+    hash: MultiHash
+)(
+    var round: Round = -1,
+    var isWitness: Boolean = false,
+    var isFamous: Option[Boolean] = None,
+    var roundReceived: Round = -1,
+    var consensusTimestamp: Long = 0L,
+    var lastAncestors: Map[MultiHash, EventCoordinates] = Map(),
+    var firstDescendants: Map[MultiHash, EventCoordinates] = Map()
 ) {
-  def isDivided = this.round != -1
+  override def toString: String =
+    s"Event|${hash.digest.toHex.take(7)}|$round-${body.index}|" +
+      (if (isWitness) "w|" else "|") + (if (isFamous.isEmpty) "n" else if (isFamous == Some(true)) "t" else "f")
 
-  def isDecided = this.isFamous.isDefined
+  @inline def sp = body.selfParent
 
-  def divided(round: Round, isWitness: Boolean): Event = {
-    this.copy(round = round, isWitness = isWitness)
+  @inline def op = body.otherParent
+
+  @inline def creator = body.creator
+
+  @inline def isDivided = this.round != -1
+
+  @inline def isDecided = this.isFamous.isDefined
+
+  @inline def isOrdered = this.roundReceived != -1
+
+  //  override def hashCode(): Index = hash.##
+  //
+  //  override def equals(obj: scala.Any): Boolean = obj match {
+  //    case that: Event => (that.hash eq this.hash) || that.hash == this.hash
+  //    case _ => false
+  //  }
+
+  def divided(round: Round, isWitness: Boolean, isFamous: Option[Boolean] = None): Event = {
+    this.round = round
+    this.isWitness = isWitness
+    this.isFamous = isFamous
+    this
   }
 
-  def decided(isFamous: Boolean) = {
+  def decided(isFamous: Boolean): Event = {
     require(isDivided)
     require(!isDecided)
-    this.copy(isFamous = Some(isFamous))
+    this.isFamous = Some(isFamous)
+    this
   }
 
-  def consensused(roundReceived: Round, consensusTimestamp: Long) = {
+  def ordered(roundReceived: Round, consensusTimestamp: Long): Event = {
     require(isDivided)
     require(isDecided)
-    this.copy(roundReceived = roundReceived, consensusTimestamp = consensusTimestamp)
+    require(roundReceived > -1)
+    this.roundReceived = roundReceived
+    this.consensusTimestamp = consensusTimestamp
+    this
   }
+
+  def updateLastAncestors(m: Map[MultiHash, EventCoordinates]): Event = {
+    this.lastAncestors = m
+    this
+  }
+
+  def updateFirstDescendant(creator: MultiHash, coord: EventCoordinates): Event = {
+    this.firstDescendants = this.firstDescendants + (creator -> coord)
+    this
+  }
+
+  def lastAncestorIndex(creator: MultiHash): Int = lastAncestors.get(creator).map(_.index).getOrElse(-1)
 }
