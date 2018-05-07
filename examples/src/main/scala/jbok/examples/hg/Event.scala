@@ -39,6 +39,7 @@ case class Event(
     body: EventBody,
     hash: MultiHash
 )(
+    var topologicalIndex: Int = -1,
     var round: Round = -1,
     var isWitness: Boolean = false,
     var isFamous: Option[Boolean] = None,
@@ -47,10 +48,6 @@ case class Event(
     var lastAncestors: Map[MultiHash, EventCoordinates] = Map(),
     var firstDescendants: Map[MultiHash, EventCoordinates] = Map()
 ) {
-  override def toString: String =
-    s"Event|${hash.digest.toHex.take(7)}|$round-${body.index}|" +
-      (if (isWitness) "w|" else "|") + (if (isFamous.isEmpty) "n" else if (isFamous == Some(true)) "t" else "f")
-
   @inline def sp = body.selfParent
 
   @inline def op = body.otherParent
@@ -62,13 +59,6 @@ case class Event(
   @inline def isDecided = this.isFamous.isDefined
 
   @inline def isOrdered = this.roundReceived != -1
-
-  //  override def hashCode(): Index = hash.##
-  //
-  //  override def equals(obj: scala.Any): Boolean = obj match {
-  //    case that: Event => (that.hash eq this.hash) || that.hash == this.hash
-  //    case _ => false
-  //  }
 
   def divided(round: Round, isWitness: Boolean, isFamous: Option[Boolean] = None): Event = {
     this.round = round

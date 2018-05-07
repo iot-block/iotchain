@@ -49,7 +49,6 @@ object GraphUtil {
     )
 
     def nodeTransformer(innerNode: Graph[N, E]#NodeT): Option[(DotGraph, DotNodeStmt)] = {
-//      Some((dotRoot, DotNodeStmt(innerNode.toString, DotAttr("label", nl(innerNode.toOuter)) :: Nil)))
       Some((dotRoot, DotNodeStmt(innerNode.toString, nt(innerNode.toOuter))))
     }
 

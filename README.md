@@ -1,8 +1,5 @@
-jbok-p2p
-========
+JBOK: Just a Bunch Of Keys
+===
 
-## motivations
-...
+To be a type-safe, functional and flexible blockchain testbed.
 
-## requirements
-- MultiAddr, a self-descriptive IPFS-like multi-protocol address format

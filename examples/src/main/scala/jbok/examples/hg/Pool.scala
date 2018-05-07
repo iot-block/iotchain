@@ -11,7 +11,7 @@ class Pool[F[_]: Monad](
     events: KVStore[F, MultiHash, Event],
     rounds: KVStore[F, Round, Map[MultiHash, EventInfo]]
 ) {
-  private val undividedEvents = mutable.ListBuffer[MultiHash]()
+  private val undividedEvents = mutable.Set[MultiHash]()
 
   def getEvent(hash: MultiHash): F[Event] = events.get(hash)
 
@@ -26,9 +26,7 @@ class Pool[F[_]: Monad](
 
   def putEvent(event: Event): F[Unit] = {
     if (!event.isDivided) {
-      if (!undividedEvents.contains(event.hash)) {
-        undividedEvents += event.hash
-      }
+      undividedEvents += event.hash
       for {
         _ <- events.put(event.hash, event)
       } yield ()
@@ -53,7 +51,9 @@ class Pool[F[_]: Monad](
   def getFamousWitnessAt(r: Round): F[List[Event]] = getEventsAt(r, _.isFamous.contains(true))
 
   def getUndividedEvents: F[List[Event]] = {
-    undividedEvents.toList.traverse(h => getEvent(h))
+    undividedEvents.toList
+      .traverse(h => getEvent(h))
+      .map(_.sortBy(_.topologicalIndex))
   }
 
   def getUndividedEventsAt(r: Round): F[List[Event]] = getEventsAt(r, _.isFamous.isDefined)
@@ -70,7 +70,12 @@ class Pool[F[_]: Monad](
       roundInfo <- getRoundInfo(event.round)
       _ <- rounds.put(
         event.round,
-        roundInfo + (event.hash -> EventInfo(event.hash, event.round, event.isWitness, event.isFamous, event.isOrdered)))
+        roundInfo + (event.hash -> EventInfo(
+          event.hash,
+          event.round,
+          event.isWitness,
+          event.isFamous,
+          event.isOrdered)))
     } yield ()
   }
 

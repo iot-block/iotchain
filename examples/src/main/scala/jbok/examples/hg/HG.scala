@@ -9,15 +9,17 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 case class HGConfig(
-    n: Int,      // the number of members in the population
+    n: Int, // the number of members in the population
     c: Int = 10, // frequency of coin rounds (such as c = 10)
-    d: Int = 1   // rounds delayed before start of election (such as d = 1)
+    d: Int = 1 // rounds delayed before start of election (such as d = 1)
 )
 
 abstract class HG[F[_]: Monad](
     val pool: Pool[F],
     val config: HGConfig
 ) {
+  private var topologicalIndex = 0
+
   def superMajority(n: Int = config.n): Int = 2 * n / 3
 
   /**
@@ -386,6 +388,8 @@ abstract class HG[F[_]: Monad](
 
   def insertEvent(event: Event): F[Unit] = {
     // TODO verify
+    event.topologicalIndex = this.topologicalIndex
+    this.topologicalIndex += 1
     for {
       updated <- updateLastAncestors(event)
       _ <- pool.putEvent(updated)
@@ -405,6 +409,6 @@ object HG {
     val god = MultiHash.hash("god", HashType.sha256)
     val body = EventBody(nil, nil, god, 0L, 0, Nil)
     val hash = MultiHash.hash(body, HashType.sha256)
-    Event(body, hash)(0, isWitness = true, isFamous = Some(true))
+    Event(body, hash)(topologicalIndex = 0, round = 0, isWitness = true, isFamous = Some(true))
   }
 }
