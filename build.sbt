@@ -59,14 +59,17 @@ lazy val jbok = project
 lazy val common = project
   .settings(
     name := "jbok-common",
-    libraryDependencies ++= logging ++ tests ++ cats
+    libraryDependencies ++= logging ++ tests ++ cats ++ Seq(
+      "org.scala-graph" %% "graph-core" % "1.12.5",
+      "org.scala-graph" %% "graph-dot" % "1.12.1"
+    )
   )
 
 lazy val core = project
   .settings(
     name := "jbok-core"
   )
-  .dependsOn(crypto, p2p)
+  .dependsOn(common % CompileAndTest, crypto, p2p)
 
 lazy val crypto = project
   .settings(
@@ -91,7 +94,7 @@ lazy val examples = project
   .settings(
     name := "jbok-examples"
   )
-  .dependsOn(common % CompileAndTest, core)
+  .dependsOn(core % CompileAndTest)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 
