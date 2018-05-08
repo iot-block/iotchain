@@ -41,7 +41,11 @@ object GraphUtil {
     found.toSet
   }
 
-  def graphviz[N, E[X] <: EdgeLikeIn[X]](graph: Graph[N, E], nt: N => List[DotAttr]): String = {
+  def defaultNodeTransformer[N](x: N): List[DotAttr] = List(DotAttr("label", x.toString))
+
+  def graphviz[N, E[X] <: EdgeLikeIn[X]](
+      graph: Graph[N, E],
+      nt: N => List[DotAttr] = defaultNodeTransformer[N] _): String = {
     val dotRoot = DotRootGraph(
       directed = true,
       id = None,
