@@ -48,6 +48,9 @@ case class Event(
     var lastAncestors: Map[MultiHash, EventCoordinates] = Map(),
     var firstDescendants: Map[MultiHash, EventCoordinates] = Map()
 ) {
+
+  override def toString: String = s"Event($hash)"
+
   @inline def sp = body.selfParent
 
   @inline def op = body.otherParent
@@ -94,4 +97,9 @@ case class Event(
   }
 
   def lastAncestorIndex(creator: MultiHash): Int = lastAncestors.get(creator).map(_.index).getOrElse(-1)
+}
+
+object Event {
+  implicit val ordering: Ordering[Event] =
+    Ordering.by(e => (e.roundReceived, e.consensusTimestamp))
 }

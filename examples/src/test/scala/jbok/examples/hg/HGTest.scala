@@ -12,7 +12,7 @@ import scalax.collection.io.dot.implicits._
 
 class HGTest extends PropertyTest with HGGen {
   val events = implicitly[KVStore[Id, MultiHash, Event]]
-  val rounds = implicitly[KVStore[Id, Round, Map[MultiHash, EventInfo]]]
+  val rounds = implicitly[KVStore[Id, Round, RoundInfo]]
   val pool = new Pool[Id](events, rounds)
 
   val numEvents = 20
@@ -67,23 +67,34 @@ class HGTest extends PropertyTest with HGGen {
     divided.length shouldBe undivided.length
     hg.pool.getUndividedEvents.length shouldBe 0
 
-    // plot
-    // println(dot)
-
     // decide fame
-    val undecidedRounds = hg.pool.undecidedRounds
-    undecidedRounds.contains(0) shouldBe false
-    println(undecidedRounds)
-
+    val undecided = hg.pool.undecidedRounds
     hg.decideFame()
-    println(hg.pool.undecidedRounds)
+    val stillUndecided = hg.pool.undecidedRounds
 
-    // plot
-    // println(dot)
+    (undecided.toSet diff stillUndecided.toSet).foreach(r => {
+      val wits = hg.pool.getWitnessesAt(r)
+      wits.forall(_.isDecided) shouldBe true
+    })
+
+    stillUndecided.foreach(r => {
+      val wits = hg.pool.getWitnessesAt(r)
+      wits.exists(!_.isDecided) shouldBe true
+    })
 
     // find order
-    println(hg.pool.getEventsAt(1, _ => true).map(x => (x.roundReceived -> x.consensusTimestamp, x)))
-    val sorted = hg.findOrderAt(1).map(x => (x.roundReceived -> x.consensusTimestamp, x))
-    println(sorted)
+    val unordered = hg.pool.unorderedRounds
+    hg.findOrder()
+    val stillUnordered = hg.pool.unorderedRounds
+
+    (unordered.toSet diff stillUnordered.toSet).foreach(r => {
+      val events = hg.pool.getEventsAt(r)
+      events.forall(_.isOrdered) shouldBe true
+    })
+
+    stillUnordered.foreach(r => {
+      val events = hg.pool.getEventsAt(r)
+      events.exists(!_.isOrdered) shouldBe true
+    })
   }
 }

@@ -313,8 +313,15 @@ abstract class HG[F[_]: Monad](
   def findOrderAt(r: Round): F[List[Event]] =
     for {
       events <- decideOrderAt(r)
-      sorted = events.sortBy(x => (x.roundReceived, x.consensusTimestamp))
+      sorted = events.sorted
     } yield sorted
+
+  def findOrder(): F[Unit] = {
+    for {
+      rs <- pool.unorderedRounds
+      _ <- rs.traverse(findOrderAt)
+    } yield ()
+  }
 
   def decideOrderAt(r: Round): F[List[Event]] = {
     def decideEvent(x: Event, round: Round, lastRound: Round): F[Event] = {
@@ -324,7 +331,7 @@ abstract class HG[F[_]: Monad](
         for {
           fws <- pool.getFamousWitnessAt(round)
           sees = fws.filter(w => see(w, x))
-          r <- if (sees.length >= fws.length / 2) {
+          r <- if (sees.length > fws.length / 2) {
             val timestamp = HG.median(sees.map(_.body.timestamp))
             decideEvent(x.ordered(round, timestamp), round + 1, lastRound)
           } else {
@@ -409,6 +416,6 @@ object HG {
     val god = MultiHash.hash("god", HashType.sha256)
     val body = EventBody(nil, nil, god, 0L, 0, Nil)
     val hash = MultiHash.hash(body, HashType.sha256)
-    Event(body, hash)(topologicalIndex = 0, round = 0, isWitness = true, isFamous = Some(true))
+    Event(body, hash)(topologicalIndex = 0, round = 0, isWitness = true, isFamous = Some(true), roundReceived = 1, consensusTimestamp = 0L)
   }
 }

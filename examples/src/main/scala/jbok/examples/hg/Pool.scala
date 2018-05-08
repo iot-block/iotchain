@@ -9,18 +9,11 @@ import scala.collection.mutable
 
 class Pool[F[_]: Monad](
     events: KVStore[F, MultiHash, Event],
-    rounds: KVStore[F, Round, Map[MultiHash, EventInfo]]
+    rounds: KVStore[F, Round, RoundInfo]
 ) {
   private val undividedEvents = mutable.Set[MultiHash]()
 
   def getEvent(hash: MultiHash): F[Event] = events.get(hash)
-
-  def allEvents: F[List[Event]] = {
-    for {
-      keys <- events.keys
-      es <- keys.traverse(events.get)
-    } yield es
-  }
 
   def getEventOpt(hash: MultiHash): F[Option[Event]] = events.getOpt(hash)
 
@@ -39,9 +32,9 @@ class Pool[F[_]: Monad](
     }
   }
 
-  def getEventsAt(r: Round, eventsFilter: EventInfo => Boolean): F[List[Event]] = {
+  def getEventsAt(r: Round, eventsFilter: EventInfo => Boolean = _ => true): F[List[Event]] = {
     for {
-      hashes <- getRoundInfo(r).map(_.filter { case (_, ri) => eventsFilter(ri) }.keys.toList)
+      hashes <- rounds.get(r).map(_.events.filter { case (_, ei) => eventsFilter(ei) }.keys.toList)
       xs <- hashes.traverse(getEvent)
     } yield xs
   }
@@ -56,34 +49,24 @@ class Pool[F[_]: Monad](
       .map(_.sortBy(_.topologicalIndex))
   }
 
-  def getUndividedEventsAt(r: Round): F[List[Event]] = getEventsAt(r, _.isFamous.isDefined)
-
-  private def getRoundInfo(r: Round): F[Map[MultiHash, EventInfo]] = {
-    for {
-      ri <- rounds.getOpt(r)
-    } yield ri.getOrElse(Map.empty)
-  }
-
-  private def putRoundInfo(event: Event): F[Unit] = {
+  def putRoundInfo(event: Event): F[Unit] = {
     require(event.isDivided)
     for {
-      roundInfo <- getRoundInfo(event.round)
-      _ <- rounds.put(
-        event.round,
-        roundInfo + (event.hash -> EventInfo(
-          event.hash,
-          event.round,
-          event.isWitness,
-          event.isFamous,
-          event.isOrdered)))
+      roundInfo <- rounds.getOpt(event.round).map(_.getOrElse(RoundInfo(event.round)))
+      _ <- rounds.put(event.round, roundInfo.update(event))
     } yield ()
   }
 
-  def undecidedRounds: F[List[Round]] =
+  def getRounds(f: RoundInfo => Boolean): F[List[Round]] = {
     for {
       rs <- rounds.keys
       ri <- rs.traverse(rounds.get)
-    } yield ri.filter(_.exists(_._2.isFamous.isEmpty)).map(_.head._2.round).sorted
+    } yield ri.filter(f).map(_.round).sorted
+  }
+
+  def undecidedRounds: F[List[Round]] = getRounds(!_.isDecided)
+
+  def unorderedRounds: F[List[Round]] = getRounds(!_.isOrdered)
 
   def lastRound: F[Round] = rounds.keys.map(_.max)
 }
