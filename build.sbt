@@ -4,7 +4,7 @@ name := "jbok"
 
 description := "Just a Bunch Of Keys"
 
-scalaVersion in ThisBuild := "2.12.3"
+scalaVersion in ThisBuild := "2.12.4"
 
 cancelable in Global := true
 
@@ -111,5 +111,6 @@ scalacOptions in ThisBuild ++= Seq(
   "-language:postfixOps",
   "-deprecation",
   "-encoding",
-  "utf8"
+  "utf8",
+  "-Ypartial-unification"
 )
