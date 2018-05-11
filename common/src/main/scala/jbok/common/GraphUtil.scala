@@ -12,7 +12,8 @@ object GraphUtil {
   def findAllPaths[N, E[X] <: EdgeLikeIn[X]](
       g: Graph[N, E],
       source: N,
-      target: N
+      target: N,
+      breakOut: N => Boolean
   ): Set[g.Path] = {
     val s = g.get(source)
     val t = g.get(target)
@@ -27,6 +28,8 @@ object GraphUtil {
       val last = path.nodes.last
       if (last == t) {
         found += path
+      } else if (breakOut(last)) {
+        //
       } else {
         last.diSuccessors.foreach(n => {
           val b = g.newPathBuilder(path.nodes.head)
