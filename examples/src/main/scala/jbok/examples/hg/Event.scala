@@ -1,54 +1,11 @@
 package jbok.examples.hg
 
-import jbok.core.Transaction
 import jbok.crypto.hashing.MultiHash
-import scodec.codecs._
-import scodec.{Codec, _}
-
-/**
-  * @param selfParent hash of the previous self created event
-  * @param otherParent hash of the received sync event
-  * @param creator creator's proposition
-  * @param timestamp creator's creating timestamp
-  * @param txs optional payload
-  *
-  */
-case class EventBody(
-    selfParent: MultiHash,
-    otherParent: MultiHash,
-    creator: MultiHash,
-    timestamp: Long,
-    index: Int,
-    txs: List[Transaction]
-)
-
-object EventBody {
-  implicit val codec: Codec[EventBody] = {
-    ("self parent" | Codec[MultiHash]) ::
-      ("other parent" | Codec[MultiHash]) ::
-      ("creator" | Codec[MultiHash]) ::
-      ("timestamp" | int64) ::
-      ("index" | int32) ::
-      ("transactions" | listOfN(int32, Codec[Transaction]))
-  }.as[EventBody]
-}
-
-case class EventCoordinates(hash: MultiHash, index: Int)
 
 case class Event(
     body: EventBody,
     hash: MultiHash
-)(
-    var topologicalIndex: Int = -1,
-    var round: Round = -1,
-    var isWitness: Boolean = false,
-    var isFamous: Option[Boolean] = None,
-    var roundReceived: Round = -1,
-    var consensusTimestamp: Long = 0L,
-    var lastAncestors: Map[MultiHash, EventCoordinates] = Map(),
-    var firstDescendants: Map[MultiHash, EventCoordinates] = Map()
-) {
-
+)(val info: EventInfo) {
   override def toString: String = s"Event($hash)"
 
   @inline def sp = body.selfParent
@@ -57,23 +14,29 @@ case class Event(
 
   @inline def creator = body.creator
 
-  @inline def isDivided = this.round != -1
+  @inline def round = info.round
 
-  @inline def isDecided = this.isFamous.isDefined
+  @inline def isWitness = info.isWitness
 
-  @inline def isOrdered = this.roundReceived != -1
+  @inline def isFamous = info.isFamous
+
+  @inline def isDivided = info.round != -1
+
+  @inline def isDecided = info.isFamous.isDefined
+
+  @inline def isOrdered = info.roundReceived != -1
 
   def divided(round: Round, isWitness: Boolean, isFamous: Option[Boolean] = None): Event = {
-    this.round = round
-    this.isWitness = isWitness
-    this.isFamous = isFamous
+    info.round = round
+    info.isWitness = isWitness
+    info.isFamous = isFamous
     this
   }
 
   def decided(isFamous: Boolean): Event = {
     require(isDivided)
     require(!isDecided)
-    this.isFamous = Some(isFamous)
+    info.isFamous = Some(isFamous)
     this
   }
 
@@ -81,25 +44,85 @@ case class Event(
     require(isDivided)
     require(isDecided)
     require(roundReceived > -1)
-    this.roundReceived = roundReceived
-    this.consensusTimestamp = consensusTimestamp
+    info.roundReceived = roundReceived
+    info.consensusTimestamp = consensusTimestamp
     this
   }
 
   def updateLastAncestors(m: Map[MultiHash, EventCoordinates]): Event = {
-    this.lastAncestors = m
+    info.lastAncestors = m
     this
   }
 
   def updateFirstDescendant(creator: MultiHash, coord: EventCoordinates): Event = {
-    this.firstDescendants = this.firstDescendants + (creator -> coord)
+    info.firstDescendants += (creator -> coord)
     this
   }
-
-  def lastAncestorIndex(creator: MultiHash): Int = lastAncestors.get(creator).map(_.index).getOrElse(-1)
 }
 
 object Event {
-  implicit val ordering: Ordering[Event] =
-    Ordering.by(e => (e.roundReceived, e.consensusTimestamp))
+  implicit val ordering: Ordering[Event] = Ordering.by(e => (e.info.roundReceived, e.info.consensusTimestamp))
+
+  /**
+    * @param x event
+    * @param y event
+    * @return true if y is an ancestor of x
+    *
+    * x == y ∨ ∃z ∈ parents(x), ancestor(z, y)
+    */
+  def ancestor(x: Event, y: Event): Boolean = {
+    x == y || x.info.lastAncestorIndex(y.body.creator) >= y.body.index
+  }
+
+  /**
+    * @param x event
+    * @param y event
+    * @return true if y is a selfAncestor of x
+    *
+    * x and y are created by a same creator
+    * x == y ∨ (selfParent(x) ̸= ∅ ∧ selfAncestor(selfParent(x), y))
+    */
+  def selfAncestor(x: Event, y: Event): Boolean = {
+    x == y || x.body.creator == y.body.creator && x.body.index >= y.body.index
+  }
+
+  /**
+    * @param x event
+    * @param y event
+    * @return true if x sees y
+    *
+    */
+  def see(x: Event, y: Event): Boolean = ancestor(x, y)
+
+  /**
+    * @param x event
+    * @param y event
+    * @return earliest selfAncestor of x that sees y
+    */
+  def earliestSelfAncestorSee(x: Event, y: Event): Option[MultiHash] = {
+    val a = y.info.firstDescendants(x.creator)
+
+    if (x.body.index >= a.index) {
+      Some(a.hash)
+    } else {
+      None
+    }
+  }
+
+  /**
+    * @param x event
+    * @param y event
+    * @return true if x strongly sees y
+    *
+    * see(x, y) ∧ (∃S ⊆ E, manyCreators(S) ∧(z∈S => (see(x,z)∧see(z,y))))
+    */
+  def stronglySee(x: Event, y: Event, superMajority: Int): Boolean = {
+    val c = x.info.lastAncestors
+      .map {
+        case (creator, coord) =>
+          coord.index >= y.info.firstDescendants.get(creator).map(_.index).getOrElse(Int.MaxValue)
+      }
+      .count(_ == true)
+    c > superMajority
+  }
 }

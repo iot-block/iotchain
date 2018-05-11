@@ -11,21 +11,13 @@ case class RoundInfo(round: Round, events: mutable.Map[MultiHash, EventInfo] = m
 
   def isOrdered = events.forall { case (_, ei) => ei.isOrdered }
 
-  def update(event: Event): RoundInfo = {
-    this.events += (event.hash -> EventInfo(
-        event.hash,
-        event.round,
-        event.isWitness,
-        event.isFamous,
-        event.isOrdered))
+  def +=(event: Event): RoundInfo = {
+    this.events += (event.hash -> event.info)
+    this
+  }
+
+  def -=(hash: MultiHash): RoundInfo = {
+    this.events -= hash
     this
   }
 }
-
-case class EventInfo(
-    hash: MultiHash,
-    round: Round,
-    isWitness: Boolean,
-    isFamous: Option[Boolean],
-    isOrdered: Boolean
-)

@@ -12,7 +12,7 @@ import scalax.collection.GraphEdge.DiEdge
 import scalax.collection.GraphPredef._
 import scalax.collection.mutable.{Graph => MGraph}
 
-trait HGGen {
+trait HgGen {
   def genBoundedBytes(minSize: Int, maxSize: Int): Gen[Array[Byte]] =
     Gen.choose(minSize, maxSize).flatMap { sz =>
       Gen.listOfN(sz, Arbitrary.arbitrary[Byte]).map(_.toArray)
@@ -29,11 +29,11 @@ trait HGGen {
       Transaction(MultiHash.hash(b1, HashType.sha256), length, ByteVector(b2))
     }
 
-  def emptyEvent(sp: Event, op: Event, creator: MultiHash): Event = {
+  def emptyEvent(sp: Event, op: Event, creator: MultiHash, timestamp: Long): Event = {
     val ts = math.max(sp.body.timestamp, op.body.timestamp) + 1L
-    val body = EventBody(sp.hash, op.hash, creator, ts, sp.body.index + 1, Nil)
+    val body = EventBody(sp.hash, op.hash, creator, timestamp, sp.body.index + 1, Nil)
     val hash = MultiHash.hash(body, HashType.sha256)
-    Event(body, hash)()
+    Event(body, hash)(EventInfo())
   }
 
   def genGraph(
@@ -46,14 +46,14 @@ trait HGGen {
     } else if (g.order == 0) {
       g += HG.genesis
       val creators = (1 to n).toList.map(i => Cast.name2hash(Cast.names(i)))
-      val newEvents = creators.map(c => emptyEvent(HG.genesis, HG.genesis, c))
+      val newEvents = creators.map(c => emptyEvent(HG.genesis, HG.genesis, c, g.nodes.length + 1L))
       newEvents.foreach(e => g += (HG.genesis ~> e))
       genGraph(size - (n + 1), n, g, newEvents.map(x => x.body.creator -> x).toMap)
     } else {
       val Vector(sender, receiver) = Random.shuffle(1 to n).toVector.take(2)
       val op = lastEvents(Cast.name2hash(Cast.names(sender)))
       val sp = lastEvents(Cast.name2hash(Cast.names(receiver)))
-      val newEvent = emptyEvent(sp, op, sp.body.creator)
+      val newEvent = emptyEvent(sp, op, sp.body.creator, g.nodes.length + 1L)
       g += (sp ~> newEvent, op ~> newEvent)
       genGraph(size - 1, n, g, lastEvents + (sp.body.creator -> newEvent))
     }
