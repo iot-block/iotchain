@@ -1,43 +1,74 @@
 package jbok.crypto.signature
 
 import cats.effect.IO
-import jbok.crypto.signature.Curves.SHA256withSecp256k1
-import tsec.keygen.asymmetric.AsymmetricKeyGen
+import jbok.crypto._
+import org.bouncycastle.jcajce.provider.asymmetric.ec.{BCECPrivateKey, BCECPublicKey}
+import simulacrum.typeclass
 import tsec.signature._
 import tsec.signature.jca._
 
-object Curves {
-  sealed trait SHA256withSecp256k1
-  object SHA256withSecp256k1 extends ECDSASignature[SHA256withSecp256k1]("SHA256withECDSA", "secp256k1", 64)
+@typeclass trait Signature[A] {
+  def name: String
+
+  def code: Byte
+
+  def generateKeyPair: KeyPair
+
+  def buildPublicKey(bytes: Array[Byte]): SigPublicKey[A]
+
+  def buildPrivateKey(bytes: Array[Byte]): SigPrivateKey[A]
+
+  def sign(toSign: Array[Byte], priKey: PriKey): Sig
+
+  def verify(toSign: Array[Byte], signed: Sig, pubKey: PubKey): Boolean
 }
 
-trait Signature[F[_], A] {
-  type AKG = AsymmetricKeyGen[F, A, SigPublicKey, SigPrivateKey, SigKeyPair]
+object Signature {
+  implicit val secp256k1 = new Signature[Curves.secp256k1] {
+    val akg = implicitly[JCASigKG[IO, Curves.secp256k1]]
 
-  def buildPrivateKey(bytes: Array[Byte])(implicit S: AKG): F[SigPrivateKey[A]] =
-    S.buildPrivateKey(bytes)
+    val signer = implicitly[JCASigner[IO, Curves.secp256k1]]
 
-  def buildPublicKey(bytes: Array[Byte])(implicit S: AKG): F[SigPublicKey[A]] =
-    S.buildPublicKey(bytes)
+    override val name: String = "secp256k1"
 
-  def buildKeyPair(privateKey: SigPrivateKey[A], publicKey: SigPublicKey[A]): SigKeyPair[A] =
-    SigKeyPair(privateKey, publicKey)
+    override val code: Byte = 0x00
 
-  def generateKeyPair(implicit S: AKG): F[SigKeyPair[A]] =
-    S.generateKeyPair
+    override def generateKeyPair = {
+      val keypair = akg.generateKeyPair.unsafeRunSync()
+      val privateKey = keypair.privateKey.asInstanceOf[BCECPrivateKey]
+      val publicKey = keypair.publicKey.asInstanceOf[BCECPublicKey]
+      val priKey = PriKey(code, privateKey.getEncoded.bv)
+      val pubKey = PubKey(code, publicKey.getEncoded.bv)
+      KeyPair(pubKey, priKey)
+    }
 
-  def sign(toSign: Array[Byte], privateKey: SigPrivateKey[A])(
-      implicit S: Signer[F, A, SigPublicKey, SigPrivateKey]): F[CryptoSignature[A]] =
-    S.sign(toSign, privateKey)
+    override def buildPublicKey(bytes: Array[Byte]) =
+      akg.buildPublicKey(bytes).unsafeRunSync()
 
-  def buildSignature(bytes: Array[Byte]): CryptoSignature[A] =
-    CryptoSignature(bytes)
+    override def buildPrivateKey(bytes: Array[Byte]): SigPrivateKey[Curves.secp256k1] =
+      akg.buildPrivateKey(bytes).unsafeRunSync()
 
-  def verify(toSign: Array[Byte], signed: CryptoSignature[A], publicKey: SigPublicKey[A])(
-      implicit S: Signer[F, A, SigPublicKey, SigPrivateKey]): F[Boolean] =
-    S.verifyBool(toSign, signed, publicKey)
-}
+    override def sign(toSign: Array[Byte], priKey: PriKey): Sig = {
+      val privateKey = buildPrivateKey(priKey.bytes.toArray)
+      val sig = signer.sign(toSign, privateKey).unsafeRunSync()
+      Sig(code, sig.bv)
+    }
 
-object Signatures {
-  object Secp256k1Sig extends Signature[IO, SHA256withSecp256k1]
+    override def verify(toSign: Array[Byte], signed: Sig, pubKey: PubKey): Boolean = {
+      val publicKey = buildPublicKey(pubKey.bytes.toArray)
+      signer
+        .verifyBool(
+          toSign,
+          signed.bytes.toArray.asInstanceOf[CryptoSignature[Curves.secp256k1]],
+          publicKey
+        )
+        .unsafeRunSync()
+    }
+  }
+
+  val codeTypeMap = Map(
+    secp256k1.code -> secp256k1
+  )
+
+  val codeNameMap = codeTypeMap.mapValues(_.name)
 }
