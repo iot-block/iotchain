@@ -49,7 +49,8 @@ lazy val tsec = Seq(
 )
 
 lazy val cats = Seq(
-  "org.typelevel" %% "cats-core" % "1.1.0"
+  "org.typelevel" %% "cats-core" % "1.1.0",
+  "org.typelevel" %% "cats-effect" % "1.0.0-RC"
 )
 
 lazy val jbok = project
@@ -59,9 +60,11 @@ lazy val jbok = project
 lazy val common = project
   .settings(
     name := "jbok-common",
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
     libraryDependencies ++= logging ++ tests ++ cats ++ Seq(
       "org.scala-graph" %% "graph-core" % "1.12.5",
-      "org.scala-graph" %% "graph-dot" % "1.12.1"
+      "org.scala-graph" %% "graph-dot" % "1.12.1",
+      "com.github.mpilquist" %% "simulacrum" % "0.12.0"
     )
   )
 
@@ -74,9 +77,11 @@ lazy val core = project
 lazy val crypto = project
   .settings(
     name := "jbok-crypto",
-    libraryDependencies ++= tsec ++ Seq(
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
+    libraryDependencies ++= tsec ++ circe ++ Seq(
       "org.scodec" %% "scodec-bits" % "1.1.5",
-      "org.scodec" %% "scodec-core" % "1.10.3"
+      "org.scodec" %% "scodec-core" % "1.10.3",
+      "org.scorexfoundation" %% "scrypto" % "2.0.5"
     )
   )
   .dependsOn(common % CompileAndTest)
@@ -90,11 +95,27 @@ lazy val p2p = project
   )
   .dependsOn(common % CompileAndTest, crypto)
 
+lazy val codec = project
+  .settings(
+    name := "jbok-codec",
+    libraryDependencies ++= Seq(
+      "org.scodec" %% "scodec-bits" % "1.1.5",
+      "org.scodec" %% "scodec-core" % "1.10.3",
+    )
+  )
+  .dependsOn(common % CompileAndTest)
+
 lazy val examples = project
   .settings(
     name := "jbok-examples"
   )
   .dependsOn(core % CompileAndTest)
+
+lazy val app = project
+  .settings(
+    name := "jbok-app"
+  )
+  .dependsOn(core % CompileAndTest, examples)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 
