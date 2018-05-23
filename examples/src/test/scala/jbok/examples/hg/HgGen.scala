@@ -1,16 +1,18 @@
 package jbok.examples.hg
 
 import jbok.core.Transaction
-import jbok.crypto.hashing.{HashType, MultiHash}
+import jbok.crypto._
+import jbok.crypto.hashing.{Hash, Hashing}
 import jbok.testkit.Cast
 import org.scalacheck.{Arbitrary, Gen}
-import scodec.bits.ByteVector
-
-import scala.util.Random
 import scalax.collection.Graph
 import scalax.collection.GraphEdge.DiEdge
 import scalax.collection.GraphPredef._
 import scalax.collection.mutable.{Graph => MGraph}
+import scodec.bits.ByteVector
+import tsec.hashing.jca.SHA256
+
+import scala.util.Random
 
 trait HgGen {
   def genBoundedBytes(minSize: Int, maxSize: Int): Gen[Array[Byte]] =
@@ -26,13 +28,13 @@ trait HgGen {
       length <- Gen.chooseNum(1, 10)
       b2 <- genBytes(length)
     } yield {
-      Transaction(MultiHash.hash(b1, HashType.sha256), length, ByteVector(b2))
+      Transaction(Hashing[SHA256].hash(b1.bytes), length, ByteVector(b2))
     }
 
-  def emptyEvent(sp: Event, op: Event, creator: MultiHash, timestamp: Long): Event = {
+  def emptyEvent(sp: Event, op: Event, creator: Hash, timestamp: Long): Event = {
     val ts = math.max(sp.body.timestamp, op.body.timestamp) + 1L
     val body = EventBody(sp.hash, op.hash, creator, timestamp, sp.body.index + 1, Nil)
-    val hash = MultiHash.hash(body, HashType.sha256)
+    val hash = Hashing.hash[SHA256](body.bytes)
     Event(body, hash)(EventInfo())
   }
 
@@ -40,7 +42,7 @@ trait HgGen {
       size: Int,
       n: Int,
       g: MGraph[Event, DiEdge] = MGraph.empty,
-      lastEvents: Map[MultiHash, Event] = Map.empty): Graph[Event, DiEdge] = {
+      lastEvents: Map[Hash, Event] = Map.empty): Graph[Event, DiEdge] = {
     if (size <= 0) {
       g
     } else if (g.order == 0) {

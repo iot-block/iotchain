@@ -1,10 +1,10 @@
 package jbok.examples.hg
 
-import jbok.crypto.hashing.MultiHash
+import jbok.crypto.hashing.Hash
 
 case class Event(
     body: EventBody,
-    hash: MultiHash
+    hash: Hash
 )(val info: EventInfo) {
   override def toString: String = s"Event($hash)"
 
@@ -49,12 +49,12 @@ case class Event(
     this
   }
 
-  def updateLastAncestors(m: Map[MultiHash, EventCoordinates]): Event = {
+  def updateLastAncestors(m: Map[Hash, EventCoordinates]): Event = {
     info.lastAncestors = m
     this
   }
 
-  def updateFirstDescendant(creator: MultiHash, coord: EventCoordinates): Event = {
+  def updateFirstDescendant(creator: Hash, coord: EventCoordinates): Event = {
     info.firstDescendants += (creator -> coord)
     this
   }
@@ -99,7 +99,7 @@ object Event {
     * @param y event
     * @return earliest selfAncestor of x that sees y
     */
-  def earliestSelfAncestorSee(x: Event, y: Event): Option[MultiHash] = {
+  def earliestSelfAncestorSee(x: Event, y: Event): Option[Hash] = {
     val a = y.info.firstDescendants(x.creator)
 
     if (x.body.index >= a.index) {

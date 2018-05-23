@@ -4,14 +4,13 @@ import cats.Id
 import jbok.JbokSpec
 import jbok.common.GraphUtil
 import jbok.core.store.KVStore
-import jbok.crypto.hashing.MultiHash
+import jbok.crypto.hashing.Hash
 import jbok.testkit.Cast
-
 import scalax.collection.io.dot.DotAttr
 import scalax.collection.io.dot.implicits._
 
 class HgSpec extends JbokSpec with HgGen {
-  val events = implicitly[KVStore[Id, MultiHash, Event]]
+  val events = implicitly[KVStore[Id, Hash, Event]]
   val rounds = implicitly[KVStore[Id, Round, RoundInfo]]
   implicit val pool = new Pool[Id](events, rounds)
 

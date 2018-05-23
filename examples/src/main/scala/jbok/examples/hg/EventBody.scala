@@ -1,7 +1,7 @@
 package jbok.examples.hg
 
 import jbok.core.Transaction
-import jbok.crypto.hashing.MultiHash
+import jbok.crypto.hashing.Hash
 import scodec.codecs._
 import scodec.{Codec, _}
 
@@ -14,19 +14,19 @@ import scodec.{Codec, _}
   *
   */
 case class EventBody(
-    selfParent: MultiHash,
-    otherParent: MultiHash,
-    creator: MultiHash,
-    timestamp: Long,
-    index: Int,
-    txs: List[Transaction]
+                      selfParent: Hash,
+                      otherParent: Hash,
+                      creator: Hash,
+                      timestamp: Long,
+                      index: Int,
+                      txs: List[Transaction]
 )
 
 object EventBody {
   implicit val codec: Codec[EventBody] = {
-    ("self parent" | Codec[MultiHash]) ::
-      ("other parent" | Codec[MultiHash]) ::
-      ("creator" | Codec[MultiHash]) ::
+    ("self parent" | Codec[Hash]) ::
+      ("other parent" | Codec[Hash]) ::
+      ("creator" | Codec[Hash]) ::
       ("timestamp" | int64) ::
       ("index" | int32) ::
       ("transactions" | listOfN(int32, Codec[Transaction]))

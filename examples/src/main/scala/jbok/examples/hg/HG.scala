@@ -2,8 +2,10 @@ package jbok.examples.hg
 
 import cats.Monad
 import cats.implicits._
-import jbok.crypto.hashing.{HashType, MultiHash}
+import jbok.crypto._
+import jbok.crypto.hashing.{Hash, Hashing}
 import scodec.bits.BitVector
+import tsec.hashing.jca.SHA256
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -27,7 +29,7 @@ class HG[F[_]: Monad](config: HGConfig)(implicit pool: Pool[F]) {
 
   def unorderedRounds: F[List[Round]] = pool.getRounds(!_.isOrdered)
 
-  def event(hash: MultiHash): F[Event] = pool.getEvent(hash)
+  def event(hash: Hash): F[Event] = pool.getEvent(hash)
 
   def eventsAt(r: Round): F[List[Event]] = pool.getEvents(r)
 
@@ -103,7 +105,7 @@ class HG[F[_]: Monad](config: HGConfig)(implicit pool: Pool[F]) {
     } yield divided
   }
 
-  type Votes = mutable.Map[MultiHash, Boolean]
+  type Votes = mutable.Map[Hash, Boolean]
 
   /**
     * @param x witness event
@@ -211,7 +213,7 @@ class HG[F[_]: Monad](config: HGConfig)(implicit pool: Pool[F]) {
     } yield decided
   }
 
-  def medianTimestamp(hashes: List[MultiHash]): F[Long] = {
+  def medianTimestamp(hashes: List[Hash]): F[Long] = {
     require(hashes.nonEmpty)
     for {
       events <- hashes.traverse(event)
@@ -310,10 +312,10 @@ object HG {
   }
 
   val genesis: Event = {
-    val nil = MultiHash.hash("", HashType.sha256)
-    val god = MultiHash.hash("god", HashType.sha256)
+    val nil = Hashing.hash[SHA256]("".utf8bytes)
+    val god = Hashing.hash[SHA256]("god".utf8bytes)
     val body = EventBody(nil, nil, god, 0L, 0, Nil)
-    val hash = MultiHash.hash(body, HashType.sha256)
+    val hash = Hashing.hash[SHA256](body.bytes)
     Event(body, hash)(
       EventInfo(
         topologicalIndex = 0,

@@ -3,12 +3,12 @@ package jbok.examples.hg
 import cats.Monad
 import cats.implicits._
 import jbok.core.store.KVStore
-import jbok.crypto.hashing.MultiHash
+import jbok.crypto.hashing.Hash
 
-class Pool[F[_]: Monad](val events: KVStore[F, MultiHash, Event], val rounds: KVStore[F, Round, RoundInfo]) {
-  def getEvent(hash: MultiHash): F[Event] = events.get(hash)
+class Pool[F[_]: Monad](val events: KVStore[F, Hash, Event], val rounds: KVStore[F, Round, RoundInfo]) {
+  def getEvent(hash: Hash): F[Event] = events.get(hash)
 
-  def getEventOpt(hash: MultiHash): F[Option[Event]] = events.getOpt(hash)
+  def getEventOpt(hash: Hash): F[Option[Event]] = events.getOpt(hash)
 
   def putEvent(event: Event): F[Unit] = {
     for {
