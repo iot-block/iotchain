@@ -1,5 +1,7 @@
 package jbok.codec
 
+import scodec.Attempt
+import scodec.Attempt.Successful
 import scodec.bits._
 
 package object hp {
@@ -21,14 +23,14 @@ package object hp {
     hp.toByteVector
   }
 
-  def decode(bytes: ByteVector): (Boolean, Nibbles) = {
+  def decode(bytes: ByteVector): Attempt[(Boolean, Nibbles)] = {
     val flag = (bytes(0) & (2 << 4)) != 0
     val even = (bytes(0) & (1 << 4)) == 0
 
     if (even) {
-      (flag, bytes.tail.toBitVector)
+      Successful(flag, bytes.tail.toBitVector)
     } else {
-      (flag, bytes.toBitVector.drop(4))
+      Successful(flag, bytes.toBitVector.drop(4))
     }
   }
 }
