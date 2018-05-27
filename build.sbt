@@ -15,6 +15,10 @@ lazy val V = new {
   val tsec = "0.0.1-M11"
 }
 
+lazy val fs2 = Seq(
+  "co.fs2" %% "fs2-core" % "0.10.4"
+)
+
 lazy val circe = Seq(
   "io.circe" %% "circe-core",
   "io.circe" %% "circe-generic",
@@ -116,6 +120,26 @@ lazy val app = project
     name := "jbok-app"
   )
   .dependsOn(core % CompileAndTest, examples)
+
+lazy val persistent = project
+  .settings(
+    name := "jbok-persistent",
+    libraryDependencies ++= fs2 ++ Seq(
+      "org.scodec" %% "scodec-bits" % "1.1.5",
+      "org.scodec" %% "scodec-core" % "1.10.3",
+      "org.iq80.leveldb" % "leveldb" % "0.10",
+      "io.monix" %% "monix" % "3.0.0-RC1",
+      "org.scalacheck" %% "scalacheck" % "1.13.4"
+    )
+  )
+  .dependsOn(common % CompileAndTest)
+
+lazy val benchmark = project
+  .settings(
+    name := "jbok-benchmark"
+  )
+  .enablePlugins(JmhPlugin)
+  .dependsOn(persistent)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 
