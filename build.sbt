@@ -13,6 +13,7 @@ lazy val V = new {
   val akka = "2.5.11"
   val akkaHttp = "10.1.0"
   val tsec = "0.0.1-M11"
+  val http4s = "0.18.11"
 }
 
 lazy val fs2 = Seq(
@@ -68,7 +69,9 @@ lazy val common = project
     libraryDependencies ++= logging ++ tests ++ cats ++ Seq(
       "org.scala-graph" %% "graph-core" % "1.12.5",
       "org.scala-graph" %% "graph-dot" % "1.12.1",
-      "com.github.mpilquist" %% "simulacrum" % "0.12.0"
+      "com.github.mpilquist" %% "simulacrum" % "0.12.0",
+      "com.beachape" %% "enumeratum" % "1.5.13",
+      "com.beachape" %% "enumeratum-circe" % "1.5.13"
     )
   )
 
@@ -134,12 +137,25 @@ lazy val persistent = project
   )
   .dependsOn(common % CompileAndTest)
 
+lazy val rpc = project
+  .settings(
+    name := "jbok-rpc",
+    libraryDependencies ++= circe ++ Seq(
+      "org.http4s" %% "http4s-core" % V.http4s,
+      "org.http4s" %% "http4s-blaze-server" % V.http4s,
+      "org.http4s" %% "http4s-blaze-client" % V.http4s,
+      "org.http4s" %% "http4s-circe" % V.http4s,
+      "org.http4s" %% "http4s-dsl" % V.http4s
+    )
+  )
+  .dependsOn(common % CompileAndTest)
+
 lazy val benchmark = project
   .settings(
     name := "jbok-benchmark"
   )
   .enablePlugins(JmhPlugin)
-  .dependsOn(persistent)
+  .dependsOn(persistent, rpc)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 
