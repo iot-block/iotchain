@@ -140,6 +140,9 @@ lazy val persistent = project
 lazy val rpc = project
   .settings(
     name := "jbok-rpc",
+    addCompilerPlugin(
+      "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
+    ),
     libraryDependencies ++= circe ++ Seq(
       "org.http4s" %% "http4s-core" % V.http4s,
       "org.http4s" %% "http4s-blaze-server" % V.http4s,
