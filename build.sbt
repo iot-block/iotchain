@@ -91,7 +91,7 @@ lazy val crypto = project
       "org.scorexfoundation" %% "scrypto" % "2.0.5"
     )
   )
-  .dependsOn(common % CompileAndTest, codec)
+  .dependsOn(common % CompileAndTest, codec, persistent)
 
 lazy val p2p = project
   .settings(
