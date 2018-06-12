@@ -1,11 +1,12 @@
 package jbok.common
 
-import scala.collection.mutable
 import scalax.collection.Graph
-import scalax.collection.GraphEdge.DiEdge
+import scalax.collection.GraphEdge.{DiEdge, UnDiEdge}
 import scalax.collection.GraphPredef.EdgeLikeIn
 import scalax.collection.io.dot._
 import scalax.collection.io.dot.implicits._
+
+import scala.collection.mutable
 
 object GraphUtil {
 
@@ -52,7 +53,7 @@ object GraphUtil {
     val dotRoot = DotRootGraph(
       directed = true,
       id = None,
-      attrStmts = List(DotAttrStmt(Elem.node, List(DotAttr("shape", "record")))),
+      attrStmts = List(DotAttrStmt(Elem.node, List(DotAttr("shape", "record"))))
     )
 
     def nodeTransformer(innerNode: Graph[N, E]#NodeT): Option[(DotGraph, DotNodeStmt)] = {
@@ -61,6 +62,7 @@ object GraphUtil {
 
     def edgeTransformer(innerEdge: Graph[N, E]#EdgeT): Option[(DotGraph, DotEdgeStmt)] = innerEdge.edge match {
       case DiEdge(source, target) => Some((dotRoot, DotEdgeStmt(source.toString, target.toString, Nil)))
+      case UnDiEdge(a, b) => Some((dotRoot, DotEdgeStmt(a.toString, b.toString, Nil)))
     }
 
     graph.toDot(dotRoot, edgeTransformer, cNodeTransformer = Some(nodeTransformer))
