@@ -1,13 +1,25 @@
 package jbok.rpc.json
 
+import java.nio.charset.StandardCharsets
+
 import cats.effect.Effect
 import cats.implicits._
 import io.circe._
 import io.circe.generic.JsonCodec
+import io.circe.parser._
 import io.circe.syntax._
 
 sealed trait JsonrpcMsg
 object JsonrpcMsg {
+  def request(method: String, id: RequestId, params: Option[Json] = None): JsonrpcMsg =
+    JsonrpcRequest(method, id, params)
+
+  def response(result: Json, id: RequestId): JsonrpcMsg = JsonrpcResponse.Success(result, id)
+
+  def error(error: ErrorObject, id: RequestId): JsonrpcMsg = JsonrpcResponse.Error(error, id)
+
+  def notification(method: String, params: Option[Json] = None): JsonrpcMsg = JsonrpcNotification(method, params)
+
   implicit val encoder: Encoder[JsonrpcMsg] = new Encoder[JsonrpcMsg] {
     override def apply(a: JsonrpcMsg): Json = {
       val json = a match {
@@ -31,20 +43,25 @@ object JsonrpcMsg {
         else json.as[JsonrpcNotification]
       result.leftMap(_.toString)
     }
+
+  implicit val binaryCodec: scodec.Codec[JsonrpcMsg] = scodec.codecs
+    .string(StandardCharsets.UTF_8)
+    .xmap[JsonrpcMsg](x => decode[JsonrpcMsg](x).right.get, _.asJson.noSpaces)
 }
 
 @JsonCodec case class JsonrpcRequest(
     method: String,
-    params: Option[Json],
-    id: RequestId
+    id: RequestId,
+    params: Option[Json] = None,
 ) extends JsonrpcMsg {
   def toError(code: ErrorCode, message: String): JsonrpcResponse =
     JsonrpcResponse.error(ErrorObject(code, message, None), id)
 }
 
-@JsonCodec case class JsonrpcNotification(method: String, params: Option[Json]) extends JsonrpcMsg
+@JsonCodec case class JsonrpcNotification(method: String, params: Option[Json] = None) extends JsonrpcMsg
 
-sealed trait JsonrpcResponse extends JsonrpcMsg {
+sealed abstract class JsonrpcResponse extends JsonrpcMsg {
+  def id: RequestId
   def isSuccess: Boolean = this.isInstanceOf[JsonrpcResponse.Success]
 }
 
@@ -53,15 +70,11 @@ object JsonrpcResponse {
     override def apply(a: JsonrpcResponse): Json = a match {
       case r: JsonrpcResponse.Success => r.asJson
       case r: JsonrpcResponse.Error => r.asJson
-      case JsonrpcResponse.Empty => JsonObject.empty.asJson
     }
   }
 
   @JsonCodec case class Success(result: Json, id: RequestId) extends JsonrpcResponse
   @JsonCodec case class Error(error: ErrorObject, id: RequestId) extends JsonrpcResponse
-  case object Empty extends JsonrpcResponse
-
-  def empty: JsonrpcResponse = Empty
 
   def ok(result: Json, id: RequestId): JsonrpcResponse = success(result, id)
 
