@@ -112,7 +112,9 @@ package object rlp {
 
   val rempty: RlpCodec[Unit] = RlpCodec(constant(itemOffset))
 
-  val ritemOpt: RlpCodec[Option[ByteVector]] =  ritem(optional(bool(8), bytes))
+  val ritemOpt: RlpCodec[Option[ByteVector]] = ritem(optional(bool(8), bytes))
+
+  def rulong(bits: Int): RlpCodec[Long] = ritem(ulong(bits))
 
   def encode[A](a: A)(implicit codec: RlpCodec[A]): Attempt[BitVector] = codec.encode(a)
 
