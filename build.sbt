@@ -13,7 +13,7 @@ lazy val V = new {
   val akka = "2.5.11"
   val akkaHttp = "10.1.0"
   val tsec = "0.0.1-M11"
-  val http4s = "0.18.11"
+  val http4s = "0.18.12"
 }
 
 lazy val fs2 = Seq(
@@ -43,7 +43,8 @@ lazy val tests = Seq(
 
 lazy val logging = Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.3",
-  "com.typesafe.scala-logging" %% "scala-logging" % "3.8.0"
+  "com.typesafe.scala-logging" %% "scala-logging" % "3.8.0",
+  "org.log4s" %% "log4s" % "1.6.1"
 )
 
 lazy val tsec = Seq(
@@ -58,15 +59,35 @@ lazy val cats = Seq(
   "org.typelevel" %% "cats-effect" % "1.0.0-RC"
 )
 
+lazy val http4s = Seq(
+  "org.http4s" %% "http4s-core",
+  "org.http4s" %% "http4s-blaze-server",
+  "org.http4s" %% "http4s-blaze-client" ,
+  "org.http4s" %% "http4s-circe",
+  "org.http4s" %% "http4s-dsl"
+).map(_ % V.http4s)
+
+lazy val monix = Seq(
+  "io.monix" %% "monix" % "3.0.0-RC1"
+)
+
+lazy val commonSettings = Seq(
+  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
+  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
+  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7"),
+  scalacOpts
+)
+
 lazy val jbok = project
   .in(file("."))
   .aggregate(core)
 
 lazy val common = project
+  .settings(commonSettings)
   .settings(
     name := "jbok-common",
     addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
-    libraryDependencies ++= logging ++ tests ++ cats ++ Seq(
+    libraryDependencies ++= logging ++ tests ++ cats ++ fs2 ++ Seq(
       "org.scala-graph" %% "graph-core" % "1.12.5",
       "org.scala-graph" %% "graph-dot" % "1.12.1",
       "com.github.mpilquist" %% "simulacrum" % "0.12.0",
@@ -76,12 +97,17 @@ lazy val common = project
   )
 
 lazy val core = project
+  .settings(commonSettings)
   .settings(
-    name := "jbok-core"
+    name := "jbok-core",
+    libraryDependencies ++= http4s ++ circe ++ Seq(
+     "com.github.pathikrit" %% "better-files" % "3.5.0"
+    )
   )
-  .dependsOn(common % CompileAndTest, crypto, p2p)
+  .dependsOn(common % CompileAndTest, crypto, p2p, rpc)
 
 lazy val crypto = project
+  .settings(commonSettings)
   .settings(
     name := "jbok-crypto",
     addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
@@ -94,6 +120,7 @@ lazy val crypto = project
   .dependsOn(common % CompileAndTest, codec, persistent)
 
 lazy val p2p = project
+  .settings(commonSettings)
   .settings(
     name := "jbok-p2p",
     libraryDependencies ++= akka ++ Seq(
@@ -103,9 +130,10 @@ lazy val p2p = project
   .dependsOn(common % CompileAndTest, crypto)
 
 lazy val codec = project
+  .settings(commonSettings)
   .settings(
     name := "jbok-codec",
-    libraryDependencies ++= Seq(
+    libraryDependencies ++= circe ++ Seq(
       "org.scodec" %% "scodec-bits" % "1.1.5",
       "org.scodec" %% "scodec-core" % "1.10.3",
     )
@@ -113,18 +141,35 @@ lazy val codec = project
   .dependsOn(common % CompileAndTest)
 
 lazy val examples = project
+  .settings(commonSettings)
   .settings(
     name := "jbok-examples"
   )
   .dependsOn(core % CompileAndTest)
 
-lazy val app = project
+lazy val simulations = project
+  .settings(commonSettings)
   .settings(
-    name := "jbok-app"
+    name := "jbok-simulations",
+    libraryDependencies ++= monix
   )
-  .dependsOn(core % CompileAndTest, examples)
+  .dependsOn(core % CompileAndTest)
+
+lazy val app = project
+  .settings(commonSettings)
+  .settings(
+    name := "jbok-app",
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
+    scalaJSUseMainModuleInitializer := true,
+    libraryDependencies ++= Seq(
+      "com.thoughtworks.binding" %%% "dom" % "11.0.1",
+      "com.thoughtworks.binding" %%% "route" % "11.0.1"
+    )
+  )
+  .enablePlugins(ScalaJSPlugin)
 
 lazy val persistent = project
+  .settings(commonSettings)
   .settings(
     name := "jbok-persistent",
     libraryDependencies ++= fs2 ++ Seq(
@@ -138,22 +183,21 @@ lazy val persistent = project
   .dependsOn(common % CompileAndTest)
 
 lazy val rpc = project
+  .settings(commonSettings)
   .settings(
     name := "jbok-rpc",
     addCompilerPlugin(
       "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
     ),
-    libraryDependencies ++= circe ++ Seq(
-      "org.http4s" %% "http4s-core" % V.http4s,
-      "org.http4s" %% "http4s-blaze-server" % V.http4s,
-      "org.http4s" %% "http4s-blaze-client" % V.http4s,
-      "org.http4s" %% "http4s-circe" % V.http4s,
-      "org.http4s" %% "http4s-dsl" % V.http4s
+    libraryDependencies ++= circe ++ http4s ++ monix ++ akka ++ Seq(
+      "com.spinoco" %% "fs2-http" % "0.3.0",
+      "com.github.zainab-ali" %% "fs2-reactive-streams" % "0.5.1"
     )
   )
-  .dependsOn(common % CompileAndTest)
+  .dependsOn(common % CompileAndTest, codec)
 
 lazy val benchmark = project
+  .settings(commonSettings)
   .settings(
     name := "jbok-benchmark"
   )
@@ -166,15 +210,16 @@ publishMavenStyle := true
 
 publishArtifact in Test := false
 
-scalacOptions in ThisBuild ++= Seq(
+lazy val scalacOpts = scalacOptions := Seq(
   "-unchecked",
   "-feature",
-  "-language:existentials",
-  "-language:higherKinds",
-  "-language:implicitConversions",
-  "-language:postfixOps",
   "-deprecation",
   "-encoding",
   "utf8",
-  "-Ypartial-unification"
+  "-Ywarn-inaccessible",
+  "-Ywarn-nullary-override",
+  "-Ypartial-unification",
+  "-language:higherKinds",
+  "-language:implicitConversions",
+  "-language:postfixOps"
 )
