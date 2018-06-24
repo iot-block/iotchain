@@ -28,3 +28,5 @@ project/plugins/project/
 .ensime_cache
 
 # project specific
+node_modules
+package-lock.json
