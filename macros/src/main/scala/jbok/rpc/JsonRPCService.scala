@@ -1,6 +1,6 @@
 package jbok.rpc
 
-import cats.effect.IO
+import cats.effect.Effect
 import cats.implicits._
 import io.circe.generic.JsonCodec
 import io.circe.parser._
@@ -14,40 +14,45 @@ import scala.reflect.macros.blackbox
 @JsonCodec
 case class JsonRpcMethod(method: String)
 
-class JsonRPCService(val handlers: Map[String, Handler] = Map.empty) {
-  def mountAPI[API](api: API): JsonRPCService = macro JsonRPCServerMacro.mountAPI[API]
+class JsonRPCService[F[_]](val handlers: Map[String, Handler[F]])(implicit val F: Effect[F]) {
+  type Service = JsonRPCService[F]
 
-  def handle(json: String): IO[String] = {
+  type HandlerF = Handler[F]
+
+  def mountAPI[API](api: API): Service = macro JsonRPCServerMacro.mountAPI[Service, HandlerF, API]
+
+  def handle(json: String): F[String] = {
     decode[JsonRpcMethod](json) match {
-      case Left(e) => JsonRPCResponse.invalidRequest(e.toString).asJson.noSpaces.pure[IO]
+      case Left(e) => JsonRPCResponse.invalidRequest(e.toString).asJson.noSpaces.pure[F]
       case Right(x) => handleReq(x.method, json)
     }
   }
 
-  protected def handleReq(method: String, json: String): IO[String] =
+  protected def handleReq(method: String, json: String): F[String] =
     handlers.get(method) match {
       case Some(handler) => handler(json)
-      case _ => IO.pure(JsonRPCResponse.invalidRequest(s"method ${method} does not exist").asJson.noSpaces)
+      case _ => F.pure(JsonRPCResponse.invalidRequest(s"method ${method} does not exist").asJson.noSpaces)
     }
 }
 
 object JsonRPCService {
-  def apply(): JsonRPCService = new JsonRPCService()
+  def apply[F[_]: Effect]: JsonRPCService[F] = new JsonRPCService[F](Map.empty)
 
-  type Handler = String => IO[String]
+  type Handler[F[_]] = String => F[String]
 }
 
 object JsonRPCServerMacro {
-  def mountAPI[API: c.WeakTypeTag](c: blackbox.Context)(api: c.Expr[API]): c.Expr[JsonRPCService] = {
+  def mountAPI[Service, HandlerF, API: c.WeakTypeTag](c: blackbox.Context)(api: c.Expr[API]): c.Expr[Service] = {
     import c.universe._
 
     val apiType: Type = weakTypeOf[API]
 
     val handlers = MacroUtils[c.type](c)
       .getApiMethods(apiType)
-      .map((apiMember: MethodSymbol) => methodToHandler(c)(api, apiMember))
+      .map((apiMember: MethodSymbol) => methodToHandler[HandlerF, API](c)(api, apiMember))
 
-    val expr = c.Expr[JsonRPCService] {
+
+    val expr = c.Expr[Service] {
       q"""
         new JsonRPCService(
             ${c.prefix.tree}.handlers ++ Map(..$handlers)
@@ -58,8 +63,8 @@ object JsonRPCServerMacro {
     expr
   }
 
-  private def methodToHandler[API](
-      c: blackbox.Context)(api: c.Expr[API], method: c.universe.MethodSymbol): c.Expr[(String, Handler)] = {
+  private def methodToHandler[HandlerF, API: c.WeakTypeTag](
+      c: blackbox.Context)(api: c.Expr[API], method: c.universe.MethodSymbol): c.Expr[(String, HandlerF)] = {
     import c.universe._
 
     val macroUtils = MacroUtils[c.type](c)
@@ -77,7 +82,9 @@ object JsonRPCServerMacro {
         .map(fieldName => q"$params.$fieldName")
     }
 
-    val handler = c.Expr[Handler] {
+    val effectType = weakTypeOf[API].typeArgs.head
+
+    val handler = c.Expr[HandlerF] {
       val run = if (parameterTypes.isEmpty) {
         q"$api.$method"
       } else if (parameterTypes.size == 1) {
@@ -98,7 +105,7 @@ object JsonRPCServerMacro {
           import jbok.rpc.json._
           decode[JsonRPCRequest[$parameterType]](json) match {
             case Left(e) =>
-              JsonRPCResponse.invalidRequest(e.toString()).asJson.noSpaces.pure[IO]
+              JsonRPCResponse.invalidRequest(e.toString()).asJson.noSpaces.pure[$effectType]
             case Right(req) =>
               val result = $run
               result.map(x => JsonRPCResponse.ok(req.id, x).asJson.noSpaces)
@@ -107,6 +114,6 @@ object JsonRPCServerMacro {
        """
     }
 
-    c.Expr[(String, Handler)](q"""$fullMethodName -> $handler""")
+    c.Expr[(String, HandlerF)](q"""$fullMethodName -> $handler""")
   }
 }

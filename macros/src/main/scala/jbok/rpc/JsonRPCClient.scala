@@ -1,12 +1,13 @@
 package jbok.rpc
 
+import cats.effect.Sync
 import fs2._
 import jbok.rpc.json.JsonRPCMessage.RequestId
 
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
 
-abstract class JsonRPCClient[F[_]] {
+abstract class JsonRPCClient[F[_]](implicit val F: Sync[F]) {
   def request(id: RequestId, json: String): F[String]
 
   def subscribe(maxQueued: Int): Stream[F, String]
@@ -22,16 +23,19 @@ object JsonRPCClientMacro {
   def useAPI[API: c.WeakTypeTag](c: blackbox.Context): c.Expr[API] = {
     import c.universe._
 
-    val apiType: Type = weakTypeOf[API]
+    val returnType: Type = weakTypeOf[API]
+
     val methods: Iterable[c.Tree] = createMethods[c.type, API](c)
 
     val expr = c.Expr[API] {
       q"""
-        new $apiType {
+        new $returnType {
           import _root_.io.circe.syntax._
           import _root_.io.circe.parser._
+          import cats.effect.IO
           import cats.implicits._
           import jbok.rpc.json._
+
           ..$methods
         }
         """
@@ -80,11 +84,9 @@ object JsonRPCClientMacro {
 
     val parameterType: Tree = macroUtils.getParameterType(apiMethod)
 
-    val returnType: Type = apiMethod.returnType
+    val resultType: Type = apiMethod.returnType.typeArgs.head
 
-    val resultType: Type = returnType.typeArgs.head
-
-    def methodBody = c.Expr[returnType.type] {
+    def methodBody = {
       q"""
         val requestId = jbok.rpc.json.RequestId.random
 
@@ -97,17 +99,17 @@ object JsonRPCClientMacro {
 
         ${c.prefix.tree}.request(request.id, request.asJson.noSpaces).map(x => decode[JsonRPCResponse[$resultType]](x)).flatMap {
           case Left(e) =>
-            IO.raiseError[$resultType](new Exception(e))
+            ${c.prefix.tree}.F.raiseError[$resultType](new Exception(e))
           case Right(x) => x match {
-            case e: JsonRPCError => IO.raiseError[$resultType](new Exception(e.error.toString()))
-            case r: JsonRPCResult[${TypeName(resultType.toString)}] => r.result.pure[IO]
+            case e: JsonRPCError => ${c.prefix.tree}.F.raiseError[$resultType](new Exception(e.error.toString()))
+            case r: JsonRPCResult[${TypeName(resultType.toString)}] => ${c.prefix.tree}.F.pure(r.result)
           }
         }
        """
     }
 
     q"""
-      override def $methodName(...$parameterLists): $returnType = {
+      override def $methodName(...$parameterLists) = {
         $methodBody
       }
      """
