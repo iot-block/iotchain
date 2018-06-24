@@ -1,6 +1,6 @@
 package jbok.rpc
 
-object Resources {
+object execution {
   import java.nio.channels.AsynchronousChannelGroup
   import java.util.concurrent.Executors
 
@@ -10,12 +10,11 @@ object Resources {
   import scala.concurrent.ExecutionContext
 
   implicit val EC: ExecutionContext = ExecutionContext.fromExecutor(
-    Executors.newFixedThreadPool(8, util.mkThreadFactory("ec", daemon = true)))
+    Executors.newFixedThreadPool(8, util.mkThreadFactory("EC", daemon = true)))
 
   implicit val Sch: Scheduler = Scheduler.fromScheduledExecutorService(
     Executors.newScheduledThreadPool(4, util.mkThreadFactory("fs2-scheduler", daemon = true)))
 
   implicit val AG: AsynchronousChannelGroup = AsynchronousChannelGroup.withThreadPool(
-    Executors.newCachedThreadPool(util.mkThreadFactory("fs2-AG", daemon = true)))
+    Executors.newCachedThreadPool(util.mkThreadFactory("AG", daemon = true)))
 }
-
