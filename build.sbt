@@ -1,3 +1,5 @@
+import sbtcrossproject.CrossPlugin.autoImport.{CrossType, crossProject}
+
 organization in ThisBuild := "org.jbok"
 
 name := "jbok"
@@ -62,7 +64,7 @@ lazy val cats = Seq(
 lazy val http4s = Seq(
   "org.http4s" %% "http4s-core",
   "org.http4s" %% "http4s-blaze-server",
-  "org.http4s" %% "http4s-blaze-client" ,
+  "org.http4s" %% "http4s-blaze-client",
   "org.http4s" %% "http4s-circe",
   "org.http4s" %% "http4s-dsl"
 ).map(_ % V.http4s)
@@ -75,18 +77,20 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
   addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7"),
+  fork in test := true,
+  fork in run := true,
+  parallelExecution in test := false,
   scalacOpts
 )
 
 lazy val jbok = project
   .in(file("."))
-  .aggregate(core)
+  .aggregate(rpcJS, rpcJVM, appJS, appJVM)
 
 lazy val common = project
   .settings(commonSettings)
   .settings(
     name := "jbok-common",
-    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
     libraryDependencies ++= logging ++ tests ++ cats ++ fs2 ++ Seq(
       "org.scala-graph" %% "graph-core" % "1.12.5",
       "org.scala-graph" %% "graph-dot" % "1.12.1",
@@ -101,10 +105,10 @@ lazy val core = project
   .settings(
     name := "jbok-core",
     libraryDependencies ++= http4s ++ circe ++ Seq(
-     "com.github.pathikrit" %% "better-files" % "3.5.0"
+      "com.github.pathikrit" %% "better-files" % "3.5.0"
     )
   )
-  .dependsOn(common % CompileAndTest, crypto, p2p, rpc)
+  .dependsOn(common % CompileAndTest, crypto, p2p)
 
 lazy val crypto = project
   .settings(commonSettings)
@@ -155,18 +159,76 @@ lazy val simulations = project
   )
   .dependsOn(core % CompileAndTest)
 
-lazy val app = project
+lazy val commonJsSettings = Seq(
+  scalaJSUseMainModuleInitializer := true,
+  jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv,
+  libraryDependencies ++= Seq(
+    "org.scala-js" %%% "scalajs-dom" % "0.9.2"
+  )
+)
+
+lazy val app = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
   .settings(commonSettings)
+  .jsSettings(commonJsSettings)
   .settings(
     name := "jbok-app",
-    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
-    scalaJSUseMainModuleInitializer := true,
     libraryDependencies ++= Seq(
-      "com.thoughtworks.binding" %%% "dom" % "11.0.1",
-      "com.thoughtworks.binding" %%% "route" % "11.0.1"
+      "com.thoughtworks.binding" %%% "binding" % "11.0.1",
+      "com.lihaoyi" %%% "upickle" % "0.6.6",
+      "com.lihaoyi" %%% "scalatags" % "0.6.7"
     )
   )
-  .enablePlugins(ScalaJSPlugin)
+  .dependsOn(rpc)
+
+lazy val appJS = app.js
+lazy val appJVM = app.jvm
+
+lazy val macros = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .settings(commonSettings)
+  .settings(
+    name := "jbok-macros",
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "cats-core" % "1.1.0",
+      "org.typelevel" %%% "cats-effect" % "1.0.0-RC",
+      "io.circe" %%% "circe-core" % V.circe,
+      "io.circe" %%% "circe-generic" % V.circe,
+      "io.circe" %%% "circe-parser" % V.circe,
+      "com.beachape" %%% "enumeratum" % "1.5.13",
+      "com.beachape" %%% "enumeratum-circe" % "1.5.13",
+      "org.typelevel" %%% "cats-core" % "1.1.0",
+      "org.typelevel" %%% "cats-effect" % "1.0.0-RC",
+      "co.fs2" %%% "fs2-core" % "0.10.4",
+      "org.scodec" %%% "scodec-bits" % "1.1.5",
+      "org.scodec" %%% "scodec-core" % "1.10.3"
+    )
+  )
+  .jsSettings(commonJsSettings)
+
+lazy val macrosJS = macros.js
+lazy val macrosJVM = macros.jvm
+
+lazy val rpc = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .settings(
+    name := "jbok-rpc",
+    libraryDependencies ++= logging ++ Seq(
+      "org.scalatest" %%% "scalatest" % "3.0.5" % Test,
+      "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
+    )
+  )
+  .jsSettings(commonJsSettings)
+  .jvmSettings(
+    libraryDependencies ++= http4s ++ logging ++ Seq(
+      "com.spinoco" %% "fs2-http" % "0.3.0"
+    )
+  )
+  .dependsOn(macros % CompileAndTest)
+
+lazy val rpcJS = rpc.js
+lazy val rpcJVM = rpc.jvm
 
 lazy val persistent = project
   .settings(commonSettings)
@@ -182,27 +244,13 @@ lazy val persistent = project
   )
   .dependsOn(common % CompileAndTest)
 
-lazy val rpc = project
-  .settings(commonSettings)
-  .settings(
-    name := "jbok-rpc",
-    addCompilerPlugin(
-      "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
-    ),
-    libraryDependencies ++= circe ++ http4s ++ monix ++ akka ++ Seq(
-      "com.spinoco" %% "fs2-http" % "0.3.0",
-      "com.github.zainab-ali" %% "fs2-reactive-streams" % "0.5.1"
-    )
-  )
-  .dependsOn(common % CompileAndTest, codec)
-
 lazy val benchmark = project
   .settings(commonSettings)
   .settings(
     name := "jbok-benchmark"
   )
   .enablePlugins(JmhPlugin)
-  .dependsOn(persistent, rpc)
+  .dependsOn(persistent)
 
 lazy val CompileAndTest = "compile->compile;test->test"
 
