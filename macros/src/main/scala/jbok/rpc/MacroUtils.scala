@@ -7,9 +7,14 @@ class MacroUtils[CONTEXT <: blackbox.Context](val c: CONTEXT) {
   import c.universe._
 
   def getApiMethods(apiType: Type): Iterable[MethodSymbol] = {
-    apiType.decls
-      .filter((apiMember: Symbol) => isJsonRpcMethod(c)(apiMember))
-      .map((apiMember: Symbol) => apiMember.asMethod)
+    apiType.baseClasses
+      .map(_.asClass)
+      .filter(_.isTrait)
+      .flatMap(
+        _.typeSignature.decls
+          .filter((apiMember: Symbol) => isJsonRpcMethod(c)(apiMember))
+          .map((apiMember: Symbol) => apiMember.asMethod)
+      )
   }
 
   def isJsonRpcMethod(c: blackbox.Context)(method: Symbol): Boolean = {
