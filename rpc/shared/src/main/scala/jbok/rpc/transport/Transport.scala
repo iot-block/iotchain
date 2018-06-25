@@ -5,12 +5,12 @@ import cats.implicits._
 import fs2.async.mutable.{Signal, Topic}
 import fs2.async.{Promise, Ref}
 import fs2.{Scheduler, _}
-import jbok.rpc.HostPort
+import jbok.rpc.Address
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
 
-abstract class Transport[F[_], Id, A](val addr: HostPort)(implicit F: Effect[F], ec: ExecutionContext) {
+abstract class Transport[F[_], Id, A](val addr: Address)(implicit F: Effect[F], ec: ExecutionContext) {
   val promises: Ref[F, Map[Id, Promise[F, A]]]
 
   val stopWhenTrue: Signal[F, Boolean]
@@ -33,7 +33,7 @@ abstract class Transport[F[_], Id, A](val addr: HostPort)(implicit F: Effect[F],
   def isUp: F[Boolean] = stopWhenTrue.get.map(!_)
 }
 
-abstract class DuplexTransport[F[_], Id, A](addr: HostPort)(implicit F: Effect[F], ec: ExecutionContext)
+abstract class DuplexTransport[F[_], Id, A](addr: Address)(implicit F: Effect[F], ec: ExecutionContext)
     extends Transport[F, Id, A](addr) {
   val events: Topic[F, Option[A]]
 

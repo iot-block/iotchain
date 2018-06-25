@@ -9,9 +9,9 @@ import jbok.rpc.transport.WSTransport
 import org.scalatest.{BeforeAndAfter, Matchers, WordSpec}
 
 class JvmServerSpec extends WordSpec with BeforeAndAfter with Matchers {
-  val addr = HostPort("localhost", 10001)
-  val api = new TestAPI {}
-  val service = new JsonRPCService().mountAPI(api)
+  val addr = Address("localhost", 10001)
+  val api = TestAPI.apiImpl
+  val service = JsonRPCService[IO].mountAPI(api)
   val server = Server[IO](addr, service.handle).unsafeRunSync()
   val client = WSTransport[IO](server.addr).unsafeRunSync()
 

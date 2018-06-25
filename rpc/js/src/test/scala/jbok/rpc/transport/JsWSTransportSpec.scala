@@ -1,10 +1,9 @@
 package jbok.rpc.transport
 
 import cats.effect.IO
-import fs2.Scheduler
-import jbok.rpc.HostPort
+import fs2.{Scheduler, _}
+import jbok.rpc.Address
 import org.scalatest.{AsyncWordSpec, Matchers}
-import fs2._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -16,7 +15,7 @@ class JsWSTransportSpec extends AsyncWordSpec with Matchers {
   "ws" should {
     "start and stop" in {
       val p = for {
-        ws <- WSTransport[IO](HostPort("echo.websocket.org"))
+        ws <- WSTransport[IO](Address("echo.websocket.org"))
         _ <- ws.start
         up1 <- ws.isUp
         _ <- ws.stop
@@ -32,7 +31,7 @@ class JsWSTransportSpec extends AsyncWordSpec with Matchers {
 
     "send and recv" in {
       val p = for {
-        ws <- Stream.eval(WSTransport[IO](HostPort("echo.websocket.org")))
+        ws <- Stream.eval(WSTransport[IO](Address("echo.websocket.org")))
         _ <- Stream.eval(ws.start)
         s <- ws.subscribe().concurrently(sch.awakeEvery[IO](1.second).evalMap(_ => ws.send("oho")))
       } yield s

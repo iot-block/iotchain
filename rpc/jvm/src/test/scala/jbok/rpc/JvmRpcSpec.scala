@@ -8,9 +8,9 @@ import jbok.rpc.transport.WSTransport
 import org.scalatest.{Matchers, WordSpec}
 
 class JvmRpcSpec extends WordSpec with Matchers {
-  val api = new TestAPI {}
-  val addr = HostPort("localhost", 9033)
-  val service = JsonRPCService().mountAPI[TestAPI](api)
+  val api = TestAPI.apiImpl
+  val addr = Address("localhost", 9033)
+  val service = JsonRPCService[IO].mountAPI[TestAPI[IO]](api)
   val server = Server[IO](addr, service.handle).unsafeRunSync()
   val transport = WSTransport[IO](addr).unsafeRunSync()
   val client = Client[IO](transport)
@@ -21,7 +21,7 @@ class JvmRpcSpec extends WordSpec with Matchers {
       val resp = for {
         _ <- server.start
         _ <- client.start
-        c = client.useAPI[TestAPI]
+        c = client.useAPI[TestAPI[IO]]
         resp <- c.grow(21, "taylor")
         _ <- client.stop
         _ <- server.stop

@@ -9,10 +9,10 @@
         </encoder>
     </appender>
 
-    <logger name="org.http4s" level="WARN" />
-    <logger name="org.http4s.server" level="INFO" />
+    <logger name="org.http4s" level="DEBUG" />
+    <logger name="org.http4s.server" level="DEBUG" />
 
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="OUTPUT"/>
     </root>
 </configuration>

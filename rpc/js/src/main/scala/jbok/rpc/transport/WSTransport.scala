@@ -5,16 +5,16 @@ import cats.implicits._
 import fs2.async.mutable.{Signal, Topic}
 import fs2.async.{Promise, Ref}
 import io.circe.Json
-import jbok.rpc.HostPort
+import jbok.rpc.Address
 import org.scalajs.dom
 
 import scala.concurrent.ExecutionContext
 
-abstract class WSTransport[F[_]](addr: HostPort)(implicit F: Effect[F], ec: ExecutionContext)
+abstract class WSTransport[F[_]](addr: Address)(implicit F: Effect[F], ec: ExecutionContext)
     extends DuplexTransport[F, String, String](addr)
 
 object WSTransport {
-  def apply[F[_]](addr: HostPort)(implicit F: Effect[F], ec: ExecutionContext): F[WSTransport[F]] = {
+  def apply[F[_]](addr: Address)(implicit F: Effect[F], ec: ExecutionContext): F[WSTransport[F]] = {
 
     for {
       _events <- fs2.async.topic[F, Option[String]](None)

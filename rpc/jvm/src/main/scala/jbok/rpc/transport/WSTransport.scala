@@ -10,18 +10,18 @@ import fs2.async.{Promise, Ref}
 import io.circe
 import io.circe.Json
 import fs2._
-import jbok.rpc.HostPort
+import jbok.rpc.Address
 
 import scala.concurrent.ExecutionContext
 
-abstract class WSTransport[F[_]](addr: HostPort)(implicit F: Effect[F], ec: ExecutionContext)
+abstract class WSTransport[F[_]](addr: Address)(implicit F: Effect[F], ec: ExecutionContext)
     extends DuplexTransport[F, String, String](addr)
 
 object WSTransport {
   import spinoco.fs2.http.websocket.{Frame, WebSocket, WebSocketRequest}
   import spinoco.protocol.http.Uri.QueryParameter
 
-  def apply[F[_]](addr: HostPort)(
+  def apply[F[_]](addr: Address)(
       implicit F: ConcurrentEffect[F],
       AG: AsynchronousChannelGroup,
       S: Scheduler,

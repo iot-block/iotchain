@@ -9,7 +9,7 @@ import scala.language.higherKinds
 
 class RPCSpec extends WordSpec with Matchers {
   "json rpc macro" should {
-    val apiImpl = new TestAPI {
+    val apiImpl = new TestAPI[IO] {
       override def foo: IO[Int] = IO(42)
 
       override def bar: IO[String] = IO("oho")
@@ -17,7 +17,7 @@ class RPCSpec extends WordSpec with Matchers {
       override def grow(age: Int, name: String): IO[Person] = IO(Person(age + 1, name))
     }
 
-    val server = JsonRPCService().mountAPI[TestAPI](apiImpl)
+    val server = JsonRPCService[IO].mountAPI[TestAPI[IO]](apiImpl)
 
     "generate client code" in {
       val client: JsonRPCClient[IO] = new JsonRPCClient[IO] {
@@ -31,7 +31,7 @@ class RPCSpec extends WordSpec with Matchers {
 
         override def stop: IO[Unit] = IO.unit
       }
-      val c = client.useAPI[TestAPI]
+      val c = client.useAPI[TestAPI[IO]]
 
       c.foo.attempt.unsafeRunSync() shouldBe Right(42)
       c.bar.attempt.unsafeRunSync() shouldBe Right("oho")
