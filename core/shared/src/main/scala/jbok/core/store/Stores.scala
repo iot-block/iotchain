@@ -2,9 +2,10 @@ package jbok.core.store
 
 import cats.data.OptionT
 import cats.effect.Sync
-import jbok.core.models.{BlockBody, BlockHeader, Receipt}
-import scodec.bits.ByteVector
 import cats.implicits._
+import jbok.core.models.{BlockBody, BlockHeader, Receipt, _}
+import jbok.persistent.KeyValueDB
+import scodec.bits.ByteVector
 
 class BlockHeaderStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, ByteVector, BlockHeader](Namespaces.BlockHeader, db)
@@ -17,8 +18,6 @@ class ReceiptStore[F[_]: Sync](db: KeyValueDB[F])
 
 class BlockNumberHashStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, BigInt, ByteVector](Namespaces.Heights, db)
-
-case class TransactionLocation(blockHash: ByteVector, txIndex: Int)
 
 class TransactionLocationStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, ByteVector, TransactionLocation](Namespaces.TransactionLocation, db)

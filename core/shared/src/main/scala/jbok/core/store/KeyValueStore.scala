@@ -3,6 +3,7 @@ package jbok.core.store
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
+import jbok.persistent.KeyValueDB
 import scodec.Codec
 import scodec.bits.ByteVector
 
