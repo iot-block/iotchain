@@ -1,3 +1,3 @@
 package jbok.core.models
 
-case class Account
+case class Account()
