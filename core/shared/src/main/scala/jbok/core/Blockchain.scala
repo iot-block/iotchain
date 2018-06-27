@@ -2,10 +2,11 @@ package jbok.core
 
 import cats.data.OptionT
 import cats.effect.Sync
+import cats.implicits._
 import jbok.core.models._
 import jbok.core.store._
+import jbok.persistent.KeyValueDB
 import scodec.bits._
-import cats.implicits._
 
 abstract class Blockchain[F[_]](implicit F: Sync[F]) {
 
@@ -197,6 +198,30 @@ abstract class Blockchain[F[_]](implicit F: Sync[F]) {
   def pruneState(blockNumber: BigInt): F[Unit]
 
   def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit]
+}
+
+object Blockchain {
+  def inMemory[F[_]: Sync]: F[Blockchain[F]] =
+    for {
+      db <- KeyValueDB.inMemory[F]
+    } yield apply[F](db)
+
+  def apply[F[_]: Sync](db: KeyValueDB[F]): Blockchain[F] = {
+    val headerStore = new BlockHeaderStore[F](db)
+    val bodyStore = new BlockBodyStore[F](db)
+    val receiptStore = new ReceiptStore[F](db)
+    val numberHashStore = new BlockNumberHashStore[F](db)
+    val txLocationStore = new TransactionLocationStore[F](db)
+    val appStateStore = new AppStateStore[F](db)
+    new BlockchainImpl[F](
+      headerStore,
+      bodyStore,
+      receiptStore,
+      numberHashStore,
+      txLocationStore,
+      appStateStore
+    )
+  }
 }
 
 class BlockchainImpl[F[_]](
