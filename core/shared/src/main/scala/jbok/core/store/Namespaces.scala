@@ -1,17 +1,18 @@
 package jbok.core.store
 
 import scodec.bits._
+import jbok.codec._
 
 object Namespaces {
-  val Receipts: ByteVector = hex"r"
-  val BlockHeader: ByteVector = hex"h"
-  val BlockBody: ByteVector = hex"b"
-  val NodeNamespace: ByteVector = hex"n"
-  val CodeNamespace: ByteVector = hex"c"
-  val TotalDifficultyNamespace: ByteVector = hex"t"
-  val AppStateNamespace: ByteVector = hex"s"
-  val KnownNodesNamespace: ByteVector = hex"k"
-  val Heights: ByteVector = hex"i"
-  val FastSyncStateNamespace: ByteVector = hex"h"
-  val TransactionLocation: ByteVector = hex"l"
+  val Receipts: ByteVector = "r".utf8Bytes
+  val BlockHeader: ByteVector = "h".utf8Bytes
+  val BlockBody: ByteVector = "b".utf8Bytes
+  val NodeNamespace: ByteVector = "n".utf8Bytes
+  val CodeNamespace: ByteVector = "c".utf8Bytes
+  val TotalDifficultyNamespace: ByteVector = "t".utf8Bytes
+  val AppStateNamespace: ByteVector = "s".utf8Bytes
+  val KnownNodesNamespace: ByteVector = "k".utf8Bytes
+  val Heights: ByteVector = "i".utf8Bytes
+  val FastSyncStateNamespace: ByteVector = "h".utf8Bytes
+  val TransactionLocation: ByteVector = "l".utf8Bytes
 }
