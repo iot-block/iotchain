@@ -7,7 +7,7 @@ import jbok.core.store._
 import scodec.bits._
 import cats.implicits._
 
-class Blockchain[F[_]](implicit F: Sync[F]) {
+abstract class Blockchain[F[_]](implicit F: Sync[F]) {
 
   /**
     * Allows to query a blockHeader by block hash
@@ -102,7 +102,7 @@ class Blockchain[F[_]](implicit F: Sync[F]) {
     * @param hash Node Hash
     * @return MPT node
     */
-  def getMptNodeByHash(hash: ByteVector): Option[MptNode]
+  def getMptNodeByHash(hash: ByteVector)
 
   /**
     * Returns the total difficulty based on a block hash
@@ -111,10 +111,16 @@ class Blockchain[F[_]](implicit F: Sync[F]) {
     */
   def getTotalDifficultyByHash(blockhash: ByteVector): F[Option[BigInt]]
 
-  def getTotalDifficultyByNumber(blockNumber: BigInt): Option[BigInt] =
-    getHashByBlockNumber(blockNumber).flatMap(getTotalDifficultyByHash)
+  def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]] = {
+    val p = for {
+      hash <- OptionT(getHashByBlockNumber(blockNumber))
+      td <- OptionT(getTotalDifficultyByHash(hash))
+    } yield td
 
-//  def getTransactionLocation(txHash: ByteVector): Option[TransactionLocation]
+    p.value
+  }
+
+  def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]]
 
   def getBestBlockNumber: F[BigInt]
 
@@ -126,14 +132,14 @@ class Blockchain[F[_]](implicit F: Sync[F]) {
     */
   def save(block: Block, receipts: List[Receipt], totalDifficulty: BigInt, saveAsBestBlock: Boolean): F[Unit] = {
     save(block) *>
-    save(block.header.hash, receipts) *>
-    save(block.header.hash, totalDifficulty) *>
-    if (saveAsBestBlock) {
-      saveBestBlockNumber(block.header.number)
-    } else {
-      F.unit
-    } *>
-    pruneState(block.header.number)
+      save(block.header.hash, receipts) *>
+      save(block.header.hash, totalDifficulty) *>
+      (if (saveAsBestBlock) {
+         saveBestBlockNumber(block.header.number)
+       } else {
+         F.unit
+       }) *>
+      pruneState(block.header.number)
   }
 
   /**
@@ -142,8 +148,7 @@ class Blockchain[F[_]](implicit F: Sync[F]) {
     * @param block Block to be saved
     */
   def save(block: Block): F[Unit] = {
-    save(block.header) *>
-    save(block.header.hash, block.body)
+    save(block.header) *> save(block.header.hash, block.body)
   }
 
   def removeBlock(hash: ByteVector, saveParentAsBestBlock: Boolean): F[Unit]
@@ -255,14 +260,44 @@ class BlockchainImpl[F[_]](
     */
   override def getTotalDifficultyByHash(blockhash: ByteVector): F[Option[BigInt]] = ???
 
+  override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
+    txLocationStore.getOpt(txHash)
+
   override def getBestBlockNumber: F[BigInt] =
     appStateStore.getBestBlockNumber
 
   override def getBestBlock: F[Block] =
     getBestBlockNumber.flatMap(bn => getBlockByNumber(bn).map(_.get))
 
-  override def removeBlock(hash: ByteVector, saveParentAsBestBlock: Boolean): F[Unit]
+  override def removeBlock(blockHash: ByteVector, saveParentAsBestBlock: Boolean): F[Unit] = {
+    val maybeBlockHeader = getBlockHeaderByHash(blockHash)
+    val maybeTxList = getBlockBodyByHash(blockHash).map(_.map(_.transactionList))
 
+    headerStore.del(blockHash) *>
+      bodyStore.del(blockHash) *>
+//    totalDifficultyStorage.remove(blockHash)
+      receiptStore.del(blockHash) *>
+      maybeTxList.map {
+        case Some(txs) => txs.map(tx => txLocationStore.del(tx.hash)).sequence.void
+        case None => F.unit
+      } *>
+      maybeBlockHeader.map {
+        case Some(bh) =>
+          val rollback = rollbackStateChangesMadeByBlock(bh.number)
+          val removeMapping = getHashByBlockNumber(bh.number).flatMap {
+            case Some(hash) => numberHashStore.del(bh.number)
+            case None => F.unit
+          }
+
+          val updateBest =
+            if (saveParentAsBestBlock) appStateStore.putBestBlockNumber(bh.number - 1)
+            else F.unit
+
+          rollback *> removeMapping *> updateBest
+
+        case None => F.unit
+      }
+  }
 
   /**
     * Persists a block header in the underlying Blockchain Database
@@ -314,5 +349,5 @@ class BlockchainImpl[F[_]](
     * @param hash Node Hash
     * @return MPT node
     */
-  override def getMptNodeByHash(hash: ByteVector): Option[Any] = ???
+  override def getMptNodeByHash(hash: ByteVector) = ???
 }
