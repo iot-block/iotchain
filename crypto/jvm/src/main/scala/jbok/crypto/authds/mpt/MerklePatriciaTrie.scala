@@ -4,7 +4,9 @@ import cats.effect.Effect
 import cats.implicits._
 import jbok.crypto.authds.mpt.Node._
 import jbok.crypto.hashing.Hashing
+import jbok.persistent.leveldb.{LevelDB, LevelDBConfig}
 import scodec.bits.ByteVector
+import scodec.codecs.implicits.implicitByteVectorCodec
 import tsec.hashing.jca.SHA256
 
 object MerklePatriciaTrie {
@@ -21,38 +23,19 @@ object MerklePatriciaTrie {
       root: Node = emptyRoot,
       rootHash: ByteVector = emptyRootHash
   ): MerklePatriciaTrie[F] = new MerklePatriciaTrie(store, root, rootHash)
+
+  def apply[F[_]: Effect](config: LevelDBConfig): F[MerklePatriciaTrie[F]] = {
+    for {
+      db <- LevelDB[F](config)
+      store = new Store[F, ByteVector, ByteVector](db)
+    } yield new MerklePatriciaTrie[F](store, emptyRoot, emptyRootHash)
+  }
 }
 
 import jbok.crypto.authds.mpt.MerklePatriciaTrie._
 
 class MerklePatriciaTrie[F[_]](store: Store[F, ByteVector, ByteVector], root: Node, rootHash: ByteVector)(
     implicit F: Effect[F]) {
-  def encode(node: Node): NodeEntry = {
-    val encoded = NodeCodec.encode(node).require
-    if (encoded.size < 32) {
-      Right(node)
-    } else {
-      val key = hash(encoded)
-      store.put(key, encoded)
-      Left(key)
-    }
-  }
-
-  def decode(entry: NodeEntry): F[Node] = entry match {
-    case Left(hash) if hash == emptyRootHash => F.pure(BlankNode)
-    case Left(hash) =>
-      for {
-        encoded <- store.get(hash)
-      } yield NodeCodec.decode(encoded).require
-    case Right(node) => node.pure[F]
-  }
-
-  def updateRootHash(root: Node): F[ByteVector] = {
-    val encoded = NodeCodec.encode(root).require
-    val key = hash(encoded)
-    store.put(key, encoded)
-    key.pure[F]
-  }
 
   def get(key: String): F[Option[ByteVector]] = {
     def get0(node: Node, key: String): F[Option[ByteVector]] = {
@@ -154,6 +137,33 @@ class MerklePatriciaTrie[F[_]](store: Store[F, ByteVector, ByteVector], root: No
 
   // ------------------------------------------
 
+  private def encode(node: Node): NodeEntry = {
+    val encoded = NodeCodec.encode(node).require
+    if (encoded.size < 32) {
+      Right(node)
+    } else {
+      val key = hash(encoded)
+      store.put(key, encoded)
+      Left(key)
+    }
+  }
+
+  private def decode(entry: NodeEntry): F[Node] = entry match {
+    case Left(hash) if hash == emptyRootHash => F.pure(BlankNode)
+    case Left(hash) =>
+      for {
+        encoded <- store.get(hash)
+      } yield NodeCodec.decode(encoded).require
+    case Right(node) => node.pure[F]
+  }
+
+  private def updateRootHash(root: Node): F[ByteVector] = {
+    val encoded = NodeCodec.encode(root).require
+    val key = hash(encoded)
+    store.put(key, encoded)
+    key.pure[F]
+  }
+
   private def updateAndDeleteStorage(node: Node, key: String, value: ByteVector): F[Node] = {
     for {
       newNode <- updateNode(node, key, value)
@@ -181,7 +191,7 @@ class MerklePatriciaTrie[F[_]](store: Store[F, ByteVector, ByteVector], root: No
       updateKVNode(n, key, value)
   }
 
-  private[jbok] def updateKVNode(node: KVNode, key: String, value: ByteVector): F[Node] = {
+  private def updateKVNode(node: KVNode, key: String, value: ByteVector): F[Node] = {
 
     val curKey = node.key
     val prefix = Key.longestCommonPrefix(curKey, key)
