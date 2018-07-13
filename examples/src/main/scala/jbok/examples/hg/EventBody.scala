@@ -14,12 +14,12 @@ import scodec.{Codec, _}
   *
   */
 case class EventBody(
-                      selfParent: Hash,
-                      otherParent: Hash,
-                      creator: Hash,
-                      timestamp: Long,
-                      index: Int,
-                      txs: List[Transaction]
+    selfParent: Hash,
+    otherParent: Hash,
+    creator: Hash,
+    timestamp: Long,
+    index: Int,
+    txs: List[Transaction]
 )
 
 object EventBody {

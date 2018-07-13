@@ -3,12 +3,36 @@ package jbok.core
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
+import jbok.core.genesis.Genesis
 import jbok.core.models._
 import jbok.core.store._
+import jbok.crypto.authds.mpt.{MPTrie, Node}
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 
 abstract class Blockchain[F[_]](implicit F: Sync[F]) {
+  protected val log = org.log4s.getLogger
+
+  def loadGenesis: F[Unit] = {
+    log.info(s"loading genesis data")
+
+    for {
+      headerOpt <- getBlockHeaderByNumber(0)
+      _ <- headerOpt match {
+        case Some(h) if h.hash == Genesis.header.hash =>
+          log.info("genesis data already in the database")
+          F.unit
+
+        case Some(h) =>
+          F.raiseError(
+            new RuntimeException("Genesis data present in the database does not match genesis block from file")
+          )
+
+        case None =>
+          save(Genesis.block, Nil, saveAsBestBlock = true)
+      }
+    } yield ()
+  }
 
   /**
     * Allows to query a blockHeader by block hash
@@ -69,12 +93,7 @@ abstract class Blockchain[F[_]](implicit F: Sync[F]) {
     * @param address address of the account
     * @param blockNumber the block that determines the state of the account
     */
-  def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] = {
-    for {
-      header <- OptionT(getBlockHeaderByNumber(blockNumber))
-    } yield ???
-    ???
-  }
+  def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]]
 
   /**
     * Get account storage at given position
@@ -82,7 +101,7 @@ abstract class Blockchain[F[_]](implicit F: Sync[F]) {
     * @param rootHash storage root hash
     * @param position storage position
     */
-  def getAccountStorageAt(rootHash: ByteVector, position: BigInt): ByteVector
+  def getAccountStorageAt(rootHash: ByteVector, position: BigInt): F[ByteVector]
 
   /**
     * Returns the receipts based on a block hash
@@ -103,7 +122,7 @@ abstract class Blockchain[F[_]](implicit F: Sync[F]) {
     * @param hash Node Hash
     * @return MPT node
     */
-  def getMptNodeByHash(hash: ByteVector)
+  def getMptNodeByHash(hash: ByteVector): F[Node]
 
   /**
     * Returns the total difficulty based on a block hash
@@ -131,26 +150,23 @@ abstract class Blockchain[F[_]](implicit F: Sync[F]) {
     * Persists full block along with receipts and total difficulty
     * @param saveAsBestBlock - whether to save the block's number as current best block
     */
-  def save(block: Block, receipts: List[Receipt], totalDifficulty: BigInt, saveAsBestBlock: Boolean): F[Unit] = {
+  def save(block: Block, receipts: List[Receipt], saveAsBestBlock: Boolean): F[Unit] =
     save(block) *>
       save(block.header.hash, receipts) *>
-      save(block.header.hash, totalDifficulty) *>
       (if (saveAsBestBlock) {
          saveBestBlockNumber(block.header.number)
        } else {
          F.unit
        }) *>
       pruneState(block.header.number)
-  }
 
   /**
     * Persists a block in the underlying Blockchain Database
     *
     * @param block Block to be saved
     */
-  def save(block: Block): F[Unit] = {
+  def save(block: Block): F[Unit] =
     save(block.header) *> save(block.header.hash, block.body)
-  }
 
   def removeBlock(hash: ByteVector, saveParentAsBestBlock: Boolean): F[Unit]
 
@@ -167,11 +183,13 @@ abstract class Blockchain[F[_]](implicit F: Sync[F]) {
 
   def save(hash: ByteVector, evmCode: ByteVector): F[Unit]
 
-  def save(blockhash: ByteVector, totalDifficulty: BigInt): F[Unit]
+  def save(blockHash: ByteVector, totalDifficulty: BigInt): F[Unit]
 
   def saveBestBlockNumber(number: BigInt): F[Unit]
 
-//  def saveNode(nodeHash: NodeHash, nodeEncoded: NodeEncoded, blockNumber: BigInt): Unit
+//  def saveNode(nodeHash: ByteVector, nodeEncoded: ByteVector, blockNumber: BigInt): F[Unit]
+
+  def saveAccount(address: Address, account: Account): F[Unit]
 
   /**
     * Returns a block hash given a block number
@@ -204,23 +222,29 @@ object Blockchain {
   def inMemory[F[_]: Sync]: F[Blockchain[F]] =
     for {
       db <- KeyValueDB.inMemory[F]
-    } yield apply[F](db)
+      blockchain <- apply[F](db)
+      _ <- blockchain.loadGenesis
+    } yield blockchain
 
-  def apply[F[_]: Sync](db: KeyValueDB[F]): Blockchain[F] = {
+  def apply[F[_]: Sync](db: KeyValueDB[F]): F[Blockchain[F]] = {
     val headerStore = new BlockHeaderStore[F](db)
     val bodyStore = new BlockBodyStore[F](db)
     val receiptStore = new ReceiptStore[F](db)
     val numberHashStore = new BlockNumberHashStore[F](db)
     val txLocationStore = new TransactionLocationStore[F](db)
     val appStateStore = new AppStateStore[F](db)
-    new BlockchainImpl[F](
-      headerStore,
-      bodyStore,
-      receiptStore,
-      numberHashStore,
-      txLocationStore,
-      appStateStore
-    )
+
+    MPTNodeStore[F](db).map { mptStore =>
+      new BlockchainImpl[F](
+        headerStore,
+        bodyStore,
+        receiptStore,
+        numberHashStore,
+        txLocationStore,
+        appStateStore,
+        mptStore
+      )
+    }
   }
 }
 
@@ -230,7 +254,8 @@ class BlockchainImpl[F[_]](
     receiptStore: ReceiptStore[F],
     numberHashStore: BlockNumberHashStore[F],
     txLocationStore: TransactionLocationStore[F],
-    appStateStore: AppStateStore[F]
+    appStateStore: AppStateStore[F],
+    mptStore: MPTNodeStore[F]
 )(implicit F: Sync[F])
     extends Blockchain[F] {
 
@@ -258,7 +283,16 @@ class BlockchainImpl[F[_]](
     * @param rootHash storage root hash
     * @param position storage position
     */
-  override def getAccountStorageAt(rootHash: ByteVector, position: BigInt): ByteVector = ???
+  override def getAccountStorageAt(rootHash: ByteVector, position: BigInt): F[ByteVector] = ???
+
+  /**
+    * Get an account for an address and a block number
+    *
+    * @param address     address of the account
+    * @param blockNumber the block that determines the state of the account
+    */
+  override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] =
+    mptStore.getOpt(address)
 
   /**
     * Returns the receipts based on a block hash
@@ -304,14 +338,14 @@ class BlockchainImpl[F[_]](
       receiptStore.del(blockHash) *>
       maybeTxList.map {
         case Some(txs) => txs.map(tx => txLocationStore.del(tx.hash)).sequence.void
-        case None => F.unit
+        case None      => F.unit
       } *>
       maybeBlockHeader.map {
         case Some(bh) =>
           val rollback = rollbackStateChangesMadeByBlock(bh.number)
           val removeMapping = getHashByBlockNumber(bh.number).flatMap {
             case Some(hash) => numberHashStore.del(bh.number)
-            case None => F.unit
+            case None       => F.unit
           }
 
           val updateBest =
@@ -335,6 +369,8 @@ class BlockchainImpl[F[_]](
   }
 
   override def save(blockHash: ByteVector, blockBody: BlockBody): F[Unit] = {
+      log.info(s"saving blockBody")
+
     bodyStore.put(blockHash, blockBody) *>
       blockBody.transactionList.zipWithIndex
         .map {
@@ -352,6 +388,9 @@ class BlockchainImpl[F[_]](
 
   override def save(blockhash: ByteVector, totalDifficulty: BigInt): F[Unit] = ???
 
+  override def saveAccount(address: Address, account: Account): F[Unit] =
+    mptStore.put(address, account)
+
   override def saveBestBlockNumber(number: BigInt): F[Unit] =
     appStateStore.putBestBlockNumber(number)
 
@@ -364,7 +403,7 @@ class BlockchainImpl[F[_]](
   override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
     numberHashStore.getOpt(number)
 
-  override def pruneState(blockNumber: BigInt): F[Unit] = ???
+  override def pruneState(blockNumber: BigInt): F[Unit] = F.unit
 
   override def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit] = ???
 
@@ -374,5 +413,5 @@ class BlockchainImpl[F[_]](
     * @param hash Node Hash
     * @return MPT node
     */
-  override def getMptNodeByHash(hash: ByteVector) = ???
+  override def getMptNodeByHash(hash: ByteVector): F[Node] = mptStore.getNodeByHash(hash)
 }

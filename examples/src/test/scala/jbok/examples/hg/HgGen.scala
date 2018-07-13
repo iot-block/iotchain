@@ -1,7 +1,7 @@
 package jbok.examples.hg
 
+import jbok.codec._
 import jbok.core.Transaction
-import jbok.crypto._
 import jbok.crypto.hashing.{Hash, Hashing}
 import jbok.testkit.Cast
 import org.scalacheck.{Arbitrary, Gen}
@@ -28,13 +28,13 @@ trait HgGen {
       length <- Gen.chooseNum(1, 10)
       b2 <- genBytes(length)
     } yield {
-      Transaction(Hashing[SHA256].hash(b1.bytes), length, ByteVector(b2))
+      Transaction(Hashing[SHA256].hash(ByteVector(b1)), length, ByteVector(b2))
     }
 
   def emptyEvent(sp: Event, op: Event, creator: Hash, timestamp: Long): Event = {
     val ts = math.max(sp.body.timestamp, op.body.timestamp) + 1L
     val body = EventBody(sp.hash, op.hash, creator, timestamp, sp.body.index + 1, Nil)
-    val hash = Hashing.hash[SHA256](body.bytes)
+    val hash = Hashing.hash[SHA256](body.asBytes)
     Event(body, hash)(EventInfo())
   }
 

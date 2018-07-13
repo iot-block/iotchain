@@ -1,19 +1,26 @@
 package jbok.core.sync
 
-import cats.effect.Sync
-import fs2._
-import jbok.core.messages.NewBlock
+import cats.effect.ConcurrentEffect
 import cats.implicits._
+import fs2._
+import fs2.async.mutable.Signal
 import jbok.core.ledger.BlockImportResult._
 import jbok.core.ledger.Ledger
+import jbok.core.messages.{GetBlockHeaders, NewBlock, NewBlockHashes}
 import jbok.core.models.Block
-import jbok.p2p.peer.PeerId
+import jbok.core.peer.{PeerEvent, PeerManager}
 
-class RegularSync[F[_]](blocks: Stream[F, (NewBlock, PeerId)], ledger: Ledger[F])(implicit F: Sync[F]) {
+import scala.concurrent.ExecutionContext
+
+case class RegularSync[F[_]](
+    peerManager: PeerManager[F],
+    ledger: Ledger[F],
+    stopWhenTrue: Signal[F, Boolean]
+)(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
-  val start = blocks.evalMap {
-    case (NewBlock(block), peerId) =>
+  def stream: Stream[F, Unit] = peerManager.subscribeMessages().evalMap {
+    case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
       ledger.importBlock(block).map {
         case BlockImported(newBlocks) =>
           broadcastBlocks(newBlocks)
@@ -29,7 +36,17 @@ class RegularSync[F[_]](blocks: Stream[F, (NewBlock, PeerId)], ledger: Ledger[F]
         case BlockImportFailed(error) =>
           log.info(s"importing block error: ${error}")
       }
+
+    case PeerEvent.PeerRecv(peerId, NewBlockHashes(hashes)) =>
+      val request = GetBlockHeaders(Right(hashes.head.hash), hashes.length, 0, reverse = false)
+      peerManager.sendMessage(peerId, request)
+
+    case _ => F.unit
   }
+
+  def start: F[Unit] = stopWhenTrue.set(false) *> F.start(stream.interruptWhen(stopWhenTrue).compile.drain).void
+
+  def stop: F[Unit] = stopWhenTrue.set(true)
 
   private def updateTxAndOmmerPools(blocksAdded: Seq[Block], blocksRemoved: Seq[Block]): Unit = {
 //    blocksRemoved.headOption.foreach(block => ommersPool ! AddOmmers(block.header))
@@ -46,4 +63,14 @@ class RegularSync[F[_]](blocks: Stream[F, (NewBlock, PeerId)], ledger: Ledger[F]
 //      broadcaster.broadcastBlock(NewBlock(block, td), handshakedPeers)
 //    }
   }
+}
+
+object RegularSync {
+  def apply[F[_]](
+      peerManager: PeerManager[F],
+      ledger: Ledger[F]
+  )(implicit F: ConcurrentEffect[F], EC: ExecutionContext): F[RegularSync[F]] =
+    fs2.async
+      .signalOf[F, Boolean](true)
+      .map(s => RegularSync(peerManager, ledger, s))
 }
