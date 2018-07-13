@@ -1,17 +1,19 @@
 package jbok.crypto.signature
 
-import scodec.Codec
-import scodec.bits.ByteVector
-import scodec.codecs._
+import cats.effect.Sync
 
-case class Signature private (sign: ByteVector) extends AnyVal {
-  def bytes: Array[Byte] = sign.toArray
-}
+trait Signature {
+  val algo: String
 
-object Signature {
-  def apply(sign: ByteVector): Signature = new Signature(sign)
+  val seedBits: Int
 
-  def apply(sign: Array[Byte]): Signature = new Signature(ByteVector(sign))
+  def buildPrivateKey[F[_]: Sync](bytes: Array[Byte]): F[KeyPair.Secret]
 
-  implicit val codec: Codec[Signature] = variableSizeBytes(uint8, bytes).as[Signature]
+  def buildPublicKeyFromPrivate[F[_]: Sync](secret: KeyPair.Secret): F[KeyPair.Public]
+
+  def generateKeyPair[F[_]](implicit F: Sync[F]): F[KeyPair]
+
+  def sign[F[_]](toSign: Array[Byte], sk: KeyPair.Secret)(implicit F: Sync[F]): F[CryptoSignature]
+
+  def verify[F[_]](toSign: Array[Byte], signed: CryptoSignature, pk: KeyPair.Public)(implicit F: Sync[F]): F[Boolean]
 }
