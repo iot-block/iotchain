@@ -1,4 +1,4 @@
-import sbtcrossproject.CrossPlugin.autoImport.{CrossType, crossProject}
+import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
 organization in ThisBuild := "org.jbok"
 
@@ -12,8 +12,6 @@ cancelable in Global := true
 
 lazy val V = new {
   val circe = "0.9.1"
-  val akka = "2.5.11"
-  val akkaHttp = "10.1.0"
   val tsec = "0.0.1-M11"
   val http4s = "0.18.12"
 }
@@ -21,21 +19,6 @@ lazy val V = new {
 lazy val fs2 = Seq(
   "co.fs2" %% "fs2-core" % "0.10.4"
 )
-
-lazy val akka = Seq(
-  "com.typesafe.akka" %% "akka-actor" % V.akka,
-  "com.typesafe.akka" %% "akka-stream" % V.akka,
-  "com.typesafe.akka" %% "akka-slf4j" % V.akka,
-  "com.typesafe.akka" %% "akka-http" % V.akkaHttp,
-  "com.typesafe.akka" %% "akka-testkit" % V.akka % "test",
-  "com.typesafe.akka" %% "akka-stream-testkit" % V.akka % "test",
-  "com.typesafe.akka" %% "akka-http-testkit" % V.akkaHttp % "test"
-)
-
-lazy val tests = Seq(
-  "org.scalatest" %% "scalatest" % "3.0.5",
-  "org.scalacheck" %% "scalacheck" % "1.13.4"
-).map(_ % "test")
 
 lazy val logging = Seq(
   "ch.qos.logback" % "logback-classic" % "1.2.3",
@@ -66,7 +49,7 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
   addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7"),
-  fork in test := true,
+  fork in test := false,
   fork in run := true,
   parallelExecution in test := false,
   scalacOpts
@@ -74,7 +57,7 @@ lazy val commonSettings = Seq(
 
 lazy val jbok = project
   .in(file("."))
-  .aggregate(rpcJS, rpcJVM, appJS, appJVM)
+  .aggregate(networkJS, networkJVM, appJS, appJVM)
 
 lazy val common = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
@@ -85,25 +68,18 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= logging ++ Seq(
       "org.typelevel" %%% "cats-core" % "1.1.0",
       "org.typelevel" %%% "cats-effect" % "1.0.0-RC",
-
       "io.circe" %%% "circe-core" % V.circe,
       "io.circe" %%% "circe-generic" % V.circe,
-      "io.circe" %%% "circe-parser"  % V.circe,
-
+      "io.circe" %%% "circe-parser" % V.circe,
       "org.scala-graph" %%% "graph-core" % "1.12.5",
       "org.scala-graph" %% "graph-dot" % "1.12.1",
-
       "com.github.mpilquist" %%% "simulacrum" % "0.12.0",
       "com.beachape" %%% "enumeratum" % "1.5.13",
       "com.beachape" %%% "enumeratum-circe" % "1.5.13",
-
       "co.fs2" %%% "fs2-core" % "0.10.4",
-
       "org.scodec" %%% "scodec-bits" % "1.1.5",
       "org.scodec" %%% "scodec-core" % "1.10.3",
-
       "org.scalatest" %%% "scalatest" % "3.0.5" % Test,
-      "org.scalatest" %% "scalatest" % "3.0.5" % Test, // workaround
       "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
     )
   )
@@ -130,17 +106,24 @@ lazy val crypto = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
   .jsSettings(commonJsSettings)
+  .jsSettings(
+    npmDependencies in Compile ++= Seq(
+      "elliptic" -> "6.4.0"
+    ),
+    skip in packageJSDependencies := false,
+    jsEnv in Test := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv()
+  )
   .settings(
     name := "jbok-crypto",
     libraryDependencies ++= tsec ++ Seq(
       "org.scorexfoundation" %% "scrypto" % "2.0.5",
-      "org.scodec" %%% "scodec-bits" % "1.1.5",
-      "org.scodec" %%% "scodec-core" % "1.10.3"
+      "org.bouncycastle" % "bcprov-jdk15on" % "1.59",
+      "net.i2p.crypto" % "eddsa" % "0.3.0"
     )
   )
   .dependsOn(common % CompileAndTest, codec, persistent)
 
-lazy val cryptoJS = crypto.js
+lazy val cryptoJS = crypto.js.enablePlugins(ScalaJSBundlerPlugin)
 lazy val cryptoJVM = crypto.jvm
 
 lazy val p2p = crossProject(JSPlatform, JVMPlatform)
@@ -150,7 +133,7 @@ lazy val p2p = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-p2p"
   )
-  .dependsOn(common % CompileAndTest, rpc, persistent)
+  .dependsOn(common % CompileAndTest, network, persistent, codec)
 
 lazy val p2pJS = p2p.js
 lazy val p2pJVM = p2p.jvm
@@ -175,20 +158,25 @@ lazy val codecJVM = codec.jvm
 //  .dependsOn(core % CompileAndTest)
 
 lazy val simulations = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
+  .crossType(CrossType.Full)
   .settings(commonSettings)
   .jsSettings(commonJsSettings)
   .settings(
-    name := "jbok-simulations"
+    name := "jbok-simulations",
+    libraryDependencies ++= Seq(
+      "com.monovore" %% "decline" % "0.4.0-RC1"
+    )
   )
   .dependsOn(common % CompileAndTest, core)
+  .enablePlugins(JavaAppPackaging)
 
 lazy val simJS = simulations.js
 lazy val simJVM = simulations.jvm
 
 lazy val commonJsSettings = Seq(
   scalaJSUseMainModuleInitializer := true,
-  jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv,
+  jsEnv := new org.scalajs.jsenv.nodejs.NodeJSEnv(),
+  fork in Test := false,
   libraryDependencies ++= Seq(
     "org.scala-js" %%% "scalajs-dom" % "0.9.2"
   )
@@ -207,7 +195,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
       "com.monovore" %% "decline" % "0.4.0-RC1"
     )
   )
-  .dependsOn(rpc, simulations)
+  .dependsOn(network, simulations)
 
 lazy val appJS = app.js
 lazy val appJVM = app.jvm
@@ -219,20 +207,17 @@ lazy val macros = crossProject(JVMPlatform, JSPlatform)
   .settings(
     name := "jbok-macros"
   )
-  .dependsOn(common)
+  .dependsOn(common % CompileAndTest, codec)
 
 lazy val macrosJS = macros.js
 lazy val macrosJVM = macros.jvm
 
-lazy val rpc = crossProject(JVMPlatform, JSPlatform)
+lazy val network = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
   .settings(
-    name := "jbok-rpc",
-    libraryDependencies ++= logging ++ Seq(
-      "org.scalatest" %%% "scalatest" % "3.0.5" % Test,
-      "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
-    )
+    name := "jbok-network",
+    libraryDependencies ++= logging
   )
   .jsSettings(commonJsSettings)
   .jvmSettings(
@@ -240,15 +225,15 @@ lazy val rpc = crossProject(JVMPlatform, JSPlatform)
       "com.spinoco" %% "fs2-http" % "0.3.0"
     )
   )
-  .dependsOn(macros)
+  .dependsOn(common % CompileAndTest, macros)
 
-lazy val rpcJS = rpc.js
-lazy val rpcJVM = rpc.jvm
+lazy val networkJS = network.js
+lazy val networkJVM = network.jvm
 
 lazy val persistent = crossProject(JSPlatform, JVMPlatform)
-    .crossType(CrossType.Full)
-    .settings(commonSettings)
-    .jsSettings(commonJsSettings)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
   .settings(
     name := "jbok-persistent",
     libraryDependencies ++= Seq(
@@ -256,7 +241,7 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
       "io.monix" %% "monix" % "3.0.0-RC1"
     )
   )
-  .dependsOn(common % CompileAndTest)
+  .dependsOn(common % CompileAndTest, codec)
 
 lazy val persistentJS = persistent.js
 lazy val persistentJVM = persistent.jvm
