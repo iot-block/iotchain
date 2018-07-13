@@ -2,7 +2,8 @@ package jbok.core.models
 
 import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs._
+import tsec.hashing.bouncy._
+import jbok.codec.codecs._
 
 case class Transaction(
     nonce: BigInt,
@@ -12,16 +13,17 @@ case class Transaction(
     value: BigInt,
     payload: ByteVector
 ) {
-  val hash: ByteVector = ???
+  lazy val hash: ByteVector =
+    ByteVector(Keccak256.hashPure(Transaction.codec.encode(this).require.toByteArray))
 }
 
 object Transaction {
   implicit val codec: Codec[Transaction] = {
-    Codec[BigInt] ::
-      Codec[BigInt] ::
-      Codec[BigInt] ::
-      optional(bool, Codec[Address]) ::
-      Codec[BigInt] ::
-      variableSizeBytes(uint8, bytes)
+    codecBigInt ::
+      codecBigInt ::
+      codecBigInt ::
+      codecOptional[Address] ::
+      codecBigInt ::
+      codecBytes
   }.as[Transaction]
 }

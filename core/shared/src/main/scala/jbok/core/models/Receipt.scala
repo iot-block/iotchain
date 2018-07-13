@@ -2,7 +2,8 @@ package jbok.core.models
 
 import scodec.Codec
 import scodec.bits._
-import scodec.codecs._
+import jbok.codec.codecs._
+
 case class Receipt(
     postTransactionStateHash: ByteVector,
     cumulativeGasUsed: BigInt,
@@ -12,9 +13,9 @@ case class Receipt(
 
 object Receipt {
   implicit val codec: Codec[Receipt] = {
-    variableSizeBytes(uint8, bytes) ::
-    Codec[BigInt] ::
-    variableSizeBytes(uint8, bytes) ::
-    list(Codec[TxLogEntry])
+    codecBytes ::
+    codecBigInt ::
+    codecBytes ::
+    codecList[TxLogEntry]
   }.as[Receipt]
 }

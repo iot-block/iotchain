@@ -2,7 +2,8 @@ package jbok.core.models
 
 import scodec.Codec
 import scodec.bits._
-import scodec.codecs._
+import jbok.codec.codecs._
+import jbok.crypto._
 
 case class BlockHeader(
     parentHash: ByteVector,
@@ -21,25 +22,43 @@ case class BlockHeader(
     mixHash: ByteVector,
     nonce: ByteVector
 ) {
-  val hash: ByteVector = ByteVector.fromHex("0xabcd").get
+  val hash: ByteVector = Codec[BlockHeader].encode(this).require.bytes.kec256
 }
 
 object BlockHeader {
   implicit val codec: Codec[BlockHeader] = {
-    variableSizeBytes(uint8, bytes) ::
-      variableSizeBytes(uint8, bytes) ::
-      variableSizeBytes(uint8, bytes) ::
-      variableSizeBytes(uint8, bytes) ::
-      variableSizeBytes(uint8, bytes) ::
-      variableSizeBytes(uint8, bytes) ::
-      variableSizeBytes(uint8, bytes) ::
-      Codec[BigInt] ::
-      Codec[BigInt] ::
-      Codec[BigInt] ::
-      Codec[BigInt] ::
-      int64 ::
-      variableSizeBytes(uint8, bytes) ::
-      variableSizeBytes(uint8, bytes) ::
-      variableSizeBytes(uint8, bytes)
+    codecBytes ::
+      codecBytes ::
+      codecBytes ::
+      codecBytes ::
+      codecBytes ::
+      codecBytes ::
+      codecBytes ::
+      codecBigInt ::
+      codecBigInt ::
+      codecBigInt ::
+      codecBigInt ::
+      codecLong ::
+      codecBytes ::
+      codecBytes ::
+      codecBytes
   }.as[BlockHeader]
+
+  def empty: BlockHeader = BlockHeader(
+    ByteVector.empty,
+    ByteVector.empty,
+    ByteVector.empty,
+    ByteVector.empty,
+    ByteVector.empty,
+    ByteVector.empty,
+    ByteVector.empty,
+    BigInt(0),
+    BigInt(0),
+    BigInt(0),
+    BigInt(0),
+    0L,
+    ByteVector.empty,
+    ByteVector.empty,
+    ByteVector.empty
+  )
 }

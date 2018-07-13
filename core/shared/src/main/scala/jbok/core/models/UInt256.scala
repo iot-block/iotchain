@@ -1,8 +1,11 @@
 package jbok.core.models
 
+import scodec.Codec
 import scodec.bits.ByteVector
+import jbok.codec.codecs._
 
 object UInt256 {
+  implicit val codec: Codec[UInt256] = codecBytes.xmap(apply, _.bytes)
 
   /** Size of UInt256 byte representation */
   val Size: Int = 32
