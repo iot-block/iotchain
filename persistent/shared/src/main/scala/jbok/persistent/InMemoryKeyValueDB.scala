@@ -1,9 +1,10 @@
 package jbok.persistent
 
+import cats.Traverse
 import cats.effect.Sync
+import cats.implicits._
 import fs2.async.Ref
 import scodec.bits.ByteVector
-import cats.implicits._
 
 class InMemoryKeyValueDB[F[_]](ref: Ref[F, Map[ByteVector, ByteVector]])(implicit F: Sync[F]) extends KeyValueDB[F] {
   override def get(key: ByteVector): F[ByteVector] =
@@ -23,6 +24,15 @@ class InMemoryKeyValueDB[F[_]](ref: Ref[F, Map[ByteVector, ByteVector]])(implici
 
   override def keys: F[List[ByteVector]] =
     ref.get.map(_.keys.toList)
+
+  override def writeBatch[G[_] : Traverse](ops: G[(ByteVector, Option[ByteVector])]): F[Unit] =
+    ops
+      .map {
+        case (key, Some(v)) => put(key, v)
+        case (key, None)    => del(key)
+      }
+      .sequence
+      .void
 
   override def clear(): F[Unit] =
     ref.modify(_ => Map.empty).void

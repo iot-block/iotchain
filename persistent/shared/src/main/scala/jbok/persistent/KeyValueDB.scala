@@ -1,5 +1,6 @@
 package jbok.persistent
 
+import cats.Traverse
 import cats.effect.Sync
 import scodec.bits.ByteVector
 
@@ -15,6 +16,8 @@ trait KeyValueDB[F[_]] {
   def has(key: ByteVector): F[Boolean]
 
   def keys: F[List[ByteVector]]
+
+  def writeBatch[G[_]: Traverse](ops: G[(ByteVector, Option[ByteVector])]): F[Unit]
 
   def clear(): F[Unit]
 }
