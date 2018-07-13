@@ -1,37 +1,53 @@
 package jbok.core.sync
 
-import cats.effect.Sync
+import cats.effect.ConcurrentEffect
 import cats.implicits._
+import fs2._
+import fs2.async.mutable.Signal
 import jbok.core.Blockchain
 import jbok.core.messages._
-import fs2._
+import jbok.core.peer.{PeerEvent, PeerId, PeerManager}
 
-class SyncService[F[_]](blockchain: Blockchain[F])(implicit F: Sync[F]) {
+import scala.concurrent.ExecutionContext
+
+case class SyncService[F[_]](
+    peerManager: PeerManager[F],
+    blockchain: Blockchain[F],
+    stopWhenTrue: Signal[F, Boolean]
+)(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
-  def handleMessages(messages: Stream[F, MessageFromPeer]): Stream[F, MessageToPeer] =
-    messages
-      .evalMap(from =>
-        handleMessage(from).map {
-          case Some(msg) => MessageToPeer(msg, from.peerId).some
-          case None => None
-      })
+  def stream: Stream[F, Unit] =
+    peerManager.events
+      .subscribe(64)
       .unNone
+      .evalMap {
+        case PeerEvent.PeerRecv(peerId, message) =>
+          handleMessage(peerId, message).flatMap {
+            case Some((id, response)) => peerManager.sendMessage(id, response)
+            case None                 => F.unit
+          }
+        case _ => F.unit
+      }
 
-  def handleMessage(message: MessageFromPeer): F[Option[Message]] = message match {
-    case MessageFromPeer(GetReceipts(hashes), _) =>
+  def start: F[Unit] = stopWhenTrue.set(false) *> F.start(stream.interruptWhen(stopWhenTrue).compile.drain).void
+
+  def stop: F[Unit] = stopWhenTrue.set(true)
+
+  def handleMessage(peerId: PeerId, message: Message): F[Option[(PeerId, Message)]] = message match {
+    case GetReceipts(hashes) =>
       for {
         receipts <- hashes.traverse(blockchain.getReceiptsByHash).map(_.flatten)
-      } yield Receipts(receipts).some
+      } yield Some(peerId -> Receipts(receipts))
 
-    case MessageFromPeer(GetBlockBodies(hashes), _) =>
+    case GetBlockBodies(hashes) =>
       for {
         bodies <- hashes.traverse(hash => blockchain.getBlockBodyByHash(hash)).map(_.flatten)
-      } yield BlockBodies(bodies).some
+      } yield Some(peerId -> BlockBodies(bodies))
 
-    case MessageFromPeer(request: GetBlockHeaders, _) =>
+    case request: GetBlockHeaders =>
       val blockNumber: F[Option[BigInt]] = request.block match {
-        case Left(v) => v.some.pure[F]
+        case Left(v)   => v.some.pure[F]
         case Right(bv) => blockchain.getBlockHeaderByHash(bv).map(_.map(_.number))
       }
 
@@ -47,7 +63,7 @@ class SyncService[F[_]](blockchain: Blockchain[F])(implicit F: Sync[F]) {
 
           for {
             headers <- range.toList.traverse(blockchain.getBlockHeaderByNumber).map(_.flatten)
-          } yield BlockHeaders(headers).some
+          } yield Some(peerId -> BlockHeaders(headers))
 
         case _ =>
           log.warn(s"got request for block headers with invalid block hash/number: ${request}")
@@ -59,5 +75,7 @@ class SyncService[F[_]](blockchain: Blockchain[F])(implicit F: Sync[F]) {
 }
 
 object SyncService {
-  def apply[F[_]](blockchain: Blockchain[F])(implicit F: Sync[F]): SyncService[F] = new SyncService(blockchain)
+  def apply[F[_]](peerManager: PeerManager[F], blockchain: Blockchain[F])(implicit F: ConcurrentEffect[F],
+                                                                          EC: ExecutionContext): F[SyncService[F]] =
+    fs2.async.signalOf[F, Boolean](true).map(s => SyncService(peerManager, blockchain, s))
 }
