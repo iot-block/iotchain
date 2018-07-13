@@ -4,23 +4,26 @@ import scodec.Attempt
 import scodec.Attempt.Successful
 import scodec.bits._
 
-package object hp {
-  type Nibbles = BitVector
+package object HexPrefix {
+  type Nibbles = String
+
+  def bytesToNibbles(bytes: ByteVector): Nibbles =
+    bytes.toHex
 
   def encode(nibbles: Nibbles, isLeaf: Boolean): ByteVector = {
-    val isOdd = nibbles.length / 4 % 2 != 0
+    val isOdd = nibbles.length % 2 != 0
 
     val hp = if (isOdd && isLeaf) {
-      bin"0011" ++ nibbles
+      "3" ++ nibbles
     } else if (isOdd && !isLeaf) {
-      bin"0001" ++ nibbles
+      "1" ++ nibbles
     } else if (!isOdd && isLeaf) {
-      bin"00100000" ++ nibbles
+      "20" ++ nibbles
     } else {
-      bin"00000000" ++ nibbles
+      "00" ++ nibbles
     }
 
-    hp.toByteVector
+    ByteVector.fromValidHex(hp)
   }
 
   def decode(bytes: ByteVector): Attempt[(Boolean, Nibbles)] = {
@@ -28,9 +31,9 @@ package object hp {
     val even = (bytes(0) & (1 << 4)) == 0
 
     if (even) {
-      Successful(flag, bytes.tail.toBitVector)
+      Successful(flag, bytes.tail.toHex)
     } else {
-      Successful(flag, bytes.toBitVector.drop(4))
+      Successful(flag, bytes.toBitVector.drop(4).toHex)
     }
   }
 }
