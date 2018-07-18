@@ -5,9 +5,9 @@ import java.nio.charset.StandardCharsets
 import cats.Id
 import scodec.bits.ByteVector
 import tsec.Bouncy
-import tsec.hashing.{CryptoHashAPI, _}
-import tsec.hashing.bouncy._
 import tsec.hashing.jca._
+import tsec.hashing.{CryptoHashAPI, _}
+import tsec.hashing.bouncy.{genHasher, _}
 
 abstract class AsBouncyCryptoHash[H](repr: String) extends BouncyDigestTag[H] with CryptoHashAPI[H] {
 
