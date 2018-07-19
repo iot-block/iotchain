@@ -25,6 +25,9 @@ class InMemoryKeyValueDB[F[_]](ref: Ref[F, Map[ByteVector, ByteVector]])(implici
   override def keys: F[List[ByteVector]] =
     ref.get.map(_.keys.toList)
 
+  override def toMap: F[Map[ByteVector, ByteVector]] =
+    ref.get
+
   override def writeBatch[G[_] : Traverse](ops: G[(ByteVector, Option[ByteVector])]): F[Unit] =
     ops
       .map {
@@ -35,7 +38,7 @@ class InMemoryKeyValueDB[F[_]](ref: Ref[F, Map[ByteVector, ByteVector]])(implici
       .void
 
   override def clear(): F[Unit] =
-    ref.modify(_ => Map.empty).void
+    ref.setSync(Map.empty)
 }
 
 object InMemoryKeyValueDB {
