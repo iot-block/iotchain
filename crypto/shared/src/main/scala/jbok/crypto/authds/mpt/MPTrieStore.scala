@@ -21,6 +21,12 @@ class MPTrieStore[F[_], K, V](namespace: ByteVector, mpt: MPTrie[F])(implicit F:
 }
 
 object MPTrieStore {
+  def apply[F[_], K, V](db: KeyValueDB[F])(implicit F: Sync[F], ck: Codec[K], cv: Codec[V]): F[MPTrieStore[F, K, V]] =
+    for {
+      rootHash <- fs2.async.refOf[F, ByteVector](MPTrie.emptyRootHash)
+      trie = new MPTrie[F](db, rootHash)
+    } yield new MPTrieStore[F, K, V](ByteVector.empty, trie)
+
   def inMemory[F[_], K, V](implicit F: Sync[F], ck: Codec[K], cv: Codec[V]): F[MPTrieStore[F, K, V]] =
     for {
       db <- KeyValueDB.inMemory[F]

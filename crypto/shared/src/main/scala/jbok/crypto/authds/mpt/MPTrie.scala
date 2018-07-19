@@ -38,15 +38,15 @@ object MPTrie {
 
   val alphabet: Vector[String] = "0123456789abcdef".map(_.toString).toVector
 
-  def inMemory[F[_]: Sync]: F[MPTrie[F]] =
+  def inMemory[F[_]: Sync](root: ByteVector = emptyRootHash): F[MPTrie[F]] =
     for {
       db <- KeyValueDB.inMemory[F]
-      rootHash <- fs2.async.refOf[F, ByteVector](emptyRootHash)
+      rootHash <- fs2.async.refOf[F, ByteVector](root)
     } yield new MPTrie[F](db, rootHash)
 
-  def apply[F[_]: Sync](db: KeyValueDB[F]): F[MPTrie[F]] =
+  def apply[F[_]: Sync](db: KeyValueDB[F], root: ByteVector = emptyRootHash): F[MPTrie[F]] =
     for {
-      rootHash <- fs2.async.refOf[F, ByteVector](emptyRootHash)
+      rootHash <- fs2.async.refOf[F, ByteVector](root)
     } yield new MPTrie[F](db, rootHash)
 }
 
@@ -67,29 +67,61 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, ByteVector])(implicit F: 
     for {
       root <- getRoot
       nibbles = HexPrefix.bytesToNibbles(key)
-      _ <- putNode(root, nibbles, newVal).flatMap(r => {
-        log.info(s"put $nibbles result: ${r}")
-        commitPut(r)
-      })
+      newRootHash <- putNode(root, nibbles, newVal) >>= commitPut
+      _ <- rootHash.setSync(newRootHash)
     } yield ()
 
   override def del(key: ByteVector): F[Unit] =
     for {
       root <- getRoot
       nibbles = HexPrefix.bytesToNibbles(key)
-      _ <- delNode(root, nibbles).flatMap(r => commitDel(r))
+      newRootHash <- delNode(root, nibbles) >>= commitDel
+      _ <- rootHash.setSync(newRootHash)
     } yield ()
 
   override def has(key: ByteVector): F[Boolean] = getOpt(key).map(_.isDefined)
 
-  override def keys: F[List[ByteVector]] = db.keys
+  override def keys: F[List[ByteVector]] = toMap.map(_.keys.toList)
+
+  override def toMap: F[Map[ByteVector, ByteVector]] = {
+    def toMap0(node: Node): F[Map[String, ByteVector]] = node match {
+      case BlankNode => F.pure(Map.empty)
+      case LeafNode(key, value) =>
+        F.pure(Map(key -> value))
+      case ExtensionNode(key, entry) =>
+        for {
+          decoded <- getNodeByEntry(entry)
+          subMap <- toMap0(decoded)
+        } yield subMap.map { case (k, v) => key ++ k -> v }
+      case BranchNode(branches, value) =>
+        for {
+          xs <- branches.zipWithIndex.traverse { case (e, i) => (getNodeByEntry(e) >>= toMap0).map(_ -> i) }
+          m = xs.foldLeft(Map.empty[String, ByteVector]) {
+            case (acc, (cur, i)) => acc ++ cur.map { case (k, v) => MPTrie.alphabet(i) ++ k -> v }
+          }
+        } yield if (value.isDefined) m + ("" -> value.get) else m
+    }
+
+    for {
+      root <- getRoot
+      m <- toMap0(root)
+    } yield m.map { case (k, v) => ByteVector.fromValidHex(k) -> v }
+  }
 
   override def writeBatch[G[_]: Traverse](ops: G[(ByteVector, Option[ByteVector])]): F[Unit] =
-    db.writeBatch(ops)
+    ops
+      .map {
+        case (key, Some(v)) => put(key, v)
+        case (key, None)    => del(key)
+      }
+      .sequence
+      .void
 
   override def clear(): F[Unit] = db.clear() *> rootHash.setSync(MPTrie.emptyRootHash)
 
-  // ---
+  ////////////////////////
+  ////////////////////////
+
 
   def getRootHash: F[ByteVector] = rootHash.get
 
@@ -112,7 +144,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, ByteVector])(implicit F: 
     getNodeByNibbles(node, HexPrefix.bytesToNibbles(key))
 
   def getNodeByNibbles(node: Node, nibbles: Nibbles): F[Option[Node]] = {
-    log.info(s"""get nibbles "${nibbles}" in $node""")
+    log.debug(s"""get nibbles "${nibbles}" in $node""")
     node match {
       case BlankNode => F.pure(None)
 
@@ -144,7 +176,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, ByteVector])(implicit F: 
       values <- keys.traverse(db.get).map(_.map(x => NodeCodec.decode(x).require))
     } yield keys.zip(values)
 
-  private def commit(newRoot: Option[Node], toDel: List[Node], toPut: List[Node]): F[Unit] = {
+  private def commit(newRoot: Option[Node], toDel: List[Node], toPut: List[Node]): F[ByteVector] = {
     val newRootHash = newRoot.map(_.hash).getOrElse(MPTrie.emptyRootHash)
     val newRootBytes = newRoot.map(_.capped).getOrElse(ByteVector.empty)
 
@@ -153,39 +185,38 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, ByteVector])(implicit F: 
         .filter { node =>
           node.entry.isLeft || node.hash == previousRootHash
         }
-        .map(x => { log.info(s"del $x"); x })
+        .map(x => { log.debug(s"del $x"); x })
         .map(x => x.hash -> None)
 
       val putOps = toPut
         .filter { node =>
           node.entry.isLeft || node.capped == newRootBytes
         }
-        .map(x => { log.info(s"put$x"); x })
+        .map(x => { log.debug(s"put$x"); x })
         .map(x => x.hash -> Some(x.bytes))
 
       val batch = delOps ++ putOps
-
-      writeBatch(batch) *> rootHash.setSync(newRootHash)
+      db.writeBatch(batch).map(_ => newRootHash)
     }
   }
 
-  private def commitPut(nodeInsertResult: NodeInsertResult): F[Unit] =
+  private def commitPut(nodeInsertResult: NodeInsertResult): F[ByteVector] =
     commit(Some(nodeInsertResult.newNode), nodeInsertResult.toDel, nodeInsertResult.toPut)
 
-  private def commitDel(nodeRemoveResult: NodeRemoveResult): F[Unit] =
+  private def commitDel(nodeRemoveResult: NodeRemoveResult): F[ByteVector] =
     nodeRemoveResult match {
       case NodeRemoveResult(true, newRoot, toDel, toPut) =>
         commit(newRoot, toDel, toPut)
 
       case NodeRemoveResult(false, _, _, _) =>
-        F.unit
+        rootHash.get
     }
 
   private def longestCommonPrefix(a: Nibbles, b: Nibbles): Int =
     a.zip(b).takeWhile(t => t._1 == t._2).length
 
   private def getNodeValue(node: Node, nibbles: Nibbles): F[Option[ByteVector]] = {
-    log.info(s"""get nibbles "${nibbles}" in $node""")
+    log.debug(s"""get nibbles "${nibbles}" in $node""")
     node match {
       case BlankNode => F.pure(None)
 
@@ -214,16 +245,16 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, ByteVector])(implicit F: 
   private def putNode(node: Node, key: Nibbles, value: ByteVector): F[NodeInsertResult] = node match {
     case BlankNode =>
       val newRoot = LeafNode(key, value)
-      log.info(s"put ${key} in blank")
+      log.debug(s"put ${key} in blank")
       NodeInsertResult(newRoot, Nil, newRoot :: Nil).pure[F]
     case leafNode: LeafNode =>
-      log.info(s"put ${key} in ${leafNode}")
+      log.debug(s"put ${key} in ${leafNode}")
       putLeafNode(leafNode, key, value)
     case extNode: ExtensionNode =>
-      log.info(s"put ${key} in ${extNode}")
+      log.debug(s"put ${key} in ${extNode}")
       putExtensionNode(extNode, key, value)
     case branchNode: BranchNode =>
-      log.info(s"put ${key} in ${branchNode}")
+      log.debug(s"put ${key} in ${branchNode}")
       putBranchNode(branchNode, key, value)
   }
 
