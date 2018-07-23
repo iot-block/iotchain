@@ -1,7 +1,6 @@
 package org.jbok.evm.testsuite
 
 
-import better.files._
 import cats.effect.IO
 import io.circe._
 import io.circe.generic.auto._
@@ -15,6 +14,11 @@ import jbok.persistent.{KeyValueDB, SnapshotKeyValueStore}
 import org.scalatest.{Matchers, WordSpec}
 import scodec.Codec
 import scodec.bits.ByteVector
+import jbok.codec.json._
+import scala.io.Source
+import testsuite._
+import jbok.codec.codecs._
+import better.files._
 
 //Env           stEnv                 `json:"env"`
 //Exec          vmExec                `json:"exec"`
@@ -108,11 +112,15 @@ class VMTest extends WordSpec with Matchers {
     val accounts = json.map {
       case (addr, account) => (addr, Account(balance = UInt256(account.balance), nonce = UInt256(account.nonce)))
     }
+
     val accountCodes = json.map {
       case (addr, account) => (addr, account.code)
     }
 
+    println(s"Account codes: ${accountCodes}")
+
     val db = KeyValueDB.inMemory[IO].unsafeRunSync()
+
     val storages = json.map {
       case (addr, account) => (addr, Storage.fromMap[IO](account.storage.map(s => (UInt256(s._1), UInt256(s._2)))).unsafeRunSync())
     }
@@ -151,10 +159,25 @@ class VMTest extends WordSpec with Matchers {
       } {
         val label = testCase._1
         val vmJson = testCase._2
-        val config = EvmConfig.PostEIP160ConfigBuilder(None)
+        val config = EvmConfig.HomesteadConfigBuilder(None)
 
         val preState = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
+        println(
+          s"""
+             |pre
+             |${preState.accountProxy.toMap.unsafeRunSync()}
+             |${preState.contractStorages.mapValues(_.data.unsafeRunSync())}
+             |${preState.accountCodes}
+           """.stripMargin)
+
         val postState = loadMockWorldState(vmJson.post, vmJson.env.currentNumber)
+        println(
+          s"""
+             |post
+             |${postState.accountProxy.toMap.unsafeRunSync()}
+             |${postState.contractStorages.mapValues(_.data.unsafeRunSync())}
+             |${postState.accountCodes}
+           """.stripMargin)
 
         val currentBlockHeader = BlockHeader(
           ByteVector.empty,
@@ -200,7 +223,7 @@ class VMTest extends WordSpec with Matchers {
         result.gasRemaining shouldEqual vmJson.gas
         world.accountProxy.toMap.unsafeRunSync() shouldEqual postState.accountProxy.toMap.unsafeRunSync()
 //        world.contractStorages.filter(!_._2.isEmpty) shouldEqual postState.storages.filter(!_._2.isEmpty)
-        world.accountCodes.filter(!_._2.isEmpty) shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
+//        world.accountCodes.filter(!_._2.isEmpty) shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
         result.returnData shouldEqual vmJson.out
         Codec.encode(result.logs.toList).require.bytes.kec256 shouldEqual vmJson.logs
 
