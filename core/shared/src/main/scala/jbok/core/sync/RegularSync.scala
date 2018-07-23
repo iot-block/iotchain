@@ -21,20 +21,23 @@ case class RegularSync[F[_]](
 
   def stream: Stream[F, Unit] = peerManager.subscribeMessages().evalMap {
     case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
-      ledger.importBlock(block).map {
-        case BlockImported(newBlocks) =>
+      ledger.importBlock(block).value.map {
+        case Right(BlockImported(newBlocks)) =>
           broadcastBlocks(newBlocks)
           updateTxAndOmmerPools(newBlocks, Nil)
           log.debug(s"Added new block ${block.header.number} to the top of the chain received from $peerId")
 
-        case DuplicateBlock =>
+        case Right(DuplicateBlock) =>
           log.debug(s"Ignoring duplicate block ${block.header.number}) from ${peerId}")
 
-        case UnknownParent =>
+        case Right(UnknownParent) =>
           log.debug(s"Ignoring orphaned block ${block.header.number} from $peerId")
 
-        case BlockImportFailed(error) =>
+        case Right(BlockImportFailed(error)) =>
           log.info(s"importing block error: ${error}")
+
+        case Left(error) =>
+          log.warn(s"import block invalid: ${error}")
       }
 
     case PeerEvent.PeerRecv(peerId, NewBlockHashes(hashes)) =>

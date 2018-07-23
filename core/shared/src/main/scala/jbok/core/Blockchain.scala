@@ -6,11 +6,12 @@ import cats.implicits._
 import jbok.core.genesis.Genesis
 import jbok.core.models._
 import jbok.core.store._
-import jbok.crypto.authds.mpt.{MPTrie, Node}
+import jbok.crypto.authds.mpt.Node
+import jbok.evm.WorldStateProxy
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 
-abstract class Blockchain[F[_]](implicit F: Sync[F]) {
+abstract class BlockChain[F[_]](implicit F: Sync[F]) {
   protected val log = org.log4s.getLogger
 
   def loadGenesis: F[Unit] = {
@@ -203,10 +204,12 @@ abstract class Blockchain[F[_]](implicit F: Sync[F]) {
 
   def genesisBlock: F[Block] = getBlockByNumber(0).map(_.get)
 
-//  def getWorldStateProxy(blockNumber: BigInt,
-//                         accountStartNonce: UInt256,
-//                         stateRootHash: Option[ByteVector] = None,
-//                         noEmptyAccounts: Boolean = false): WS
+  def getWorldStateProxy(
+      blockNumber: BigInt,
+      accountStartNonce: UInt256,
+      stateRootHash: Option[ByteVector] = None,
+      noEmptyAccounts: Boolean = false
+  ): F[WorldStateProxy[F]]
 //
 //  def getReadOnlyWorldStateProxy(blockNumber: Option[BigInt],
 //                                 accountStartNonce: UInt256,
@@ -218,46 +221,49 @@ abstract class Blockchain[F[_]](implicit F: Sync[F]) {
   def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit]
 }
 
-object Blockchain {
-  def inMemory[F[_]: Sync]: F[Blockchain[F]] =
+object BlockChain {
+  def inMemory[F[_]: Sync]: F[BlockChain[F]] =
     for {
       db <- KeyValueDB.inMemory[F]
       blockchain <- apply[F](db)
       _ <- blockchain.loadGenesis
     } yield blockchain
 
-  def apply[F[_]: Sync](db: KeyValueDB[F]): F[Blockchain[F]] = {
+  def apply[F[_]: Sync](db: KeyValueDB[F]): F[BlockChain[F]] = {
     val headerStore = new BlockHeaderStore[F](db)
     val bodyStore = new BlockBodyStore[F](db)
     val receiptStore = new ReceiptStore[F](db)
     val numberHashStore = new BlockNumberHashStore[F](db)
     val txLocationStore = new TransactionLocationStore[F](db)
     val appStateStore = new AppStateStore[F](db)
+    val evmCodeStore = new EvmCodeStore[F](db)
 
-    MPTNodeStore[F](db).map { mptStore =>
-      new BlockchainImpl[F](
+    AddressAccountStore[F](db).map { mptStore =>
+      new BlockChainImpl[F](
         headerStore,
         bodyStore,
         receiptStore,
         numberHashStore,
         txLocationStore,
         appStateStore,
-        mptStore
+        mptStore,
+        evmCodeStore
       )
     }
   }
 }
 
-class BlockchainImpl[F[_]](
-    headerStore: BlockHeaderStore[F],
-    bodyStore: BlockBodyStore[F],
-    receiptStore: ReceiptStore[F],
-    numberHashStore: BlockNumberHashStore[F],
-    txLocationStore: TransactionLocationStore[F],
-    appStateStore: AppStateStore[F],
-    mptStore: MPTNodeStore[F]
+class BlockChainImpl[F[_]](
+                            headerStore: BlockHeaderStore[F],
+                            bodyStore: BlockBodyStore[F],
+                            receiptStore: ReceiptStore[F],
+                            numberHashStore: BlockNumberHashStore[F],
+                            txLocationStore: TransactionLocationStore[F],
+                            appStateStore: AppStateStore[F],
+                            mptStore: AddressAccountStore[F],
+                            evmCodeStore: EvmCodeStore[F]
 )(implicit F: Sync[F])
-    extends Blockchain[F] {
+    extends BlockChain[F] {
 
   /**
     * Allows to query a blockHeader by block hash
@@ -369,7 +375,7 @@ class BlockchainImpl[F[_]](
   }
 
   override def save(blockHash: ByteVector, blockBody: BlockBody): F[Unit] = {
-      log.info(s"saving blockBody")
+    log.info(s"saving blockBody")
 
     bodyStore.put(blockHash, blockBody) *>
       blockBody.transactionList.zipWithIndex
@@ -414,4 +420,19 @@ class BlockchainImpl[F[_]](
     * @return MPT node
     */
   override def getMptNodeByHash(hash: ByteVector): F[Node] = mptStore.getNodeByHash(hash)
+
+  override def getWorldStateProxy(blockNumber: BigInt,
+                                  accountStartNonce: UInt256,
+                                  stateRootHash: Option[ByteVector],
+                                  noEmptyAccounts: Boolean): F[WorldStateProxy[F]] =
+    fs2.async.refOf[F, Set[Address]](Set.empty).map { ref =>
+//      WorldStateProxy[F](
+//        mptStore,
+//        mptStore,
+//        evmCodeStore,
+//        ref,
+//        noEmptyAccounts
+//      )
+      ???
+    }
 }

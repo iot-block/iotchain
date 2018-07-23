@@ -2,8 +2,6 @@ package jbok.core.models
 
 import jbok.codec._
 import jbok.codec.codecs._
-import jbok.crypto._
-import jbok.crypto.signature.KeyPair
 import scodec.Codec
 import scodec.bits.ByteVector
 

@@ -8,7 +8,7 @@ import fs2._
 import fs2.async.mutable.{Signal, Topic}
 import fs2.async.{Promise, Ref}
 import fs2.io.tcp.Socket
-import jbok.core.Blockchain
+import jbok.core.BlockChain
 import jbok.core.configs.PeerManagerConfig
 import jbok.core.messages.{Message, Messages, Status}
 import jbok.network.NetAddress
@@ -21,7 +21,7 @@ case class PeerManager[F[_]](
     pending: Ref[F, Map[PeerId, Peer[F]]],
     handshaked: Ref[F, Map[PeerId, HandshakedPeer[F]]],
     events: Topic[F, Option[PeerEvent]],
-    blockchain: Blockchain[F]
+    blockchain: BlockChain[F]
 )(implicit F: ConcurrentEffect[F]) {
 
   private[this] val log = org.log4s.getLogger
@@ -167,11 +167,6 @@ case class PeerManager[F[_]](
 
   def subscribe() = events.subscribe(32).unNone
 
-  def subscribeMessage[A <: Message] =
-    events.subscribe(32).unNone.collect {
-      case event @ PeerEvent.PeerRecv(_, msg) if msg.isInstanceOf[A] => event
-    }
-
   def subscribeEvents(): Stream[F, PeerEvent] = events.subscribe(32).unNone.collect {
     case x: PeerEvent.PeerAdd  => x
     case x: PeerEvent.PeerDrop => x
@@ -189,7 +184,7 @@ case class PeerManager[F[_]](
 object PeerManager {
   def apply[F[_]: ConcurrentEffect](
       config: PeerManagerConfig,
-      blockchain: Blockchain[F]
+      blockchain: BlockChain[F]
   ): F[PeerManager[F]] =
     for {
       stopWhenTrue <- fs2.async.signalOf[F, Boolean](true)
