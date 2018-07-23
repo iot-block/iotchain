@@ -21,7 +21,7 @@ trait codecs {
 
   implicit val codecLong: Codec[Long] = codecBigInt.xmap[Long](_.toLong, BigInt.apply)
 
-  implicit def codecList[A: Codec]: Codec[List[A]] = listOfN(uint8, Codec[A])
+  implicit def codecList[A: Codec]: Codec[List[A]] = rlp.rlist[A](rlp.RlpCodec(Codec[A]))
 
   implicit def codecSet[A: Codec]: Codec[Set[A]] = list(implicitly[Codec[A]]).xmap[Set[A]](_.toSet, _.toList)
 
