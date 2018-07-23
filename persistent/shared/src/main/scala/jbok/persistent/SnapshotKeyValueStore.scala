@@ -25,6 +25,10 @@ case class SnapshotKeyValueStore[F[_]: Sync, K, V](inner: KeyValueStore[F, K, V]
     for {
       _ <- inner.writeBatch(stage.toList)
     } yield new SnapshotKeyValueStore[F, K, V](inner, Map.empty)
+
+  def +(kv: (K, V)): SnapshotKeyValueStore[F, K, V] = this.copy(stage = stage + (kv._1 -> Some(kv._2)))
+
+  def ++(kvs: Map[K, V]): SnapshotKeyValueStore[F, K, V] = this.copy(stage = stage ++ kvs.mapValues(Some.apply))
 }
 
 object SnapshotKeyValueStore {
