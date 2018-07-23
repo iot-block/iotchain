@@ -15,6 +15,8 @@ case class Transaction(
 ) {
   lazy val hash: ByteVector =
     ByteVector(Keccak256.hashPure(Transaction.codec.encode(this).require.toByteArray))
+
+  def isContractInit: Boolean = receivingAddress.isEmpty
 }
 
 object Transaction {

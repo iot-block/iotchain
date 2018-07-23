@@ -1,7 +1,8 @@
 package jbok.core.models
 
 import cats.effect.IO
-import jbok.crypto.signature.{CryptoSignature, Ed25519, KeyPair}
+import jbok.crypto._
+import jbok.crypto.signature.{CryptoSignature, KeyPair, SecP256k1}
 import scodec.Codec
 import scodec.bits.ByteVector
 import tsec.hashing.bouncy._
@@ -24,12 +25,12 @@ object SignedTransaction {
 
   def sign(tx: Transaction, keyPair: KeyPair, chainId: Option[Byte]): SignedTransaction = {
     val bytes = bytesToSign(tx, chainId)
-    val sig = Ed25519.sign[IO](bytes, keyPair.secret).unsafeRunSync()
-    val pub = keyPair.public.bytes
-    val address = Address(Keccak256.hashPure(pub))
+    val sig = SecP256k1.sign[IO](bytes, keyPair).unsafeRunSync()
+    val pub = keyPair.public.uncompressed
+    val address = Address(pub.kec256)
     SignedTransaction(tx, sig, address)
   }
 
-  private def bytesToSign(tx: Transaction, chainId: Option[Byte]): Array[Byte] =
-    Transaction.codec.encode(tx).require.bytes.toArray
+  private def bytesToSign(tx: Transaction, chainId: Option[Byte]): ByteVector =
+    Transaction.codec.encode(tx).require.bytes.kec256
 }

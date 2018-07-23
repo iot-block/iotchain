@@ -14,8 +14,8 @@ case class Receipt(
 object Receipt {
   implicit val codec: Codec[Receipt] = {
     codecBytes ::
-    codecBigInt ::
-    codecBytes ::
-    codecList[TxLogEntry]
+      codecBigInt ::
+      codecBytes ::
+      codecList[TxLogEntry]
   }.as[Receipt]
 }
