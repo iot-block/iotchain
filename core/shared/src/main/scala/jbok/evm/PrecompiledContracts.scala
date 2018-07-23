@@ -20,12 +20,6 @@ object PrecompiledContracts {
     IdAddr -> Identity
   )
 
-  /**
-    * Given a [[ProgramContext]] it optionally runs a precompiled contract if the receiving address is one of
-    * the contracts
-    *
-    * @vyItalicreturn None if the receiving address is not a precompiled contract
-    */
   def runOptionally[F[_]: Sync](context: ProgramContext[F]): Option[ProgramResult[F]] =
     contracts.get(context.receivingAddr).map(_.run(context))
 
@@ -68,7 +62,7 @@ object PrecompiledContracts {
         val recovered = SecP256k1.recoverPublic(sig, h)
         recovered
           .map { pk =>
-            val hash = pk.bytes.kec256.slice(12, 32)
+            val hash = pk.uncompressed.kec256.slice(12, 32)
             hash.padLeft(32)
           }
           .getOrElse(ByteVector.empty)
