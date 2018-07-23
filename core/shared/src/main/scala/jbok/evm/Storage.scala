@@ -30,6 +30,15 @@ object Storage {
       s = SnapshotKeyValueStore(store)
     } yield Storage[F](s)
 
+  def fromMap[F[_]: Sync](kvs: Map[UInt256, UInt256]): F[Storage[F]] =
+    for {
+      storage <- empty[F]
+      stored = kvs.foldLeft(storage) {
+        case (s, (k, v)) =>
+          s.store(k, v)
+      }
+    } yield stored
+
   def fromList[F[_]: Sync](words: List[UInt256]): F[Storage[F]] =
     for {
       storage <- empty[F]
