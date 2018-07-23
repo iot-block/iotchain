@@ -1,36 +1,28 @@
 package jbok.crypto.signature
 
-import java.security.spec.{PKCS8EncodedKeySpec, X509EncodedKeySpec}
+import java.math.BigInteger
 
 import scodec.bits.ByteVector
 
 case class KeyPair(public: KeyPair.Public, secret: KeyPair.Secret)
 
 object KeyPair {
-
-  def fromJavaKeyPair(keyPair: java.security.KeyPair): KeyPair = {
-    KeyPair(Public(keyPair.getPublic.getEncoded), Secret(keyPair.getPrivate.getEncoded))
-  }
-
-  case class Public(value: ByteVector) extends AnyVal {
-    def bytes: Array[Byte] = value.toArray
-    def encoded: X509EncodedKeySpec = new X509EncodedKeySpec(bytes)
-    def toHex: String = value.toHex
+  case class Public(bytes: ByteVector) extends AnyVal {
+    def uncompressed: ByteVector = bytes.tail
   }
 
   object Public {
-    def apply(bytes: Array[Byte]): Public = Public(ByteVector(bytes))
     def apply(hex: String): Public = Public(ByteVector.fromValidHex(hex))
+    def apply(bytes: Array[Byte]): Public = Public(ByteVector(bytes))
   }
 
-  case class Secret(value: ByteVector) extends AnyVal {
-    def bytes: Array[Byte] = value.toArray
-    def encoded: PKCS8EncodedKeySpec = new PKCS8EncodedKeySpec(bytes)
-    def toHex: String = value.toHex
+  case class Secret(bytes: ByteVector) extends AnyVal {
+    def d: BigInt = BigInt(bytes.toArray)
   }
 
   object Secret {
-    def apply(bytes: Array[Byte]): Secret = Secret(ByteVector(bytes))
+    def apply(d: BigInteger): Secret = Secret(ByteVector(d.toByteArray))
     def apply(hex: String): Secret = Secret(ByteVector.fromValidHex(hex))
+    def apply(bytes: Array[Byte]): Secret = Secret(ByteVector(bytes))
   }
 }

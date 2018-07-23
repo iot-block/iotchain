@@ -1,16 +1,21 @@
 package jbok.crypto.signature
 
+import java.math.BigInteger
+
 import jbok.codec.codecs._
 import scodec.Codec
 import scodec.bits.ByteVector
 
-case class CryptoSignature(bytes: ByteVector) extends AnyVal {
-  def toHex: String = bytes.toHex
-  def toArray: Array[Byte] = bytes.toArray
+case class CryptoSignature(r: BigInt, s: BigInt, v: Option[Byte]) {
+  def bytes: ByteVector = ByteVector(r.toByteArray) ++ ByteVector(s.toByteArray)
 }
 
 object CryptoSignature {
-  def apply(bytes: Array[Byte]): CryptoSignature = CryptoSignature(ByteVector(bytes))
+  implicit val codec: Codec[CryptoSignature] = (codecBigInt :: codecBigInt :: codecOptional[Byte]).as[CryptoSignature]
 
-  implicit val codec: Codec[CryptoSignature] = codecBytes.as[CryptoSignature]
+  def apply(r: BigInteger, s: BigInteger, v: Option[Byte]): CryptoSignature =
+    CryptoSignature(BigInt(r), BigInt(s), v)
+
+  def apply(r: ByteVector, s: ByteVector, v: Option[Byte]): CryptoSignature =
+    CryptoSignature(BigInt(1, r.toArray), BigInt(1, s.toArray), v)
 }
