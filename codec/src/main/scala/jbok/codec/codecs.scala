@@ -8,6 +8,8 @@ object codecs extends codecs
 trait codecs {
   implicit val codecString: Codec[String] = rlp.rstring
 
+  implicit val codecByte: Codec[Byte] = rlp.ritem.xmap[Byte](_.head, b => ByteVector(b))
+
   implicit val codecBytes: Codec[ByteVector] = rlp.ritem
 
   implicit val codecArrayByte: Codec[Array[Byte]] = rlp.ritem.xmap[Array[Byte]](_.toArray, ByteVector.apply)
