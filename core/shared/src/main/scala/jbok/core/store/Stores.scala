@@ -72,7 +72,10 @@ class AppStateStore[F[_]: Sync](db: KeyValueDB[F])
     encode(n).flatMap(v => put(SyncStartingBlock, v))
 }
 
-class MPTNodeStore[F[_]: Sync](val mpt: MPTrie[F])
+class EvmCodeStore[F[_]: Sync](db: KeyValueDB[F])
+    extends KeyValueStore[F, ByteVector, ByteVector](Namespaces.CodeNamespace, db)
+
+class AddressAccountStore[F[_]: Sync](val mpt: MPTrie[F])
     extends KeyValueStore[F, Address, Account](Namespaces.NodeNamespace, mpt) {
 
   def getRootHash: F[ByteVector] = mpt.getRootHash
@@ -86,9 +89,19 @@ class MPTNodeStore[F[_]: Sync](val mpt: MPTrie[F])
   def clear(): F[Unit] = mpt.clear()
 }
 
-object MPTNodeStore {
-  def apply[F[_]: Sync](db: KeyValueDB[F]): F[MPTNodeStore[F]] =
+object AddressAccountStore {
+  def apply[F[_]: Sync](db: KeyValueDB[F]): F[AddressAccountStore[F]] =
     for {
       trie <- MPTrie[F](db)
-    } yield new MPTNodeStore[F](trie)
+    } yield new AddressAccountStore[F](trie)
+}
+
+class ContractStorageStore[F[_]: Sync](val mpt: MPTrie[F])
+  extends KeyValueStore[F, UInt256, UInt256](ByteVector.empty, mpt)
+
+object ContractStorageStore {
+  def apply[F[_]: Sync](db: KeyValueDB[F], rootHash: ByteVector): F[ContractStorageStore[F]] =
+    for {
+      mpt <- MPTrie[F](db, rootHash)
+    } yield new ContractStorageStore[F](mpt)
 }
