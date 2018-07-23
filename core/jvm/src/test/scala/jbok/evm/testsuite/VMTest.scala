@@ -1,4 +1,4 @@
-package org.jbok.evm.testsuite
+package jbok.evm.testsuite
 
 
 import cats.effect.IO
@@ -16,8 +16,8 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import jbok.codec.json._
 import scala.io.Source
-import testsuite._
 import jbok.codec.codecs._
+import testsuite._
 import better.files._
 
 //Env           stEnv                 `json:"env"`

@@ -4,7 +4,6 @@ import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.models.UInt256
 import jbok.persistent.KeyValueDB
-import org.jbok.evm.CallOpFixture
 
 class CallOpcodesSpecPostEip161 extends JbokSpec {
 

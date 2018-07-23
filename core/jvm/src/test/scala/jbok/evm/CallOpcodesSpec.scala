@@ -1,4 +1,4 @@
-package org.jbok.evm
+package jbok.evm
 
 import cats.effect.IO
 import jbok.JbokSpec

@@ -1,4 +1,4 @@
-package org.jbok.evm
+package jbok.evm
 
 import cats.effect.IO
 import jbok.core.models.{Account, Address, UInt256}

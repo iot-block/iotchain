@@ -1,4 +1,4 @@
-package org.jbok.evm.testsuite
+package jbok.evm.testsuite
 
 import io.circe.{Decoder, Encoder, KeyDecoder}
 import jbok.codec.json._

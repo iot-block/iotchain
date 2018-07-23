@@ -1,9 +1,8 @@
-package org.jbok.evm
+package jbok.evm
 
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.models.{Account, Address, UInt256}
-import jbok.evm.{Assembly, EvmConfig, _}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
