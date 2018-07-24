@@ -102,12 +102,6 @@ case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLimit: B
 case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
 class VMTest extends WordSpec with Matchers {
-
-  def recursiveListFiles(f: File): List[File] = {
-    val these = f.list
-    (these ++ these.filter(f => f.isDirectory && !f.name.contains("vmSystemOperations")).flatMap(recursiveListFiles)).toList
-  }
-
   def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: BigInt): WorldStateProxy[IO] = {
     val accounts = json.map {
       case (addr, account) => (addr, Account(balance = UInt256(account.balance), nonce = UInt256(account.nonce)))
@@ -116,8 +110,6 @@ class VMTest extends WordSpec with Matchers {
     val accountCodes = json.map {
       case (addr, account) => (addr, account.code)
     }
-
-    println(s"Account codes: ${accountCodes}")
 
     val db = KeyValueDB.inMemory[IO].unsafeRunSync()
 
@@ -145,7 +137,8 @@ class VMTest extends WordSpec with Matchers {
   "evm test suite" should {
     "load and run official json test files" in {
       val file = File(Resource.getUrl("VMTests"))
-      val fileList = file.listRecursively.filter(f => f.name.endsWith(".json") && !f.name.contains("env1")).toList
+      val fileList = file.listRecursively.filter(f => f.name.endsWith(".json") &&
+        !f.path.toString.contains("vmSystemOperations") && !f.name.contains("env1")).toList
 
       val sources = for {
         file <- fileList
@@ -162,22 +155,8 @@ class VMTest extends WordSpec with Matchers {
         val config = EvmConfig.HomesteadConfigBuilder(None)
 
         val preState = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
-        println(
-          s"""
-             |pre
-             |${preState.accountProxy.toMap.unsafeRunSync()}
-             |${preState.contractStorages.mapValues(_.data.unsafeRunSync())}
-             |${preState.accountCodes}
-           """.stripMargin)
 
         val postState = loadMockWorldState(vmJson.post, vmJson.env.currentNumber)
-        println(
-          s"""
-             |post
-             |${postState.accountProxy.toMap.unsafeRunSync()}
-             |${postState.contractStorages.mapValues(_.data.unsafeRunSync())}
-             |${postState.accountCodes}
-           """.stripMargin)
 
         val currentBlockHeader = BlockHeader(
           ByteVector.empty,
