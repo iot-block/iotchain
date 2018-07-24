@@ -8,7 +8,7 @@ import jbok.common._
 import jbok.core.BlockChain
 import jbok.core.configs.BlockChainConfig
 import jbok.core.ledger.BlockExecutionError.TxsExecutionError
-import jbok.core.ledger.BlockImportResult.DuplicateBlock
+import jbok.core.ledger.BlockImportResult.{BlockImportFailed, BlockImported, DuplicateBlock}
 import jbok.core.mining.BlockPreparationResult
 import jbok.core.models.UInt256._
 import jbok.core.models._
@@ -23,7 +23,7 @@ case object UnknownBlock extends BlockStatus
 
 sealed trait BlockImportResult
 object BlockImportResult {
-  case class BlockImported(imported: List[Block]) extends BlockImportResult
+  case class BlockImported(imported: List[Block], totalDifficulties: List[BigInt]) extends BlockImportResult
   case class BlockImportFailed(error: String) extends BlockImportResult
   case object DuplicateBlock extends BlockImportResult
   case object UnknownParent extends BlockImportResult
@@ -86,33 +86,34 @@ class Ledger[F[_]](
     blockChain.getBlockByHash(blockHash).map(_.isDefined) && blockPool.getBlockByHash(blockHash).map(_.isDefined)
 
   def importBlockToTop(block: Block, bestBlockNumber: BigInt, currentTd: BigInt): F[BlockImportResult] =
-//    val topBlockHash = blockQueue.enqueueBlock(block, bestBlockNumber).get.hash
-//    val topBlocks = blockQueue.getBranch(topBlockHash, dequeue = true)
-//    val (importedBlocks, maybeError) = executeBlocks(topBlocks, currentTd)
-//    val totalDifficulties = importedBlocks.foldLeft(List(currentTd)) {(tds, b) =>
-//      (tds.head + b.header.difficulty) :: tds
-//    }.reverse.tail
-//
-//    val result = maybeError match {
-//      case None =>
-//        BlockImportedToTop(importedBlocks, totalDifficulties)
-//
-//      case Some(error) if importedBlocks.isEmpty =>
-//        blockQueue.removeSubtree(block.header.hash)
-//        BlockImportFailed(error.toString)
-//
-//      case Some(error) =>
-//        topBlocks.drop(importedBlocks.length).headOption.foreach { failedBlock =>
-//          blockQueue.removeSubtree(failedBlock.header.hash)
-//        }
-//        BlockImportedToTop(importedBlocks, totalDifficulties)
-//    }
-//
-//    importedBlocks.foreach { b =>
-//      log.debug(s"Imported new block (${b.header.number}: ${Hex.toHexString(b.header.hash.toArray)}) to the top of chain")
-//    }
-//    result
-    ???
+    for {
+      topBlockHash <- blockPool.addBlock(block, bestBlockNumber).map(_.get.hash)
+      topBlocks <- blockPool.getBranch(topBlockHash, dequeue = true)
+      (importedBlocks, maybeError) <- executeBlocks(topBlocks, currentTd)
+      totalDifficulties = importedBlocks
+        .foldLeft(List(currentTd)) { (tds, b) =>
+          (tds.head + b.header.difficulty) :: tds
+        }
+        .reverse
+        .tail
+
+      result <- maybeError match {
+        case None =>
+          BlockImported(importedBlocks, totalDifficulties).pure[F]
+
+        case Some(error) if importedBlocks.isEmpty =>
+          blockPool.removeSubtree(block.header.hash).map(_ => BlockImportFailed(error.toString))
+
+        case Some(error) =>
+          val p = topBlocks.drop(importedBlocks.length).headOption match {
+            case Some(failedBlock) => blockPool.removeSubtree(failedBlock.header.hash)
+            case None => F.unit
+          }
+
+          p.map(_ => BlockImported(importedBlocks, totalDifficulties))
+      }
+
+    } yield result
 
   def validateBlockBefore(block: Block): EitherT[F, Invalid, Block] = {
     val et = for {

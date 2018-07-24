@@ -59,15 +59,41 @@ package object configs {
   )
 
   case class MiningConfig(
-    ommersPoolSize: Int,
-    blockCacheSize: Int,
-    coinbase: Address,
-    activeTimeout: FiniteDuration,
-    ommerPoolQueryTimeout: FiniteDuration,
-    headerExtraData: ByteVector,
-    miningEnabled: Boolean,
-    ethashDir: String,
-    mineRounds: Int
+      ommersPoolSize: Int,
+      blockCacheSize: Int,
+      coinbase: Address,
+      activeTimeout: FiniteDuration,
+      ommerPoolQueryTimeout: FiniteDuration,
+      headerExtraData: ByteVector,
+      miningEnabled: Boolean,
+      ethashDir: String,
+      mineRounds: Int
+  )
+
+  case class SyncConfig(
+      peersScanInterval: FiniteDuration,
+      blacklistDuration: FiniteDuration,
+      startRetryInterval: FiniteDuration,
+      syncRetryInterval: FiniteDuration,
+      peerResponseTimeout: FiniteDuration,
+      printStatusInterval: FiniteDuration,
+      maxConcurrentRequests: Int,
+      blockHeadersPerRequest: Int,
+      blockBodiesPerRequest: Int,
+      receiptsPerRequest: Int,
+      nodesPerRequest: Int,
+      minPeersToChooseTargetBlock: Int,
+      targetBlockOffset: Int,
+      persistStateSnapshotInterval: FiniteDuration,
+      checkForNewBlockInterval: FiniteDuration,
+      branchResolutionRequestSize: Int,
+      blockChainOnlyPeersPoolSize: Int,
+      fastSyncThrottle: FiniteDuration,
+      maxQueuedBlockNumberAhead: Int,
+      maxQueuedBlockNumberBehind: Int,
+      maxNewBlockHashAge: Int,
+      maxNewHashes: Int,
+      redownloadMissingStateNodes: Boolean
   )
 
   object FullNodeConfig {

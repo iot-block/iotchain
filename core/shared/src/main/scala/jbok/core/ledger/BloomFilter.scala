@@ -34,7 +34,7 @@ object BloomFilter {
       ByteUtils.or(bloomFilters: _*)
   }
 
-  //Bloom filter function that reduces a log to a single 256-byte hash based on equation 24 from the YP
+  // Bloom filter function that reduces a log to a single 256-byte hash based on equation 24 from the YP
   private def createBloomFilterForLogEntry(logEntry: TxLogEntry): ByteVector = {
     val dataForBloomFilter = logEntry.loggerAddress.bytes +: logEntry.logTopics
     val bloomFilters = dataForBloomFilter.map(bytes => bloomFilter(bytes))

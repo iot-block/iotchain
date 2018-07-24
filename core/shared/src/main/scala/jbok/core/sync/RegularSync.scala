@@ -22,7 +22,7 @@ case class RegularSync[F[_]](
   def stream: Stream[F, Unit] = peerManager.subscribeMessages().evalMap {
     case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
       ledger.importBlock(block).value.map {
-        case Right(BlockImported(newBlocks)) =>
+        case Right(BlockImported(newBlocks, Nil)) =>
           broadcastBlocks(newBlocks)
           updateTxAndOmmerPools(newBlocks, Nil)
           log.debug(s"Added new block ${block.header.number} to the top of the chain received from $peerId")

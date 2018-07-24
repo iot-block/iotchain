@@ -2,7 +2,6 @@ package jbok.evm
 
 import jbok.JbokSpec
 import jbok.testkit.VMGens
-import jbok.evm._
 import org.scalacheck.Gen
 import scodec.bits.ByteVector
 

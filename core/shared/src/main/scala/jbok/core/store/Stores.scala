@@ -24,6 +24,9 @@ class BlockNumberHashStore[F[_]: Sync](db: KeyValueDB[F])
 class TransactionLocationStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, ByteVector, TransactionLocation](Namespaces.TransactionLocation, db)
 
+class TotalDifficultyStore[F[_]: Sync](db: KeyValueDB[F])
+    extends KeyValueStore[F, ByteVector, BigInt](Namespaces.TotalDifficulty, db)
+
 class AppStateStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, String, ByteVector](Namespaces.AppStateNamespace, db) {
   private val BestBlockNumber = "BestBlockNumber"
@@ -97,7 +100,7 @@ object AddressAccountStore {
 }
 
 class ContractStorageStore[F[_]: Sync](val mpt: MPTrie[F])
-  extends KeyValueStore[F, UInt256, UInt256](ByteVector.empty, mpt)
+    extends KeyValueStore[F, UInt256, UInt256](ByteVector.empty, mpt)
 
 object ContractStorageStore {
   def apply[F[_]: Sync](db: KeyValueDB[F], rootHash: ByteVector): F[ContractStorageStore[F]] =

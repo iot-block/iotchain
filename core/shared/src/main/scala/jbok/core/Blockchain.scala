@@ -125,12 +125,9 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
     */
   def getMptNodeByHash(hash: ByteVector): F[Node]
 
-  /**
-    * Returns the total difficulty based on a block hash
-    * @param blockhash
-    * @return total difficulty if found
-    */
-  def getTotalDifficultyByHash(blockhash: ByteVector): F[Option[BigInt]]
+  def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]]
+
+  def setTotalDifficultyByHash(blockHash: ByteVector, td: Option[BigInt]): F[Unit]
 
   def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]] = {
     val p = for {
@@ -141,9 +138,12 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
     p.value
   }
 
+
   def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]]
 
   def getBestBlockNumber: F[BigInt]
+
+  def setBestBlockNumber(bestBlockNumber: BigInt): F[Unit]
 
   def getBestBlock: F[Block]
 
@@ -235,6 +235,7 @@ object BlockChain {
     val receiptStore = new ReceiptStore[F](db)
     val numberHashStore = new BlockNumberHashStore[F](db)
     val txLocationStore = new TransactionLocationStore[F](db)
+    val totalDifficultyStore = new TotalDifficultyStore[F](db)
     val appStateStore = new AppStateStore[F](db)
     val evmCodeStore = new EvmCodeStore[F](db)
 
@@ -245,6 +246,7 @@ object BlockChain {
         receiptStore,
         numberHashStore,
         txLocationStore,
+        totalDifficultyStore,
         appStateStore,
         mptStore,
         evmCodeStore
@@ -254,14 +256,15 @@ object BlockChain {
 }
 
 class BlockChainImpl[F[_]](
-                            headerStore: BlockHeaderStore[F],
-                            bodyStore: BlockBodyStore[F],
-                            receiptStore: ReceiptStore[F],
-                            numberHashStore: BlockNumberHashStore[F],
-                            txLocationStore: TransactionLocationStore[F],
-                            appStateStore: AppStateStore[F],
-                            mptStore: AddressAccountStore[F],
-                            evmCodeStore: EvmCodeStore[F]
+    headerStore: BlockHeaderStore[F],
+    bodyStore: BlockBodyStore[F],
+    receiptStore: ReceiptStore[F],
+    numberHashStore: BlockNumberHashStore[F],
+    txLocationStore: TransactionLocationStore[F],
+    totalDifficultyStore: TotalDifficultyStore[F],
+    appStateStore: AppStateStore[F],
+    mptStore: AddressAccountStore[F],
+    evmCodeStore: EvmCodeStore[F]
 )(implicit F: Sync[F])
     extends BlockChain[F] {
 
@@ -317,19 +320,23 @@ class BlockChainImpl[F[_]](
     */
   override def getEvmCodeByHash(hash: ByteVector): Option[ByteVector] = ???
 
-  /**
-    * Returns the total difficulty based on a block hash
-    *
-    * @param blockhash
-    * @return total difficulty if found
-    */
-  override def getTotalDifficultyByHash(blockhash: ByteVector): F[Option[BigInt]] = ???
+  override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]] =
+    totalDifficultyStore.getOpt(blockHash)
+
+  override def setTotalDifficultyByHash(blockHash: ByteVector, td: Option[BigInt]): F[Unit] =
+    td match {
+      case Some(n) => totalDifficultyStore.put(blockHash, n)
+      case None => totalDifficultyStore.del(blockHash)
+    }
 
   override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
     txLocationStore.getOpt(txHash)
 
   override def getBestBlockNumber: F[BigInt] =
     appStateStore.getBestBlockNumber
+
+  override def setBestBlockNumber(bestBlockNumber: BigInt): F[Unit] =
+    appStateStore.putBestBlockNumber(bestBlockNumber)
 
   override def getBestBlock: F[Block] =
     getBestBlockNumber.flatMap(bn => getBlockByNumber(bn).map(_.get))
