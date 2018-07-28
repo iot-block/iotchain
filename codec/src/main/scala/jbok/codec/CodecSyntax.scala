@@ -12,6 +12,8 @@ trait CodecSyntax {
   implicit final def codecSyntax[A](a: A): encodeOps[A] = new encodeOps[A](a)
 
   implicit final def stringCodecSyntax(s: String): StringCodecOps = new StringCodecOps(s)
+
+  implicit final def bigIntSyntax(bi: BigInt): BigIntOps = new BigIntOps(bi)
 }
 
 final class encodeOps[A](val a: A) extends AnyVal {
@@ -30,4 +32,12 @@ final class StringCodecOps(val s: String) extends AnyVal {
   def decodeJson[A](implicit decoder: io.circe.Decoder[A]): Either[io.circe.Error, A] = io.circe.parser.decode[A](s)
 
   def utf8Bytes: ByteVector = ByteVector(s.getBytes(StandardCharsets.UTF_8))
+}
+
+final class BigIntOps(val bi: BigInt) extends AnyVal {
+  def toUnsignedByteArray: Array[Byte] = {
+    val asByteArray = bi.toByteArray
+    if (asByteArray.head == 0) asByteArray.tail
+    else asByteArray
+  }
 }

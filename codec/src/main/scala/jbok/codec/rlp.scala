@@ -67,7 +67,7 @@ package object rlp {
       case Left(v) => provide(ByteVector(v)) // Single byte value < 128
       case Right(l) => bytes(l.toInt)
     } { b =>
-      if (b.length == 1 && b(0) > 0 && b(0) < 128) Left(b(0))
+      if (b.length == 1 && b(0) >= 0 && b(0) < 128) Left(b(0))
       else Right(b.length.toInt)
     }
   )
@@ -109,6 +109,8 @@ package object rlp {
     if (i < 128) i
     else 129
   })
+
+  val rbyte: RlpCodec[Byte] = RlpCodec(ritem.xmap[Byte](_.head, b => ByteVector(b)))
 
   val rempty: RlpCodec[Unit] = RlpCodec(constant(itemOffset))
 

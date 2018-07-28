@@ -5,10 +5,8 @@ import scodec.bits.{BitVector, ByteVector}
 import shapeless._
 
 package object codec extends CodecSyntax {
-  implicit final val decodeByteVector: Decoder[ByteVector] = Decoder[String].emap(ByteVector.fromBase64Descriptive(_))
-  implicit final val encodeByteVector: Encoder[ByteVector] = Encoder.instance(bv => Json.fromString(bv.toBase64))
-
   implicit final val decodeBitVector: Decoder[BitVector] = decodeBitVectorWithNames("bits", "length")
+
   implicit final val encodeBitVector: Encoder[BitVector] = encodeBitVectorWithNames("bits", "length")
 
   implicit def decoderValueClass[T <: AnyVal, V](

@@ -2,11 +2,52 @@ package jbok.codec
 
 import jbok.JbokSpec
 import jbok.codec.rlp._
+import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits._
 import scodec.codecs._
+import jbok.codec.codecs._
 
 class RlpSpec extends JbokSpec {
   "rlp codec" should {
+    "codec Byte" in {
+      rbyte.encode(0.toByte).require.bytes shouldBe hex"0x00"
+      rbyte.encode(127.toByte).require.bytes shouldBe hex"0x7f"
+
+      forAll(Gen.choose[Byte](Byte.MinValue, Byte.MaxValue)) { byte =>
+        rbyte.decode(rbyte.encode(byte).require).require.value shouldBe byte
+      }
+    }
+
+    "codec String" in {
+      rstring.encode("").require.bytes shouldBe hex"0x80"
+
+      val strGen = (n: Int) => Gen.choose(0, n).flatMap(long => Gen.listOfN(long, Gen.alphaChar).map(_.mkString))
+      forAll(strGen(10000)) { str =>
+        rstring.decode(rstring.encode(str).require).require.value shouldBe str
+      }
+    }
+
+    "codec BigInt" in {
+      codecBigInt
+          .encode(BigInt(0))
+          .require
+          .bytes shouldBe hex"0x80"
+
+      codecBigInt
+        .encode(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935"))
+        .require
+        .bytes shouldBe hex"a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+
+      codecBigInt
+          .encode(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639936"))
+          .require
+          .bytes shouldBe hex"a1010000000000000000000000000000000000000000000000000000000000000000"
+
+      forAll(Arbitrary.arbitrary[BigInt]) { bigInt =>
+        codecBigInt.decode(codecBigInt.encode(bigInt).require).require.value shouldBe bigInt
+      }
+    }
+
     "codec item length" in {
       // single value
       for (b <- 0x00 to 0x7f) {
