@@ -1,6 +1,5 @@
 package jbok.core.keystore
 
-import java.nio.file.Paths
 import java.security.SecureRandom
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneOffset, ZonedDateTime}
@@ -16,7 +15,6 @@ import jbok.core.keystore.KeyStoreError.KeyNotFound
 import jbok.core.models.Address
 import jbok.crypto.signature.{KeyPair, SecP256k1}
 import scodec.bits.ByteVector
-import io.circe.generic.auto._
 import jbok.codec.json._
 
 sealed trait KeyStoreError
@@ -46,11 +44,15 @@ trait KeyStore[F[_]] {
 
   def deleteWallet(address: Address): F[Either[KeyStoreError, Boolean]]
 
-  def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): F[Either[KeyStoreError, Unit]]
+  def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): F[Either[KeyStoreError, Boolean]]
+
+  def clear: F[Either[KeyStoreError, Boolean]]
 }
 
 class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Sync[F]) extends KeyStore[F] {
   private[this] val log = org.log4s.getLogger
+
+  private val keyLength = 32
 
   override def newAccount(passphrase: String): F[Either[KeyStoreError, Address]] = {
     val p = for {
@@ -62,8 +64,13 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
   }
 
   override def importPrivateKey(key: ByteVector, passphrase: String): F[Either[KeyStoreError, Address]] = {
-    val encKey = EncryptedKey(KeyPair.Secret(key), passphrase, secureRandom)
-    save(encKey).map(_ => encKey.address).value
+    if (key.length != keyLength) {
+      log.warn(s"import key failed, incorrect key length ${key.length}")
+      F.pure(Left(KeyStoreError.invalidKeyFormat))
+    } else {
+      val encKey = EncryptedKey(KeyPair.Secret(key), passphrase, secureRandom)
+      save(encKey).map(_ => encKey.address).value
+    }
   }
 
   override def listAccounts: F[Either[KeyStoreError, List[Address]]] = {
@@ -80,8 +87,14 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
       wallet <- EitherT.fromEither[F](
         key
           .decrypt(passphrase)
-          .leftMap(_ => KeyStoreError.decryptionFailed)
-          .map(secret => Wallet(address, secret))
+          .leftMap {_ =>
+            log.error(s"unlock account decryption failed")
+            KeyStoreError.decryptionFailed
+          }
+          .map { secret =>
+            log.info(s"unlocked wallet at ${address}")
+            Wallet(address, secret)
+          }
       )
     } yield wallet
     p.value
@@ -97,15 +110,20 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
 
   override def changePassphrase(address: Address,
                                 oldPassphrase: String,
-                                newPassphrase: String): F[Either[KeyStoreError, Unit]] = {
+                                newPassphrase: String): F[Either[KeyStoreError, Boolean]] = {
     val p = for {
       oldKey <- load(address)
       prvKey <- EitherT.fromEither[F](oldKey.decrypt(oldPassphrase).left.map(_ => KeyStoreError.decryptionFailed))
       keyFile <- findKeyFile(address)
       newEncKey = EncryptedKey(prvKey, newPassphrase, secureRandom)
       _ <- overwrite(keyFile, newEncKey)
-    } yield ()
+    } yield true
     p.value
+  }
+
+  override def clear: F[Either[KeyStoreError, Boolean]] = {
+    log.info(s"delete keyStoreDir ${keyStoreDir.pathAsString}")
+    deleteFile(keyStoreDir).value
   }
 
   private[jbok] def save(encryptedKey: EncryptedKey): EitherT[F, KeyStoreError, Unit] = {
@@ -118,6 +136,7 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
       _ <- EitherT[F, KeyStoreError, Unit](if (alreadyInKeyStore) {
         F.pure(Left(KeyStoreError.duplicateKeySaved))
       } else {
+        log.info(s"saving key into ${file.pathAsString}")
         F.delay(file.writeText(json)).attempt.map(_.leftMap(KeyStoreError.ioError).map(_ => ()))
       })
     } yield ()
