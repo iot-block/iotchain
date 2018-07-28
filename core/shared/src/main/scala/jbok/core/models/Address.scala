@@ -1,7 +1,9 @@
 package jbok.core.models
 
-import jbok.codec._
 import jbok.codec.codecs._
+import jbok.codec.json.{bytesDecoder, bytesEncoder}
+import jbok.crypto._
+import jbok.crypto.signature.KeyPair
 import scodec.Codec
 import scodec.bits.ByteVector
 
@@ -16,9 +18,9 @@ object Address {
 
   implicit val codec: Codec[Address] = codecBytes.as[Address]
 
-  implicit val je: io.circe.Encoder[Address] = encodeByteVector.contramap[Address](_.bytes)
+  implicit val je: io.circe.Encoder[Address] = bytesEncoder.contramap[Address](_.bytes)
 
-  implicit val jd: io.circe.Decoder[Address] = decodeByteVector.map(Address.apply)
+  implicit val jd: io.circe.Decoder[Address] = bytesDecoder.map(Address.apply)
 
   def fromHex(hex: String): Address = Address.apply(ByteVector.fromValidHex(hex))
 
@@ -29,4 +31,6 @@ object Address {
   def apply(uint: UInt256): Address = Address.apply(uint.bytes)
 
   def apply(bytes: ByteVector): Address = new Address(bytes.takeRight(numBytes).padLeft(numBytes))
+
+  def apply(keyPair: KeyPair): Address = Address(keyPair.public.uncompressed.kec256)
 }
