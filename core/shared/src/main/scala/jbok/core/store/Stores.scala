@@ -8,6 +8,7 @@ import jbok.crypto.authds.mpt.{MPTrie, Node}
 import jbok.persistent.{KeyValueDB, KeyValueStore}
 import scodec.bits.ByteVector
 import jbok.codec.codecs._
+import jbok.core.sync.SyncState
 
 class BlockHeaderStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, ByteVector, BlockHeader](Namespaces.BlockHeader, db)
@@ -26,6 +27,17 @@ class TransactionLocationStore[F[_]: Sync](db: KeyValueDB[F])
 
 class TotalDifficultyStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, ByteVector, BigInt](Namespaces.TotalDifficulty, db)
+
+class FastSyncStore[F[_]: Sync](db: KeyValueDB[F])
+    extends KeyValueStore[F, String, SyncState](Namespaces.FastSync, db) {
+  val syncStateKey: String = "fast-sync-state"
+
+  def getSyncState: F[Option[SyncState]] = getOpt(syncStateKey)
+
+  def putSyncState(syncState: SyncState): F[Unit] = put(syncStateKey, syncState)
+
+  def purge: F[Unit] = del(syncStateKey)
+}
 
 class AppStateStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, String, ByteVector](Namespaces.AppStateNamespace, db) {

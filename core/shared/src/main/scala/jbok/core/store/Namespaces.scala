@@ -13,6 +13,6 @@ object Namespaces {
   val AppStateNamespace: ByteVector = "s".utf8Bytes
   val KnownNodesNamespace: ByteVector = "k".utf8Bytes
   val Heights: ByteVector = "i".utf8Bytes
-  val FastSyncStateNamespace: ByteVector = "h".utf8Bytes
+  val FastSync: ByteVector = "h".utf8Bytes
   val TransactionLocation: ByteVector = "l".utf8Bytes
 }
