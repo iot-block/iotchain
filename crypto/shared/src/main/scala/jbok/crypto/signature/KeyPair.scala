@@ -22,6 +22,7 @@ object KeyPair {
 
   object Secret {
     def apply(d: BigInteger): Secret = Secret(ByteVector(d.toByteArray))
+    def apply(d: BigInt): Secret = Secret(ByteVector(d.toByteArray))
     def apply(hex: String): Secret = Secret(ByteVector.fromValidHex(hex))
     def apply(bytes: Array[Byte]): Secret = Secret(ByteVector(bytes))
   }
