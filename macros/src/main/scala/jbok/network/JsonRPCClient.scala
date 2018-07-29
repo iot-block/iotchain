@@ -81,12 +81,12 @@ object JsonRPCClientMacro {
               params = $parametersAsTuple
             )
 
-          ${c.prefix.tree}.request(request.id, request.asJson.noSpaces).map(x => decode[JsonRPCResponse[$resultType]](x)).flatMap {
+          ${c.prefix.tree}.request(request.id, request.asJson.noSpaces).map(x => decode[JsonRPCResponse[$resultType]](x)).map {
             case Left(e) =>
-              ${c.prefix.tree}.F.raiseError[$resultType](new Exception(e))
+              Left(JsonRPCResponse.parseError("parsing JsonRPCResponse failed"))
             case Right(x) => x match {
-              case e: JsonRPCError => ${c.prefix.tree}.F.raiseError[$resultType](new Exception(e.error.toString()))
-              case r: JsonRPCResult[${TypeName(resultType.toString)}] => ${c.prefix.tree}.F.pure(r.result)
+              case e: JsonRPCError => Left(e)
+              case r: JsonRPCResult[${TypeName(resultType.toString)}] => Right(r.result)
             }
           }
        """

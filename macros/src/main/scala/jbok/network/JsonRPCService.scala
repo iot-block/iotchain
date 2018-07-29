@@ -5,6 +5,7 @@ import cats.implicits._
 import io.circe.generic.JsonCodec
 import io.circe.parser._
 import io.circe.syntax._
+import io.circe.generic.auto._
 import fs2._
 import fs2.async.mutable.Topic
 import jbok.network.json.JsonRPCResponse
@@ -109,7 +110,10 @@ object JsonRPCServerMacro {
               JsonRPCResponse.invalidRequest(e.toString()).asJson.noSpaces.pure[$effectType]
             case Right(req) =>
               val result = $run
-              result.map(x => JsonRPCResponse.ok(req.id, x).asJson.noSpaces)
+              result.map {
+                case Left(e) => e.copy(id = req.id).asJson.noSpaces
+                case Right(x) => JsonRPCResponse.ok(req.id, x).asJson.noSpaces
+              }
           }
          }
        """

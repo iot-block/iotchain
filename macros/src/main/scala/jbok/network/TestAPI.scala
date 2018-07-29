@@ -1,32 +1,25 @@
 package jbok.network
 
-import cats.effect.IO
-import fs2.async.mutable.{Queue, Topic}
+import cats.effect.Sync
 import io.circe.generic.JsonCodec
-
-import scala.concurrent.ExecutionContext.Implicits.global
 
 @JsonCodec
 case class Person(age: Int, name: String)
 
-trait TestAPI[F[_]] {
-  def foo: F[Int]
+trait TestAPI[F[_]] extends JsonRpcAPI[F] {
+  def foo: R[Int]
 
-  def bar: F[String]
+  def bar: R[String]
 
-  def grow(age: Int, name: String): F[Person]
+  def grow(age: Int, name: String): R[Person]
 
-  val events: Topic[F, Option[String]]
+//  val events: Topic[F, Option[String]]
 }
 
-object TestAPI {
-  val apiImpl = new TestAPI[IO] {
-    override def foo: IO[Int] = IO(42)
+class TestApiImpl[F[_]](implicit F: Sync[F]) extends TestAPI[F] {
+  override def foo: R[Int] = F.pure(Right(42))
 
-    override def bar: IO[String] = IO("oho")
+  override def bar: R[String] = F.pure(Right("oho"))
 
-    override def grow(age: Int, name: String): IO[Person] = IO(Person(age + 1, name))
-
-    override val events: Topic[IO, Option[String]] = fs2.async.topic[IO, Option[String]](None).unsafeRunSync()
-  }
+  override def grow(age: Int, name: String): R[Person] = F.pure(Right(Person(age + 1, name)))
 }

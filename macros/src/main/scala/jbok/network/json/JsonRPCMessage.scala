@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets
 import cats.implicits._
 import io.circe._
 import io.circe.generic.JsonCodec
-import io.circe.generic.auto._
 import io.circe.syntax._
 import io.circe.parser._
 import jbok.network.json.JsonRPCMessage.RequestId
@@ -56,6 +55,13 @@ case class JsonRPCRequest[A](id: RequestId, method: String, params: A) extends J
 case class JsonRPCNotification[A](method: String, params: A) extends JsonRPCMessage[A]
 
 sealed trait JsonRPCResponse[+A] extends JsonRPCMessage[A]
+
+@JsonCodec
+case class JsonRPCResult[A](id: RequestId, result: A) extends JsonRPCResponse[A]
+
+@JsonCodec
+case class JsonRPCError(id: RequestId, error: ErrorObject) extends JsonRPCResponse[Nothing]
+
 object JsonRPCResponse {
   implicit def encoder[A: Encoder]: Encoder[JsonRPCResponse[A]] = new Encoder[JsonRPCResponse[A]] {
     override def apply(a: JsonRPCResponse[A]): Json = {
@@ -108,9 +114,3 @@ object JsonRPCResponse {
       id.getOrElse(RequestId.Null),
       ErrorObject(ErrorCode.MethodNotFound, s"method $method does not exist", None))
 }
-
-@JsonCodec
-case class JsonRPCResult[A](id: RequestId, result: A) extends JsonRPCResponse[A]
-
-@JsonCodec
-case class JsonRPCError(id: RequestId, error: ErrorObject) extends JsonRPCResponse[Nothing]
