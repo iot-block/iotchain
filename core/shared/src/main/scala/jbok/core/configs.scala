@@ -4,20 +4,28 @@ import java.util.UUID
 
 import better.files.File._
 import better.files._
-import jbok.core.configs.FullNodeConfig
+import com.typesafe.config.Config
 import jbok.core.models.{Address, UInt256}
 import jbok.network.NetAddress
-import scodec.bits.ByteVector
+import pureconfig.{ConfigReader, Derivation}
+import scodec.bits._
 
 import scala.concurrent.duration._
 import scala.util.Random
 
 package object configs {
+  implicit val bytesReader: ConfigReader[ByteVector] = ConfigReader[String].map(x => ByteVector.fromValidHex(x))
+
+  implicit val byteReader: ConfigReader[Byte] = ConfigReader[Int].map(x => x.toByte)
+
+  def loadConfig[A](config: Config, namespace: String)(implicit ev: Derivation[ConfigReader[A]]) =
+    pureconfig.loadConfig[A](config, namespace)
+
   val defaultRootDir: File = home / ".jbok"
 
   case class NetworkConfig(
       rpcBindAddress: NetAddress,
-      p2pBindAddress: NetAddress
+      peerBindAddress: NetAddress
   )
 
   case class KeyStoreConfig(
@@ -44,38 +52,70 @@ package object configs {
   )
 
   case class BlockChainConfig(
-      maxCodeSize: Option[BigInt],
-      customGenesisFileOpt: Option[String],
-      accountStartNonce: UInt256,
-      chainId: Byte
-//      monetaryPolicyConfig: MonetaryPolicyConfig,
-//      gasTieBreaker: Boolean
+      frontierBlockNumber: BigInt = 0,
+      homesteadBlockNumber: BigInt = 1150000,
+      eip106BlockNumber: BigInt = BigInt("1000000000000000000"),
+      eip150BlockNumber: BigInt = BigInt("2500000"),
+      eip155BlockNumber: BigInt = BigInt("3000000"),
+      eip160BlockNumber: BigInt = BigInt("3000000"),
+      eip161BlockNumber: BigInt = BigInt("1000000000000000000"),
+      maxCodeSize: Option[BigInt] = None,
+      difficultyBombPauseBlockNumber: BigInt = BigInt("3000000"),
+      difficultyBombContinueBlockNumber: BigInt = BigInt("5000000"),
+      customGenesisFileOpt: Option[String] = None,
+      daoForkConfig: Option[DaoForkConfig] = None,
+      accountStartNonce: UInt256 = UInt256.Zero,
+      chainId: Byte = 0x3d.toByte,
+      monetaryPolicyConfig: MonetaryPolicyConfig = MonetaryPolicyConfig(),
+      gasTieBreaker: Boolean = false
   )
 
+  case class DaoForkConfig(
+      forkBlockNumber: BigInt = BigInt("1920000"),
+      forkBlockHash: ByteVector = hex"94365e3a8c0b35089c1d1195081fe7489b528a84b22199c916180db8b28ade7f",
+      blockExtraData: Option[ByteVector] = None,
+      range: Int = 10,
+      refundContract: Option[Address] = None,
+      drainList: List[Address] = Nil
+  ) {
+    private lazy val extraDataBlockRange = forkBlockNumber until (forkBlockNumber + range)
+
+    def isDaoForkBlock(blockNumber: BigInt): Boolean = forkBlockNumber == blockNumber
+
+    def requiresExtraData(blockNumber: BigInt): Boolean =
+      blockExtraData.isDefined && (extraDataBlockRange contains blockNumber)
+
+    def getExtraData(blockNumber: BigInt): Option[ByteVector] =
+      if (requiresExtraData(blockNumber)) blockExtraData
+      else None
+  }
+
   case class MonetaryPolicyConfig(
-      eraDuration: Int,
-      rewardRedutionRate: Double,
-      firstEraBlockReward: BigInt
+      eraDuration: Int = 5000000,
+      rewardReductionRate: Double = 0.2,
+      firstEraBlockReward: BigInt = BigInt("5000000000000000000")
   )
 
   case class MiningConfig(
-      ommersPoolSize: Int,
-      blockCacheSize: Int,
-      coinbase: Address,
-      activeTimeout: FiniteDuration,
-      ommerPoolQueryTimeout: FiniteDuration,
-      headerExtraData: ByteVector,
-      miningEnabled: Boolean,
-      ethashDir: String,
-      mineRounds: Int
+      ommersPoolSize: Int = 30,
+      blockCacheSize: Int = 30,
+      coinbase: Address = Address(42),
+      activeTimeout: FiniteDuration = 5.seconds,
+      ommerPoolQueryTimeout: FiniteDuration = 5.seconds,
+      headerExtraData: ByteVector = ByteVector("jbok".getBytes),
+      miningEnabled: Boolean = false,
+      ethashDir: String = "~/.ethash",
+      mineRounds: Int = 100000
+  )
+
+  case class FilterConfig(
+      filterTimeout: FiniteDuration = 10.minutes,
+      filterManagerQueryTimeout: FiniteDuration = 3.minutes
   )
 
   case class SyncConfig(
-      peersScanInterval: FiniteDuration,
       blacklistDuration: FiniteDuration,
       startRetryInterval: FiniteDuration,
-      syncRetryInterval: FiniteDuration,
-      peerResponseTimeout: FiniteDuration,
       printStatusInterval: FiniteDuration,
       maxConcurrentRequests: Int,
       blockHeadersPerRequest: Int,
@@ -84,16 +124,14 @@ package object configs {
       nodesPerRequest: Int,
       minPeersToChooseTargetBlock: Int,
       targetBlockOffset: Int,
-      persistStateSnapshotInterval: FiniteDuration,
-      checkForNewBlockInterval: FiniteDuration,
-      branchResolutionRequestSize: Int,
-      blockChainOnlyPeersPoolSize: Int,
-      fastSyncThrottle: FiniteDuration,
-      maxQueuedBlockNumberAhead: Int,
-      maxQueuedBlockNumberBehind: Int,
-      maxNewBlockHashAge: Int,
-      maxNewHashes: Int,
-      redownloadMissingStateNodes: Boolean
+      blockChainOnlyPeersPoolSize: Int
+  )
+
+  case class Timeouts(
+      shortTimeout: FiniteDuration = 500.millis,
+      normalTimeout: FiniteDuration = 3.seconds,
+      longTimeout: FiniteDuration = 10.seconds,
+      veryLongTimeout: FiniteDuration = 30.seconds
   )
 
   object FullNodeConfig {
