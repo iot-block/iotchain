@@ -16,6 +16,7 @@ import jbok.core.models.Block
 import jbok.core.utils.ByteUtils
 import scodec.bits.ByteVector
 import jbok.codec._
+import jbok.core.api.PublicAPI
 
 sealed trait MiningResult {
   def triedHashes: Int
@@ -29,6 +30,7 @@ class Miner[F[_]](
     ommersPool: OmmersPool[F],
     blockGenerator: BlockGenerator[F],
     miningConfig: MiningConfig,
+    publicAPI: PublicAPI[F],
     currentEpoch: Ref[F, Option[Long]],
     currentEpochDagSize: Ref[F, Option[Long]],
     currentEpochDag: Ref[F, Option[Array[Array[Int]]]]
@@ -85,7 +87,7 @@ class Miner[F[_]](
           val mineResult = mine(headerHash, block.header.difficulty.toLong, dagSize, dag, miningConfig.mineRounds)
           val time = System.currentTimeMillis() - startTime
           val hashRate = (mineResult.triedHashes * 1000) / time
-//          ethService.submitHashRate(SubmitHashRateRequest(hashRate, ByteString("mantis-miner")))
+          publicAPI.submitHashRate(hashRate, ByteVector("jbok-miner".getBytes))
           mineResult match {
             case MiningSuccessful(_, pow, nonce) =>
 //              syncController ! RegularSync.MinedBlock(block.copy(header = block.header.copy(nonce = nonce, mixHash = pow.mixHash)))
