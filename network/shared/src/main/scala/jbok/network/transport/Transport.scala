@@ -21,7 +21,7 @@ abstract class Transport[F[_], Id, A](val addr: NetAddress)(implicit F: Effect[F
 
   def stop: F[Unit]
 
-  def request(id: Id, req: A, timeout: FiniteDuration = 10.seconds)(implicit S: Scheduler): F[Option[A]] =
+  def request(id: Id, req: A, timeout: FiniteDuration)(implicit S: Scheduler): F[Option[A]] =
     for {
       promise <- fs2.async.promise[F, A]
       _ <- promises.modify(_ + (id -> promise))
