@@ -64,7 +64,8 @@ lazy val commonSettings = Seq(
 
 lazy val jbok = project
   .in(file("."))
-  .aggregate(networkJS, networkJVM, appJS, appJVM)
+  .aggregate(coreJVM)
+  .settings(noPublishSettings)
 
 lazy val common = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
