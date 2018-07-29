@@ -1,5 +1,7 @@
 package jbok.core.utils
 
+import java.nio.{ByteBuffer, ByteOrder}
+
 import scodec.bits.ByteVector
 
 object ByteUtils {
@@ -21,5 +23,23 @@ object ByteUtils {
     arrays.foldLeft[ByteVector](ones) {
       case (acc, cur) => acc and cur
     }
+  }
+
+  def bytesToInts(bytes: Array[Byte]): Array[Int] =
+    bytes.grouped(4).map(getIntFromWord).toArray
+
+  def intsToBytes(input: Array[Int]): Array[Byte] = {
+    input.flatMap { i =>
+      Array(
+        (i & 0xFF).toByte,
+        ((i >> 8) & 0xFF).toByte,
+        ((i >> 16) & 0xFF).toByte,
+        ((i >> 24) & 0xFF).toByte
+      )
+    }
+  }
+
+  def getIntFromWord(arr: Array[Byte]): Int = {
+    ByteBuffer.wrap(arr, 0, 4).order(ByteOrder.LITTLE_ENDIAN).getInt
   }
 }
