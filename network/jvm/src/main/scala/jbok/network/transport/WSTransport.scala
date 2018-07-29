@@ -21,10 +21,12 @@ object WSTransport {
   import spinoco.fs2.http.websocket.{Frame, WebSocket, WebSocketRequest}
   import spinoco.protocol.http.Uri.QueryParameter
 
-  def apply[F[_]](addr: NetAddress, maxQueued: Int = 64)(implicit F: ConcurrentEffect[F],
-                                                         AG: AsynchronousChannelGroup,
-                                                         S: Scheduler,
-                                                         EC: ExecutionContext): F[WSTransport[F]] =
+  def apply[F[_]](addr: NetAddress, maxQueued: Int = 64)(
+      implicit F: ConcurrentEffect[F],
+      AG: AsynchronousChannelGroup,
+      S: Scheduler,
+      EC: ExecutionContext
+  ): F[WSTransport[F]] =
     for {
       _topics <- fs2.async.refOf[F, Map[String, Topic[F, Option[String]]]](Map.empty)
       _promises <- fs2.async.refOf[F, Map[String, Promise[F, String]]](Map.empty)
@@ -72,7 +74,7 @@ object WSTransport {
 
           val stream = WebSocket.client(request, pipe).interruptWhen(stopWhenTrue)
 
-          F.start(stream.compile.drain) *> stopWhenTrue.set(false)
+          stopWhenTrue.set(false) *> F.start(stream.compile.drain).void
         }
 
         override def stop: F[Unit] = stopWhenTrue.set(true)

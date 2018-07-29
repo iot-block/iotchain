@@ -35,13 +35,13 @@ case class Server[F[_]](
   def wsService = HttpService[F] {
     case GET -> Root =>
       val toClient: Pipe[F, String, WebSocketFrame] = _.map(m => {
-        log.info(s"toClient\n${m}")
+        log.debug(s"toClient\n${m}")
         Text(m)
       })
 
       val fromClient: Pipe[F, WebSocketFrame, String] = _.evalMap[String] {
         case Text(t, _) =>
-          log.info(s"fromClient\n${t}")
+          log.debug(s"fromClient\n${t}")
           handle.get.flatMap(f => f(t))
       }
 
