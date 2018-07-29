@@ -3,9 +3,12 @@ package jbok.core.models
 import scodec.Codec
 import scodec.bits.ByteVector
 import jbok.codec.codecs._
+import pureconfig.ConfigReader
 
 object UInt256 {
   implicit val codec: Codec[UInt256] = codecBytes.xmap(apply, _.bytes)
+
+  implicit val reader: ConfigReader[UInt256] = ConfigReader[Long].map(x => UInt256(x))
 
   /** Size of UInt256 byte representation */
   val Size: Int = 32
