@@ -6,9 +6,11 @@ import cats.effect.Effect
 import cats.implicits._
 import jbok.common._
 import jbok.core.BlockChain
-import jbok.core.configs.BlockChainConfig
+import jbok.core.configs.{BlockChainConfig, MonetaryPolicyConfig}
 import jbok.core.ledger.BlockExecutionError.TxsExecutionError
-import jbok.core.ledger.BlockImportResult.{BlockImportFailed, BlockImported, DuplicateBlock}
+import jbok.core.ledger.BlockImportResult.{BlockImportFailed, BlockImported}
+import jbok.core.ledger.BlockPool.Leaf
+import jbok.core.ledger.io.iohk.ethereum.ledger.BlockRewardCalculator
 import jbok.core.mining.BlockPreparationResult
 import jbok.core.models.UInt256._
 import jbok.core.models._
@@ -27,6 +29,7 @@ object BlockImportResult {
   case class BlockImportFailed(error: String) extends BlockImportResult
   case object DuplicateBlock extends BlockImportResult
   case object UnknownParent extends BlockImportResult
+  case object BlockPooled extends BlockImportResult
 }
 
 sealed trait BlockExecutionError {
@@ -50,46 +53,58 @@ case class TxResult[F[_]](
     vmError: Option[ProgramError]
 )
 
-class Ledger[F[_]](
+case class Ledger[F[_]](
     vm: VM,
     blockChain: BlockChain[F],
     blockChainConfig: BlockChainConfig,
     validators: Validators[F],
-    blockPool: BlockPool[F]
+    blockPool: BlockPool[F],
+    blockRewardCalculator: BlockRewardCalculator = new BlockRewardCalculator(MonetaryPolicyConfig())
 )(implicit F: Effect[F]) {
   protected[this] val log = org.log4s.getLogger
 
-  def importBlock(block: Block): EitherT[F, Invalid, BlockImportResult] =
-    for {
-      validated1 <- validateBlockBefore(block)
-      isDup <- EitherT.right[Invalid](isDuplicate(validated1.header.hash))
-      r <- if (isDup) {
-        EitherT.right[Invalid](DuplicateBlock.pure[F])
-      } else {
-        val r2 = for {
-          bestBlock <- blockChain.getBestBlock
-          currentTd <- blockChain.getTotalDifficultyByHash(bestBlock.header.hash).map(_.get)
-//          isTopOfChain = block.header.parentHash == bestBlock.header.hash
-          r2 <- importBlockToTop(block, bestBlock.header.number, currentTd)
-//          r2 <- if (isTopOfChain) {
-//            importBlockToTop(block, bestBlock.header.number, currentTd)
-//          } else {
-//            ???
-////            enqueueBlockOrReorganiseChain(block, bestBlock, currentTd)
-//          }
-        } yield r2
-        EitherT.right[Invalid](r2)
-      }
-    } yield r
+  def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxResult[F]] = ???
+
+  def binarySearchGasEstimation(stx: SignedTransaction, blockHeader: BlockHeader): F[BigInt] = ???
+
+  def importBlock(block: Block): F[BlockImportResult] =
+    validateBlockBefore(block).value.flatMap {
+      case Left(invalid) =>
+        log.info(s"import block: failed")
+        F.pure(BlockImportResult.BlockImportFailed(invalid.toString))
+
+      case Right(validated) =>
+        F.ifM(isDuplicate(validated.header.hash))(
+          ifTrue = {
+            log.info(s"import block: duplicate")
+            F.pure(BlockImportResult.DuplicateBlock)
+          },
+          ifFalse = for {
+            bestBlock <- blockChain.getBestBlock
+            currentTd <- blockChain.getTotalDifficultyByHash(bestBlock.header.hash).map(_.get)
+            isTopOfChain = block.header.parentHash == bestBlock.header.hash
+            result <- if (isTopOfChain) {
+              log.info(s"import block: about to import to top")
+              importBlockToTop(block, bestBlock.header.number, currentTd)
+            } else {
+              log.info(s"import block: pooled")
+              poolBlock(block, bestBlock, currentTd)
+            }
+          } yield result
+        )
+    }
 
   def isDuplicate(blockHash: ByteVector): F[Boolean] =
-    blockChain.getBlockByHash(blockHash).map(_.isDefined) && blockPool.getBlockByHash(blockHash).map(_.isDefined)
+    blockChain.getBlockByHash(blockHash).map(_.isDefined) || blockPool.getBlockByHash(blockHash).map(_.isDefined)
 
   def importBlockToTop(block: Block, bestBlockNumber: BigInt, currentTd: BigInt): F[BlockImportResult] =
     for {
       topBlockHash <- blockPool.addBlock(block, bestBlockNumber).map(_.get.hash)
+      _ = log.info(s"topBlockHash: ${topBlockHash}")
       topBlocks <- blockPool.getBranch(topBlockHash, dequeue = true)
+      _ = log.info(s"topBlocks: ${topBlocks}")
       (importedBlocks, maybeError) <- executeBlocks(topBlocks, currentTd)
+      _ = log.info(s"importedBlocks: ${importedBlocks}")
       totalDifficulties = importedBlocks
         .foldLeft(List(currentTd)) { (tds, b) =>
           (tds.head + b.header.difficulty) :: tds
@@ -97,23 +112,29 @@ class Ledger[F[_]](
         .reverse
         .tail
 
+
       result <- maybeError match {
         case None =>
+          log.info(s"block import succeed")
           BlockImported(importedBlocks, totalDifficulties).pure[F]
 
         case Some(error) if importedBlocks.isEmpty =>
+          log.info(s"block import failed because ${error}")
           blockPool.removeSubtree(block.header.hash).map(_ => BlockImportFailed(error.toString))
 
         case Some(error) =>
+          log.info(s"block import succeed")
           val p = topBlocks.drop(importedBlocks.length).headOption match {
             case Some(failedBlock) => blockPool.removeSubtree(failedBlock.header.hash)
-            case None => F.unit
+            case None              => F.unit
           }
-
           p.map(_ => BlockImported(importedBlocks, totalDifficulties))
       }
 
     } yield result
+
+  def poolBlock(block: Block, bestBlock: Block, currentTd: BigInt): F[BlockImportResult] =
+    blockPool.addBlock(block, bestBlock.header.number).map(_ => BlockImportResult.BlockPooled)
 
   def validateBlockBefore(block: Block): EitherT[F, Invalid, Block] = {
     val et = for {
@@ -234,9 +255,13 @@ class Ledger[F[_]](
     } yield execResult
 
     execResult
-      .leftMap(error => error.asInstanceOf[BlockExecutionError])
+      .leftMap(error => {
+        log.info(s"execute ${block.id} failed because ${error}")
+        error.asInstanceOf[BlockExecutionError]
+      })
       .semiflatMap {
         case BlockResult(resultingWorldStateProxy, gasUsed, receipts) =>
+          log.info(s"execute ${block.id} succeed")
           for {
             worldToPersist <- payBlockReward(block, resultingWorldStateProxy)
             worldPersisted <- WorldStateProxy.persist(worldToPersist) // State root hash needs to be up-to-date for validateBlockAfterExecution
@@ -245,41 +270,82 @@ class Ledger[F[_]](
       }
   }
 
-  def executeBlocks(blocks: List[Block], parentTd: BigInt): F[(List[Block], Option[Invalid])] =
+  def executeBlocks(blocks: List[Block], parentTd: BigInt): F[(List[Block], Option[Invalid])] = {
+    log.info(s"start executing ${blocks.length} blocks")
     blocks match {
-      case block :: tail =>
+      case block :: remainingBlocks =>
         executeBlock(block, alreadyValidated = true).value.flatMap {
           case Right(receipts) =>
+            log.info(s"execute block ${block.header.hash.toHex.take(7)} succeed")
             val td = parentTd + block.header.difficulty
-            val s = for {
-              _ <- blockChain.save(block, receipts, saveAsBestBlock = true)
-              (executedBlocks, error) <- executeBlocks(tail, td)
+            for {
+              _ <- blockChain.save(block, receipts, td, saveAsBestBlock = true)
+              (executedBlocks, error) <- executeBlocks(remainingBlocks, td)
             } yield (block :: executedBlocks, error)
 
-            ???
-
           case Left(error) =>
-            val a = (List.empty[Block], Some(error)).pure[F]
-            ???
+            log.info(s"execute block ${block.header.hash.toHex.take(7)} failed")
+            F.pure(List.empty[Block] -> Some(error.asInstanceOf[Invalid]))
         }
 
       case Nil =>
         F.pure((Nil, None))
     }
+  }
 
-  def payBlockReward(block: Block, worldStateProxy: WorldStateProxy[F]): F[WorldStateProxy[F]] = ???
+  def payBlockReward(block: Block, worldStateProxy: WorldStateProxy[F]): F[WorldStateProxy[F]] = {
+    def getAccountToPay(address: Address, ws: WorldStateProxy[F]): F[Account] = ws.getAccountOpt(address)
+      .getOrElse(Account.empty(blockChainConfig.accountStartNonce))
+
+    val minerAddress = Address(block.header.beneficiary)
+
+    for {
+      minerAccount <- getAccountToPay(minerAddress, worldStateProxy)
+      minerReward = blockRewardCalculator.calcBlockMinerReward(block.header.number, block.body.uncleNodesList.size)
+      afterMinerReward = worldStateProxy.saveAccount(minerAddress, minerAccount.increaseBalance(UInt256(minerReward)))
+      _ = log.info(s"Paying block ${block.header.number} reward of $minerReward to miner with account address $minerAddress")
+      world <- Foldable[List].foldLeftM(block.body.uncleNodesList, afterMinerReward) { (ws, ommer) =>
+        val ommerAddress = Address(ommer.beneficiary)
+        for {
+          account <- getAccountToPay(ommerAddress, ws)
+          ommerReward = blockRewardCalculator.calcOmmerMinerReward(block.header.number, ommer.number)
+          _ = log.info(s"Paying block ${block.header.number} reward of $ommerReward to ommer with account address $ommerAddress")
+        } yield ws.saveAccount(ommerAddress, account.increaseBalance(UInt256(ommerReward)))
+      }
+    } yield world
+  }
 
   def getHeaderFromChainOrQueue(hash: ByteVector): F[Option[BlockHeader]] =
     OptionT(blockChain.getBlockHeaderByHash(hash))
       .orElseF(blockPool.getBlockByHash(hash).map(_.map(_.header)))
       .value
 
-  def getNBlocksBackFromChainOrQueue(hash: ByteVector, n: Int): F[List[Block]] = ???
+  def getNBlocksBackFromChainOrQueue(hash: ByteVector, n: Int): F[List[Block]] = {
+    for {
+      pooledBlocks <- blockPool.getBranch(hash, dequeue = false).map(_.take(n))
+      result <- if (pooledBlocks.length == n) {
+        pooledBlocks.pure[F]
+      } else {
+        val chainedBlockHash = pooledBlocks.headOption.map(_.header.parentHash).getOrElse(hash)
+        blockChain.getBlockByHash(chainedBlockHash).flatMap {
+          case None =>
+            F.pure(List.empty[Block])
 
-  def executeTransaction(stx: SignedTransaction,
-                         blockHeader: BlockHeader,
-                         worldProxy: WorldStateProxy[F]): F[TxResult[F]] = {
-    log.debug(s"Transaction ${stx.hash.toHex} execution start")
+          case Some(block) =>
+            val remaining = n - pooledBlocks.length - 1
+            val numbers = (block.header.number - remaining) until block.header.number
+            numbers.toList.map(blockChain.getBlockByNumber).sequence.map(xs => (xs.flatten :+ block) ::: pooledBlocks)
+        }
+      }
+    } yield result
+  }
+
+  def executeTransaction(
+      stx: SignedTransaction,
+      blockHeader: BlockHeader,
+      worldProxy: WorldStateProxy[F]
+  ): F[TxResult[F]] = {
+    log.info(s"Transaction(${stx.hash.toHex.take(7)}) execution start")
     val gasPrice = UInt256(stx.tx.gasPrice)
     val gasLimit = stx.tx.gasLimit
     val config = EvmConfig.forBlock(blockHeader.number, blockChainConfig)
@@ -309,11 +375,12 @@ class Ledger[F[_]](
         .run(worldAfterPayments)
 
     } yield {
-
-      log.debug(s"""Transaction ${stx.hash.toHex} execution end. Summary:
+      log.info(
+        s"""Transaction(${stx.hash.toHex.take(7)}) execution end. Summary:
                      | - Error: ${result.error}.
                      | - Total Gas to Refund: $totalGasToRefund
-                     | - Execution gas paid to miner: $executionGasToPayToMiner""".stripMargin)
+                     | - Execution gas paid to miner: $executionGasToPayToMiner""".stripMargin
+      )
 
       TxResult(world2, executionGasToPayToMiner, resultWithErrorHandling.logs, result.returnData, result.error)
     }
@@ -351,9 +418,9 @@ class Ledger[F[_]](
 
   def updateSenderAccountBeforeExecution(stx: SignedTransaction, world: WorldStateProxy[F]): F[WorldStateProxy[F]] = {
     val senderAddress = stx.senderAddress
-    for {
-      account <- world.getAccount(senderAddress)
-    } yield world.saveAccount(senderAddress, account.increaseBalance(-calculateUpfrontGas(stx.tx)).increaseNonce())
+    world.getAccount(senderAddress).map { account =>
+      world.saveAccount(senderAddress, account.increaseBalance(-calculateUpfrontGas(stx.tx)).increaseNonce())
+    }
   }
 
   def prepareProgramContext(
@@ -386,11 +453,13 @@ class Ledger[F[_]](
   def calculateUpfrontGas(tx: Transaction): UInt256 =
     UInt256(tx.gasLimit * tx.gasPrice)
 
+  // YP 6.2
   def calcTotalGasToRefund(stx: SignedTransaction, result: ProgramResult[F]): BigInt =
     if (result.error.isDefined) {
       0
     } else {
       val gasUsed = stx.tx.gasLimit - result.gasRemaining
+      // remaining gas plus some allowance
       result.gasRemaining + (gasUsed / 2).min(result.gasRefund)
     }
 

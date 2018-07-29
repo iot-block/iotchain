@@ -18,11 +18,11 @@ object EvmConfig {
     */
   def forBlock(blockNumber: BigInt, blockchainConfig: BlockChainConfig): EvmConfig = {
     val transitionBlockToConfigMapping: Map[BigInt, EvmConfigBuilder] = Map(
-//      blockchainConfig.frontierBlockNumber -> FrontierConfigBuilder,
-//      blockchainConfig.homesteadBlockNumber -> HomesteadConfigBuilder,
-//      blockchainConfig.eip150BlockNumber -> PostEIP150ConfigBuilder,
-//      blockchainConfig.eip160BlockNumber -> PostEIP160ConfigBuilder,
-//      blockchainConfig.eip161BlockNumber -> PostEIP161ConfigBuilder
+      blockchainConfig.frontierBlockNumber -> FrontierConfigBuilder,
+      blockchainConfig.homesteadBlockNumber -> HomesteadConfigBuilder,
+      blockchainConfig.eip150BlockNumber -> PostEIP150ConfigBuilder,
+      blockchainConfig.eip160BlockNumber -> PostEIP160ConfigBuilder,
+      blockchainConfig.eip161BlockNumber -> PostEIP161ConfigBuilder
     )
 
     // highest transition block that is less/equal to `blockNumber`
