@@ -1,12 +1,13 @@
 package jbok.core
 
 import cats.data.OptionT
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.implicits._
 import jbok.core.genesis.Genesis
 import jbok.core.models._
 import jbok.core.store._
-import jbok.crypto.authds.mpt.Node
+import jbok.core.sync.SyncState
+import jbok.crypto.authds.mpt.{MPTrie, MPTrieStore, Node}
 import jbok.evm.WorldStateProxy
 import jbok.persistent.KeyValueDB
 import scodec.bits._
@@ -30,7 +31,7 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
           )
 
         case None =>
-          save(Genesis.block, Nil, saveAsBestBlock = true)
+          save(Genesis.block, Nil, Genesis.header.difficulty, saveAsBestBlock = true)
       }
     } yield ()
   }
@@ -127,8 +128,6 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
 
   def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]]
 
-  def setTotalDifficultyByHash(blockHash: ByteVector, td: Option[BigInt]): F[Unit]
-
   def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]] = {
     val p = for {
       hash <- OptionT(getHashByBlockNumber(blockNumber))
@@ -138,10 +137,13 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
     p.value
   }
 
-
   def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]]
 
   def getBestBlockNumber: F[BigInt]
+
+  def getEstimatedHighestBlock: F[BigInt]
+
+  def getSyncStartingBlock: F[BigInt]
 
   def setBestBlockNumber(bestBlockNumber: BigInt): F[Unit]
 
@@ -151,9 +153,10 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
     * Persists full block along with receipts and total difficulty
     * @param saveAsBestBlock - whether to save the block's number as current best block
     */
-  def save(block: Block, receipts: List[Receipt], saveAsBestBlock: Boolean): F[Unit] =
+  def save(block: Block, receipts: List[Receipt], totalDifficulty: BigInt, saveAsBestBlock: Boolean): F[Unit] =
     save(block) *>
       save(block.header.hash, receipts) *>
+      save(block.header.hash, totalDifficulty) *>
       (if (saveAsBestBlock) {
          saveBestBlockNumber(block.header.number)
        } else {
@@ -188,7 +191,7 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
 
   def saveBestBlockNumber(number: BigInt): F[Unit]
 
-//  def saveNode(nodeHash: ByteVector, nodeEncoded: ByteVector, blockNumber: BigInt): F[Unit]
+  def saveNode(nodeHash: ByteVector, nodeEncoded: ByteVector, blockNumber: BigInt): F[Unit]
 
   def saveAccount(address: Address, account: Account): F[Unit]
 
@@ -219,6 +222,12 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
   def pruneState(blockNumber: BigInt): F[Unit]
 
   def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit]
+
+  def getSyncState: F[Option[SyncState]]
+
+  def putSyncState(syncState: SyncState): F[Unit]
+
+  def purgeSyncState: F[Unit]
 }
 
 object BlockChain {
@@ -238,33 +247,43 @@ object BlockChain {
     val totalDifficultyStore = new TotalDifficultyStore[F](db)
     val appStateStore = new AppStateStore[F](db)
     val evmCodeStore = new EvmCodeStore[F](db)
+    val fastSyncStore = new FastSyncStore[F](db)
 
-    AddressAccountStore[F](db).map { mptStore =>
+    for {
+      mptStore <- AddressAccountStore[F](db)
+      mpt <- MPTrie[F](db)
+    } yield {
       new BlockChainImpl[F](
+        db,
         headerStore,
         bodyStore,
         receiptStore,
         numberHashStore,
         txLocationStore,
         totalDifficultyStore,
+        fastSyncStore,
         appStateStore,
         mptStore,
-        evmCodeStore
+        evmCodeStore,
+        mpt
       )
     }
   }
 }
 
 class BlockChainImpl[F[_]](
+    db: KeyValueDB[F],
     headerStore: BlockHeaderStore[F],
     bodyStore: BlockBodyStore[F],
     receiptStore: ReceiptStore[F],
     numberHashStore: BlockNumberHashStore[F],
     txLocationStore: TransactionLocationStore[F],
     totalDifficultyStore: TotalDifficultyStore[F],
+    fastSyncStore: FastSyncStore[F],
     appStateStore: AppStateStore[F],
     mptStore: AddressAccountStore[F],
-    evmCodeStore: EvmCodeStore[F]
+    evmCodeStore: EvmCodeStore[F],
+    mpt: MPTrie[F]
 )(implicit F: Sync[F])
     extends BlockChain[F] {
 
@@ -323,17 +342,17 @@ class BlockChainImpl[F[_]](
   override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]] =
     totalDifficultyStore.getOpt(blockHash)
 
-  override def setTotalDifficultyByHash(blockHash: ByteVector, td: Option[BigInt]): F[Unit] =
-    td match {
-      case Some(n) => totalDifficultyStore.put(blockHash, n)
-      case None => totalDifficultyStore.del(blockHash)
-    }
-
   override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
     txLocationStore.getOpt(txHash)
 
   override def getBestBlockNumber: F[BigInt] =
     appStateStore.getBestBlockNumber
+
+  override def getEstimatedHighestBlock: F[BigInt] =
+    appStateStore.getEstimatedHighestBlock
+
+  override def getSyncStartingBlock: F[BigInt] =
+    appStateStore.getSyncStartingBlock
 
   override def setBestBlockNumber(bestBlockNumber: BigInt): F[Unit] =
     appStateStore.putBestBlockNumber(bestBlockNumber)
@@ -381,9 +400,7 @@ class BlockChainImpl[F[_]](
     headerStore.put(hash, blockHeader) *> numberHashStore.put(blockHeader.number, hash)
   }
 
-  override def save(blockHash: ByteVector, blockBody: BlockBody): F[Unit] = {
-    log.info(s"saving blockBody")
-
+  override def save(blockHash: ByteVector, blockBody: BlockBody): F[Unit] =
     bodyStore.put(blockHash, blockBody) *>
       blockBody.transactionList.zipWithIndex
         .map {
@@ -392,20 +409,24 @@ class BlockChainImpl[F[_]](
         }
         .sequence
         .void
-  }
 
   override def save(blockHash: ByteVector, receipts: List[Receipt]): F[Unit] =
     receiptStore.put(blockHash, receipts)
 
   override def save(hash: ByteVector, evmCode: ByteVector): F[Unit] = ???
 
-  override def save(blockhash: ByteVector, totalDifficulty: BigInt): F[Unit] = ???
+  override def save(blockhash: ByteVector, totalDifficulty: BigInt): F[Unit] =
+    totalDifficultyStore.put(blockhash, totalDifficulty)
 
   override def saveAccount(address: Address, account: Account): F[Unit] =
     mptStore.put(address, account)
 
   override def saveBestBlockNumber(number: BigInt): F[Unit] =
     appStateStore.putBestBlockNumber(number)
+
+  override def saveNode(nodeHash: ByteVector, nodeEncoded: ByteVector, blockNumber: BigInt): F[Unit] = {
+    mpt.put(nodeHash, nodeEncoded)
+  }
 
   /**
     * Returns a block hash given a block number
@@ -428,18 +449,20 @@ class BlockChainImpl[F[_]](
     */
   override def getMptNodeByHash(hash: ByteVector): F[Node] = mptStore.getNodeByHash(hash)
 
-  override def getWorldStateProxy(blockNumber: BigInt,
-                                  accountStartNonce: UInt256,
-                                  stateRootHash: Option[ByteVector],
-                                  noEmptyAccounts: Boolean): F[WorldStateProxy[F]] =
-    fs2.async.refOf[F, Set[Address]](Set.empty).map { ref =>
-//      WorldStateProxy[F](
-//        mptStore,
-//        mptStore,
-//        evmCodeStore,
-//        ref,
-//        noEmptyAccounts
-//      )
-      ???
-    }
+  override def getWorldStateProxy(
+      blockNumber: BigInt,
+      accountStartNonce: UInt256,
+      stateRootHash: Option[ByteVector],
+      noEmptyAccounts: Boolean
+  ): F[WorldStateProxy[F]] =
+    WorldStateProxy.inMemory[F](
+      db,
+      noEmptyAccounts
+    )
+
+  override def getSyncState: F[Option[SyncState]] = fastSyncStore.getSyncState
+
+  override def putSyncState(syncState: SyncState): F[Unit] = fastSyncStore.putSyncState(syncState)
+
+  override def purgeSyncState: F[Unit] = fastSyncStore.purge
 }
