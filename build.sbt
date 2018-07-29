@@ -11,7 +11,7 @@ scalaVersion in ThisBuild := "2.12.4"
 cancelable in Global := true
 
 lazy val contributors = Map(
-  "siyan" -> "siyan"
+  "blazingsiyan" -> "siyan"
 )
 
 lazy val V = new {
@@ -86,6 +86,7 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "co.fs2" %%% "fs2-core" % "0.10.4",
       "org.scodec" %%% "scodec-bits" % "1.1.5",
       "org.scodec" %%% "scodec-core" % "1.10.3",
+      "com.github.pureconfig" %% "pureconfig" % "0.9.1",
       "org.scalatest" %%% "scalatest" % "3.0.5" % Test,
       "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
     )
