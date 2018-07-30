@@ -42,7 +42,8 @@ case class ProgramState[F[_]: Sync](
     internalTxs: List[InternalTransaction] = Nil,
     logs: List[TxLogEntry] = Nil,
     halted: Boolean = false,
-    error: Option[ProgramError] = None
+    error: Option[ProgramError] = None,
+    noRecurency: Boolean = true
 ) {
 
   def config: EvmConfig = context.config
