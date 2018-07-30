@@ -437,7 +437,6 @@ case object BLOCKHASH extends OpCode(0x40, 1, 1, _.G_blockhash) with ConstGas {
     val (blockNumber, stack1) = state.stack.pop
 
     val outOfLimits = state.env.blockHeader.number - blockNumber > 256 || blockNumber >= state.env.blockHeader.number
-    println(outOfLimits, state.env.blockHeader.number, blockNumber)
     for {
       hash <- if (outOfLimits) UInt256.Zero.pure[F]
       else OptionT(state.world.getBlockHash(blockNumber)).getOrElse(UInt256.Zero)
