@@ -4,14 +4,15 @@ import cats.Foldable
 import cats.data.{Kleisli, OptionT}
 import cats.effect.Sync
 import cats.implicits._
-import jbok.codec.rlp
 import jbok.common._
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.store.EvmCodeStore
 import jbok.crypto._
 import jbok.crypto.authds.mpt.{MPTrie, MPTrieStore}
 import jbok.persistent.{KeyValueDB, SnapshotKeyValueStore}
+import scodec.Codec
 import scodec.bits.ByteVector
+import jbok.codec.rlp
 
 case class WorldStateProxy[F[_]: Sync](
     db: KeyValueDB[F],
@@ -133,7 +134,8 @@ case class WorldStateProxy[F[_]: Sync](
     for {
       creatorAccount <- getAccount(creatorAddr)
     } yield {
-      val hash = rlp.rlist.encode(List(creatorAddr.bytes, (creatorAccount.nonce - 1).bytes)).require.bytes.kec256
+      val hash = rlp.rlist2.encode(List(Codec.encode(creatorAddr).require.bytes,
+        Codec.encode(creatorAccount.nonce - 1).require.bytes)).require.bytes.kec256
       Address.apply(hash)
     }
 

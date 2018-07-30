@@ -90,14 +90,6 @@ case class ExecJson(
 
 case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLimit: BigInt, value: BigInt)
 
-//address: The address of the logentry.
-//data: The data of the logentry.
-//topics: The topics of the logentry, given as an array of values.
-
-//
-//case class LogsJson(address: Address,
-//                    data: ByteVector,
-//                    topics: ByteVector)
 
 case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
@@ -130,7 +122,7 @@ class VMTest extends WordSpec with Matchers {
       MPTrie.emptyRootHash,
       UInt256.Zero,
       noEmptyAccounts = true,
-      _ => IO(Some(UInt256(currentNumber)))
+      number => IO(Some(UInt256(ByteVector(number.toString.getBytes).kec256)))
     )
   }
 
@@ -138,7 +130,7 @@ class VMTest extends WordSpec with Matchers {
     "load and run official json test files" in {
       val file = File(Resource.getUrl("VMTests"))
       val fileList = file.listRecursively.filter(f => f.name.endsWith(".json") &&
-        !f.path.toString.contains("vmSystemOperations") && !f.name.contains("env1")).toList
+        !f.path.toString.contains("vmPerformance")).toList
 
       val sources = for {
         file <- fileList
@@ -189,22 +181,30 @@ class VMTest extends WordSpec with Matchers {
 
         val context = ProgramContext(env, vmJson.exec.address, vmJson.exec.gas, preState, config)
 
+        println(label)
         val result = VM.run(context).unsafeRunSync()
 
-        println(label)
-
         val world = if (result.addressesToDelete.nonEmpty) {
+          result.world.accountCodes.filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
           result.world.deleteAccount(result.addressesToDelete.head)
         } else {
+          result.world.accountCodes.filter(!_._2.isEmpty) shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
           result.world
         }
 
         result.gasRemaining shouldEqual vmJson.gas
         world.accountProxy.toMap.unsafeRunSync() shouldEqual postState.accountProxy.toMap.unsafeRunSync()
-//        world.contractStorages.filter(!_._2.isEmpty) shouldEqual postState.storages.filter(!_._2.isEmpty)
-//        world.accountCodes.filter(!_._2.isEmpty) shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
+        for {
+          contractStorages <- postState.contractStorages
+          address = contractStorages._1
+          storage = contractStorages._2.data.unsafeRunSync()
+          if storage.nonEmpty
+        } {
+          world.contractStorages.get(address).map(_.data.unsafeRunSync() shouldEqual storage)
+        }
+
         result.returnData shouldEqual vmJson.out
-        Codec.encode(result.logs.toList).require.bytes.kec256 shouldEqual vmJson.logs
+        Codec.encode(result.logs).require.bytes.kec256 shouldEqual vmJson.logs
 
         println(label + " test successful.")
       }

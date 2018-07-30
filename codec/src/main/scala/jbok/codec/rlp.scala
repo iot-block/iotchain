@@ -72,6 +72,10 @@ package object rlp {
     }
   )
 
+  implicit val rid: RlpCodec[ByteVector] = RlpCodec(scodec.codecs.bytes)
+
+  implicit val rlist2: RlpCodec[List[ByteVector]] = rlist(rid)
+
   implicit val rlist: RlpCodec[List[ByteVector]] = rlist(ritem)
 
   implicit def rlist[A](codec: RlpCodec[A]): RlpCodec[List[A]] = RlpCodec(

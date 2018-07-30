@@ -6,7 +6,7 @@ import jbok.codec.codecs._
 import pureconfig.ConfigReader
 
 object UInt256 {
-  implicit val codec: Codec[UInt256] = codecBytes.xmap(apply, _.bytes)
+  implicit val codec: Codec[UInt256] = codecBytes.xmap(apply, _.unpaddedBytes)
 
   implicit val reader: ConfigReader[UInt256] = ConfigReader[Long].map(x => UInt256(x))
 
@@ -82,6 +82,8 @@ class UInt256 private (private val n: BigInt) extends Ordered[UInt256] {
     else
       bs
   }
+
+  lazy val unpaddedBytes: ByteVector = ByteVector(n.toByteArray).dropWhile(_ == 0.toByte).takeRight(Size)
 
   /** Used for gas calculation for EXP opcode. See YP Appendix H.1 (220)
     * For n > 0: (n.bitLength - 1) / 8 + 1 == 1 + floor(log_256(n))
