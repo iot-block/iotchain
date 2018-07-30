@@ -851,7 +851,7 @@ abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
             !enoughGasForDeposit && state.config.exceptionalFailedCodeDeposit
 
         } yield {
-          if (state.noRecurency) {
+          if (state.env.noSelfCall) {
             val stack2 = stack1.push(newAddress.toUInt256)
             state
               .withStack(stack2)
@@ -909,7 +909,7 @@ abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toB
     val endowment = if (this == DELEGATECALL) UInt256.Zero else callValue
     val toAddr = Address(to)
 
-    if (state.noRecurency) {
+    if (state.env.noSelfCall) {
       for {
         startGas <- calcStartGas(state, params, endowment)
       } yield {

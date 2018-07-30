@@ -25,5 +25,6 @@ case class ExecEnv(
     value: UInt256,
     program: Program,
     blockHeader: BlockHeader,
-    callDepth: Int
+    callDepth: Int,
+    noSelfCall: Boolean = false
 )

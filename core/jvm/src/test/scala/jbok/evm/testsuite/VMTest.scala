@@ -176,7 +176,8 @@ class VMTest extends WordSpec with Matchers {
           UInt256(vmJson.exec.value),
           Program(vmJson.exec.code),
           currentBlockHeader,
-          0
+          0,
+          true
         )
 
         val context = ProgramContext(env, vmJson.exec.address, vmJson.exec.gas, preState, config)
