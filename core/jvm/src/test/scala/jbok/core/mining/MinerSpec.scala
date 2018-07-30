@@ -80,8 +80,7 @@ trait MinerFixture extends BlockChainFixture {
 
 }
 class MinerSpec extends JbokSpec {
-  "Miner" should {
-    "mine valid blocks" in new MinerFixture {
-    }
-  }
+//  "Miner" should {
+//    "mine valid blocks" in new MinerFixture {}
+//  }
 }
