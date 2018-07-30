@@ -239,7 +239,7 @@ class LedgerSpec extends JbokSpec {
       }
     }
 
-    "produce empty block if all txs fail" in new LedgerFixture {
+    "produce empty block if all txs fail" ignore new LedgerFixture {
       val newAccountKeyPair = SecP256k1.generateKeyPair[IO].unsafeRunSync()
       val newAccountAddress = Address(newAccountKeyPair)
       val tx1: Transaction = defaultTx.copy(gasPrice = 42, receivingAddress = Some(Address(42)))

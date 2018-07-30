@@ -120,7 +120,7 @@ class KeyStoreSpec extends JbokSpec {
       val newPassphrase = "very5tr0ng&l0ngp4s5phr4s3"
 
       keyStore.importPrivateKey(key1, oldPassphrase).unsafeRunSync()
-      keyStore.changePassphrase(addr1, oldPassphrase, newPassphrase).unsafeRunSync() shouldBe Right(())
+      keyStore.changePassphrase(addr1, oldPassphrase, newPassphrase).unsafeRunSync() shouldBe Right(true)
 
       keyStore.unlockAccount(addr1, newPassphrase).unsafeRunSync() shouldBe Right(Wallet(addr1, KeyPair.Secret(key1)))
     }
