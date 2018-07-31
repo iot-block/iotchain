@@ -291,13 +291,13 @@ lazy val scalacOpts = scalacOptions := Seq(
 
 lazy val micrositeSettings = Seq(
   libraryDependencies += "com.47deg" %% "github4s" % "0.18.6",
-  micrositeName := "JBOK",
+  micrositeName := "jbok",
   micrositeBaseUrl := "/jbok",
   micrositeDescription := "Just a Bunch Of Keys",
-  micrositeAuthor := "Siyan",
-  micrositeGithubOwner := "Siyan",
+  micrositeAuthor := "siyan",
+  micrositeGithubOwner := "c-block",
   micrositeGithubRepo := "jbok",
-  micrositeDocumentationUrl := "https://....github.io/jbok",
+  micrositeDocumentationUrl := "https://c-block.github.io/jbok",
   micrositeFooterText := None,
   micrositeHighlightTheme := "atom-one-light",
   micrositePalette := Map(

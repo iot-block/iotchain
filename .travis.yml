@@ -23,6 +23,9 @@ script:
   - sbt ++$TRAVIS_SCALA_VERSION test
   - sbt ++$TRAVIS_SCALA_VERSION docs/makeMicrosite
 
+after_success:
+  - test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && test $TRAVIS_REPO_SLUG == "c-block/jbok" && test $TRAVIS_SCALA_VERSION == "2.12.4" && sbt docs/publishMicrosite
+
 cache:
   directories:
     - $HOME/.ivy2/cache
