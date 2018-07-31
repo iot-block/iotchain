@@ -1,6 +1,5 @@
 package jbok.evm.testsuite
 
-
 import cats.effect.IO
 import io.circe._
 import io.circe.generic.auto._
@@ -19,6 +18,7 @@ import scala.io.Source
 import jbok.codec.codecs._
 import testsuite._
 import better.files._
+import scala.collection.JavaConverters._
 
 //Env           stEnv                 `json:"env"`
 //Exec          vmExec                `json:"exec"`
@@ -90,7 +90,6 @@ case class ExecJson(
 
 case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLimit: BigInt, value: BigInt)
 
-
 case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
 class VMTest extends WordSpec with Matchers {
@@ -106,7 +105,8 @@ class VMTest extends WordSpec with Matchers {
     val db = KeyValueDB.inMemory[IO].unsafeRunSync()
 
     val storages = json.map {
-      case (addr, account) => (addr, Storage.fromMap[IO](account.storage.map(s => (UInt256(s._1), UInt256(s._2)))).unsafeRunSync())
+      case (addr, account) =>
+        (addr, Storage.fromMap[IO](account.storage.map(s => (UInt256(s._1), UInt256(s._2)))).unsafeRunSync())
     }
 
     val mpt = MPTrieStore[IO, Address, Account](db).unsafeRunSync()
@@ -126,89 +126,89 @@ class VMTest extends WordSpec with Matchers {
     )
   }
 
-  "evm test suite" should {
-    "load and run official json test files" in {
-      val file = File(Resource.getUrl("VMTests"))
-      val fileList = file.listRecursively.filter(f => f.name.endsWith(".json") &&
-        !f.path.toString.contains("vmPerformance")).toList
+  def check(label: String, vmJson: VMJson) =
+    s"test pass test suite ${label}" in {
+      val config = EvmConfig.HomesteadConfigBuilder(None)
+      val preState = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
+      val postState = loadMockWorldState(vmJson.post, vmJson.env.currentNumber)
+      val currentBlockHeader = BlockHeader(
+        ByteVector.empty,
+        ByteVector.empty,
+        vmJson.env.currentCoinbase.bytes,
+        ByteVector.empty,
+        ByteVector.empty,
+        ByteVector.empty,
+        ByteVector.empty,
+        vmJson.env.currentDifficulty,
+        vmJson.env.currentNumber,
+        vmJson.env.currentGasLimit,
+        BigInt(0),
+        vmJson.env.currentTimestamp.toLong,
+        ByteVector.empty,
+        ByteVector.empty,
+        ByteVector.empty
+      )
+      val env = ExecEnv(
+        vmJson.exec.address,
+        vmJson.exec.caller,
+        vmJson.exec.origin,
+        UInt256(vmJson.exec.gasPrice),
+        vmJson.exec.data,
+        UInt256(vmJson.exec.value),
+        Program(vmJson.exec.code),
+        currentBlockHeader,
+        0,
+        noSelfCall = true
+      )
+      val context = ProgramContext(env, vmJson.exec.address, vmJson.exec.gas, preState, config)
 
-      val sources = for {
-        file <- fileList
-        lines = file.lines.mkString("\n")
-      } yield lines
+      val result = VM.run(context).unsafeRunSync()
 
-      for {
-        source <- sources
-        caseJson: Json = parse(source).getOrElse(Json.Null)
-        testCase <- caseJson.as[Map[String, VMJson]].getOrElse(Map.empty)
-      } {
-        val label = testCase._1
-        val vmJson = testCase._2
-        val config = EvmConfig.HomesteadConfigBuilder(None)
-
-        val preState = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
-
-        val postState = loadMockWorldState(vmJson.post, vmJson.env.currentNumber)
-
-        val currentBlockHeader = BlockHeader(
-          ByteVector.empty,
-          ByteVector.empty,
-          vmJson.env.currentCoinbase.bytes,
-          ByteVector.empty,
-          ByteVector.empty,
-          ByteVector.empty,
-          ByteVector.empty,
-          vmJson.env.currentDifficulty,
-          vmJson.env.currentNumber,
-          vmJson.env.currentGasLimit,
-          BigInt(0),
-          vmJson.env.currentTimestamp.toLong,
-          ByteVector.empty,
-          ByteVector.empty,
-          ByteVector.empty
-        )
-        val env = ExecEnv(
-          vmJson.exec.address,
-          vmJson.exec.caller,
-          vmJson.exec.origin,
-          UInt256(vmJson.exec.gasPrice),
-          vmJson.exec.data,
-          UInt256(vmJson.exec.value),
-          Program(vmJson.exec.code),
-          currentBlockHeader,
-          0,
-          true
-        )
-
-        val context = ProgramContext(env, vmJson.exec.address, vmJson.exec.gas, preState, config)
-
-        println(label)
-        val result = VM.run(context).unsafeRunSync()
-
-        val world = if (result.addressesToDelete.nonEmpty) {
-          result.world.accountCodes.filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
-          result.world.deleteAccount(result.addressesToDelete.head)
-        } else {
-          result.world.accountCodes.filter(!_._2.isEmpty) shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
-          result.world
-        }
-
-        result.gasRemaining shouldEqual vmJson.gas
-        world.accountProxy.toMap.unsafeRunSync() shouldEqual postState.accountProxy.toMap.unsafeRunSync()
-        for {
-          contractStorages <- postState.contractStorages
-          address = contractStorages._1
-          storage = contractStorages._2.data.unsafeRunSync()
-          if storage.nonEmpty
-        } {
-          world.contractStorages.get(address).map(_.data.unsafeRunSync() shouldEqual storage)
-        }
-
-        result.returnData shouldEqual vmJson.out
-        Codec.encode(result.logs).require.bytes.kec256 shouldEqual vmJson.logs
-
-        println(label + " test successful.")
+      val world = if (result.addressesToDelete.nonEmpty) {
+        result.world.accountCodes
+          .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.accountCodes.filter(
+          !_._2.isEmpty)
+        result.world.deleteAccount(result.addressesToDelete.head)
+      } else {
+        result.world.accountCodes.filter(!_._2.isEmpty) shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
+        result.world
       }
+
+      result.gasRemaining shouldEqual vmJson.gas
+      world.accountProxy.toMap.unsafeRunSync() shouldEqual postState.accountProxy.toMap.unsafeRunSync()
+      for {
+        contractStorages <- postState.contractStorages
+        address = contractStorages._1
+        storage = contractStorages._2.data.unsafeRunSync()
+        if storage.nonEmpty
+      } {
+        world.contractStorages.get(address).map(_.data.unsafeRunSync() shouldEqual storage)
+      }
+
+      result.returnData shouldEqual vmJson.out
+      Codec.encode(result.logs).require.bytes.kec256 shouldEqual vmJson.logs
+    }
+
+  "load and run official json test files" should {
+    val file = File(Resource.getUrl("VMTests"))
+    val fileList = file.listRecursively
+      .filter(
+        f =>
+          f.name.endsWith(".json") &&
+            !f.path.toString.contains("vmPerformance"))
+      .toList
+
+    val sources = for {
+      file <- fileList
+      lines = file.lines.mkString("\n")
+    } yield file.path.iterator().asScala.toList.takeRight(2).mkString("/") -> lines
+
+    for {
+      (name, json) <- sources
+      caseJson: Json = parse(json).getOrElse(Json.Null)
+      (label, vmJson) <- caseJson.as[Map[String, VMJson]].getOrElse(Map.empty)
+    } {
+      check(s"${name}: ${label}", vmJson)
     }
   }
 }
