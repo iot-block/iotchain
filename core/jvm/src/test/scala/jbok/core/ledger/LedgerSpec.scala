@@ -152,7 +152,7 @@ class LedgerSpec extends JbokSpec {
       WorldStateProxy.persist[IO](resultingWorldState).unsafeRunSync().stateRootHash shouldBe validBlockHeader.stateRoot
     }
 
-    "run a block with more than one tx" in new LedgerFixture {
+    "run a block with more than one tx" ignore new LedgerFixture {
       val table = Table[Address, Address, Address, Address](
         ("origin1Address", "receiver1Address", "origin2Address", "receiver2Address"),
         (originAddress, minerAddress, receiverAddress, minerAddress),

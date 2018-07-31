@@ -15,7 +15,7 @@ trait codecs {
   implicit val codecArrayByte: Codec[Array[Byte]] = rlp.ritem.xmap[Array[Byte]](_.toArray, ByteVector.apply)
 
   implicit val codecBigInt: Codec[BigInt] =
-    codecBytes.xmap[BigInt](bytes => if (bytes.isEmpty) 0 else BigInt(bytes.toArray), bi => ByteVector(bi.toUnsignedByteArray))
+    codecBytes.xmap[BigInt](bytes => if (bytes.isEmpty) 0 else BigInt(1, bytes.toArray), bi => ByteVector(bi.toUnsignedByteArray))
 
   implicit val codecLong: Codec[Long] = codecBigInt.xmap[Long](_.toLong, BigInt.apply)
 
@@ -23,9 +23,9 @@ trait codecs {
 
   implicit def codecSet[A: Codec]: Codec[Set[A]] = list(implicitly[Codec[A]]).xmap[Set[A]](_.toSet, _.toList)
 
-  implicit val codecBoolean: Codec[Boolean] = bool
+  implicit val codecBoolean: Codec[Boolean] = bool(8)
 
-  implicit def codecOptional[A: Codec]: Codec[Option[A]] = optional(bool, Codec[A])
+  implicit def codecOptional[A: Codec]: Codec[Option[A]] = optional(bool(8), Codec[A])
 
-  implicit def codecEither[L: Codec, R: Codec] = either[L, R](bool, Codec[L], Codec[R])
+  implicit def codecEither[L: Codec, R: Codec] = either[L, R](bool(8), Codec[L], Codec[R])
 }

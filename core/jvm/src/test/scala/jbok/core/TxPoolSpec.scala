@@ -5,7 +5,7 @@ import cats.implicits._
 import jbok.JbokSpec
 import jbok.core.messages.{Messages, SignedTransactions}
 import jbok.core.models.{Address, SignedTransaction, Transaction}
-import jbok.crypto.signature.{Ed25519, KeyPair}
+import jbok.crypto.signature.{Ed25519, KeyPair, SecP256k1}
 import jbok.network.execution._
 import scodec.bits.ByteVector
 
@@ -22,7 +22,7 @@ class TxPoolSpec extends JbokSpec {
   def newStx(
       nonce: BigInt = 0,
       tx: Transaction,
-      keyPair: KeyPair = Ed25519.generateKeyPair[IO].unsafeRunSync()
+      keyPair: KeyPair = SecP256k1.generateKeyPair[IO].unsafeRunSync()
   ): SignedTransaction =
     SignedTransaction.sign(tx, keyPair, Some(0x31))
 
@@ -30,7 +30,7 @@ class TxPoolSpec extends JbokSpec {
     "codec SignedTransactions" in {
       val stxs = SignedTransactions((1 to 10).toList.map(i => newStx(i, tx)))
       val bytes = Messages.encode(stxs)
-      assert(Messages.decode(bytes).require == stxs)
+      Messages.decode(bytes).require shouldBe stxs
     }
 
     "store pending transactions received from peers" in new TxPoolFixture {
@@ -75,7 +75,7 @@ class TxPoolSpec extends JbokSpec {
         _ <- connect
         _ <- txPool.start
         _ <- txPool.addTransactions(stxs.txs)
-        x <- peerManagers.tail.traverse(_.subscribeMessages.take(1).compile.toList)
+        x <- peerManagers.tail.traverse(_.subscribeMessages().take(1).compile.toList)
         _ = x.flatten.head.message shouldBe stxs
         _ <- stopAll
       } yield ()
@@ -84,8 +84,8 @@ class TxPoolSpec extends JbokSpec {
     }
 
     "override transactions with the same sender and nonce" in new TxPoolFixture {
-      val keyPair1 = Ed25519.generateKeyPair[IO].unsafeRunSync()
-      val keyPair2 = Ed25519.generateKeyPair[IO].unsafeRunSync()
+      val keyPair1 = SecP256k1.generateKeyPair[IO].unsafeRunSync()
+      val keyPair2 = SecP256k1.generateKeyPair[IO].unsafeRunSync()
       val first = newStx(1, tx, keyPair1)
       val second = newStx(1, tx.copy(value = 2 * tx.value), keyPair1)
       val other = newStx(1, tx, keyPair2)

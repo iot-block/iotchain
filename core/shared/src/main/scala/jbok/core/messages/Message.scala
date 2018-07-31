@@ -38,7 +38,7 @@ object Messages {
   )
 
   def encode(msg: Message): ByteVector =
-    (rstring.encode(msg.name).require ++ encoders(msg.name).encode(msg).require).bytes
+    rstring.encode(msg.name).require.bytes ++ encoders(msg.name).encode(msg).require.bytes
 
   def decode(bytes: ByteVector): Attempt[Message] = rstring.decode(bytes.bits).map { r =>
     val name = r.value
