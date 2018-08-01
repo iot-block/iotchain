@@ -31,7 +31,7 @@ class BroadcasterSpec extends JbokSpec {
         _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.unsafeRunTimed(5.seconds)
     }
 
     "not send a block only when it is known by the peer" in new BroadcasterFixture {
@@ -45,7 +45,7 @@ class BroadcasterSpec extends JbokSpec {
       val p = for {
         _ <- connect
         _ <- broadcaster.broadcastBlock(newBlock)
-        x = peerManagers.tail.traverse(_.subscribeMessages().take(1).compile.toList.unsafeRunTimed(1.second))
+        x = peerManagers.tail.traverse(_.subscribeMessages().take(1).compile.toList.unsafeRunTimed(5.seconds))
         _ = x shouldBe None
         _ <- stopAll
       } yield ()

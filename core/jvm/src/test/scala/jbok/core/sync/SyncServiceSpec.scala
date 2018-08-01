@@ -7,6 +7,7 @@ import jbok.core.messages._
 import jbok.core.models.{BlockBody, BlockHeader}
 import jbok.network.execution._
 import scodec.bits._
+import scala.concurrent.duration._
 
 trait SyncServiceFixture extends PeerManageFixture {
   val blockchain = pm1.blockchain
@@ -36,7 +37,7 @@ class SyncServiceSpec extends JbokSpec {
         _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.unsafeRunTimed(5.seconds)
     }
 
     "return BlockBodies by block hashes" in new SyncServiceFixture {
@@ -59,7 +60,7 @@ class SyncServiceSpec extends JbokSpec {
         _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.unsafeRunTimed(5.seconds)
     }
 
     "return BlockHeaders by block number/hash" in new SyncServiceFixture {
@@ -86,7 +87,7 @@ class SyncServiceSpec extends JbokSpec {
         _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.unsafeRunTimed(5.seconds)
     }
   }
 }

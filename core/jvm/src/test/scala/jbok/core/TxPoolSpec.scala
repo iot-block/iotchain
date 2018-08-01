@@ -80,7 +80,7 @@ class TxPoolSpec extends JbokSpec {
         _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.unsafeRunTimed(5.seconds)
     }
 
     "override transactions with the same sender and nonce" in new TxPoolFixture {

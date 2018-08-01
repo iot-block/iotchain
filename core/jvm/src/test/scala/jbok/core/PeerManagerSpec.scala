@@ -11,6 +11,7 @@ import jbok.core.peer.PeerManager
 import jbok.network.NetAddress
 import jbok.network.execution._
 import scodec.bits.ByteVector
+import scala.concurrent.duration._
 
 trait PeerManageFixture extends BlockChainFixture {
   val N = 3
@@ -62,7 +63,7 @@ class PeerManagerSpec extends JbokSpec {
         _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.unsafeRunTimed(5.seconds)
     }
 
     "retry connections to remaining bootstrap nodes" ignore {}
