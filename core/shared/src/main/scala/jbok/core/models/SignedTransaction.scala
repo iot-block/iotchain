@@ -1,12 +1,12 @@
 package jbok.core.models
 
 import cats.effect.IO
-import jbok.codec.codecs._
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
 import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, KeyPair, SecP256k1, SignatureRecover}
-import scodec.Codec
 import scodec.bits.ByteVector
-import tsec.hashing.bouncy._
+import shapeless._
 
 case class SignedTransaction(
     tx: Transaction,
@@ -14,16 +14,10 @@ case class SignedTransaction(
     senderAddress: Address
 ) {
   lazy val hash: ByteVector =
-    ByteVector(Keccak256.hashPure(SignedTransaction.codec.encode(this).require.toByteArray))
+    RlpCodec.encode(this).require.bytes.kec256
 }
 
 object SignedTransaction {
-  implicit val codec: Codec[SignedTransaction] = {
-    Codec[Transaction] ::
-      Codec[CryptoSignature] ::
-      Codec[Address]
-  }.as[SignedTransaction]
-
   def apply(
       tx: Transaction,
       pointSign: Byte,
@@ -57,7 +51,7 @@ object SignedTransaction {
   }
 
   private def bytesToSign(tx: Transaction, chainId: Option[Byte]): ByteVector =
-    Transaction.codec.encode(tx).require.bytes.kec256
+    RlpCodec.encode(tx).require.bytes.kec256
 
   private def getSender(tx: Transaction, signature: CryptoSignature, chainId: Byte): Option[Address] = {
     val bytesToSign =
@@ -74,21 +68,16 @@ object SignedTransaction {
   }
 
   private def generalTransactionBytes(tx: Transaction): ByteVector = {
-    val codec = codecBigInt :: codecBigInt :: codecBigInt :: codecBytes :: codecBigInt :: codecBytes
-    import shapeless._
     val hlist = tx.nonce :: tx.gasPrice :: tx.gasLimit :: tx.receivingAddress
       .map(_.bytes)
       .getOrElse(ByteVector.empty) :: tx.value :: tx.payload :: HNil
-    codec.encode(hlist).require.bytes
+    RlpCodec.encode(hlist).require.bytes
   }
 
   private def chainSpecificTransactionBytes(tx: Transaction, chainId: Byte): ByteVector = {
-
-    val codec = codecBigInt :: codecBigInt :: codecBigInt :: codecBytes :: codecBigInt :: codecBytes :: codecByte :: codecBigInt :: codecBigInt
-    import shapeless._
     val hlist = tx.nonce :: tx.gasPrice :: tx.gasLimit :: tx.receivingAddress
       .map(_.bytes)
       .getOrElse(ByteVector.empty) :: tx.value :: tx.payload :: chainId :: BigInt(0) :: BigInt(0) :: HNil
-    codec.encode(hlist).require.bytes
+    RlpCodec.encode(hlist).require.bytes
   }
 }

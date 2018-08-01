@@ -1,34 +1,35 @@
 package jbok.core.sync
 
-import jbok.codec.codecs._
+import jbok.codec.rlp.RlpCodec
 import jbok.core.models.BlockHeader
-import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{discriminated, uint8}
+import scodec.codecs.{bytes, discriminated, uint8}
 
 sealed trait HashType {
   def v: ByteVector
 }
 
 object HashType {
-  implicit val codec: Codec[HashType] = discriminated[HashType]
-    .by(uint8)
-    .subcaseO(1) {
-      case t: StateMptNodeHash => Some(t)
-      case _                   => None
-    }(codecBytes.as[StateMptNodeHash])
-    .subcaseO(2) {
-      case t: ContractStorageMptNodeHash => Some(t)
-      case _                             => None
-    }(codecBytes.as[ContractStorageMptNodeHash])
-    .subcaseO(3) {
-      case t: EvmCodeHash => Some(t)
-      case _              => None
-    }(codecBytes.as[EvmCodeHash])
-    .subcaseO(4) {
-      case t: StorageRootHash => Some(t)
-      case _                  => None
-    }(codecBytes.as[StorageRootHash])
+  implicit val codec: RlpCodec[HashType] = RlpCodec.item(
+    discriminated[HashType]
+      .by(uint8)
+      .subcaseO(1) {
+        case t: StateMptNodeHash => Some(t)
+        case _                   => None
+      }(bytes.as[StateMptNodeHash])
+      .subcaseO(2) {
+        case t: ContractStorageMptNodeHash => Some(t)
+        case _                             => None
+      }(bytes.as[ContractStorageMptNodeHash])
+      .subcaseO(3) {
+        case t: EvmCodeHash => Some(t)
+        case _              => None
+      }(bytes.as[EvmCodeHash])
+      .subcaseO(4) {
+        case t: StorageRootHash => Some(t)
+        case _                  => None
+      }(bytes.as[StorageRootHash])
+  )
 }
 
 case class StateMptNodeHash(v: ByteVector) extends HashType
@@ -71,19 +72,4 @@ case class SyncState(
       receiptsQueue.nonEmpty
 
   val totalNodesCount: Int = downloadedNodesCount + pendingMptNodes.size + pendingNonMptNodes.size
-}
-
-object SyncState {
-
-  import jbok.codec.codecs._
-
-  implicit val codec: Codec[SyncState] = (
-    Codec[BlockHeader] ::
-      codecList[HashType] ::
-      codecList[HashType] ::
-      codecList[ByteVector] ::
-      codecList[ByteVector] ::
-      codecBigInt.xmap[Int](_.toInt, BigInt.apply) ::
-      codecBigInt
-  ).as[SyncState]
 }

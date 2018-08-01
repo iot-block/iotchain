@@ -1,9 +1,7 @@
 package jbok.core.models
 
-import jbok.codec.codecs._
-import jbok.codec.rlp
+import jbok.codec.rlp.codecs._
 import jbok.crypto._
-import scodec.Codec
 import scodec.bits.ByteVector
 
 case class Account(
@@ -39,9 +37,7 @@ case class Account(
 }
 
 object Account {
-  implicit val codec: Codec[Account] = (Codec[UInt256] :: Codec[UInt256] :: codecBytes :: codecBytes).as[Account]
-
-  val EmptyStorageRootHash: ByteVector = rlp.ritem.encode(ByteVector.empty).require.bytes.kec256
+  val EmptyStorageRootHash: ByteVector = rbytes.encode(ByteVector.empty).require.bytes.kec256
 
   val EmptyCodeHash: ByteVector = ByteVector.empty.kec256
 

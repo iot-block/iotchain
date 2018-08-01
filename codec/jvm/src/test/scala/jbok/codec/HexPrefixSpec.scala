@@ -20,16 +20,16 @@ class HexPrefixSpec extends JbokSpec {
       HexPrefix.encode("f1cb8", isLeaf = true) shouldBe hex"3f1cb8"
       HexPrefix.encode("0f1cb8", isLeaf = true) shouldBe hex"200f1cb8"
 
-      HexPrefix.decode(hex"00abcd").require shouldBe (false, "abcd")
-      HexPrefix.decode(hex"20abcd").require shouldBe (true, "abcd")
-      HexPrefix.decode(hex"19abcd").require shouldBe (false, "9abcd")
-      HexPrefix.decode(hex"39abcd").require shouldBe (true, "9abcd")
+      HexPrefix.decode(hex"00abcd").require shouldBe ((false, "abcd"))
+      HexPrefix.decode(hex"20abcd").require shouldBe ((true, "abcd"))
+      HexPrefix.decode(hex"19abcd").require shouldBe ((false, "9abcd"))
+      HexPrefix.decode(hex"39abcd").require shouldBe ((true, "9abcd"))
 
       forAll(hexGen, boolGen) {
         case (hex, isLeaf) =>
           val bytes = HexPrefix.encode(hex, isLeaf = isLeaf)
           val decoded = HexPrefix.decode(bytes).require
-          decoded shouldBe (isLeaf, hex)
+          decoded shouldBe ((isLeaf, hex))
       }
     }
   }

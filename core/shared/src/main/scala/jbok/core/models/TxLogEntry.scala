@@ -1,18 +1,11 @@
 package jbok.core.models
 
-import scodec.Codec
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
 import scodec.bits.ByteVector
-import jbok.codec.codecs._
-import jbok.codec.rlp
 
 case class TxLogEntry(loggerAddress: Address, logTopics: List[ByteVector], data: ByteVector)
 
-object TxLogEntry {
-  implicit val codec: Codec[TxLogEntry] = rlp.rstruct {
-    {
-      Codec[Address] ::
-        codecList[ByteVector] ::
-        codecBytes
-    }.as[TxLogEntry]
-  }
-}
+//object TxLogEntry {
+//  implicit val codec: RlpCodec[TxLogEntry] = RlpCodec[TxLogEntry]
+//}

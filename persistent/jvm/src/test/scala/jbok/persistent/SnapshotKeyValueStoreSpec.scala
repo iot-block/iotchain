@@ -3,7 +3,7 @@ package jbok.persistent
 import cats.effect.IO
 import jbok.JbokSpec
 import scodec.bits.ByteVector
-import jbok.codec.codecs._
+import jbok.codec.rlp.codecs._
 
 class SnapshotKeyValueStoreFixture {
   val db = KeyValueDB.inMemory[IO].unsafeRunSync()

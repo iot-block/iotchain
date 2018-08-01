@@ -1,9 +1,12 @@
 package jbok.evm.testsuite
 
+import better.files._
 import cats.effect.IO
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.parser._
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
 import jbok.core.store.EvmCodeStore
 import jbok.crypto._
@@ -11,11 +14,9 @@ import jbok.crypto.authds.mpt.{MPTrie, MPTrieStore}
 import jbok.evm._
 import jbok.persistent.{KeyValueDB, SnapshotKeyValueStore}
 import org.scalatest.{Matchers, WordSpec}
-import scodec.Codec
 import scodec.bits.ByteVector
 import jbok.codec.json._
 import scala.io.Source
-import jbok.codec.codecs._
 import testsuite._
 import better.files._
 import scala.collection.JavaConverters._
@@ -186,7 +187,7 @@ class VMTest extends WordSpec with Matchers {
       }
 
       result.returnData shouldEqual vmJson.out
-      Codec.encode(result.logs).require.bytes.kec256 shouldEqual vmJson.logs
+      RlpCodec.encode(result.logs).require.bytes.kec256 shouldEqual vmJson.logs
     }
 
   "load and run official json test files" should {

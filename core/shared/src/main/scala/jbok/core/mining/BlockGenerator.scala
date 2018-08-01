@@ -6,7 +6,8 @@ import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import fs2.async.Ref
-import jbok.codec.codecs._
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
 import jbok.core.BlockChain
 import jbok.core.configs.{BlockChainConfig, MiningConfig}
 import jbok.core.ledger.{BlockResult, BloomFilter, DifficultyCalculator, Ledger}
@@ -15,7 +16,6 @@ import jbok.core.utils.ByteUtils
 import jbok.core.validators.Validators
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MPTrieStore
-import scodec.Codec
 import scodec.bits.ByteVector
 
 trait BlockPreparationError
@@ -120,7 +120,7 @@ class BlockGenerator[F[_]](
   ) =
     BlockHeader(
       parentHash = parent.header.hash,
-      ommersHash = codecList[BlockHeader].encode(ommers).require.bytes.kec256,
+      ommersHash = RlpCodec.encode(ommers).require.bytes.kec256,
       beneficiary = beneficiary.bytes,
       stateRoot = ByteVector.empty,
       //we are not able to calculate transactionsRoot here because we do not know if they will fail
@@ -165,8 +165,7 @@ class BlockGenerator[F[_]](
     parentGas + gasLimitDifference - 1
   }
 
-  private[jbok] def buildMPT[V](entities: List[V])(implicit cv: Codec[V]): F[ByteVector] = {
-    implicit val codecInt = scodec.codecs.uint16
+  private[jbok] def buildMPT[V](entities: List[V])(implicit cv: RlpCodec[V]): F[ByteVector] = {
     for {
       mpt <- MPTrieStore.inMemory[F, Int, V]
       _ <- entities.zipWithIndex.map { case (v, k) => mpt.put(k, v) }.sequence

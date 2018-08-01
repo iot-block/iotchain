@@ -2,10 +2,10 @@ package jbok.crypto.authds.mpt
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.codec.codecs._
 import jbok.common.testkit.HexGen
 import jbok.crypto.authds.mpt.Node.BlankNode
 import org.scalacheck.Gen
+import jbok.codec.rlp.codecs._
 
 class MPTrieStoreSpec extends JbokSpec {
   class Setup {

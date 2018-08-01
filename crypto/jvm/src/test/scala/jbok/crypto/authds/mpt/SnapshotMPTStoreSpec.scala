@@ -4,7 +4,7 @@ import cats.effect.IO
 import jbok.JbokSpec
 import jbok.persistent.{KeyValueDB, SnapshotKeyValueStore}
 import scodec.bits.ByteVector
-import jbok.codec.codecs._
+import jbok.codec.rlp.codecs._
 
 class SnapshotMPTStoreSpecFixture {
   val db = KeyValueDB.inMemory[IO].unsafeRunSync()

@@ -1,9 +1,9 @@
 package jbok.core.models
 
-import scodec.Codec
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
+import jbok.crypto._
 import scodec.bits.ByteVector
-import tsec.hashing.bouncy._
-import jbok.codec.codecs._
 
 case class Transaction(
     nonce: BigInt,
@@ -13,22 +13,12 @@ case class Transaction(
     value: BigInt,
     payload: ByteVector
 ) {
-  lazy val hash: ByteVector =
-    ByteVector(Keccak256.hashPure(Transaction.codec.encode(this).require.toByteArray))
+  lazy val hash: ByteVector = RlpCodec.encode(this).require.bytes.kec256
 
   def isContractInit: Boolean = receivingAddress.isEmpty
 }
 
 object Transaction {
-  implicit val codec: Codec[Transaction] = {
-    codecBigInt ::
-      codecBigInt ::
-      codecBigInt ::
-      codecOptional[Address] ::
-      codecBigInt ::
-      codecBytes
-  }.as[Transaction]
-
   def apply(
       nonce: BigInt,
       gasPrice: BigInt,

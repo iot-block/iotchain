@@ -38,13 +38,16 @@ class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F]) {
   private def shouldSendNewBlock(newBlock: NewBlock, peerInfo: PeerInfo): Boolean =
     newBlock.block.header.number > peerInfo.maxBlockNumber
 
-  private def broadcastNewBlock(newBlock: NewBlock, peers: Set[PeerId]): F[Unit] =
-    randomSelect(peers).toList
+  private def broadcastNewBlock(newBlock: NewBlock, peers: Set[PeerId]): F[Unit] = {
+    val selected = randomSelect(peers)
+    log.info(s"random selected ${selected.size} peers to broadcast block")
+    selected.toList
       .map { peerId =>
         peerManager.sendMessage(peerId, newBlock)
       }
       .sequence
       .void
+  }
 
   private def broadcastNewBlockHash(newBlock: NewBlock, peers: Set[PeerId]): F[Unit] =
     peers.toList

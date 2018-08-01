@@ -1,7 +1,7 @@
 package jbok
 
 import io.circe._
-import scodec.bits.{BitVector, ByteVector}
+import scodec.bits.BitVector
 import shapeless._
 
 package object codec extends CodecSyntax {

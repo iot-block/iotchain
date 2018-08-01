@@ -2,12 +2,12 @@ package jbok.p2p
 
 import cats.effect.{Effect, Sync}
 import cats.implicits._
-import fs2.{Scheduler, _}
 import fs2.async.Ref
-import jbok.codec.codecs._
+import fs2.{Scheduler, _}
 import jbok.network.NetAddress
 import jbok.persistent.{KeyValueDB, KeyValueStore}
 import scodec.bits.ByteVector
+import jbok.codec.rlp.codecs._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}

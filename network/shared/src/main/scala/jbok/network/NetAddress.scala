@@ -1,9 +1,8 @@
 package jbok.network
 
 import io.circe.generic.JsonCodec
-import jbok.codec.codecs._
-import scodec.Codec
-import scodec.codecs._
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
 
 @JsonCodec
 case class NetAddress(host: String, port: Option[Int] = None, scheme: String) {
@@ -14,8 +13,7 @@ case class NetAddress(host: String, port: Option[Int] = None, scheme: String) {
 }
 
 object NetAddress {
-  implicit val codec: Codec[NetAddress] =
-    (codecString :: optional(Codec[Boolean], uint16) :: codecString).as[NetAddress]
+  implicit val codec: RlpCodec[NetAddress] = implicitly[RlpCodec[NetAddress]]
 
   val defaultScheme: String = "ws"
 

@@ -7,6 +7,8 @@ import cats.data.{EitherT, OptionT}
 import cats.effect.Sync
 import cats.implicits._
 import fs2.async.Ref
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
 import jbok.core.api._
 import jbok.core.configs.{BlockChainConfig, MiningConfig}
 import jbok.core.consensus.Ethash
@@ -16,7 +18,6 @@ import jbok.core.mining.BlockGenerator
 import jbok.core.models._
 import jbok.core.{BlockChain, TxPool}
 import jbok.crypto.signature.CryptoSignature
-import scodec.Codec
 import scodec.bits.ByteVector
 
 class PublicApiImpl[F[_]](
@@ -199,7 +200,7 @@ class PublicApiImpl[F[_]](
   }
 
   override def sendRawTransaction(data: ByteVector): R[ByteVector] = {
-    val stx = Codec.decode[SignedTransaction](data.bits).require.value
+    val stx = RlpCodec.decode[SignedTransaction](data.bits).require.value
     val txHash = for {
       _ <- txPool.addOrUpdateTransaction(stx)
     } yield stx.hash

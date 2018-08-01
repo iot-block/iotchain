@@ -3,12 +3,13 @@ package jbok.core.store
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
-import jbok.core.models.{BlockBody, BlockHeader, Receipt, _}
+import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.RlpCodec._
+import jbok.core.models._
+import jbok.core.sync.SyncState
 import jbok.crypto.authds.mpt.{MPTrie, Node}
 import jbok.persistent.{KeyValueDB, KeyValueStore}
 import scodec.bits.ByteVector
-import jbok.codec.codecs._
-import jbok.core.sync.SyncState
 
 class BlockHeaderStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, ByteVector, BlockHeader](Namespaces.BlockHeader, db)

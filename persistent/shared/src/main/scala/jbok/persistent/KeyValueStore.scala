@@ -4,15 +4,13 @@ import cats.Traverse
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
-import scodec.Codec
+import jbok.codec.rlp.RlpCodec
 import scodec.bits.ByteVector
-
-import scala.Option
 
 class KeyValueStore[F[_], K, V](namespace: ByteVector, db: KeyValueDB[F])(
     implicit F: Sync[F],
-    ck: Codec[K],
-    cv: Codec[V]
+    ck: RlpCodec[K],
+    cv: RlpCodec[V]
 ) {
   def get(key: K): F[V] =
     for {
@@ -69,7 +67,7 @@ class KeyValueStore[F[_], K, V](namespace: ByteVector, db: KeyValueDB[F])(
       }.sequence)
       .map(_.toMap)
 
-  def decode[A](x: ByteVector)(implicit codec: Codec[A]): F[A] = F.delay(codec.decode(x.bits).require.value)
+  def decode[A](x: ByteVector)(implicit codec: RlpCodec[A]): F[A] = F.delay(codec.decode(x.bits).require.value)
 
-  def encode[A](x: A)(implicit codec: Codec[A]): F[ByteVector] = F.delay(codec.encode(x).require.bytes)
+  def encode[A](x: A)(implicit codec: RlpCodec[A]): F[ByteVector] = F.delay(codec.encode(x).require.bytes)
 }

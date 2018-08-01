@@ -31,9 +31,9 @@ package object HexPrefix {
     val even = (bytes(0) & (1 << 4)) == 0
 
     if (even) {
-      Successful(flag, bytes.tail.toHex)
+      Successful((flag, bytes.tail.toHex))
     } else {
-      Successful(flag, bytes.toBitVector.drop(4).toHex)
+      Successful((flag, bytes.toBitVector.drop(4).toHex))
     }
   }
 }

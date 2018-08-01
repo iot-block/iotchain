@@ -1,9 +1,10 @@
 package jbok.core.models
 
-import scodec.{Attempt, Codec, Encoder, SizeBound}
-import scodec.bits._
-import jbok.codec.codecs._
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
 import jbok.crypto._
+import scodec.bits._
+import shapeless._
 
 case class BlockHeader(
     parentHash: ByteVector,
@@ -22,63 +23,15 @@ case class BlockHeader(
     mixHash: ByteVector,
     nonce: ByteVector
 ) {
-  val hash: ByteVector = Codec[BlockHeader].encode(this).require.bytes.kec256
+  lazy val hash: ByteVector = RlpCodec.encode(this).require.bytes.kec256
 
-  val hashWithoutNonce: ByteVector = BlockHeader.codecWithoutNonce.encode(this).require.bytes.kec256
+  lazy val hashWithoutNonce: ByteVector = BlockHeader.encodeWithoutNonce(this).kec256
 }
 
 object BlockHeader {
-  implicit val codec: Codec[BlockHeader] = {
-    codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBigInt ::
-      codecBigInt ::
-      codecBigInt ::
-      codecBigInt ::
-      codecLong ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes
-  }.as[BlockHeader]
-
-  val codecWithoutNonce: Encoder[BlockHeader] = new Encoder[BlockHeader] {
-    val codec = codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBytes ::
-      codecBigInt ::
-      codecBigInt ::
-      codecBigInt ::
-      codecBigInt ::
-      codecLong ::
-      codecBytes
-    override def encode(h: BlockHeader): Attempt[BitVector] = {
-      import shapeless._
-      val hlist = h.parentHash ::
-        h.ommersHash ::
-        h.beneficiary ::
-        h.stateRoot ::
-        h.transactionsRoot ::
-        h.receiptsRoot ::
-        h.logsBloom ::
-        h.difficulty ::
-        h.number ::
-        h.gasLimit ::
-        h.gasUsed ::
-        h.unixTimestamp ::
-        h.extraData :: HNil
-      codec.encode(hlist)
-    }
-
-    override def sizeBound: SizeBound = SizeBound.unknown
+  def encodeWithoutNonce(header: BlockHeader): ByteVector = {
+    val hlist = Generic[BlockHeader].to(header).take(13)
+    RlpCodec.encode(hlist).require.bytes
   }
 
   def empty: BlockHeader = BlockHeader(

@@ -1,48 +1,47 @@
 package jbok.core.messages
 
-import jbok.codec.rlp.rstring
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
+import scodec.Attempt
 import scodec.bits.ByteVector
-import scodec.{Attempt, Codec, Decoder, Encoder}
 
 trait Message {
   def name = getClass.getSimpleName
 }
 
 object Messages {
-  val encoders: Map[String, Encoder[Message]] = Map(
-    "Hello" -> Encoder[Hello].contramap[Message](_.asInstanceOf[Hello]),
-    "Status" -> Encoder[Status].contramap[Message](_.asInstanceOf[Status]),
-    "SignedTransactions" -> Encoder[SignedTransactions].contramap[Message](_.asInstanceOf[SignedTransactions]),
-    "GetReceipts" -> Encoder[GetReceipts].contramap[Message](_.asInstanceOf[GetReceipts]),
-    "Receipts" -> Encoder[Receipts].contramap[Message](_.asInstanceOf[Receipts]),
-    "GetBlockBodies" -> Encoder[GetBlockBodies].contramap[Message](_.asInstanceOf[GetBlockBodies]),
-    "BlockBodies" -> Encoder[BlockBodies].contramap[Message](_.asInstanceOf[BlockBodies]),
-    "GetBlockHeaders" -> Encoder[GetBlockHeaders].contramap[Message](_.asInstanceOf[GetBlockHeaders]),
-    "BlockHeaders" -> Encoder[BlockHeaders].contramap[Message](_.asInstanceOf[BlockHeaders]),
-    "NewBlock" -> Encoder[NewBlock].contramap[Message](_.asInstanceOf[NewBlock]),
-    "NewBlockHashes" -> Encoder[NewBlockHashes].contramap[Message](_.asInstanceOf[NewBlockHashes])
-  )
-
-  val decoders: Map[String, Decoder[Message]] = Map(
-    "Hello" -> Decoder[Hello],
-    "Status" -> Decoder[Status],
-    "SignedTransactions" -> Decoder[SignedTransactions],
-    "GetReceipts" -> Decoder[GetReceipts],
-    "Receipts" -> Decoder[Receipts],
-    "GetBlockBodies" -> Decoder[GetBlockBodies],
-    "BlockBodies" -> Decoder[BlockBodies],
-    "GetBlockHeaders" -> Decoder[GetBlockHeaders],
-    "BlockHeaders" -> Decoder[BlockHeaders],
-    "NewBlock" -> Decoder[NewBlock],
-    "NewBlockHashes" -> Decoder[NewBlockHashes]
+  val codecMap = Map(
+    "Hello" -> RlpCodec[Hello],
+    "Status" -> RlpCodec[Status],
+    "SignedTransactions" -> RlpCodec[SignedTransactions],
+    "GetReceipts" -> RlpCodec[GetReceipts],
+    "Receipts" -> RlpCodec[Receipts],
+    "GetBlockBodies" -> RlpCodec[GetBlockBodies],
+    "BlockBodies" -> RlpCodec[BlockBodies],
+    "GetBlockHeaders" -> RlpCodec[GetBlockHeaders],
+    "BlockHeaders" -> RlpCodec[BlockHeaders],
+    "NewBlock" -> RlpCodec[NewBlock],
+    "NewBlockHashes" -> RlpCodec[NewBlockHashes]
   )
 
   def encode(msg: Message): ByteVector =
-    rstring.encode(msg.name).require.bytes ++ encoders(msg.name).encode(msg).require.bytes
+    rstring.encode(msg.name).require.bytes ++ (msg.name match {
+      case "Hello"              => RlpCodec[Hello].encode(msg.asInstanceOf[Hello])
+      case "Status"             => RlpCodec[Status].encode(msg.asInstanceOf[Status])
+      case "SignedTransactions" => RlpCodec[SignedTransactions].encode(msg.asInstanceOf[SignedTransactions])
+      case "GetReceipts"        => RlpCodec[GetReceipts].encode(msg.asInstanceOf[GetReceipts])
+      case "Receipts"           => RlpCodec[Receipts].encode(msg.asInstanceOf[Receipts])
+      case "GetBlockBodies"     => RlpCodec[GetBlockBodies].encode(msg.asInstanceOf[GetBlockBodies])
+      case "BlockBodies"        => RlpCodec[BlockBodies].encode(msg.asInstanceOf[BlockBodies])
+      case "GetBlockHeaders"    => RlpCodec[GetBlockHeaders].encode(msg.asInstanceOf[GetBlockHeaders])
+      case "BlockHeaders"       => RlpCodec[BlockHeaders].encode(msg.asInstanceOf[BlockHeaders])
+      case "NewBlock"           => RlpCodec[NewBlock].encode(msg.asInstanceOf[NewBlock])
+      case "NewBlockHashes"     => RlpCodec[NewBlockHashes].encode(msg.asInstanceOf[NewBlockHashes])
+    }).require.bytes
 
   def decode(bytes: ByteVector): Attempt[Message] = rstring.decode(bytes.bits).map { r =>
     val name = r.value
-    decoders(name).decode(r.remainder).require.value.asInstanceOf[Message]
+    codecMap(name).decode(r.remainder).require.value.asInstanceOf[Message]
   }
 
   def main(args: Array[String]): Unit = {
@@ -53,15 +52,3 @@ object Messages {
     println(msg)
   }
 }
-
-//case class MessageSpec[A <: Message](
-//    name: String,
-//    codec: Codec[A]
-//)
-//
-//object MessageSpec {
-//  def apply[A <: Message](implicit codec: Codec[A]): MessageSpec[A] = {
-//    val name = classOf[A].getSimpleName
-//    MessageSpec[A](name, codec)
-//  }
-//}
