@@ -40,13 +40,13 @@ class TxPoolSpec extends JbokSpec {
         _ <- connect
         _ <- txPool.start
         _ <- pm2.broadcast(msg)
-        _ <- IO(Thread.sleep(200))
+        _ <- IO(Thread.sleep(1000))
         x <- txPool.getPendingTransactions
         _ = x.length shouldBe 10
-        _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.attempt.unsafeRunSync
+      stopAll.unsafeRunSync()
     }
 
     "ignore known transactions" in new TxPoolFixture {
@@ -59,7 +59,7 @@ class TxPoolSpec extends JbokSpec {
         _ = println("pm2")
         _ <- pm3.broadcast(msg)
         _ = println("pm3")
-        _ <- IO(Thread.sleep(200))
+        _ <- IO(Thread.sleep(1000))
         p <- txPool.getPendingTransactions
         _ = p.length shouldBe 1
       } yield ()
