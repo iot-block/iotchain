@@ -28,10 +28,10 @@ class BroadcasterSpec extends JbokSpec {
         _ <- broadcaster.broadcastBlock(newBlock)
         x <- peerManagers.tail.traverse(_.subscribeMessages().take(1).compile.toList)
         _ = x.flatten.length shouldBe peerManagers.length - 1
-        _ <- stopAll
       } yield ()
 
-      p.unsafeRunTimed(5.seconds)
+      p.attempt.unsafeRunTimed(5.seconds)
+      stopAll.unsafeRunSync()
     }
 
     "not send a block only when it is known by the peer" in new BroadcasterFixture {
@@ -50,7 +50,8 @@ class BroadcasterSpec extends JbokSpec {
         _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.attempt.unsafeRunSync()
+      stopAll.unsafeRunSync()
     }
 
     "send block hashes to all peers while the blocks only to sqrt of them" ignore {}

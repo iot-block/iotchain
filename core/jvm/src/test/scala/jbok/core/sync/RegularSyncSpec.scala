@@ -24,13 +24,12 @@ class RegularSyncSpec extends JbokSpec {
           _ <- connect
           _ <- regularSync.start
           _ <- pm2.broadcast(NewBlock(block))
-          _ <- IO(Thread.sleep(1000))
           ommers <- regularSync.ommersPool.getOmmers(block.header.number)
           _ = println(ommers)
-          _ <- stopAll
         } yield ()
 
-        p.unsafeRunSync()
+        p.attempt.unsafeRunSync()
+        stopAll.unsafeRunSync()
       }
 
       "handle pooled" in new RegularSyncFixture {
@@ -39,15 +38,13 @@ class RegularSyncSpec extends JbokSpec {
         val p = for {
           _ <- connect
           _ <- regularSync.start
-          _ <- IO(Thread.sleep(1000))
           _ <- pm2.broadcast(NewBlock(block))
-          _ <- IO(Thread.sleep(1000))
           b <- regularSync.ledger.blockPool.getBlockByHash(block.header.hash)
           _ = b shouldBe Some(block)
-          _ <- stopAll
         } yield ()
 
-        p.unsafeRunSync()
+        p.attempt.unsafeRunSync()
+        stopAll.unsafeRunSync()
       }
     }
 

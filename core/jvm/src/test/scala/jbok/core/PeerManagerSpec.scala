@@ -42,10 +42,10 @@ class PeerManagerSpec extends JbokSpec {
         _ <- connect
         peers <- peerManagers.traverse(_.getHandshakedPeers)
         _ = peers.map(_.size).sum shouldBe 4
-        _ <- stopAll
       } yield ()
 
-      p.unsafeRunSync()
+      p.attempt.unsafeRunSync()
+      stopAll.unsafeRunSync()
     }
 
     "create connections and send messages" in new PeerManageFixture {
@@ -60,10 +60,10 @@ class PeerManagerSpec extends JbokSpec {
           .compile
           .toList
         _ = e.map(_.message) shouldBe List.fill(2)(message)
-        _ <- stopAll
       } yield ()
 
-      p.unsafeRunTimed(5.seconds)
+      p.attempt.unsafeRunTimed(5.seconds)
+      stopAll.unsafeRunSync()
     }
 
     "retry connections to remaining bootstrap nodes" ignore {}
