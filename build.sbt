@@ -234,7 +234,7 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
       "com.spinoco" %% "fs2-http" % "0.3.0"
     )
   )
-  .dependsOn(common % CompileAndTest, macros)
+  .dependsOn(common % CompileAndTest, macros, crypto)
 
 lazy val networkJS = network.js
 lazy val networkJVM = network.jvm

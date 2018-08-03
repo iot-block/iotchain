@@ -5,6 +5,7 @@ import java.security.{SecureRandom, Security}
 import cats.effect.{IO, Sync}
 import jbok.crypto.signature.SignatureRecover._
 import org.bouncycastle.asn1.x9.X9IntegerConverter
+import org.bouncycastle.crypto.AsymmetricCipherKeyPair
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.crypto.generators.ECKeyPairGenerator
 import org.bouncycastle.crypto.params.{
@@ -39,6 +40,18 @@ class ECDSA(curveName: String) extends RecoverableSignature {
     } else {
       curve.getN.subtract(s)
     }
+
+  def toAsymmetricCipherKeyPair(keyPair: KeyPair): AsymmetricCipherKeyPair = {
+    val secret = new ECPrivateKeyParameters(keyPair.secret.d.underlying(), domain)
+    val public = new ECPublicKeyParameters(curve.getCurve.decodePoint(keyPair.public.bytes.toArray), domain)
+    new AsymmetricCipherKeyPair(public, secret)
+  }
+
+  def toECPrivateKeyParameters(secret: KeyPair.Secret) =
+    new ECPrivateKeyParameters(secret.d.underlying(), domain)
+
+  def toECPublicKeyParameters(public: KeyPair.Public) =
+    new ECPublicKeyParameters(curve.getCurve.decodePoint(public.bytes.toArray), domain)
 
   override val algo: String = curveName
 
