@@ -46,37 +46,6 @@ object RlpCodec {
   def item[A](codec: Codec[A]): RlpCodec[A] =
     RlpCodec(ItemCodec, codec)
 
-  implicit def deriveList[A](implicit codec: RlpCodec[A]): RlpCodec[List[A]] =
-    rlplist(codec)
-
-  implicit def deriveSet[A](implicit codec: RlpCodec[A]): RlpCodec[Set[A]] =
-    rlpset(codec)
-
-  implicit val hnilCodec: RlpCodec[HNil] = RlpCodec(
-    PureCodec,
-    new Codec[HNil] {
-      override def encode(value: HNil): Attempt[BitVector] = Attempt.successful(BitVector.empty)
-      override def sizeBound: SizeBound = SizeBound.exact(0)
-      override def decode(bits: BitVector): Attempt[DecodeResult[HNil]] = Attempt.successful(DecodeResult(HNil, bits))
-      override def toString = s"HNil"
-    }
-  )
-
-  implicit final class HListSupport[L <: HList](val self: RlpCodec[L]) extends AnyVal {
-    def ::[B](codec: RlpCodec[B]): RlpCodec[B :: L] = prepend(codec, self)
-
-    def prepend[H, T <: HList](h: RlpCodec[H], t: RlpCodec[T]): RlpCodec[H :: T] = t.codecType match {
-      case PureCodec | ItemCodec => RlpCodec(HListCodec, h.codec :: t.codec)
-      case HListCodec            => RlpCodec(HListCodec, h.codec :: t.valueCodec)
-    }
-  }
-
-  implicit def deriveHList[A, L <: HList](implicit a: Lazy[RlpCodec[A]], l: RlpCodec[L]): RlpCodec[A :: L] =
-    a.value :: l
-
-  implicit def deriveGeneric[A, R <: HList](implicit gen: Generic.Aux[A, R], codec: Lazy[RlpCodec[R]]): RlpCodec[A] =
-    RlpCodec(a => codec.value.encode(gen.to(a)), bits => codec.value.decode(bits).map(_.map(r => gen.from(r))))
-
   //////////////////////////
   //////////////////////////
 

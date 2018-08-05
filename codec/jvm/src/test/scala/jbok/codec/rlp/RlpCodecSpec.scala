@@ -7,10 +7,7 @@ import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits.ByteVector
 import shapeless.HNil
 
-case class Person(name: String, age: Int)
-case class Single(name: String)
-
-class RlpSpec extends JbokSpec {
+class RlpCodecSpec extends JbokSpec {
   def roundtrip[A](a: A, hex: String = "")(implicit ev: RlpCodec[A]) = {
     val bytes = encode(a).require.bytes
     if (hex.nonEmpty) {
@@ -19,7 +16,7 @@ class RlpSpec extends JbokSpec {
     decode[A](bytes.bits).require.value shouldBe a
   }
 
-  "rlp" should {
+  "RlpCodec" should {
     "codec single byte" in {
       roundtrip(0.toByte, "0x00")
       roundtrip(127.toByte, "0x7f")

@@ -3,17 +3,50 @@ package jbok.codec.rlp
 import java.nio.charset.StandardCharsets
 
 import jbok.codec.rlp.RlpCodec.item
-import scodec.bits.ByteVector
+import scodec.{Attempt, Codec, DecodeResult, SizeBound}
+import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
+import shapeless._
 
 object codecs {
+  implicit def deriveList[A](implicit codec: Lazy[RlpCodec[A]]): RlpCodec[List[A]] =
+    RlpCodec.rlplist(codec.value)
+
+  implicit def deriveSet[A](implicit codec: Lazy[RlpCodec[A]]): RlpCodec[Set[A]] =
+    RlpCodec.rlpset(codec.value)
+
+  implicit val hnilCodec: RlpCodec[HNil] = RlpCodec(
+    PureCodec,
+    new Codec[HNil] {
+      override def encode(value: HNil): Attempt[BitVector] = Attempt.successful(BitVector.empty)
+      override def sizeBound: SizeBound = SizeBound.exact(0)
+      override def decode(bits: BitVector): Attempt[DecodeResult[HNil]] = Attempt.successful(DecodeResult(HNil, bits))
+      override def toString = s"HNil"
+    }
+  )
+
+  implicit final class HListSupport[L <: HList](val self: RlpCodec[L]) extends AnyVal {
+    def ::[B](codec: RlpCodec[B]): RlpCodec[B :: L] = prepend(codec, self)
+
+    def prepend[H, T <: HList](h: RlpCodec[H], t: RlpCodec[T]): RlpCodec[H :: T] = t.codecType match {
+      case PureCodec | ItemCodec => RlpCodec(HListCodec, h.codec :: t.codec)
+      case HListCodec            => RlpCodec(HListCodec, h.codec :: t.valueCodec)
+    }
+  }
+
+  implicit def deriveHList[A, L <: HList](implicit a: Lazy[RlpCodec[A]], l: RlpCodec[L]): RlpCodec[A :: L] =
+    a.value :: l
+
+  implicit def deriveGeneric[A, R <: HList](implicit gen: Generic.Aux[A, R], codec: Lazy[RlpCodec[R]]): RlpCodec[A] =
+    RlpCodec(a => codec.value.encode(gen.to(a)), bits => codec.value.decode(bits).map(_.map(r => gen.from(r))))
+
   implicit val rempty: RlpCodec[Unit] = RlpCodec.pure(constant(RlpCodec.itemOffset))
 
   implicit val rbyte: RlpCodec[Byte] = item(byte)
 
   implicit val rbytes: RlpCodec[ByteVector] = item(bytes)
 
-  implicit val rbyteslist: RlpCodec[List[ByteVector]] = RlpCodec.deriveList(rbytes)
+  implicit val rbyteslist: RlpCodec[List[ByteVector]] = deriveList(rbytes)
 
   implicit val rbytearray: RlpCodec[Array[Byte]] = item(bytes.xmap[Array[Byte]](_.toArray, arr => ByteVector(arr)))
 
@@ -62,11 +95,11 @@ object codecs {
 
   implicit val rbool: RlpCodec[Boolean] = item(bool(8))
 
-  implicit def roptional[A: RlpCodec]: RlpCodec[Option[A]] =
-    item(optional(bool(8), RlpCodec[A].valueCodec))
+  implicit def roptional[A](implicit c: Lazy[RlpCodec[A]]): RlpCodec[Option[A]] =
+    item(optional(bool(8), c.value.valueCodec))
 
-  implicit def reither[L: RlpCodec, R: RlpCodec] =
-    item(either[L, R](bool(8), RlpCodec[L].valueCodec, RlpCodec[R].valueCodec))
+  implicit def reither[L, R](implicit cl: Lazy[RlpCodec[L]], cr: Lazy[RlpCodec[R]]) =
+    item(either[L, R](bool(8), cl.value.valueCodec, cr.value.valueCodec))
 
   private def byteToBytes(byte: Byte): ByteVector =
     if ((byte & 0xFF) == 0) ByteVector.empty
