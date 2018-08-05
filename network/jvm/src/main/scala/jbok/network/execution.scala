@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executors, ThreadFactory}
 
 import fs2.Scheduler
+import fs2.io.udp.AsynchronousSocketGroup
 
 import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
@@ -40,4 +41,6 @@ object execution {
 
   implicit val AG: AsynchronousChannelGroup =
     AsynchronousChannelGroup.withThreadPool(Executors.newCachedThreadPool(mkThreadFactory("AG", daemon = true)))
+
+  implicit val AsyncSocketGroup: AsynchronousSocketGroup = AsynchronousSocketGroup.apply()
 }
