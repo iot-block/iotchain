@@ -15,6 +15,9 @@ object codecs {
   implicit def deriveSet[A](implicit codec: Lazy[RlpCodec[A]]): RlpCodec[Set[A]] =
     RlpCodec.rlpset(codec.value)
 
+  implicit def deriveMap[A, B](implicit codec: Lazy[RlpCodec[List[(A, B)]]]): RlpCodec[Map[A, B]] =
+    codec.value.xmap[Map[A, B]](_.toMap, _.toList)
+
   implicit val hnilCodec: RlpCodec[HNil] = RlpCodec(
     PureCodec,
     new Codec[HNil] {
@@ -32,6 +35,11 @@ object codecs {
       case PureCodec | ItemCodec => RlpCodec(HListCodec, h.codec :: t.codec)
       case HListCodec            => RlpCodec(HListCodec, h.codec :: t.valueCodec)
     }
+  }
+
+  implicit final class HListSupportSingleton[A](val self: RlpCodec[A]) extends AnyVal {
+    def ::[B](codecB: RlpCodec[B]): RlpCodec[B :: A :: HNil] =
+      codecB :: self :: hnilCodec
   }
 
   implicit def deriveHList[A, L <: HList](implicit a: Lazy[RlpCodec[A]], l: RlpCodec[L]): RlpCodec[A :: L] =

@@ -124,7 +124,7 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
     * @param hash Node Hash
     * @return MPT node
     */
-  def getMptNodeByHash(hash: ByteVector): F[Node]
+  def getMptNodeByHash(hash: ByteVector): F[Option[Node]]
 
   def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]]
 
@@ -447,7 +447,7 @@ class BlockChainImpl[F[_]](
     * @param hash Node Hash
     * @return MPT node
     */
-  override def getMptNodeByHash(hash: ByteVector): F[Node] = mptStore.getNodeByHash(hash)
+  override def getMptNodeByHash(hash: ByteVector): F[Option[Node]] = mptStore.getNodeByHash(hash)
 
   override def getWorldStateProxy(
       blockNumber: BigInt,

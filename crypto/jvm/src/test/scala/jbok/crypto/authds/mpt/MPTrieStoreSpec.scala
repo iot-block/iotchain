@@ -2,10 +2,9 @@ package jbok.crypto.authds.mpt
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.common.testkit.HexGen
-import jbok.crypto.authds.mpt.Node.BlankNode
-import org.scalacheck.Gen
 import jbok.codec.rlp.codecs._
+import jbok.common.testkit.HexGen
+import org.scalacheck.Gen
 
 class MPTrieStoreSpec extends JbokSpec {
   class Setup {
@@ -21,7 +20,7 @@ class MPTrieStoreSpec extends JbokSpec {
     "get empty root & hash" in new Setup {
       val hash = trie.getRootHash.unsafeRunSync()
       hash shouldBe MPTrie.emptyRootHash
-      trie.getNodeByHash(hash).unsafeRunSync() shouldBe BlankNode
+      trie.getNodeByHash(hash).unsafeRunSync() shouldBe None
     }
 
     "put leaf node when empty" in new Setup {

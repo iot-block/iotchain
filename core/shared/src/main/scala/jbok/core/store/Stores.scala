@@ -4,7 +4,6 @@ import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.codecs._
-import jbok.codec.rlp.RlpCodec._
 import jbok.core.models._
 import jbok.core.sync.SyncState
 import jbok.crypto.authds.mpt.{MPTrie, Node}
@@ -96,9 +95,9 @@ class AddressAccountStore[F[_]: Sync](val mpt: MPTrie[F])
 
   def getRootHash: F[ByteVector] = mpt.getRootHash
 
-  def getRoot: F[Node] = mpt.getRoot
+  def getRootOpt: F[Option[Node]] = mpt.getRootOpt
 
-  def getNodeByHash(hash: ByteVector): F[Node] = mpt.getNodeByHash(hash)
+  def getNodeByHash(hash: ByteVector): F[Option[Node]] = mpt.getNodeByHash(hash)
 
   def size: F[Int] = mpt.size
 
@@ -116,7 +115,7 @@ class ContractStorageStore[F[_]: Sync](val mpt: MPTrie[F])
     extends KeyValueStore[F, UInt256, UInt256](ByteVector.empty, mpt)
 
 object ContractStorageStore {
-  def apply[F[_]: Sync](db: KeyValueDB[F], rootHash: ByteVector): F[ContractStorageStore[F]] =
+  def apply[F[_]: Sync](db: KeyValueDB[F], rootHash: Option[ByteVector] = None): F[ContractStorageStore[F]] =
     for {
       mpt <- MPTrie[F](db, rootHash)
     } yield new ContractStorageStore[F](mpt)

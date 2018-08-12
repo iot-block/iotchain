@@ -24,22 +24,21 @@ object Node {
       else Left(node.hash)
   }
 
-  case object BlankNode extends Node
   case class LeafNode(key: Nibbles, value: ByteVector) extends Node
   case class ExtensionNode(key: Nibbles, child: NodeEntry) extends Node
-  case class BranchNode(branches: List[NodeEntry], value: Option[ByteVector]) extends Node {
-    def activated: List[(String, NodeEntry)] =
+  case class BranchNode(branches: List[Option[NodeEntry]], value: Option[ByteVector]) extends Node {
+    def activated: List[(Int, Option[NodeEntry])] =
       branches.zipWithIndex
-        .filter(_._1 != Right(BlankNode))
-        .map { case (n, i) => MPTrie.alphabet(i) -> n }
+        .filter(_._1.isDefined)
+        .map(_.swap)
 
-    def branchAt(char: Char): NodeEntry =
+    def branchAt(char: Char): Option[NodeEntry] =
       branches(Integer.parseInt(char.toString, 16))
 
     def updateValue(v: ByteVector): BranchNode =
       this.copy(value = Some(v))
 
-    def updateBranch(char: Char, entry: Either[ByteVector, Node]): BranchNode =
+    def updateBranch(char: Char, entry: Option[NodeEntry]): BranchNode =
       this.copy(branches = this.branches.updated(Integer.parseInt(char.toString, 16), entry))
 
     override def toString: String = s"""BranchNode(${activated}, ${value})"""
@@ -50,11 +49,11 @@ object Node {
 
     def withSingleBranch(char: Char, child: NodeEntry, value: Option[ByteVector] = None): BranchNode = {
       val node = BranchNode.withOnlyValue(value)
-      node.updateBranch(char, child)
+      node.updateBranch(char, Some(child))
     }
 
     def withOnlyValue(value: Option[ByteVector]): BranchNode = {
-      val branches = List.fill[Either[ByteVector, Node]](16)(Right(BlankNode))
+      val branches = List.fill[Option[NodeEntry]](16)(None)
       BranchNode(branches, value)
     }
 

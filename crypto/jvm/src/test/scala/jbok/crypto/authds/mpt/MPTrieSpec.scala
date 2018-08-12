@@ -1,10 +1,8 @@
 package jbok.crypto.authds.mpt
 
 import cats.effect.IO
-import cats.implicits._
 import jbok.JbokSpec
-import jbok.codec._
-import jbok.crypto.authds.mpt.Node.{BlankNode, BranchNode, ExtensionNode, LeafNode}
+import jbok.crypto.authds.mpt.Node.{BranchNode, ExtensionNode, LeafNode}
 import scodec.bits._
 
 class MPTrieSpec extends JbokSpec {
@@ -13,26 +11,27 @@ class MPTrieSpec extends JbokSpec {
   }
 
   "codec round trip" in {
-    NodeCodec.decode(BlankNode.bytes).require shouldBe BlankNode
-
-    val leafNode = LeafNode("leafKey".utf8Bytes.toHex, "leafValue".utf8Bytes)
+    val leafNode = LeafNode("dead", hex"beef")
     NodeCodec.decode(leafNode.bytes).require shouldBe leafNode
+    leafNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + 2)
 
-    val extNode = ExtensionNode("extKey".utf8Bytes.toHex, leafNode.entry)
+    val extNode = ExtensionNode("babe", leafNode.entry)
     NodeCodec.decode(extNode.bytes).require shouldBe extNode
     NodeCodec.decode(extNode.bytes).require.asInstanceOf[ExtensionNode].child shouldBe Right(leafNode)
+    extNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + leafNode.bytes.length)
 
-    val branchNode = BranchNode.withSingleBranch('a', extNode.entry, "branchValue".utf8Bytes.some)
+    val branchNode = BranchNode.withSingleBranch('a', extNode.entry, Some(hex"c0de"))
     val bn = NodeCodec.decode(branchNode.bytes).require.asInstanceOf[BranchNode]
     bn shouldBe branchNode
-    bn.branchAt('a') shouldBe extNode.entry
+    bn.branchAt('a') shouldBe Some(extNode.entry)
+    bn.bytes.length shouldBe 1 + (15 * 1) + (1 + extNode.bytes.length) + (1 + 2)
   }
 
   "simple put and get" in new Setup {
-    trie.getRoot.unsafeRunSync() shouldBe BlankNode
+    trie.getRootOpt.unsafeRunSync() shouldBe None
     trie.getRootHash.unsafeRunSync() shouldBe MPTrie.emptyRootHash
     trie.put(hex"cafe", hex"babe").unsafeRunSync()
-    trie.getRoot.unsafeRunSync() shouldBe LeafNode("cafe", hex"babe")
+    trie.getRootOpt.unsafeRunSync() shouldBe Some(LeafNode("cafe", hex"babe"))
     trie.getRootHash.unsafeRunSync() shouldBe LeafNode("cafe", hex"babe").hash
 
     trie.keys.unsafeRunSync() shouldBe List(hex"cafe")
