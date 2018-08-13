@@ -50,7 +50,7 @@ trait BlockPoolFixture extends BlockChainFixture {
 //    setHeaderByHash(header.parentHash, None)
 //  }
 
-  def randomHash() = Gens.byteStringOfLengthNGen(32).sample.get
+  def randomHash() = Gens.byteVectorOfLengthNGen(32).sample.get
 
   val defaultHeader = BlockHeader(
     parentHash = ByteVector.empty,

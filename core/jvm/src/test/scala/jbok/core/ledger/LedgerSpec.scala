@@ -104,7 +104,8 @@ trait LedgerFixture extends BlockPoolFixture {
 //  storagesInstance.storages.appStateStorage.putBestBlockNumber(validBlockParentHeader.number)
 //  storagesInstance.storages.totalDifficultyStorage.put(validBlockParentHeader.hash, 0)
 
-  val ledger = Ledger[IO](new VM, blockChain, blockChainConfig, Validators(blockChain, blockChainConfig), blockPool)
+  val ledger =
+    Ledger[IO](new VM, blockChain, blockChainConfig, Validators(blockChain, blockChainConfig, daoForkConfig), blockPool)
 //  sealed trait Changes
 //  case class UpdateBalance(amount: UInt256) extends Changes
 //  case object IncreaseNonce extends Changes
@@ -132,7 +133,7 @@ class LedgerSpec extends JbokSpec {
   "ledger" should {
     "correctly calculate the total gas refund to be returned to the sender and paying for gas to the miner" in new LedgerFixture {
       val tx = defaultTx.copy(gasPrice = defaultGasPrice, gasLimit = defaultGasLimit)
-      val stx = SignedTransaction.sign(tx, originKeyPair, Some(blockChainConfig.chainId))
+      val stx = SignedTransaction.sign(tx, originKeyPair, None)
       val header = defaultBlockHeader.copy(beneficiary = minerAddress.bytes)
       val execResult = ledger.executeTransaction(stx, header, worldWithMinerAndOriginAccounts).unsafeRunSync()
       val postTxWorld = execResult.world
@@ -263,8 +264,8 @@ class LedgerSpec extends JbokSpec {
       val newAccountKeyPair = SecP256k1.generateKeyPair[IO].unsafeRunSync()
       val newAccountAddress = Address(newAccountKeyPair)
 
-      val tx: Transaction = defaultTx.copy(gasPrice = 0, receivingAddress = None, payload = inputData)
-      val stx: SignedTransaction = SignedTransaction.sign(tx, newAccountKeyPair, Some(blockChainConfig.chainId))
+      val tx: Transaction = defaultTx.copy(gasPrice = 0, receivingAddress = None, payload = inputData, nonce = 0)
+      val stx: SignedTransaction = SignedTransaction.sign(tx, newAccountKeyPair, None)
 
       val result: Either[BlockExecutionError.TxsExecutionError[IO], BlockResult[IO]] = ledger
         .executeTransactions(

@@ -34,7 +34,7 @@ trait BlockGeneratorFixture extends LedgerFixture {
   val timeouts = Timeouts()
   val miningConfig = MiningConfig()
   val blockTimestampProvider = new FakeBlockTimestampProvider
-  val validators = Validators[IO](blockChain, blockChainConfig)
+  val validators = Validators[IO](blockChain, blockChainConfig, daoForkConfig)
   val blockGenerator =
     BlockGenerator(blockChain, blockChainConfig, miningConfig, ledger, validators, blockTimestampProvider)
       .unsafeRunSync()

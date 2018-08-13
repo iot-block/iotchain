@@ -1,10 +1,12 @@
 package jbok.core
 
 import cats.effect.IO
-import jbok.core.configs.BlockChainConfig
+import jbok.core.configs.{BlockChainConfig, DaoForkConfig}
 
 trait BlockChainFixture {
   val blockChainConfig = BlockChainConfig()
+
+  val daoForkConfig = DaoForkConfig()
 
   val blockChain = newBlockChain
 

@@ -7,7 +7,7 @@ import cats.implicits._
 import jbok.common._
 import jbok.core.BlockChain
 import jbok.core.configs.{BlockChainConfig, MonetaryPolicyConfig}
-import jbok.core.ledger.BlockExecutionError.TxsExecutionError
+import jbok.core.ledger.BlockExecutionError.{StateBeforeFailure, TxsExecutionError}
 import jbok.core.ledger.BlockImportResult.{BlockImportFailed, BlockImported}
 import jbok.core.ledger.BlockPool.Leaf
 import jbok.core.ledger.io.iohk.ethereum.ledger.BlockRewardCalculator
@@ -189,7 +189,12 @@ case class Ledger[F[_]](
               .getOrElse((Account.empty(UInt256.Zero), world.saveAccount(senderAddress, Account.empty(UInt256.Zero)))))
         upfrontCost = calculateUpfrontCost(stx)
         validated <- validators.transactionValidator.validate(stx, senderAccount, blockHeader, upfrontCost, acumGas)
-        txResult <- EitherT.right(executeTransaction(stx, blockHeader, worldForTx))
+            .leftMap(invalid => TxsExecutionError[F](stx, StateBeforeFailure[F](world, acumGas, acumReceipts), invalid.toString))
+        txResult <- EitherT(
+          executeTransaction(stx, blockHeader, worldForTx).map {
+            case TxResult(world, gas, logs, _, Some(error)) => Left(TxsExecutionError[F](stx, StateBeforeFailure(world, acumGas + gas, acumReceipts), error.toString))
+            case r@ _ =>  Right(r)
+        })
         receipt = Receipt(
           postTransactionStateHash = txResult.world.stateRootHash,
           cumulativeGasUsed = acumGas + txResult.gasUsed,
@@ -214,8 +219,7 @@ case class Ledger[F[_]](
       acumReceipts: List[Receipt] = Nil,
       executed: List[SignedTransaction] = Nil
   ): F[(BlockResult[F], List[SignedTransaction])] =
-    executeTransactions(signedTransactions, world, blockHeader, acumGas, acumReceipts).value.flatMap(
-      _.fold(
+    executeTransactions(signedTransactions, world, blockHeader, acumGas, acumReceipts).value.flatMap( _.fold(
         error => {
           val txIndex = signedTransactions.indexWhere(tx => tx.hash == error.stx.hash)
           executePreparedTransactions(

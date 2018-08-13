@@ -4,7 +4,7 @@ import cats.effect.IO
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, KeyPair, SecP256k1, SignatureRecover}
+import jbok.crypto.signature.{CryptoSignature, KeyPair, SecP256k1}
 import scodec.Codec
 import scodec.bits.ByteVector
 import shapeless._

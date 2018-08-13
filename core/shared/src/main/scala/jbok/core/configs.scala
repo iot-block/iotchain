@@ -54,7 +54,6 @@ package object configs {
   case class BlockChainConfig(
       frontierBlockNumber: BigInt = 0,
       homesteadBlockNumber: BigInt = 1150000,
-      eip106BlockNumber: BigInt = BigInt("1000000000000000000"),
       eip150BlockNumber: BigInt = BigInt("2500000"),
       eip155BlockNumber: BigInt = BigInt("3000000"),
       eip160BlockNumber: BigInt = BigInt("3000000"),

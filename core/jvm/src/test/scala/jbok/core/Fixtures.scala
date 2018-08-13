@@ -134,10 +134,8 @@ object Fixtures {
         nonce = hex"0000000000000042"
       )
       override val body: BlockBody = BlockBody(
-        transactionList = List[SignedTransaction](
-          ),
-        uncleNodesList = List[BlockHeader](
-          )
+        transactionList = List[SignedTransaction](),
+        uncleNodesList = List[BlockHeader]()
       )
       override val transactionHashes: List[ByteVector] = List()
       override val size: Long = 540
@@ -220,8 +218,7 @@ object Fixtures {
             chainId = 0x3d.toByte
           )
         ),
-        uncleNodesList = List[BlockHeader](
-          )
+        uncleNodesList = List[BlockHeader]()
       )
 
       override val transactionHashes: List[ByteVector] = List(
