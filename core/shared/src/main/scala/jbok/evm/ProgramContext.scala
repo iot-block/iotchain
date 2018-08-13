@@ -14,31 +14,38 @@ object ProgramContext {
       config: EvmConfig
   ): ProgramContext[F] = {
 
-    import stx.tx
-
     // YP eq (91)
     val inputData =
-      if (tx.isContractInit) ByteVector.empty
-      else tx.payload
+      if (stx.isContractInit) ByteVector.empty
+      else stx.payload
 
-    val senderAddress = stx.senderAddress
+    val senderAddress = stx.senderAddress(None).getOrElse(Address.empty)
 
     val env = ExecEnv(
       recipientAddress,
       senderAddress,
       senderAddress,
-      UInt256(tx.gasPrice),
+      UInt256(stx.gasPrice),
       inputData,
-      UInt256(tx.value),
+      UInt256(stx.value),
       program,
       blockHeader,
       callDepth = 0
     )
 
-    val gasLimit = tx.gasLimit - config.calcTransactionIntrinsicGas(tx.payload, tx.isContractInit)
+    val gasLimit = stx.gasLimit - config.calcTransactionIntrinsicGas(stx.payload, stx.isContractInit)
 
     ProgramContext[F](env, recipientAddress, gasLimit, world, config)
   }
+
+//  private def getSenderAddress(stx: SignedTransaction, number: BigInt): Address = {
+//    val addrOpt =
+//      if (number >= blockChainConfig.eip155BlockNumber)
+//        stx.senderAddress(Some(blockChainConfig.chainId))
+//      else
+//        stx.senderAddress(None)
+//    addrOpt.getOrElse(Address.empty)
+//  }
 }
 
 /**

@@ -1,15 +1,48 @@
 package jbok.core.ledger
 
+import cats.data.EitherT
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.core.BlockChain
+import jbok.core.configs.BlockChainConfig
 import jbok.core.ledger.BlockImportResult.DuplicateBlock
-import jbok.core.models.{Block, BlockBody, BlockHeader, Receipt}
-import jbok.core.validators.Validators
+import jbok.core.models._
+import jbok.core.validators._
 import jbok.evm.VM
 import scodec.bits.ByteVector
 
 trait BlockImportFixture extends BlockPoolFixture {
-  val validators = Validators(blockChain)
+//  class MockValidatorsAlwaysSucceed[F] extends Validators {
+//
+//    override val blockValidator: BlockValidator = new BlockValidator[F] {
+//      override def validateBlockAndReceipts(blockHeader: BlockHeader,
+//                                            receipts: List[Receipt]): EitherT[F, BlockInvalid, Unit] =
+//        EitherT.rightT(Unit)
+//      override def validateHeaderAndBody(block: Block): EitherT[F, BlockInvalid, Block] = EitherT.rightT(block)
+//    }
+//
+//    override val blockHeaderValidator: BlockHeaderValidator = new BlockHeaderValidator {
+//      def validate(
+//          blockHeader: BlockHeader,
+//          getBlockHeaderByHash: ByteString => Option[BlockHeader]): Either[BlockHeaderError, BlockHeaderValid] =
+//        Right(BlockHeaderValid)
+//    }
+//
+//    override val ommersValidator: OmmersValidator =
+//      (parentHash: ByteString,
+//       blockNumber: BigInt,
+//       ommers: Seq[BlockHeader],
+//       getBlockHeaderByHash: GetBlockHeaderByHash,
+//       getNBlocksBack: GetNBlocksBack) => Right(OmmersValid)
+//
+//    override val signedTransactionValidator: SignedTransactionValidator =
+//      (stx: SignedTransaction,
+//       account: Account,
+//       blockHeader: BlockHeader,
+//       upfrontGasCost: UInt256,
+//       accumGasLimit: BigInt) => Right(SignedTransactionValid)
+//  }
+  val validators = Validators(blockChain, blockChainConfig)
   val ledger = Ledger[IO](new VM, blockChain, blockChainConfig, validators, blockPool)
 
   val genesisHeader = defaultHeader.copy(number = 0, extraData = ByteVector("genesis".getBytes))

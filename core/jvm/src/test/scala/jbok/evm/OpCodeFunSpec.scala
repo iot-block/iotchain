@@ -14,12 +14,11 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
   override val config = EvmConfig.PostEIP161ConfigBuilder(None)
 
-  def executeOp(op: OpCode, stateIn: ProgramState[IO]): ProgramState[IO] = {
+  def executeOp(op: OpCode, stateIn: ProgramState[IO]): ProgramState[IO] =
     // gas is not tested in this spec
     op.execute(stateIn).unsafeRunSync().copy(gas = stateIn.gas, gasRefund = stateIn.gasRefund)
-  }
 
-  def withStackVerification(op: OpCode, stateIn: ProgramState[IO], stateOut: ProgramState[IO])(body: => Any): Any = {
+  def withStackVerification(op: OpCode, stateIn: ProgramState[IO], stateOut: ProgramState[IO])(body: => Any): Any =
     if (stateIn.stack.size < op.delta)
       stateOut shouldBe stateIn.withError(StackUnderflow).halt
     else if (stateIn.stack.size - op.delta + op.alpha > stateIn.stack.maxSize)
@@ -35,7 +34,6 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       }
       body
     }
-  }
 
   def stateWithCode(state: ProgramState[IO], code: ByteVector): ProgramState[IO] = {
     val newProgram = Program(code)
@@ -309,9 +307,13 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
         val withinLimits =
           stateIn.env.blockHeader.number - blockHeaderNumber.toBigInt <= 256 &&
-          blockHeaderNumber.toBigInt < stateIn.env.blockHeader.number
+            blockHeaderNumber.toBigInt < stateIn.env.blockHeader.number
 
-        val hash = stateIn.world.getBlockHash(blockHeaderNumber).unsafeRunSync().filter(_ => withinLimits).getOrElse(UInt256.Zero)
+        val hash = stateIn.world
+          .getBlockHash(blockHeaderNumber)
+          .unsafeRunSync()
+          .filter(_ => withinLimits)
+          .getOrElse(UInt256.Zero)
 
         val expectedState = stateIn.withStack(stack1.push(hash)).step()
         stateOut shouldBe expectedState
@@ -427,7 +429,6 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(JUMP) { op =>
-
     // have about 1 in 2 opcodes be a JUMPDEST
     val opcodes = config.opCodes ++ List.fill(config.opCodes.size)(JUMPDEST)
     val opcodeGen = Gen.oneOf(opcodes).map(_.code.toByte)
@@ -459,13 +460,15 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       }
     }
 
-
-
     val code = Assembly(
       STOP,
       STOP,
       JUMPDEST,
-      PUSH4, 0xff, 0xff, JUMPDEST.code, 0xff
+      PUSH4,
+      0xff,
+      0xff,
+      JUMPDEST.code,
+      0xff
     ).code
 
     val List(validDest, insidePush) = code.toIndexedSeq.indices.toList.filter(i => code(i) == JUMPDEST.code)
@@ -540,13 +543,15 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       }
     }
 
-
-
     val code = Assembly(
       STOP,
       STOP,
       JUMPDEST,
-      PUSH4, 0xff, 0xff, JUMPDEST.code, 0xff
+      PUSH4,
+      0xff,
+      0xff,
+      JUMPDEST.code,
+      0xff
     ).code
 
     val List(validDest, insidePush) = code.toIndexedSeq.indices.toList.filter(i => code(i) == JUMPDEST.code)
@@ -692,7 +697,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
   test(SELFDESTRUCT) { op =>
     val stateGen = getProgramStateGen(
-      stackGen = getStackGen(valueGen = getUInt256Gen().filter(_ != ownerAddr))
+      stackGen = getStackGen(valueGen = getUInt256Gen().filter(Address(_) != ownerAddr))
     )
 
     forAll(stateGen) { stateIn =>
@@ -712,7 +717,6 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       }
     }
 
-
     // test Ether transfer on SELFDESTRUCT
     val table = Table[Address, UInt256, UInt256](
       ("refundAddr", "initialEther", "transferredEther"),
@@ -720,23 +724,24 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       (ownerAddr, 1000, 0) // if the Ether is transferred to the about-to-be removed account, the Ether gets destroyed
     )
 
-    forAll(table) { case (refundAddr, initialEther, transferredEther) =>
-      val stackIn = Stack.empty().push(refundAddr.toUInt256)
-      val stateSample = getProgramStateGen().sample.get
-      val initialWorld = stateSample.world
-        .saveAccount(refundAddr, Account.empty())
-        .saveAccount(ownerAddr, Account.empty().increaseBalance(initialEther))
-      val stateIn = stateSample.copy(world = initialWorld, stack = stackIn)
+    forAll(table) {
+      case (refundAddr, initialEther, transferredEther) =>
+        val stackIn = Stack.empty().push(refundAddr.toUInt256)
+        val stateSample = getProgramStateGen().sample.get
+        val initialWorld = stateSample.world
+          .saveAccount(refundAddr, Account.empty())
+          .saveAccount(ownerAddr, Account.empty().increaseBalance(initialEther))
+        val stateIn = stateSample.copy(world = initialWorld, stack = stackIn)
 
-      val stateOut = executeOp(op, stateIn)
+        val stateOut = executeOp(op, stateIn)
 
-      stateOut.addressesToDelete shouldBe Set(ownerAddr)
+        stateOut.addressesToDelete shouldBe Set(ownerAddr)
 
-      val ownerBalance = stateOut.world.getBalance(ownerAddr).unsafeRunSync()
-      ownerBalance shouldBe 0
+        val ownerBalance = stateOut.world.getBalance(ownerAddr).unsafeRunSync()
+        ownerBalance shouldBe 0
 
-      val refundBalance = stateOut.world.getBalance(refundAddr).unsafeRunSync()
-      refundBalance shouldBe transferredEther
+        val refundBalance = stateOut.world.getBalance(refundAddr).unsafeRunSync()
+        refundBalance shouldBe transferredEther
     }
   }
 
@@ -748,28 +753,21 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
     val table = Table[Int, UInt256, UInt256, Int, ByteVector => ByteVector](
       ("dataSize", "sliceOffset", "sliceSize", "expectedSize", "expectedContentFn"),
-
       // both offset and size are greater than data size
       (0, 16, 32, 32, _ => zeroes(32)),
-
       // offset is within bounds, offset + size is greater than data size
       (20, 16, 32, 32, bs => bs.drop(16) ++ zeroes(28)),
-
       // offset + size are within bounds
       (64, 16, 31, 31, bs => bs.slice(16, 47)),
-
       // offset is greater than Int.MaxValue
       (64, Two ** 128, 32, 32, _ => zeroes(32)),
-
       // offset is within bounds, size is greater than Int.MaxValue
       (64, 16, Two ** 64 + 7, 48, bs => bs.drop(16)),
-
       // offset is within bounds, size is greater than Int.MaxValue and size.toInt > dataSize
       // this case a bit strange because we purposefully let size overflow when converting to Int
       // but sliceBytes is supposed to copy the behaviour of geth:
       // httProgramState[IO]://github.com/ethereum/go-ethereum/blob/5f7826270c9e87509fd7731ec64953a5e4761de0/core/vm/common.go#L42
       (64, 40, Two ** 64 + 124, 124, bs => bs.drop(40) ++ zeroes(100)),
-
       // both offset and size are greater than Int.MaxValue
       (64, Two ** 33, Two ** 96 + 13, 13, _ => zeroes(13))
     )
@@ -784,4 +782,3 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
 }
-

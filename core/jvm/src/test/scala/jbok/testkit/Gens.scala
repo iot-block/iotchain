@@ -24,6 +24,8 @@ trait Gens {
 
   val bigIntGen: Gen[BigInt] = byteArrayOfNItemsGen(32).map(b => new BigInteger(1, b))
 
+  val bigInt64Gen: Gen[BigInt] = byteArrayOfNItemsGen(64).map(b => new BigInteger(1, b))
+
   def randomSizeByteArrayGen(minSize: Int, maxSize: Int): Gen[Array[Byte]] =
     Gen.choose(minSize, maxSize).flatMap(byteArrayOfNItemsGen(_))
 

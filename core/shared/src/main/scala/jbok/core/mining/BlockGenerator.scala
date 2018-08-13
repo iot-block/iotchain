@@ -49,12 +49,13 @@ class BlockGenerator[F[_]](
     val parentHash = parent.header.hash
     val blockTimestamp = blockTimestampProvider.getEpochSecond
     val header: BlockHeader = prepareHeader(blockNumber, ommers, beneficiary, parent, blockTimestamp)
-    val transactionsForBlock: List[SignedTransaction] = prepareTransactions(transactions, header.gasLimit)
+    val transactionsForBlock: List[SignedTransaction] =
+      prepareTransactions(transactions, header.gasLimit, header.number)
     val body = BlockBody(transactionsForBlock, ommers)
     val block = Block(header, body)
 
     for {
-      _ <- validators.ommersValidator.validate(parentHash, blockNumber, ommers, blockchain).leftMap(_.toString)
+      _ <- validators.ommersValidator.validate(parentHash, blockNumber, ommers).leftMap(_.toString)
       prepared <- EitherT.liftF(ledger.prepareBlock(block))
       receiptsLogs = BloomFilter.EmptyBloomFilter +: prepared.blockResult.receipts.map(_.logsBloomFilter)
       bloomFilter = ByteUtils.or(receiptsLogs: _*)
@@ -77,25 +78,25 @@ class BlockGenerator[F[_]](
     } yield pendingBlock
   }
 
-  private[jbok] def prepareTransactions(transactions: Seq[SignedTransaction], blockGasLimit: BigInt) = {
+  private[jbok] def prepareTransactions(transactions: Seq[SignedTransaction], blockGasLimit: BigInt, number: BigInt) = {
     val sortedTransactions = transactions
-      .groupBy(_.senderAddress)
+      .groupBy(stx => getSenderAddress(stx, number))
       .values
       .toList
       .flatMap { txsFromSender =>
         val ordered = txsFromSender
-          .sortBy(-_.tx.gasPrice)
-          .sortBy(_.tx.nonce)
+          .sortBy(-_.gasPrice)
+          .sortBy(_.nonce)
           .foldLeft(Seq.empty[SignedTransaction]) {
             case (txs, tx) =>
-              if (txs.exists(_.tx.nonce == tx.tx.nonce)) {
+              if (txs.exists(_.nonce == tx.nonce)) {
                 txs
               } else {
                 txs :+ tx
               }
           }
-          .takeWhile(_.tx.gasLimit <= blockGasLimit)
-        ordered.headOption.map(_.tx.gasPrice -> ordered)
+          .takeWhile(_.gasLimit <= blockGasLimit)
+        ordered.headOption.map(_.gasPrice -> ordered)
       }
       .sortBy { case (gasPrice, _) => gasPrice }
       .reverse
@@ -103,7 +104,7 @@ class BlockGenerator[F[_]](
 
     val transactionsForBlock = sortedTransactions
       .scanLeft(BigInt(0), None: Option[SignedTransaction]) {
-        case ((accumulatedGas, _), stx) => (accumulatedGas + stx.tx.gasLimit, Some(stx))
+        case ((accumulatedGas, _), stx) => (accumulatedGas + stx.gasLimit, Some(stx))
       }
       .collect { case (gas, Some(stx)) => (gas, stx) }
       .takeWhile { case (gas, _) => gas <= blockGasLimit }
@@ -165,13 +166,21 @@ class BlockGenerator[F[_]](
     parentGas + gasLimitDifference - 1
   }
 
-  private[jbok] def buildMPT[V](entities: List[V])(implicit cv: RlpCodec[V]): F[ByteVector] = {
+  private def getSenderAddress(stx: SignedTransaction, number: BigInt): Address = {
+    val addrOpt =
+      if (number >= blockChainConfig.eip155BlockNumber)
+        stx.senderAddress(Some(blockChainConfig.chainId))
+      else
+        stx.senderAddress(None)
+    addrOpt.getOrElse(Address.empty)
+  }
+
+  private[jbok] def buildMPT[V](entities: List[V])(implicit cv: RlpCodec[V]): F[ByteVector] =
     for {
       mpt <- MPTrieStore.inMemory[F, Int, V]
       _ <- entities.zipWithIndex.map { case (v, k) => mpt.put(k, v) }.sequence
       root <- mpt.getRootHash
     } yield root
-  }
 }
 
 object BlockGenerator {

@@ -8,3 +8,5 @@ case class Receipt(
     logsBloomFilter: ByteVector,
     logs: List[TxLogEntry]
 )
+
+

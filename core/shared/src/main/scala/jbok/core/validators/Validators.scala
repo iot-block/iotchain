@@ -2,6 +2,7 @@ package jbok.core.validators
 
 import cats.effect.Effect
 import jbok.core.BlockChain
+import jbok.core.configs.BlockChainConfig
 
 trait Invalid
 
@@ -13,11 +14,11 @@ trait Validators[F[_]] {
 }
 
 object Validators {
-  def apply[F[_]: Effect](blockChain: BlockChain[F])
+  def apply[F[_]: Effect](blockChain: BlockChain[F], blockChainConfig: BlockChainConfig)
     = new Validators[F] {
     override val blockValidator: BlockValidator[F] = new BlockValidator[F]()
-    override val blockHeaderValidator: BlockHeaderValidator[F] = new BlockHeaderValidator[F](blockChain)
-    override val ommersValidator: OmmersValidator[F] = new OmmersValidator[F](blockChain)
-    override val transactionValidator: TransactionValidator[F] = new TransactionValidator[F]()
+    override val blockHeaderValidator: BlockHeaderValidator[F] = new BlockHeaderValidator[F](blockChain, blockChainConfig)
+    override val ommersValidator: OmmersValidator[F] = new OmmersValidator[F](blockChain, blockChainConfig)
+    override val transactionValidator: TransactionValidator[F] = new TransactionValidator[F](blockChainConfig)
   }
 }

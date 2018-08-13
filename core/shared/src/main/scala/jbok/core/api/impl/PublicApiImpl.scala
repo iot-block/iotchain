@@ -109,7 +109,7 @@ class PublicApiImpl[F[_]](
       bestBlock <- blockChain.getBestBlockNumber
       gasPrices <- ((bestBlock - blockDifference) to bestBlock).toList
         .traverse(blockChain.getBlockByNumber)
-        .map(_.flatten.flatMap(_.body.transactionList).map(_.tx.gasPrice))
+        .map(_.flatten.flatMap(_.body.transactionList).map(_.gasPrice))
       gasPrice = if (gasPrices.nonEmpty) {
         gasPrices.sum / gasPrices.length
       } else {
@@ -228,8 +228,8 @@ class PublicApiImpl[F[_]](
     val code = for {
       block <- resolveBlock(blockParam)
       world <- blockChain.getWorldStateProxy(block.header.number,
-        blockChainConfig.accountStartNonce,
-        Some(block.header.stateRoot))
+                                             blockChainConfig.accountStartNonce,
+                                             Some(block.header.stateRoot))
       code <- world.getCode(address)
     } yield code
 
@@ -365,7 +365,7 @@ class PublicApiImpl[F[_]](
       to = callTx.to.map(Address.apply)
       tx = Transaction(0, callTx.gasPrice, gasLimit, to, callTx.value, callTx.data)
       fakeSignature = CryptoSignature(0, 0, Some(0.toByte))
-    } yield SignedTransaction(tx, fakeSignature, from)
+    } yield SignedTransaction(tx, 0.toByte, ByteVector(0), ByteVector(0), from)
 
   private[jbok] def getGasLimit(callTx: CallTx, blockParam: BlockParam): F[BigInt] =
     if (callTx.gas.isDefined) {
