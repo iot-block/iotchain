@@ -8,6 +8,7 @@ import jbok.core.ledger.BloomFilter
 import jbok.core.models._
 import jbok.core.utils.ByteUtils
 import jbok.core.validators.BlockInvalid._
+import jbok.crypto._
 
 sealed trait BlockInvalid extends Invalid
 object BlockInvalid {
@@ -44,7 +45,7 @@ class BlockValidator[F[_]]()(implicit F: Sync[F]) {
     * @return Block if valid, a Some otherwise
     */
   private def validateOmmersHash(block: Block): EitherT[F, BlockInvalid, Unit] =
-    if (RlpCodec.encode(block.body.uncleNodesList).require.toByteVector equals block.header.ommersHash)
+    if (RlpCodec.encode(block.body.uncleNodesList).require.toByteVector.kec256 equals block.header.ommersHash)
       EitherT.rightT(Unit)
     else EitherT.leftT(BlockOmmersHashInvalid)
 
@@ -60,7 +61,7 @@ class BlockValidator[F[_]]()(implicit F: Sync[F]) {
 
     val mptValidator = new MPTValidator[F]()
     val isValid = mptValidator.isValid[Receipt](blockHeader.receiptsRoot, receipts)
-    EitherT(F.ifM(isValid)(ifTrue = F.pure(Right(Unit)), ifFalse = F.pure(Left(BlockTransactionsHashInvalid))))
+    EitherT(F.ifM(isValid)(ifTrue = F.pure(Right(Unit)), ifFalse = F.pure(Left(BlockReceiptsHashInvalid))))
   }
 
   /**

@@ -4,7 +4,7 @@ import cats.data.EitherT
 import cats.effect.Effect
 import cats.implicits._
 import jbok.core.BlockChain
-import jbok.core.configs.BlockChainConfig
+import jbok.core.configs.{BlockChainConfig, DaoForkConfig}
 import jbok.core.models.{Block, BlockHeader}
 import jbok.core.validators.OmmersInvalid._
 import scodec.bits.ByteVector
@@ -25,7 +25,8 @@ object OmmersInvalid {
 
 }
 
-class OmmersValidator[F[_]](blockChain: BlockChain[F], blockChainConfig: BlockChainConfig)(implicit F: Effect[F]) {
+class OmmersValidator[F[_]](blockChain: BlockChain[F], blockChainConfig: BlockChainConfig, daoForkConfig: DaoForkConfig)(
+    implicit F: Effect[F]) {
   private def validateLength(length: Int): EitherT[F, Invalid, Int] =
     if (length <= 2) EitherT.rightT(length)
     else EitherT.leftT(OmmersLengthInvalid)
@@ -57,7 +58,7 @@ class OmmersValidator[F[_]](blockChain: BlockChain[F], blockChainConfig: BlockCh
   }
 
   private def validateOmmerHeader(ommers: List[BlockHeader]): EitherT[F, Invalid, List[BlockHeader]] = {
-    val headerValidator = new BlockHeaderValidator(blockChain, blockChainConfig)
+    val headerValidator = new BlockHeaderValidator(blockChain, blockChainConfig, daoForkConfig)
     val r = ommers.foldLeftM(true)((z, header) => headerValidator.validate(header).isRight.map(_ && z))
     EitherT(F.ifM(r)(ifTrue = F.pure(Right(ommers)), ifFalse = F.pure(Left(OmmersNotValid))))
   }
