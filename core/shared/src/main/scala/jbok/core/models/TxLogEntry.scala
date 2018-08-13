@@ -5,7 +5,3 @@ import jbok.codec.rlp.codecs._
 import scodec.bits.ByteVector
 
 case class TxLogEntry(loggerAddress: Address, logTopics: List[ByteVector], data: ByteVector)
-
-//object TxLogEntry {
-//  implicit val codec: RlpCodec[TxLogEntry] = RlpCodec[TxLogEntry]
-//}

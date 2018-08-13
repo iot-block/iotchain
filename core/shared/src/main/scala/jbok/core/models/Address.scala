@@ -37,4 +37,6 @@ object Address {
   def apply(bytes: ByteVector): Address = new Address(bytes.takeRight(numBytes).padLeft(numBytes))
 
   def apply(keyPair: KeyPair): Address = Address(keyPair.public.uncompressed.kec256)
+
+  def empty: Address = Address(ByteVector.empty)
 }

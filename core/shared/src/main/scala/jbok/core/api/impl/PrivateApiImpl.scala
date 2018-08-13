@@ -108,8 +108,9 @@ class PrivateApiImpl[F[_]](
   private[jbok] def sendTransaction(request: TransactionRequest, wallet: Wallet): F[ByteVector] =
     for {
       pending <- txPool.getPendingTransactions
-      latestNonceOpt = Try(
-        pending.collect { case ptx if ptx.stx.senderAddress == wallet.address => ptx.stx.tx.nonce }.max).toOption
+      latestNonceOpt = Try(pending.collect {
+        case ptx if ptx.stx.senderAddress(Some(0x3d.toByte)).get == wallet.address => ptx.stx.nonce
+      }.max).toOption
       bn <- blockchain.getBestBlockNumber
       currentNonceOpt <- blockchain.getAccount(request.from, bn).map(_.map(_.nonce.toBigInt))
       maybeNextTxNonce = latestNonceOpt.map(_ + 1).orElse(currentNonceOpt)

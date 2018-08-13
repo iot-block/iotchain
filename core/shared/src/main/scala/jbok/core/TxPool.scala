@@ -82,7 +82,10 @@ case class TxPool[F[_]](
     for {
       _ <- setTimeout(newStx)
       p <- pending.get
-      (a, b) = p.partition(tx => tx.stx.senderAddress == newStx.senderAddress && tx.stx.tx.nonce == newStx.tx.nonce)
+      (a, b) = p.partition(
+        tx =>
+          tx.stx.senderAddress(Some(0x3d.toByte)) == newStx
+            .senderAddress(Some(0x3d.toByte)) && tx.stx.nonce == newStx.nonce)
       _ <- a.traverse(x => clearTimeout(x.stx))
       timestamp = System.currentTimeMillis()
       _ <- pending.modify(_ => (PendingTransaction(newStx, timestamp) +: b).take(config.poolSize))

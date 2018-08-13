@@ -24,17 +24,19 @@ trait Gens {
 
   val bigIntGen: Gen[BigInt] = byteArrayOfNItemsGen(32).map(b => new BigInteger(1, b))
 
+  val bigInt64Gen: Gen[BigInt] = byteArrayOfNItemsGen(64).map(b => new BigInteger(1, b))
+
   def randomSizeByteArrayGen(minSize: Int, maxSize: Int): Gen[Array[Byte]] =
     Gen.choose(minSize, maxSize).flatMap(byteArrayOfNItemsGen(_))
 
   def byteArrayOfNItemsGen(n: Int): Gen[Array[Byte]] = Gen.listOfN(n, Arbitrary.arbitrary[Byte]).map(_.toArray)
 
   def randomSizeByteStringGen(minSize: Int, maxSize: Int): Gen[ByteVector] =
-    Gen.choose(minSize, maxSize).flatMap(byteStringOfLengthNGen)
+    Gen.choose(minSize, maxSize).flatMap(byteVectorOfLengthNGen)
 
-  def byteStringOfLengthNGen(n: Int): Gen[ByteVector] = byteArrayOfNItemsGen(n).map(ByteVector.apply)
+  def byteVectorOfLengthNGen(n: Int): Gen[ByteVector] = byteArrayOfNItemsGen(n).map(ByteVector.apply)
 
-  def listByteStringOfNItemsGen(n: Int): Gen[List[ByteVector]] = Gen.listOf(byteStringOfLengthNGen(n))
+  def listByteStringOfNItemsGen(n: Int): Gen[List[ByteVector]] = Gen.listOf(byteVectorOfLengthNGen(n))
 
   def hexPrefixDecodeParametersGen(): Gen[(Array[Byte], Boolean)] =
     for {
@@ -67,7 +69,7 @@ trait Gens {
       gasLimit <- bigIntGen
       receivingAddress <- byteArrayOfNItemsGen(20).map(Address.apply)
       value <- bigIntGen
-      payload <- byteStringOfLengthNGen(256)
+      payload <- byteVectorOfLengthNGen(256)
     } yield
       Transaction(
         nonce,
@@ -123,21 +125,21 @@ trait Gens {
 
   def blockHeaderGen: Gen[BlockHeader] =
     for {
-      parentHash <- byteStringOfLengthNGen(32)
-      ommersHash <- byteStringOfLengthNGen(32)
-      beneficiary <- byteStringOfLengthNGen(20)
-      stateRoot <- byteStringOfLengthNGen(32)
-      transactionsRoot <- byteStringOfLengthNGen(32)
-      receiptsRoot <- byteStringOfLengthNGen(32)
-      logsBloom <- byteStringOfLengthNGen(50)
+      parentHash <- byteVectorOfLengthNGen(32)
+      ommersHash <- byteVectorOfLengthNGen(32)
+      beneficiary <- byteVectorOfLengthNGen(20)
+      stateRoot <- byteVectorOfLengthNGen(32)
+      transactionsRoot <- byteVectorOfLengthNGen(32)
+      receiptsRoot <- byteVectorOfLengthNGen(32)
+      logsBloom <- byteVectorOfLengthNGen(50)
       difficulty <- bigIntGen
       number <- bigIntGen
       gasLimit <- bigIntGen
       gasUsed <- bigIntGen
       unixTimestamp <- intGen.map(_.abs)
-      extraData <- byteStringOfLengthNGen(8)
-      mixHash <- byteStringOfLengthNGen(8)
-      nonce <- byteStringOfLengthNGen(8)
+      extraData <- byteVectorOfLengthNGen(8)
+      mixHash <- byteVectorOfLengthNGen(8)
+      nonce <- byteVectorOfLengthNGen(8)
     } yield
       BlockHeader(
         parentHash = parentHash,

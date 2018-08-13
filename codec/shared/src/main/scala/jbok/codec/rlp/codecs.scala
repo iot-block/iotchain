@@ -93,13 +93,13 @@ object codecs {
         short => shortToBytes(short)
       ))
 
-  implicit val rulong: RlpCodec[Long] = item(ulong(63))
-
   implicit val rubigint: RlpCodec[BigInt] =
     item(bytes.xmap[BigInt](bytes => if (bytes.isEmpty) 0 else BigInt(1, bytes.toArray), bi => {
       val bytes = bi.toByteArray
       ByteVector(if (bytes.head == 0) bytes.tail else bytes)
     }))
+
+  implicit val rulong: RlpCodec[Long] = rubigint.xmap[Long](_.toLong, BigInt.apply)
 
   implicit val rbool: RlpCodec[Boolean] = item(bool(8))
 

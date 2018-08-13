@@ -7,7 +7,7 @@ import cats.implicits._
 import jbok.common._
 import jbok.core.BlockChain
 import jbok.core.configs.{BlockChainConfig, MonetaryPolicyConfig}
-import jbok.core.ledger.BlockExecutionError.TxsExecutionError
+import jbok.core.ledger.BlockExecutionError.{StateBeforeFailure, TxsExecutionError}
 import jbok.core.ledger.BlockImportResult.{BlockImportFailed, BlockImported}
 import jbok.core.ledger.BlockPool.Leaf
 import jbok.core.ledger.io.iohk.ethereum.ledger.BlockRewardCalculator
@@ -112,7 +112,6 @@ case class Ledger[F[_]](
         .reverse
         .tail
 
-
       result <- maybeError match {
         case None =>
           log.info(s"block import succeed")
@@ -138,8 +137,8 @@ case class Ledger[F[_]](
 
   def validateBlockBefore(block: Block): EitherT[F, Invalid, Block] = {
     val et = for {
-      block1 <- validators.blockHeaderValidator.validate(block)
-      block2 <- validators.blockValidator.validateHeaderAndBody(block1)
+      block1 <- validators.blockHeaderValidator.validate(block.header, getHeaderFromChainOrQueue)
+      block2 <- validators.blockValidator.validateHeaderAndBody(block)
       _ <- validators.ommersValidator.validate(
         block2.header.parentHash,
         block2.header.number,
@@ -180,17 +179,22 @@ case class Ledger[F[_]](
       EitherT.rightT(BlockResult(worldState = world, gasUsed = acumGas, receipts = acumReceipts))
 
     case stx :: otherStxs =>
+      val senderAddress = getSenderAddress(stx, blockHeader.number)
       for {
         (senderAccount, worldForTx) <- EitherT
           .right(
             world
-              .getAccountOpt(stx.senderAddress)
+              .getAccountOpt(senderAddress)
               .map(a => (a, world))
-              .getOrElse(
-                (Account.empty(UInt256.Zero), world.saveAccount(stx.senderAddress, Account.empty(UInt256.Zero)))))
-        upfrontCost = calculateUpfrontCost(stx.tx)
-//        validated <- validators.transactionValidator.validate(stx, senderAccount, blockHeader, upfrontCost, acumGas)
-        txResult <- EitherT.right(executeTransaction(stx, blockHeader, worldForTx))
+              .getOrElse((Account.empty(UInt256.Zero), world.saveAccount(senderAddress, Account.empty(UInt256.Zero)))))
+        upfrontCost = calculateUpfrontCost(stx)
+        validated <- validators.transactionValidator.validate(stx, senderAccount, blockHeader, upfrontCost, acumGas)
+            .leftMap(invalid => TxsExecutionError[F](stx, StateBeforeFailure[F](world, acumGas, acumReceipts), invalid.toString))
+        txResult <- EitherT(
+          executeTransaction(stx, blockHeader, worldForTx).map {
+            case TxResult(world, gas, logs, _, Some(error)) => Left(TxsExecutionError[F](stx, StateBeforeFailure(world, acumGas + gas, acumReceipts), error.toString))
+            case r@ _ =>  Right(r)
+        })
         receipt = Receipt(
           postTransactionStateHash = txResult.world.stateRootHash,
           cumulativeGasUsed = acumGas + txResult.gasUsed,
@@ -215,8 +219,7 @@ case class Ledger[F[_]](
       acumReceipts: List[Receipt] = Nil,
       executed: List[SignedTransaction] = Nil
   ): F[(BlockResult[F], List[SignedTransaction])] =
-    executeTransactions(signedTransactions, world, blockHeader, acumGas, acumReceipts).value.flatMap(
-      _.fold(
+    executeTransactions(signedTransactions, world, blockHeader, acumGas, acumReceipts).value.flatMap( _.fold(
         error => {
           val txIndex = signedTransactions.indexWhere(tx => tx.hash == error.stx.hash)
           executePreparedTransactions(
@@ -294,8 +297,9 @@ case class Ledger[F[_]](
   }
 
   def payBlockReward(block: Block, worldStateProxy: WorldStateProxy[F]): F[WorldStateProxy[F]] = {
-    def getAccountToPay(address: Address, ws: WorldStateProxy[F]): F[Account] = ws.getAccountOpt(address)
-      .getOrElse(Account.empty(blockChainConfig.accountStartNonce))
+    def getAccountToPay(address: Address, ws: WorldStateProxy[F]): F[Account] =
+      ws.getAccountOpt(address)
+        .getOrElse(Account.empty(blockChainConfig.accountStartNonce))
 
     val minerAddress = Address(block.header.beneficiary)
 
@@ -303,13 +307,15 @@ case class Ledger[F[_]](
       minerAccount <- getAccountToPay(minerAddress, worldStateProxy)
       minerReward = blockRewardCalculator.calcBlockMinerReward(block.header.number, block.body.uncleNodesList.size)
       afterMinerReward = worldStateProxy.saveAccount(minerAddress, minerAccount.increaseBalance(UInt256(minerReward)))
-      _ = log.info(s"Paying block ${block.header.number} reward of $minerReward to miner with account address $minerAddress")
+      _ = log.info(
+        s"Paying block ${block.header.number} reward of $minerReward to miner with account address $minerAddress")
       world <- Foldable[List].foldLeftM(block.body.uncleNodesList, afterMinerReward) { (ws, ommer) =>
         val ommerAddress = Address(ommer.beneficiary)
         for {
           account <- getAccountToPay(ommerAddress, ws)
           ommerReward = blockRewardCalculator.calcOmmerMinerReward(block.header.number, ommer.number)
-          _ = log.info(s"Paying block ${block.header.number} reward of $ommerReward to ommer with account address $ommerAddress")
+          _ = log.info(
+            s"Paying block ${block.header.number} reward of $ommerReward to ommer with account address $ommerAddress")
         } yield ws.saveAccount(ommerAddress, account.increaseBalance(UInt256(ommerReward)))
       }
     } yield world
@@ -320,7 +326,7 @@ case class Ledger[F[_]](
       .orElseF(blockPool.getBlockByHash(hash).map(_.map(_.header)))
       .value
 
-  def getNBlocksBackFromChainOrQueue(hash: ByteVector, n: Int): F[List[Block]] = {
+  def getNBlocksBackFromChainOrQueue(hash: ByteVector, n: Int): F[List[Block]] =
     for {
       pooledBlocks <- blockPool.getBranch(hash, dequeue = false).map(_.take(n))
       result <- if (pooledBlocks.length == n) {
@@ -338,7 +344,6 @@ case class Ledger[F[_]](
         }
       }
     } yield result
-  }
 
   def executeTransaction(
       stx: SignedTransaction,
@@ -346,12 +351,13 @@ case class Ledger[F[_]](
       worldProxy: WorldStateProxy[F]
   ): F[TxResult[F]] = {
     log.info(s"Transaction(${stx.hash.toHex.take(7)}) execution start")
-    val gasPrice = UInt256(stx.tx.gasPrice)
-    val gasLimit = stx.tx.gasLimit
+    val gasPrice = UInt256(stx.gasPrice)
+    val gasLimit = stx.gasLimit
     val config = EvmConfig.forBlock(blockHeader.number, blockChainConfig)
+    val senderAddress = getSenderAddress(stx, blockHeader.number)
 
     for {
-      checkpointWorldState <- updateSenderAccountBeforeExecution(stx, worldProxy)
+      checkpointWorldState <- updateSenderAccountBeforeExecution(senderAddress, stx, worldProxy)
       context <- prepareProgramContext(stx, blockHeader, checkpointWorldState, config)
       result <- runVM(stx, context, config)
       resultWithErrorHandling = if (result.error.isDefined) {
@@ -363,7 +369,7 @@ case class Ledger[F[_]](
 
       totalGasToRefund = calcTotalGasToRefund(stx, resultWithErrorHandling)
       executionGasToPayToMiner = gasLimit - totalGasToRefund
-      refundGasFn = pay(stx.senderAddress, (totalGasToRefund * gasPrice).toUInt256) _
+      refundGasFn = pay(senderAddress, (totalGasToRefund * gasPrice).toUInt256) _
       payMinerForGasFn = pay(Address(blockHeader.beneficiary), (executionGasToPayToMiner * gasPrice).toUInt256) _
       deleteAccountsFn = deleteAccounts(resultWithErrorHandling.addressesToDelete) _
       deleteTouchedAccountsFn = deleteEmptyTouchedAccounts _
@@ -390,7 +396,7 @@ case class Ledger[F[_]](
     for {
       result <- vm.run(context)
     } yield {
-      if (stx.tx.isContractInit && result.error.isEmpty)
+      if (stx.isContractInit && result.error.isEmpty)
         saveNewContract(context.env.ownerAddr, result, config)
       else
         result
@@ -416,49 +422,49 @@ case class Ledger[F[_]](
     }
   }
 
-  def updateSenderAccountBeforeExecution(stx: SignedTransaction, world: WorldStateProxy[F]): F[WorldStateProxy[F]] = {
-    val senderAddress = stx.senderAddress
+  def updateSenderAccountBeforeExecution(senderAddress: Address,
+                                         stx: SignedTransaction,
+                                         world: WorldStateProxy[F]): F[WorldStateProxy[F]] =
     world.getAccount(senderAddress).map { account =>
-      world.saveAccount(senderAddress, account.increaseBalance(-calculateUpfrontGas(stx.tx)).increaseNonce())
+      world.saveAccount(senderAddress, account.increaseBalance(-calculateUpfrontGas(stx)).increaseNonce())
     }
-  }
 
   def prepareProgramContext(
       stx: SignedTransaction,
       blockHeader: BlockHeader,
       world: WorldStateProxy[F],
       config: EvmConfig
-  ): F[ProgramContext[F]] =
-    stx.tx.receivingAddress match {
-      case None =>
-        for {
-          address <- world.createAddress(creatorAddr = stx.senderAddress)
-          conflict <- world.nonEmptyCodeOrNonceAccount(address)
-          code = if (conflict) ByteVector(INVALID.code) else stx.tx.payload
-          world1 <- world
-            .initialiseAccount(address)
-            .flatMap(_.transfer(stx.senderAddress, address, UInt256(stx.tx.value)))
-        } yield ProgramContext(stx, address, Program(code), blockHeader, world1, config)
-
-      case Some(txReceivingAddress) =>
-        for {
-          world1 <- world.transfer(stx.senderAddress, txReceivingAddress, UInt256(stx.tx.value))
-          code <- world1.getCode(txReceivingAddress)
-        } yield ProgramContext(stx, txReceivingAddress, Program(code), blockHeader, world1, config)
+  ): F[ProgramContext[F]] = {
+    val senderAddress = getSenderAddress(stx, blockHeader.number)
+    if (stx.isContractInit) {
+      for {
+        address <- world.createAddress(senderAddress)
+        conflict <- world.nonEmptyCodeOrNonceAccount(address)
+        code = if (conflict) ByteVector(INVALID.code) else stx.payload
+        world1 <- world
+          .initialiseAccount(address)
+          .flatMap(_.transfer(senderAddress, address, UInt256(stx.value)))
+      } yield ProgramContext(stx, address, Program(code), blockHeader, world1, config)
+    } else {
+      for {
+        world1 <- world.transfer(senderAddress, stx.receivingAddress, UInt256(stx.value))
+        code <- world1.getCode(stx.receivingAddress)
+      } yield ProgramContext(stx, stx.receivingAddress, Program(code), blockHeader, world1, config)
     }
+  }
 
-  def calculateUpfrontCost(tx: Transaction): UInt256 =
-    UInt256(calculateUpfrontGas(tx) + tx.value)
+  def calculateUpfrontCost(stx: SignedTransaction): UInt256 =
+    UInt256(calculateUpfrontGas(stx) + stx.value)
 
-  def calculateUpfrontGas(tx: Transaction): UInt256 =
-    UInt256(tx.gasLimit * tx.gasPrice)
+  def calculateUpfrontGas(stx: SignedTransaction): UInt256 =
+    UInt256(stx.gasLimit * stx.gasPrice)
 
   // YP 6.2
   def calcTotalGasToRefund(stx: SignedTransaction, result: ProgramResult[F]): BigInt =
     if (result.error.isDefined) {
       0
     } else {
-      val gasUsed = stx.tx.gasLimit - result.gasRemaining
+      val gasUsed = stx.gasLimit - result.gasRemaining
       // remaining gas plus some allowance
       result.gasRemaining + (gasUsed / 2).min(result.gasRefund)
     }
@@ -473,6 +479,15 @@ case class Ledger[F[_]](
         account <- world.getAccountOpt(address).getOrElse(Account.empty(blockChainConfig.accountStartNonce))
       } yield world.saveAccount(address, account.increaseBalance(value)).touchAccounts(address)
     )
+
+  private def getSenderAddress(stx: SignedTransaction, number: BigInt): Address = {
+    val addrOpt =
+      if (number >= blockChainConfig.eip155BlockNumber)
+        stx.senderAddress(Some(blockChainConfig.chainId))
+      else
+        stx.senderAddress(None)
+    addrOpt.getOrElse(Address.empty)
+  }
 
   def deleteEmptyTouchedAccounts(world: WorldStateProxy[F]): F[WorldStateProxy[F]] = {
     def deleteEmptyAccount(world: WorldStateProxy[F], address: Address): F[WorldStateProxy[F]] =

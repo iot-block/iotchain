@@ -14,8 +14,6 @@ case class Transaction(
     payload: ByteVector
 ) {
   lazy val hash: ByteVector = RlpCodec.encode(this).require.bytes.kec256
-
-  def isContractInit: Boolean = receivingAddress.isEmpty
 }
 
 object Transaction {
