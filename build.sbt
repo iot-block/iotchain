@@ -15,29 +15,26 @@ lazy val contributors = Map(
 )
 
 lazy val V = new {
-  val circe = "0.9.1"
-  val tsec = "0.0.1-M11"
+  val circe  = "0.9.1"
+  val tsec   = "0.0.1-M11"
   val http4s = "0.18.12"
+  val fs2    = "0.10.4"
 }
 
-lazy val fs2 = Seq(
-  "co.fs2" %% "fs2-core" % "0.10.4"
-)
-
 lazy val logging = Seq(
-  "ch.qos.logback" % "logback-classic" % "1.2.3",
-  "com.typesafe.scala-logging" %% "scala-logging" % "3.8.0",
-  "org.log4s" %% "log4s" % "1.6.1"
+  "ch.qos.logback"             % "logback-classic" % "1.2.3",
+  "com.typesafe.scala-logging" %% "scala-logging"  % "3.8.0",
+  "org.log4s"                  %% "log4s"          % "1.6.1"
 )
 
 lazy val tsec = Seq(
-  "io.github.jmcardon" %% "tsec-common" % V.tsec,
-  "io.github.jmcardon" %% "tsec-hash-jca" % V.tsec,
-  "io.github.jmcardon" %% "tsec-hash-bouncy" % V.tsec,
-  "io.github.jmcardon" %% "tsec-signatures" % V.tsec,
-  "io.github.jmcardon" %% "tsec-cipher-jca" % V.tsec,
+  "io.github.jmcardon" %% "tsec-common"        % V.tsec,
+  "io.github.jmcardon" %% "tsec-hash-jca"      % V.tsec,
+  "io.github.jmcardon" %% "tsec-hash-bouncy"   % V.tsec,
+  "io.github.jmcardon" %% "tsec-signatures"    % V.tsec,
+  "io.github.jmcardon" %% "tsec-cipher-jca"    % V.tsec,
   "io.github.jmcardon" %% "tsec-cipher-bouncy" % V.tsec,
-  "io.github.jmcardon" %% "tsec-password" % V.tsec
+  "io.github.jmcardon" %% "tsec-password"      % V.tsec
 )
 
 lazy val http4s = Seq(
@@ -48,14 +45,10 @@ lazy val http4s = Seq(
   "org.http4s" %% "http4s-dsl"
 ).map(_ % V.http4s)
 
-lazy val monix = Seq(
-  "io.monix" %% "monix" % "3.0.0-RC1"
-)
-
 lazy val commonSettings = Seq(
-  addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
-  addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7"),
+  addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),
+  addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.2.4"),
+  addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
   fork in test := false,
   fork in run := true,
   parallelExecution in test := false,
@@ -74,26 +67,27 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-common",
     libraryDependencies ++= logging ++ Seq(
-      "org.typelevel" %%% "cats-core" % "1.1.0",
-      "org.typelevel" %%% "cats-effect" % "1.0.0-RC",
-      "io.circe" %%% "circe-core" % V.circe,
-      "io.circe" %%% "circe-generic" % V.circe,
-      "io.circe" %%% "circe-parser" % V.circe,
-      "org.scala-graph" %%% "graph-core" % "1.12.5",
-      "org.scala-graph" %% "graph-dot" % "1.12.1",
-      "com.github.mpilquist" %%% "simulacrum" % "0.12.0",
-      "com.beachape" %%% "enumeratum" % "1.5.13",
-      "com.beachape" %%% "enumeratum-circe" % "1.5.13",
-      "co.fs2" %%% "fs2-core" % "0.10.4",
-      "org.scodec" %%% "scodec-bits" % "1.1.5",
-      "org.scodec" %%% "scodec-core" % "1.10.3",
-      "com.github.pureconfig" %% "pureconfig" % "0.9.1",
-      "org.scalatest" %%% "scalatest" % "3.0.5" % Test,
-      "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
+      "org.typelevel"         %%% "cats-core"        % "1.1.0",
+      "org.typelevel"         %%% "cats-effect"      % "1.0.0-RC",
+      "io.circe"              %%% "circe-core"       % V.circe,
+      "io.circe"              %%% "circe-generic"    % V.circe,
+      "io.circe"              %%% "circe-parser"     % V.circe,
+      "org.scala-graph"       %%% "graph-core"       % "1.12.5",
+      "org.scala-graph"       %% "graph-dot"         % "1.12.1",
+      "com.github.mpilquist"  %%% "simulacrum"       % "0.12.0",
+      "com.beachape"          %%% "enumeratum"       % "1.5.13",
+      "com.beachape"          %%% "enumeratum-circe" % "1.5.13",
+      "co.fs2"                %%% "fs2-core"         % V.fs2,
+      "org.scodec"            %%% "scodec-bits"      % "1.1.5",
+      "org.scodec"            %%% "scodec-core"      % "1.10.3",
+      "org.scodec"            %% "scodec-stream"     % "1.1.0",
+      "com.github.pureconfig" %% "pureconfig"        % "0.9.1",
+      "org.scalatest"         %%% "scalatest"        % "3.0.5" % Test,
+      "org.scalacheck"        %%% "scalacheck"       % "1.13.4" % Test
     )
   )
 
-lazy val commonJS = common.js
+lazy val commonJS  = common.js
 lazy val commonJVM = common.jvm
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
@@ -108,7 +102,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   )
   .dependsOn(common % CompileAndTest, codec, crypto, p2p, persistent)
 
-lazy val coreJS = core.js
+lazy val coreJS  = core.js
 lazy val coreJVM = core.jvm
 
 lazy val crypto = crossProject(JSPlatform, JVMPlatform)
@@ -125,14 +119,14 @@ lazy val crypto = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-crypto",
     libraryDependencies ++= tsec ++ Seq(
-      "org.scorexfoundation" %% "scrypto" % "2.0.5",
-      "org.bouncycastle" % "bcprov-jdk15on" % "1.59",
-      "net.i2p.crypto" % "eddsa" % "0.3.0"
+      "org.scorexfoundation" %% "scrypto"       % "2.0.5",
+      "org.bouncycastle"     % "bcprov-jdk15on" % "1.59",
+      "net.i2p.crypto"       % "eddsa"          % "0.3.0"
     )
   )
   .dependsOn(common % CompileAndTest, codec, persistent)
 
-lazy val cryptoJS = crypto.js.enablePlugins(ScalaJSBundlerPlugin)
+lazy val cryptoJS  = crypto.js.enablePlugins(ScalaJSBundlerPlugin)
 lazy val cryptoJVM = crypto.jvm
 
 lazy val p2p = crossProject(JSPlatform, JVMPlatform)
@@ -144,7 +138,7 @@ lazy val p2p = crossProject(JSPlatform, JVMPlatform)
   )
   .dependsOn(common % CompileAndTest, network, persistent, codec)
 
-lazy val p2pJS = p2p.js
+lazy val p2pJS  = p2p.js
 lazy val p2pJVM = p2p.jvm
 
 lazy val codec = crossProject(JSPlatform, JVMPlatform)
@@ -156,15 +150,20 @@ lazy val codec = crossProject(JSPlatform, JVMPlatform)
   )
   .dependsOn(common % CompileAndTest)
 
-lazy val codecJS = codec.js
+lazy val codecJS  = codec.js
 lazy val codecJVM = codec.jvm
 
-//lazy val examples = project
-//  .settings(commonSettings)
-//  .settings(
-//    name := "jbok-examples"
-//  )
-//  .dependsOn(core % CompileAndTest)
+lazy val examples = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-examples"
+  )
+  .dependsOn(core % CompileAndTest)
+
+lazy val examplesJS  = examples.js
+lazy val examplesJVM = examples.jvm
 
 lazy val simulations = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -179,7 +178,7 @@ lazy val simulations = crossProject(JSPlatform, JVMPlatform)
   .dependsOn(common % CompileAndTest, core)
   .enablePlugins(JavaAppPackaging)
 
-lazy val simJS = simulations.js
+lazy val simJS  = simulations.js
 lazy val simJVM = simulations.jvm
 
 lazy val commonJsSettings = Seq(
@@ -198,15 +197,15 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-app",
     libraryDependencies ++= Seq(
-      "com.thoughtworks.binding" %%% "binding" % "11.0.1",
-      "com.lihaoyi" %%% "upickle" % "0.6.6",
-      "com.lihaoyi" %%% "scalatags" % "0.6.7",
-      "com.monovore" %% "decline" % "0.4.0-RC1"
+      "com.thoughtworks.binding" %%% "binding"   % "11.0.1",
+      "com.lihaoyi"              %%% "upickle"   % "0.6.6",
+      "com.lihaoyi"              %%% "scalatags" % "0.6.7",
+      "com.monovore"             %% "decline"    % "0.4.0-RC1"
     )
   )
-  .dependsOn(network, simulations)
+  .dependsOn(core, network, simulations)
 
-lazy val appJS = app.js
+lazy val appJS  = app.js
 lazy val appJVM = app.jvm
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)
@@ -218,7 +217,7 @@ lazy val macros = crossProject(JVMPlatform, JSPlatform)
   )
   .dependsOn(common % CompileAndTest, codec)
 
-lazy val macrosJS = macros.js
+lazy val macrosJS  = macros.js
 lazy val macrosJVM = macros.jvm
 
 lazy val network = crossProject(JVMPlatform, JSPlatform)
@@ -236,7 +235,7 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
   )
   .dependsOn(common % CompileAndTest, macros, crypto)
 
-lazy val networkJS = network.js
+lazy val networkJS  = network.js
 lazy val networkJVM = network.jvm
 
 lazy val persistent = crossProject(JSPlatform, JVMPlatform)
@@ -247,12 +246,12 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
     name := "jbok-persistent",
     libraryDependencies ++= Seq(
       "org.iq80.leveldb" % "leveldb" % "0.10",
-      "io.monix" %% "monix" % "3.0.0-RC1"
+      "io.monix"         %% "monix"  % "3.0.0-RC1"
     )
   )
   .dependsOn(common % CompileAndTest, codec)
 
-lazy val persistentJS = persistent.js
+lazy val persistentJS  = persistent.js
 lazy val persistentJVM = persistent.jvm
 
 lazy val benchmark = project
@@ -301,14 +300,14 @@ lazy val micrositeSettings = Seq(
   micrositeFooterText := None,
   micrositeHighlightTheme := "atom-one-light",
   micrositePalette := Map(
-    "brand-primary" -> "#3e5b95",
+    "brand-primary"   -> "#3e5b95",
     "brand-secondary" -> "#294066",
-    "brand-tertiary" -> "#2d5799",
-    "gray-dark" -> "#49494B",
-    "gray" -> "#7B7B7E",
-    "gray-light" -> "#E5E5E6",
-    "gray-lighter" -> "#F4F3F4",
-    "white-color" -> "#FFFFFF"
+    "brand-tertiary"  -> "#2d5799",
+    "gray-dark"       -> "#49494B",
+    "gray"            -> "#7B7B7E",
+    "gray-light"      -> "#E5E5E6",
+    "gray-lighter"    -> "#F4F3F4",
+    "white-color"     -> "#FFFFFF"
   ),
   fork in tut := true,
   scalacOptions in Tut --= Seq(
@@ -324,9 +323,9 @@ lazy val micrositeSettings = Seq(
 )
 
 lazy val publishSettings = Seq(
-  homepage := Some(url("https://github.com/.../jbok")),
+  homepage := Some(url("https://github.com/c-block/jbok")),
   licenses := Seq("MIT" -> url("https://opensource.org/licenses/MIT")),
-  scmInfo := Some(ScmInfo(url("https://github.com/.../jbok"), "scm:git:git@github.com:jmcardon/jbok.git")),
+  scmInfo := Some(ScmInfo(url("https://github.com/c-block/jbok"), "scm:git:git@github.com:c-block/jbok.git")),
   autoAPIMappings := true,
   apiURL := None
 )
@@ -385,11 +384,11 @@ lazy val releaseSettings = {
     releasePublishArtifactsAction := PgpKeys.publishSigned.value,
     scmInfo := Some(
       ScmInfo(
-        url("https://github.com/.../jbok"),
-        "git@github.com.../jbok.git"
+        url("https://github.com/c-block/jbok"),
+        "git@github.com/c-block/jbok.git"
       )
     ),
-    homepage := Some(url("https://github.com/.../jbok")),
+    homepage := Some(url("https://github.com/c-block/jbok")),
     licenses += ("MIT", url("http://opensource.org/licenses/MIT")),
     publishMavenStyle := true,
     pomIncludeRepository := { _ =>
