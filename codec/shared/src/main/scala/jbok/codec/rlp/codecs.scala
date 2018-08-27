@@ -1,5 +1,6 @@
 package jbok.codec.rlp
 
+import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 
 import jbok.codec.rlp.RlpCodec.item
@@ -21,10 +22,10 @@ object codecs {
   implicit val hnilCodec: RlpCodec[HNil] = RlpCodec(
     PureCodec,
     new Codec[HNil] {
-      override def encode(value: HNil): Attempt[BitVector] = Attempt.successful(BitVector.empty)
-      override def sizeBound: SizeBound = SizeBound.exact(0)
+      override def encode(value: HNil): Attempt[BitVector]              = Attempt.successful(BitVector.empty)
+      override def sizeBound: SizeBound                                 = SizeBound.exact(0)
       override def decode(bits: BitVector): Attempt[DecodeResult[HNil]] = Attempt.successful(DecodeResult(HNil, bits))
-      override def toString = s"HNil"
+      override def toString                                             = s"HNil"
     }
   )
 
@@ -99,6 +100,8 @@ object codecs {
       ByteVector(if (bytes.head == 0) bytes.tail else bytes)
     }))
 
+  implicit val rubiginteger: RlpCodec[BigInteger] = rubigint.xmap[BigInteger](_.underlying(), bi => BigInt(bi))
+
   implicit val rulong: RlpCodec[Long] = rubigint.xmap[Long](_.toLong, BigInt.apply)
 
   implicit val rbool: RlpCodec[Boolean] = item(bool(8))
@@ -106,7 +109,7 @@ object codecs {
   implicit def roptional[A](implicit c: Lazy[RlpCodec[A]]): RlpCodec[Option[A]] =
     item(optional(bool(8), c.value.valueCodec))
 
-  implicit def reither[L, R](implicit cl: Lazy[RlpCodec[L]], cr: Lazy[RlpCodec[R]]) =
+  implicit def reither[L, R](implicit cl: Lazy[RlpCodec[L]], cr: Lazy[RlpCodec[R]]):RlpCodec[Either[L, R]] =
     item(either[L, R](bool(8), cl.value.valueCodec, cr.value.valueCodec))
 
   private def byteToBytes(byte: Byte): ByteVector =
