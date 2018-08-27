@@ -6,7 +6,6 @@ import jbok.codec.rlp.codecs._
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
 import pureconfig.ConfigReader
-import scodec.Codec
 import scodec.bits.ByteVector
 
 class Address private (val bytes: ByteVector) extends AnyVal {
@@ -36,7 +35,7 @@ object Address {
 
   def apply(bytes: ByteVector): Address = new Address(bytes.takeRight(numBytes).padLeft(numBytes))
 
-  def apply(keyPair: KeyPair): Address = Address(keyPair.public.uncompressed.kec256)
+  def apply(keyPair: KeyPair): Address = Address(keyPair.public.bytes.kec256)
 
   def empty: Address = Address(ByteVector.empty)
 }

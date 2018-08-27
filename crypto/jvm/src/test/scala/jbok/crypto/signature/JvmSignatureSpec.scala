@@ -1,9 +1,11 @@
 package jbok.crypto.signature
 
-class JvmSignatureSpec extends SignatureSpec {
-  check(Ed25519)
+import jbok.crypto.signature.ecdsa.SecP256k1
+
+class JvmCryptoSignatureAlgSpec extends CryptoSignatureAlgSpec {
+  check(SecP256k1)
 }
 
-class JvmRecoverableSignatureSpec extends RecoverableSignatureSpec {
+class JvmRecoverableCryptoSignatureAlgSpec extends RecoverableCryptoSignatureAlgSpec {
   check(SecP256k1)
 }

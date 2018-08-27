@@ -7,15 +7,15 @@ import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.keystore.KeyStoreError._
 import jbok.core.models.Address
-import jbok.crypto.signature.{KeyPair, SecP256k1}
+import jbok.crypto.signature.KeyPair
 import scodec.bits._
 
 trait KeyStoreFixture {
   val secureRandom = new SecureRandom()
-  val dir = File.newTemporaryDirectory().deleteOnExit()
+  val dir          = File.newTemporaryDirectory().deleteOnExit()
 
-  val key1 = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
-  val addr1 = Address(hex"aa6826f00d01fe4085f0c3dd12778e206ce4e2ac")
+  val key1     = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
+  val addr1    = Address(hex"aa6826f00d01fe4085f0c3dd12778e206ce4e2ac")
   val keyStore = KeyStore[IO](dir.pathAsString, secureRandom).unsafeRunSync()
 }
 
@@ -37,7 +37,7 @@ class KeyStoreSpec extends JbokSpec {
 
     "fail to import a key twice" in new KeyStoreFixture {
       val resAfterFirstImport = keyStore.importPrivateKey(key1, "aaa").unsafeRunSync()
-      val resAfterDupImport = keyStore.importPrivateKey(key1, "aaa").unsafeRunSync()
+      val resAfterDupImport   = keyStore.importPrivateKey(key1, "aaa").unsafeRunSync()
 
       resAfterFirstImport shouldBe Right(addr1)
       resAfterDupImport shouldBe Left(KeyStoreError.DuplicateKeySaved)
@@ -66,7 +66,7 @@ class KeyStoreSpec extends JbokSpec {
     "return an error when the keystore dir cannot be read or written" in new KeyStoreFixture {
       dir.delete()
 
-      val key = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
+      val key  = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
       val res1 = keyStore.importPrivateKey(key, "aaa").unsafeRunSync()
       res1 should matchPattern { case Left(IOError(_)) => }
 
@@ -104,7 +104,7 @@ class KeyStoreSpec extends JbokSpec {
     }
 
     "delete existing wallet " in new KeyStoreFixture {
-      val newAddr1 = keyStore.newAccount("aaa").unsafeRunSync().right.get
+      val newAddr1          = keyStore.newAccount("aaa").unsafeRunSync().right.get
       val listOfNewAccounts = keyStore.listAccounts.unsafeRunSync().right.get
       listOfNewAccounts.toSet shouldBe Set(newAddr1)
 

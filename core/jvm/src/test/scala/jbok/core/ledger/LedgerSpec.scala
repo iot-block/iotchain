@@ -4,16 +4,16 @@ import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.models._
 import jbok.core.validators.Validators
-import jbok.crypto.signature.SecP256k1
+import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.evm.{VM, WorldStateProxy}
 import scodec.bits._
 
 trait LedgerFixture extends BlockPoolFixture {
-  val originKeyPair = SecP256k1.generateKeyPair[IO].unsafeRunSync()
-  val receiverKeyPair = SecP256k1.generateKeyPair[IO].unsafeRunSync()
-  val originAddress = Address(originKeyPair)
+  val originKeyPair   = SecP256k1.generateKeyPair().unsafeRunSync()
+  val receiverKeyPair = SecP256k1.generateKeyPair().unsafeRunSync()
+  val originAddress   = Address(originKeyPair)
   val receiverAddress = Address(receiverKeyPair)
-  val minerAddress = Address(666)
+  val minerAddress    = Address(666)
 
   val defaultBlockHeader = BlockHeader(
     parentHash = ByteVector.empty,
@@ -49,15 +49,15 @@ trait LedgerFixture extends BlockPoolFixture {
   )
 
   val initialOriginBalance: UInt256 = 100000000
-  val initialMinerBalance: UInt256 = 2000000
+  val initialMinerBalance: UInt256  = 2000000
 
   val initialOriginNonce = defaultTx.nonce
 
   val defaultAddressesToDelete = Set(Address(hex"01"), Address(hex"02"), Address(hex"03"))
-  val defaultLogs = List(defaultLog.copy(loggerAddress = defaultAddressesToDelete.head))
+  val defaultLogs              = List(defaultLog.copy(loggerAddress = defaultAddressesToDelete.head))
   val defaultGasPrice: UInt256 = 10
   val defaultGasLimit: UInt256 = 1000000
-  val defaultValue: BigInt = 1000
+  val defaultValue: BigInt     = 1000
 
   val emptyWorld = blockChain.getWorldStateProxy(-1, UInt256.Zero, None).unsafeRunSync()
 
@@ -132,10 +132,10 @@ trait LedgerFixture extends BlockPoolFixture {
 class LedgerSpec extends JbokSpec {
   "ledger" should {
     "correctly calculate the total gas refund to be returned to the sender and paying for gas to the miner" in new LedgerFixture {
-      val tx = defaultTx.copy(gasPrice = defaultGasPrice, gasLimit = defaultGasLimit)
-      val stx = SignedTransaction.sign(tx, originKeyPair, None)
-      val header = defaultBlockHeader.copy(beneficiary = minerAddress.bytes)
-      val execResult = ledger.executeTransaction(stx, header, worldWithMinerAndOriginAccounts).unsafeRunSync()
+      val tx          = defaultTx.copy(gasPrice = defaultGasPrice, gasLimit = defaultGasLimit)
+      val stx         = SignedTransaction.sign(tx, originKeyPair, None)
+      val header      = defaultBlockHeader.copy(beneficiary = minerAddress.bytes)
+      val execResult  = ledger.executeTransaction(stx, header, worldWithMinerAndOriginAccounts).unsafeRunSync()
       val postTxWorld = execResult.world
 
       val balanceDelta = UInt256(execResult.gasUsed * defaultGasPrice)
@@ -144,7 +144,7 @@ class LedgerSpec extends JbokSpec {
     }
 
     "executeBlockTransactions for a block without txs" in new LedgerFixture {
-      val block = Block(validBlockHeader, validBlockBodyWithNoTxs)
+      val block         = Block(validBlockHeader, validBlockBodyWithNoTxs)
       val txsExecResult = ledger.executeBlockTransactions(block).value.unsafeRunSync()
       txsExecResult.isRight shouldBe true
       val BlockResult(resultingWorldState, resultingGasUsed, resultingReceipts) = txsExecResult.right.get
@@ -176,7 +176,7 @@ class LedgerSpec extends JbokSpec {
         val stx2 = SignedTransaction.sign(tx2, keyPair(origin2Address), Some(blockChainConfig.chainId))
 
         val validBlockBodyWithTxs: BlockBody = validBlockBodyWithNoTxs.copy(transactionList = List(stx1, stx2))
-        val block = Block(validBlockHeader, validBlockBodyWithTxs)
+        val block                            = Block(validBlockHeader, validBlockBodyWithTxs)
 
         val txsExecResult = ledger.executeBlockTransactions(block).value.unsafeRunSync()
 
@@ -241,10 +241,10 @@ class LedgerSpec extends JbokSpec {
     }
 
     "produce empty block if all txs fail" ignore new LedgerFixture {
-      val newAccountKeyPair = SecP256k1.generateKeyPair[IO].unsafeRunSync()
-      val newAccountAddress = Address(newAccountKeyPair)
-      val tx1: Transaction = defaultTx.copy(gasPrice = 42, receivingAddress = Some(Address(42)))
-      val tx2: Transaction = defaultTx.copy(gasPrice = 42, receivingAddress = Some(Address(42)))
+      val newAccountKeyPair       = SecP256k1.generateKeyPair().unsafeRunSync()
+      val newAccountAddress       = Address(newAccountKeyPair)
+      val tx1: Transaction        = defaultTx.copy(gasPrice = 42, receivingAddress = Some(Address(42)))
+      val tx2: Transaction        = defaultTx.copy(gasPrice = 42, receivingAddress = Some(Address(42)))
       val stx1: SignedTransaction = SignedTransaction.sign(tx1, newAccountKeyPair, Some(blockChainConfig.chainId))
       val stx2: SignedTransaction = SignedTransaction.sign(tx2, newAccountKeyPair, Some(blockChainConfig.chainId))
 
@@ -260,11 +260,11 @@ class LedgerSpec extends JbokSpec {
     }
 
     "create sender account if it does not exists" in new LedgerFixture {
-      val inputData = ByteVector("the payload".getBytes)
-      val newAccountKeyPair = SecP256k1.generateKeyPair[IO].unsafeRunSync()
+      val inputData         = ByteVector("the payload".getBytes)
+      val newAccountKeyPair = SecP256k1.generateKeyPair().unsafeRunSync()
       val newAccountAddress = Address(newAccountKeyPair)
 
-      val tx: Transaction = defaultTx.copy(gasPrice = 0, receivingAddress = None, payload = inputData, nonce = 0)
+      val tx: Transaction        = defaultTx.copy(gasPrice = 0, receivingAddress = None, payload = inputData, nonce = 0)
       val stx: SignedTransaction = SignedTransaction.sign(tx, newAccountKeyPair, None)
 
       val result: Either[BlockExecutionError.TxsExecutionError[IO], BlockResult[IO]] = ledger

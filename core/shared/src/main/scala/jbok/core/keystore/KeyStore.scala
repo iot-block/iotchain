@@ -6,31 +6,32 @@ import java.time.{ZoneOffset, ZonedDateTime}
 
 import better.files._
 import cats.data.EitherT
-import cats.effect.Sync
+import cats.effect.{Async, Sync}
 import cats.implicits._
 import io.circe.generic.auto._
 import io.circe.parser._
 import io.circe.syntax._
 import jbok.core.keystore.KeyStoreError.KeyNotFound
 import jbok.core.models.Address
-import jbok.crypto.signature.{KeyPair, SecP256k1}
+import jbok.crypto.signature.KeyPair
 import scodec.bits.ByteVector
 import jbok.codec.json._
+import jbok.crypto.signature.ecdsa.SecP256k1
 
 sealed trait KeyStoreError
 object KeyStoreError {
-  def keyNotFound: KeyStoreError = KeyNotFound
-  def decryptionFailed: KeyStoreError = DecryptionFailed
-  def invalidKeyFormat: KeyStoreError = InvalidKeyFormat
+  def keyNotFound: KeyStoreError           = KeyNotFound
+  def decryptionFailed: KeyStoreError      = DecryptionFailed
+  def invalidKeyFormat: KeyStoreError      = InvalidKeyFormat
   def ioError(e: Throwable): KeyStoreError = IOError(e.toString)
-  def ioError(e: String): KeyStoreError = IOError(e)
-  def duplicateKeySaved: KeyStoreError = DuplicateKeySaved
+  def ioError(e: String): KeyStoreError    = IOError(e)
+  def duplicateKeySaved: KeyStoreError     = DuplicateKeySaved
 
-  case object KeyNotFound extends KeyStoreError
-  case object DecryptionFailed extends KeyStoreError
-  case object InvalidKeyFormat extends KeyStoreError
+  case object KeyNotFound         extends KeyStoreError
+  case object DecryptionFailed    extends KeyStoreError
+  case object InvalidKeyFormat    extends KeyStoreError
   case class IOError(msg: String) extends KeyStoreError
-  case object DuplicateKeySaved extends KeyStoreError
+  case object DuplicateKeySaved   extends KeyStoreError
 }
 
 trait KeyStore[F[_]] {
@@ -44,26 +45,28 @@ trait KeyStore[F[_]] {
 
   def deleteWallet(address: Address): F[Either[KeyStoreError, Boolean]]
 
-  def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): F[Either[KeyStoreError, Boolean]]
+  def changePassphrase(address: Address,
+                       oldPassphrase: String,
+                       newPassphrase: String): F[Either[KeyStoreError, Boolean]]
 
   def clear: F[Either[KeyStoreError, Boolean]]
 }
 
-class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Sync[F]) extends KeyStore[F] {
+class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
   private[this] val log = org.log4s.getLogger
 
   private val keyLength = 32
 
   override def newAccount(passphrase: String): F[Either[KeyStoreError, Address]] = {
     val p = for {
-      keyPair <- EitherT.right[KeyStoreError](SecP256k1.generateKeyPair[F])
+      keyPair <- EitherT.right[KeyStoreError](F.liftIO(SecP256k1.generateKeyPair()))
       encKey = EncryptedKey(keyPair.secret, passphrase, secureRandom)
       _ <- save(encKey)
     } yield encKey.address
     p.value
   }
 
-  override def importPrivateKey(key: ByteVector, passphrase: String): F[Either[KeyStoreError, Address]] = {
+  override def importPrivateKey(key: ByteVector, passphrase: String): F[Either[KeyStoreError, Address]] =
     if (key.length != keyLength) {
       log.warn(s"import key failed, incorrect key length ${key.length}")
       F.pure(Left(KeyStoreError.invalidKeyFormat))
@@ -71,11 +74,10 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
       val encKey = EncryptedKey(KeyPair.Secret(key), passphrase, secureRandom)
       save(encKey).map(_ => encKey.address).value
     }
-  }
 
   override def listAccounts: F[Either[KeyStoreError, List[Address]]] = {
     val p = for {
-      files <- listFiles()
+      files  <- listFiles()
       loaded <- files.sortBy(_.name).traverse(load)
     } yield loaded.map(_.address)
     p.value
@@ -87,7 +89,7 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
       wallet <- EitherT.fromEither[F](
         key
           .decrypt(passphrase)
-          .leftMap {_ =>
+          .leftMap { _ =>
             log.error(s"unlock account decryption failed")
             KeyStoreError.decryptionFailed
           }
@@ -102,7 +104,7 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
 
   override def deleteWallet(address: Address): F[Either[KeyStoreError, Boolean]] = {
     val p = for {
-      file <- findKeyFile(address)
+      file    <- findKeyFile(address)
       deleted <- deleteFile(file)
     } yield deleted
     p.value
@@ -112,8 +114,8 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
                                 oldPassphrase: String,
                                 newPassphrase: String): F[Either[KeyStoreError, Boolean]] = {
     val p = for {
-      oldKey <- load(address)
-      prvKey <- EitherT.fromEither[F](oldKey.decrypt(oldPassphrase).left.map(_ => KeyStoreError.decryptionFailed))
+      oldKey  <- load(address)
+      prvKey  <- EitherT.fromEither[F](oldKey.decrypt(oldPassphrase).left.map(_ => KeyStoreError.decryptionFailed))
       keyFile <- findKeyFile(address)
       newEncKey = EncryptedKey(prvKey, newPassphrase, secureRandom)
       _ <- overwrite(keyFile, newEncKey)
@@ -155,7 +157,7 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
   private[jbok] def load(address: Address): EitherT[F, KeyStoreError, EncryptedKey] =
     for {
       filename <- findKeyFile(address)
-      key <- load(filename)
+      key      <- load(filename)
     } yield key
 
   private[jbok] def load(file: File): EitherT[F, KeyStoreError, EncryptedKey] =
@@ -207,7 +209,7 @@ class KeyStoreImpl[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit
 }
 
 object KeyStore {
-  def apply[F[_]: Sync](keyStoreDir: String, secureRandom: SecureRandom): F[KeyStore[F]] = {
+  def apply[F[_]: Async](keyStoreDir: String, secureRandom: SecureRandom): F[KeyStore[F]] = {
     val dir = File(keyStoreDir)
     for {
       _ <- if (!dir.isDirectory) {

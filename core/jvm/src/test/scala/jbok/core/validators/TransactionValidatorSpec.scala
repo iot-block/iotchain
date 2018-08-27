@@ -4,14 +4,14 @@ import cats.effect.IO
 import jbok.core.{BlockChainFixture, Fixtures}
 import jbok.core.models._
 import jbok.core.validators.SignedTransactionInvalid._
-import jbok.crypto.signature.SecP256k1
+import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.testkit.Gens
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.PropertyChecks
 import scodec.bits._
 
 class TransactionValidatorFixture extends BlockChainFixture {
-  val keyPair = SecP256k1.generateKeyPair[IO].unsafeRunSync()
+  val keyPair = SecP256k1.generateKeyPair().unsafeRunSync()
   val txBeforeHomestead = Transaction(
     nonce = 81,
     gasPrice = BigInt("60000000000"),

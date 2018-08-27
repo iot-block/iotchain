@@ -7,7 +7,8 @@ import cats.effect.IO
 import jbok.core.models.Address
 import jbok.crypto._
 import jbok.crypto.password.SCrypt
-import jbok.crypto.signature.{KeyPair, SecP256k1}
+import jbok.crypto.signature.KeyPair
+import jbok.crypto.signature.ecdsa.SecP256k1
 import scodec.bits.ByteVector
 import tsec.cipher.symmetric._
 import tsec.cipher.symmetric.jca._
@@ -61,7 +62,7 @@ object EncryptedKey {
   def apply(prvKey: KeyPair.Secret, passphrase: String, secureRandom: SecureRandom): EncryptedKey = {
     val version = 3
     val uuid = UUID.randomUUID()
-    val pubKey = SecP256k1.buildPublicKeyFromPrivate[IO](prvKey).unsafeRunSync()
+    val pubKey = SecP256k1.generatePublicKey(prvKey).unsafeRunSync()
     val address = Address(KeyPair(pubKey, prvKey))
     val salt = secureRandomByteString(secureRandom, 32)
     val kdfParams = KdfParams(salt, 1 << 18, 8, 1, 32) //params used by Geth

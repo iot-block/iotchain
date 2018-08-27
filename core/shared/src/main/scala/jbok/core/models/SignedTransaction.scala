@@ -1,11 +1,10 @@
 package jbok.core.models
 
-import cats.effect.IO
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, KeyPair, SecP256k1}
-import scodec.Codec
+import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.crypto.signature.{KeyPair, CryptoSignature}
 import scodec.bits.ByteVector
 import shapeless._
 
@@ -56,7 +55,7 @@ object SignedTransaction {
       signature: ByteVector,
       address: Address
   ): SignedTransaction = {
-    val txSig = CryptoSignature(BigInt(1, signatureRandom.toArray), BigInt(1, signature.toArray), Some(pointSign))
+    val txSig = CryptoSignature(BigInt(1, signatureRandom.toArray), BigInt(1, signature.toArray), pointSign)
     new SignedTransaction(
       tx.nonce,
       tx.gasPrice,
@@ -83,8 +82,8 @@ object SignedTransaction {
       BigInt(0)
     )
     val bytes = bytesToSign(stx, chainId)
-    val sig = SecP256k1.sign[IO](bytes, keyPair, chainId).unsafeRunSync()
-    stx.copy(v = BigInt(1, Array(sig.v.getOrElse(BigInt(0).toByte))), r = sig.r, s = sig.s)
+    val sig   = SecP256k1.sign(bytes.toArray, keyPair, chainId).unsafeRunSync()
+    stx.copy(v = BigInt(1, Array(sig.v)), r = sig.r, s = sig.s)
   }
 
   def verify(stx: SignedTransaction, chainId: Option[Byte], sender: Address): Boolean = {
@@ -100,13 +99,13 @@ object SignedTransaction {
 
   private def recoverPublicKey(stx: SignedTransaction, chainId: Option[Byte]): Option[KeyPair.Public] = {
     val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)
-    val txSig = new CryptoSignature(stx.r, stx.s, Some(stx.v.toByte))
+    val txSig       = CryptoSignature(stx.r, stx.s, stx.v.toByte)
 
-    SecP256k1.recoverPublic(txSig, bytesToSign, chainId)
+    SecP256k1.recoverPublic(bytesToSign.toArray, txSig, chainId)
   }
 
   private def getSender(stx: SignedTransaction, chainId: Option[Byte]): Option[Address] =
-    SignedTransaction.recoverPublicKey(stx, chainId).map(pk => Address(pk.uncompressed.kec256))
+    SignedTransaction.recoverPublicKey(stx, chainId).map(pk => Address(pk.bytes.kec256))
 
   private def generalTransactionBytes(stx: SignedTransaction): ByteVector = {
     val hlist = stx.nonce :: stx.gasPrice :: stx.gasLimit :: stx.receivingAddress :: stx.value :: stx.payload :: HNil
