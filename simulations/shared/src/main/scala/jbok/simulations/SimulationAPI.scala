@@ -1,8 +1,13 @@
 package jbok.simulations
 
-import fs2.async.mutable.Topic
-import io.circe.generic.JsonCodec
-import jbok.core.FullNode
+import _root_.io.circe.generic.JsonCodec
+import cats.effect.IO
+import fs2._
+import jbok.network.NetAddress
+import jbok.network.rpc.RpcAPI
+
+@JsonCodec
+case class SimulationEvent(source: String, target: String, message: String, time: Long = System.currentTimeMillis())
 
 @JsonCodec
 case class NodeInfo(
@@ -13,30 +18,22 @@ case class NodeInfo(
   override def toString: String = s"NodeInfo(id=${id}, rpc=${rpcAddress}, p2p=${p2pAddress})"
 }
 
-object NodeInfo {
-  def apply[F[_]](node: FullNode[F]): NodeInfo = NodeInfo(
-    node.id,
-    node.rpcBindAddress,
-    node.p2pBindAddress
-  )
-}
+trait SimulationAPI extends RpcAPI {
+  def startNetwork: Response[Unit]
 
-trait SimulationAPI[F[_]] {
-  def startNetwork: F[Unit]
+  def stopNetwork: Response[Unit]
 
-  def stopNetwork: F[Unit]
+  def getNodes: Response[List[NodeInfo]]
 
-  def getNodes: F[List[NodeInfo]]
+  def createNodes(n: Int): Response[List[NodeInfo]]
 
-  def createNodes(n: Int): F[List[NodeInfo]]
+  def getNodeInfo(id: String): Response[NodeInfo]
 
-  def getNodeInfo(id: String): F[NodeInfo]
+  def startNode(id: String): Response[NodeInfo]
 
-  def startNode(id: String): F[NodeInfo]
+  def stopNode(id: String): Response[NodeInfo]
 
-  def stopNode(id: String): F[NodeInfo]
+  def connect(topology: String): Response[Unit]
 
-  def connect(topology: String): F[Unit]
-
-  val events: Topic[F, Option[SimulationEvent]]
+  val events: Stream[IO, SimulationEvent]
 }
