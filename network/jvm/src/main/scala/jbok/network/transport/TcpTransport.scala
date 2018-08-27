@@ -41,7 +41,7 @@ class TcpTransport[F[_], A](
     } yield ()
 
   private def onError(e: Throwable): Stream[F, Unit] =
-    Stream.eval(F.delay(log.error(s"connection closed because ${e}")))
+    Stream.eval(F.delay(log.warn(s"connection closed because ${e}")))
 
   override def connect(remote: InetSocketAddress, onConnect: Connection[F, A] => F[Unit] = _ => F.unit): F[Unit] =
     connections.get.flatMap(_.get(remote) match {
@@ -49,7 +49,6 @@ class TcpTransport[F[_], A](
         log.info(s"already has a connection to ${remote}, ignored")
         F.unit
       case None =>
-        log.info(s"connecting to ${remote}")
         F.start(
             fs2.io.tcp
               .client[F](remote, keepAlive = true, noDelay = true)
@@ -57,9 +56,11 @@ class TcpTransport[F[_], A](
                 val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket)
                 for {
                   remote <- Stream.eval(conn.remoteAddress.map(_.asInstanceOf[InetSocketAddress]))
-                  _      <- Stream.eval(connections.modify(_ + (remote -> conn)))
-                  _      <- Stream.eval(onConnect(conn))
-                  _      <- Stream.eval(topic.publish1(Some(TransportEvent.Add(remote, incoming = false))))
+                  local  <- Stream.eval(conn.localAddress.map(_.asInstanceOf[InetSocketAddress]))
+                  _ = log.info(s"connect from ${local} to ${remote}")
+                  _ <- Stream.eval(connections.modify(_ + (remote -> conn)))
+                  _ <- Stream.eval(onConnect(conn))
+                  _ <- Stream.eval(topic.publish1(Some(TransportEvent.Add(remote, incoming = false))))
                   _ <- conn
                     .reads(Some(timeout))
                     .evalMap(a => {
@@ -165,7 +166,7 @@ class TcpTransport[F[_], A](
     }
 
   override def stop: F[Unit] =
-    stopListen.set(true)
+    stopListen.set(true) *> getConnected.flatMap(_.values.toList.traverse(_.close).void)
 
   override def broadcast(a: A): F[Unit] =
     for {

@@ -129,6 +129,7 @@ object PeerManager {
         override def broadcast(msg: Message): F[Unit] =
           for {
             peers <- handshakedPeers.map(_.values.toList)
+            _ = log.info(s"broadcast ${msg.name} to ${peers.length} peers")
             _     <- peers.traverse(peer => transport.write(peer.remote, msg))
           } yield ()
 

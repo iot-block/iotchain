@@ -1,5 +1,7 @@
 package jbok.core
 
+import java.net.InetSocketAddress
+
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import jbok.core.configs.FullNodeConfig
@@ -20,9 +22,8 @@ case class FullNode[F[_]](
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext, T: Timer[F]) {
   val id = config.nodeId
 
-  val rpcBindAddress = config.network.rpcBindAddress
-
-  val peerBindAddress = config.network.peerBindAddress
+  val peerBindAddress: InetSocketAddress =
+    new InetSocketAddress(config.network.peerBindAddress.host, config.network.peerBindAddress.port.get)
 
   def start: F[Unit] =
     for {
@@ -46,7 +47,7 @@ object FullNode {
       implicit F: ConcurrentEffect[F],
       EC: ExecutionContext,
       T: Timer[F]
-  ): F[FullNode[F]] = {
+  ): F[FullNode[F]] =
     for {
       blockChain  <- BlockChain.inMemory[F]()
       peerManager <- PeerManager[F](config.peer, blockChain)
@@ -68,5 +69,4 @@ object FullNode {
         regularSync,
         syncService
       )
-  }
 }
