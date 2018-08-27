@@ -4,7 +4,6 @@ import java.util.Date
 
 import cats.effect.IO
 import jbok.core.api.impl.PublicApiImpl
-//import jbok.core.api.impl.PublicApiImpl
 import jbok.core.configs.{BlockChainConfig, MiningConfig}
 import jbok.core.keystore.KeyStore
 import jbok.core.ledger.{Ledger, OmmersPool}
