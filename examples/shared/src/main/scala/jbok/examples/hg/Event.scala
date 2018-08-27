@@ -1,11 +1,13 @@
 package jbok.examples.hg
 
-import jbok.crypto.hashing.Hash
+import scodec.bits.ByteVector
 
 case class Event(
     body: EventBody,
-    hash: Hash
-)(val info: EventInfo) {
+    hash: ByteVector
+) {
+  val info: EventInfo = EventInfo()
+
   override def toString: String = s"Event($hash)"
 
   @inline def sp = body.selfParent
@@ -26,7 +28,7 @@ case class Event(
 
   @inline def isOrdered = info.roundReceived != -1
 
-  def divided(round: Round, isWitness: Boolean, isFamous: Option[Boolean] = None): Event = {
+  def divided(round: Int, isWitness: Boolean, isFamous: Option[Boolean] = None): Event = {
     info.round = round
     info.isWitness = isWitness
     info.isFamous = isFamous
@@ -40,7 +42,7 @@ case class Event(
     this
   }
 
-  def ordered(roundReceived: Round, consensusTimestamp: Long): Event = {
+  def ordered(roundReceived: Int, consensusTimestamp: Long): Event = {
     require(isDivided)
     require(isDecided)
     require(roundReceived > -1)
@@ -49,12 +51,12 @@ case class Event(
     this
   }
 
-  def updateLastAncestors(m: Map[Hash, EventCoordinates]): Event = {
+  def updateLastAncestors(m: Map[ByteVector, EventCoordinates]): Event = {
     info.lastAncestors = m
     this
   }
 
-  def updateFirstDescendant(creator: Hash, coord: EventCoordinates): Event = {
+  def updateFirstDescendant(creator: ByteVector, coord: EventCoordinates): Event = {
     info.firstDescendants += (creator -> coord)
     this
   }
@@ -70,9 +72,8 @@ object Event {
     *
     * x == y ∨ ∃z ∈ parents(x), ancestor(z, y)
     */
-  def ancestor(x: Event, y: Event): Boolean = {
+  def ancestor(x: Event, y: Event): Boolean =
     x == y || x.info.lastAncestorIndex(y.body.creator) >= y.body.index
-  }
 
   /**
     * @param x event
@@ -82,9 +83,8 @@ object Event {
     * x and y are created by a same creator
     * x == y ∨ (selfParent(x) ̸= ∅ ∧ selfAncestor(selfParent(x), y))
     */
-  def selfAncestor(x: Event, y: Event): Boolean = {
+  def selfAncestor(x: Event, y: Event): Boolean =
     x == y || x.body.creator == y.body.creator && x.body.index >= y.body.index
-  }
 
   /**
     * @param x event
@@ -99,7 +99,7 @@ object Event {
     * @param y event
     * @return earliest selfAncestor of x that sees y
     */
-  def earliestSelfAncestorSee(x: Event, y: Event): Option[Hash] = {
+  def earliestSelfAncestorSee(x: Event, y: Event): Option[ByteVector] = {
     val a = y.info.firstDescendants(x.creator)
 
     if (x.body.index >= a.index) {
