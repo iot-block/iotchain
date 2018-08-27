@@ -1,21 +1,23 @@
 package jbok.core.api
 
+import java.net.InetSocketAddress
+
 import cats.effect.IO
+import fs2._
 import jbok.JbokSpec
 import jbok.core.configs.FilterConfig
 import jbok.core.keystore.KeyStoreFixture
 import jbok.core.ledger.OmmersPool
 import jbok.core.mining.BlockGeneratorFixture
 import jbok.core.{PeerManageFixture, TxPool, TxPoolConfig}
-import jbok.network.client.Client
+import jbok.network.client.{Client, WebSocketClientBuilder}
 import jbok.network.execution._
-import jbok.network.server.Server
-import jbok.network.transport.WSTransport
-import jbok.network.{JsonRPCService, NetAddress}
+import jbok.network.rpc.{RpcClient, RpcServer}
+import jbok.network.server.{Server, WebSocketServerBuilder}
 
 trait MainAPIFixture extends BlockGeneratorFixture with PeerManageFixture with KeyStoreFixture {
-  val ommersPool = OmmersPool[IO](blockChain).unsafeRunSync()
-  val txPool = TxPool[IO](pm1, TxPoolConfig()).unsafeRunSync()
+  val ommersPool   = OmmersPool[IO](blockChain).unsafeRunSync()
+  val txPool       = TxPool[IO](pm1, TxPoolConfig()).unsafeRunSync()
   val filterConfig = FilterConfig()
   val txPoolConfig = TxPoolConfig()
   val filterManager = FilterManager[IO](
@@ -28,7 +30,7 @@ trait MainAPIFixture extends BlockGeneratorFixture with PeerManageFixture with K
   ).unsafeRunSync()
 
   val version = 1
-  val mainApiImpl = PublicAPI[IO](
+  val mainApiImpl = PublicAPI(
     blockChain,
     blockChainConfig,
     ommersPool,
@@ -41,15 +43,13 @@ trait MainAPIFixture extends BlockGeneratorFixture with PeerManageFixture with K
     version
   ).unsafeRunSync()
 
-  val service = JsonRPCService[IO].mountAPI[PublicAPI[IO]](mainApiImpl)
-  val addr = NetAddress("localhost", 9999)
-  val server = Server[IO](addr, service).unsafeRunSync()
-  val transport = WSTransport[IO](addr).unsafeRunSync()
-  val client = Client[IO](transport)
-  val api = client.useAPI[PublicAPI[IO]]
-
-  server.start.unsafeRunSync()
-  client.start.unsafeRunSync()
+  import RpcServer._
+  val rpcServer                            = RpcServer().unsafeRunSync().mountAPI(mainApiImpl)
+  val bind                                 = new InetSocketAddress("localhost", 9999)
+  val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
+  val server: Server[IO, String]           = Server(WebSocketServerBuilder[IO, String], bind, serverPipe).unsafeRunSync()
+  val client: Client[IO, String]           = Client(WebSocketClientBuilder[IO, String], bind).unsafeRunSync()
+  val api: PublicAPI                       = RpcClient[IO](client).useAPI[PublicAPI]
 }
 
 class PublicAPISpec extends JbokSpec with MainAPIFixture {
@@ -85,7 +85,12 @@ class PublicAPISpec extends JbokSpec with MainAPIFixture {
     "return average gas price" ignore {}
 
     "return account recent transactions in newest -> oldest order" ignore {}
+  }
 
+  override protected def beforeAll(): Unit = {
+    server.start.unsafeRunSync()
+    Thread.sleep(3000)
+    client.start.unsafeRunSync()
   }
 
   override protected def afterAll(): Unit = {

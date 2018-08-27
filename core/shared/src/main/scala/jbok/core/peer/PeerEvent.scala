@@ -9,6 +9,5 @@ sealed trait PeerEvent {
 object PeerEvent {
   case class PeerAdd(peerId: PeerId) extends PeerEvent
   case class PeerDrop(peerId: PeerId) extends PeerEvent
-  case class PeerSend(peerId: PeerId, message: Message) extends PeerEvent
   case class PeerRecv(peerId: PeerId, message: Message) extends PeerEvent
 }

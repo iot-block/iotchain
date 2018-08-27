@@ -4,14 +4,14 @@ import java.time.Duration
 import java.util.Date
 
 import cats.data.{EitherT, OptionT}
-import cats.effect.Sync
-import cats.implicits._
+import cats.effect.IO
 import fs2.async.Ref
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.core.api._
+import cats.implicits._
 import jbok.core.configs.{BlockChainConfig, MiningConfig}
-import jbok.core.consensus.Ethash
+import jbok.core.consensus.pow.Ethash
 import jbok.core.keystore.KeyStore
 import jbok.core.ledger.{Ledger, OmmersPool}
 import jbok.core.mining.BlockGenerator
@@ -20,92 +20,101 @@ import jbok.core.{BlockChain, TxPool}
 import jbok.crypto.signature.CryptoSignature
 import scodec.bits.ByteVector
 
-class PublicApiImpl[F[_]](
-    blockChain: BlockChain[F],
+class PublicApiImpl(
+    blockChain: BlockChain[IO],
     blockChainConfig: BlockChainConfig,
-    ommersPool: OmmersPool[F],
-    txPool: TxPool[F],
-    ledger: Ledger[F],
-    blockGenerator: BlockGenerator[F],
-    keyStore: KeyStore[F],
-    filterManager: FilterManager[F],
+    ommersPool: OmmersPool[IO],
+    txPool: TxPool[IO],
+    ledger: Ledger[IO],
+    blockGenerator: BlockGenerator[IO],
+    keyStore: KeyStore[IO],
+    filterManager: FilterManager[IO],
     miningConfig: MiningConfig,
     version: Int,
-    hashRate: Ref[F, Map[ByteVector, (BigInt, Date)]],
-    lastActive: Ref[F, Option[Date]]
-)(implicit F: Sync[F])
-    extends PublicAPI[F] {
-  implicit def toRight[A](fa: F[A]): R[A] = fa.map(a => Right(a))
+    hashRate: Ref[IO, Map[ByteVector, (BigInt, Date)]],
+    lastActive: Ref[IO, Option[Date]]
+) extends PublicAPI {
+  override def protocolVersion: Response[String] =
+    ok(f"0x${version}%x")
 
-  override def protocolVersion: R[String] =
-    f"0x${version}%x".pure[F]
+  override def bestBlockNumber: Response[BigInt] =
+    ok(blockChain.getBestBlockNumber)
 
-  override def bestBlockNumber: R[BigInt] =
-    blockChain.getBestBlockNumber
-
-  override def getBlockTransactionCountByHash(blockHash: ByteVector): R[Option[Int]] = {
+  override def getBlockTransactionCountByHash(blockHash: ByteVector): Response[Option[Int]] = {
     val count = blockChain.getBlockBodyByHash(blockHash).map(_.map(_.transactionList.length))
-    count
+    ok(count)
   }
 
-  override def getBlockByHash(blockHash: ByteVector): R[Option[Block]] =
-    blockChain.getBlockByHash(blockHash)
+  override def getBlockByHash(blockHash: ByteVector): Response[Option[Block]] =
+    ok(blockChain.getBlockByHash(blockHash))
 
-  override def getBlockByNumber(blockNumber: BigInt): R[Option[Block]] =
-    blockChain.getBlockByNumber(blockNumber)
+  override def getBlockByNumber(blockNumber: BigInt): Response[Option[Block]] =
+    ok(blockChain.getBlockByNumber(blockNumber))
 
-  override def getTransactionByHash(txHash: ByteVector): R[Option[SignedTransaction]] = {
+  override def getTransactionByHash(txHash: ByteVector): Response[Option[SignedTransaction]] = {
     val pending = OptionT(txPool.getPendingTransactions.map(_.map(_.stx).find(_.hash == txHash)))
     val inBlock = for {
-      loc <- OptionT(blockChain.getTransactionLocation(txHash))
+      loc   <- OptionT(blockChain.getTransactionLocation(txHash))
       block <- OptionT(blockChain.getBlockByHash(loc.blockHash))
-      stx <- OptionT.fromOption[F](block.body.transactionList.lift(loc.txIndex))
+      stx   <- OptionT.fromOption[IO](block.body.transactionList.lift(loc.txIndex))
     } yield stx
 
-    pending.orElseF(inBlock.value).value
+    ok(pending.orElseF(inBlock.value).value)
   }
 
-  override def getTransactionReceipt(txHash: ByteVector): R[Option[Receipt]] =
-    (for {
+  override def getTransactionReceipt(txHash: ByteVector): Response[Option[Receipt]] = {
+    val r = for {
       loc <- OptionT(blockChain.getTransactionLocation(txHash))
       block <- OptionT(blockChain.getBlockByHash(loc.blockHash))
-      stx <- OptionT.fromOption[F](block.body.transactionList.lift(loc.txIndex))
+      stx <- OptionT.fromOption[IO](block.body.transactionList.lift(loc.txIndex))
       receipts <- OptionT(blockChain.getReceiptsByHash(loc.blockHash))
-      receipt <- OptionT.fromOption[F](receipts.lift(loc.txIndex))
-    } yield receipt).value
+      receipt <- OptionT.fromOption[IO](receipts.lift(loc.txIndex))
+    } yield receipt
+
+    ok(r)
+  }
 
   override def getTransactionByBlockHashAndIndexRequest(blockHash: ByteVector,
-                                                        txIndex: Int): R[Option[SignedTransaction]] =
-    (for {
+                                                        txIndex: Int): Response[Option[SignedTransaction]] = {
+    val x = for {
       block <- OptionT(blockChain.getBlockByHash(blockHash))
-      stx <- OptionT.fromOption[F](block.body.transactionList.lift(txIndex))
-    } yield stx).value
+      stx <- OptionT.fromOption[IO](block.body.transactionList.lift(txIndex))
+    } yield stx
 
-  override def getUncleByBlockHashAndIndex(blockHash: ByteVector, uncleIndex: Int): R[Option[BlockHeader]] =
-    (for {
+    ok(x)
+  }
+
+  override def getUncleByBlockHashAndIndex(blockHash: ByteVector, uncleIndex: Int): Response[Option[BlockHeader]] = {
+    val x = for {
       block <- OptionT(blockChain.getBlockByHash(blockHash))
-      uncle <- OptionT.fromOption[F](block.body.uncleNodesList.lift(uncleIndex))
-    } yield uncle).value
+      uncle <- OptionT.fromOption[IO](block.body.uncleNodesList.lift(uncleIndex))
+    } yield uncle
 
-  override def getUncleByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): R[Option[BlockHeader]] =
-    (for {
+    ok(x)
+  }
+
+  override def getUncleByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): Response[Option[BlockHeader]] = {
+    val x = for {
       block <- OptionT.liftF(resolveBlock(blockParam))
-      uncle <- OptionT.fromOption[F](block.body.uncleNodesList.lift(uncleIndex))
-    } yield uncle).value
+      uncle <- OptionT.fromOption[IO](block.body.uncleNodesList.lift(uncleIndex))
+    } yield uncle
 
-  override def submitHashRate(hr: BigInt, id: ByteVector): R[Boolean] = {
-    val rate = for {
+    ok(x)
+  }
+
+  override def submitHashRate(hr: BigInt, id: ByteVector): Response[Boolean] = {
+    val x = for {
       _ <- reportActive
       now = new Date
       _ <- hashRate.modify(m => removeObsoleteHashrates(now, m + (id -> (hr, now))))
     } yield true
 
-    rate
+    ok(x)
   }
 
-  override def getGasPrice: R[BigInt] = {
-    val blockDifference = 30
-    val gasPrice = for {
+  override def getGasPrice: Response[BigInt] = ok {
+    val blockDifference = BigInt(30)
+    for {
       bestBlock <- blockChain.getBestBlockNumber
       gasPrices <- ((bestBlock - blockDifference) to bestBlock).toList
         .traverse(blockChain.getBlockByNumber)
@@ -116,31 +125,27 @@ class PublicApiImpl[F[_]](
         BigInt(0)
       }
     } yield gasPrice
-
-    gasPrice
   }
 
-  override def getMining: R[Boolean] = {
-    val isMining = lastActive
-      .modify(e =>
-        e.filter(time =>
-          Duration.between(time.toInstant, (new Date).toInstant).toMillis < miningConfig.activeTimeout.toMillis))
-      .map(_.now.isDefined)
+  override def getMining: Response[Boolean] =
+    ok {
+      lastActive
+        .modify(e =>
+          e.filter(time =>
+            Duration.between(time.toInstant, (new Date).toInstant).toMillis < miningConfig.activeTimeout.toMillis))
+        .map(_.now.isDefined)
+    }
 
-    isMining
+  override def getHashRate: Response[BigInt] = ok {
+    hashRate.modify(m => removeObsoleteHashrates(new Date, m)).map(_.now.map(_._2._1).sum)
   }
 
-  override def getHashRate: R[BigInt] = {
-    val rate = hashRate.modify(m => removeObsoleteHashrates(new Date, m)).map(_.now.map(_._2._1).sum)
-    rate
-  }
-
-  override def getWork: R[GetWorkResponse] = {
-    val resp = for {
-      _ <- reportActive
+  override def getWork: Response[GetWorkResponse] = ok {
+    for {
+      _         <- reportActive
       bestBlock <- blockChain.getBestBlock
-      ommers <- ommersPool.getOmmers(bestBlock.header.number + 1)
-      txs <- txPool.getPendingTransactions
+      ommers    <- ommersPool.getOmmers(bestBlock.header.number + 1)
+      txs       <- txPool.getPendingTransactions
       resp <- blockGenerator
         .generateBlockForMining(bestBlock, txs.map(_.stx), ommers, miningConfig.coinbase)
         .value
@@ -150,23 +155,20 @@ class PublicApiImpl[F[_]](
               powHeaderHash = pb.block.header.hashWithoutNonce,
               dagSeed = Ethash.seed(Ethash.epoch(pb.block.header.number.toLong)),
               target = ByteVector((BigInt(2).pow(256) / pb.block.header.difficulty).toByteArray)
-            ).pure[F]
+            ).pure[IO]
           case Left(err) =>
-            F.raiseError[GetWorkResponse](new RuntimeException("unable to prepare block"))
+            IO.raiseError[GetWorkResponse](new RuntimeException("unable to prepare block"))
         }
     } yield resp
-
-    resp
   }
 
-  override def getCoinbase: R[Address] = {
-    val addr = miningConfig.coinbase.pure[F]
-    addr
+  override def getCoinbase: Response[Address] = {
+    ok(miningConfig.coinbase.pure[IO])
   }
 
-  override def submitWork(nonce: ByteVector, powHeaderHash: ByteVector, mixHash: ByteVector): R[Boolean] = {
+  override def submitWork(nonce: ByteVector, powHeaderHash: ByteVector, mixHash: ByteVector): Response[Boolean] = {
     val succeed = for {
-      _ <- reportActive
+      _  <- reportActive
       bn <- blockChain.getBestBlockNumber
       succeed <- blockGenerator.getPrepared(powHeaderHash).map {
         case Some(pendingBlock) if bn <= pendingBlock.block.header.number =>
@@ -175,13 +177,13 @@ class PublicApiImpl[F[_]](
           false
       }
     } yield succeed
-    succeed
+    ok(succeed)
   }
 
-  override def syncing: R[Option[SyncingStatus]] = {
+  override def syncing: Response[Option[SyncingStatus]] = {
     val status = for {
-      currentBlock <- blockChain.getBestBlockNumber
-      highestBlock <- blockChain.getEstimatedHighestBlock
+      currentBlock  <- blockChain.getBestBlockNumber
+      highestBlock  <- blockChain.getEstimatedHighestBlock
       startingBlock <- blockChain.getSyncStartingBlock
     } yield {
       if (currentBlock < highestBlock) {
@@ -196,35 +198,36 @@ class PublicApiImpl[F[_]](
       }
     }
 
-    status
+    ok(status)
   }
 
-  override def sendRawTransaction(data: ByteVector): R[ByteVector] = {
+  override def sendRawTransaction(data: ByteVector): Response[ByteVector] = {
     val stx = RlpCodec.decode[SignedTransaction](data.bits).require.value
     val txHash = for {
       _ <- txPool.addOrUpdateTransaction(stx)
     } yield stx.hash
-    txHash
+    ok(txHash)
   }
 
-  override def call(callTx: CallTx, blockParam: BlockParam): R[ByteVector] = {
+  override def call(callTx: CallTx, blockParam: BlockParam): Response[ByteVector] = {
     val returnData = for {
       (stx, block) <- doCall(callTx, blockParam)
-      txResult <- ledger.simulateTransaction(stx, block.header)
+      txResult     <- ledger.simulateTransaction(stx, block.header)
     } yield txResult.vmReturnData
-    returnData
+
+    ok(returnData)
   }
 
-  override def estimateGas(callTx: CallTx, blockParam: BlockParam): R[BigInt] = {
+  override def estimateGas(callTx: CallTx, blockParam: BlockParam): Response[BigInt] = {
     val gas = for {
       (stx, block) <- doCall(callTx, blockParam)
-      gas <- ledger.binarySearchGasEstimation(stx, block.header)
+      gas          <- ledger.binarySearchGasEstimation(stx, block.header)
     } yield gas
 
-    gas
+    ok(gas)
   }
 
-  override def getCode(address: Address, blockParam: BlockParam): R[ByteVector] = {
+  override def getCode(address: Address, blockParam: BlockParam): Response[ByteVector] = {
     val code = for {
       block <- resolveBlock(blockParam)
       world <- blockChain.getWorldStateProxy(block.header.number,
@@ -233,63 +236,53 @@ class PublicApiImpl[F[_]](
       code <- world.getCode(address)
     } yield code
 
-    code
+    ok(code)
   }
 
-  override def getUncleCountByBlockNumber(blockParam: BlockParam): R[Int] = {
-    val count = for {
+  override def getUncleCountByBlockNumber(blockParam: BlockParam): Response[Int] = ok {
+    for {
       block <- resolveBlock(blockParam)
     } yield block.body.uncleNodesList.length
-    count
   }
 
-  override def getUncleCountByBlockHash(blockHash: ByteVector): R[Int] = {
+  override def getUncleCountByBlockHash(blockHash: ByteVector): Response[Int] = {
     val count = for {
       body <- blockChain.getBlockBodyByHash(blockHash)
     } yield body.map(_.uncleNodesList.length).getOrElse(-1)
-    count
+    ok(count)
   }
 
-  override def getBlockTransactionCountByNumber(blockParam: BlockParam): R[Int] = {
-    val count = resolveBlock(blockParam).map(_.body.transactionList.length)
-    count
+  override def getBlockTransactionCountByNumber(blockParam: BlockParam): Response[Int] = ok {
+    resolveBlock(blockParam).map(_.body.transactionList.length)
   }
 
   override def getTransactionByBlockNumberAndIndexRequest(
       blockParam: BlockParam,
       txIndex: Int
-  ): R[Option[SignedTransaction]] = {
-    val tx = for {
+  ): Response[Option[SignedTransaction]] = ok {
+    for {
       block <- resolveBlock(blockParam)
       tx = block.body.transactionList.lift(txIndex)
     } yield tx
-
-    tx
   }
 
-  override def getBalance(address: Address, blockParam: BlockParam): R[BigInt] = {
-    val balance = for {
+  override def getBalance(address: Address, blockParam: BlockParam): Response[BigInt] = ok {
+    for {
       account <- resolveAccount(address, blockParam)
     } yield account.balance.toBigInt
-
-    balance
   }
 
-  override def getStorageAt(address: Address, position: BigInt, blockParam: BlockParam): R[ByteVector] = {
-    val storage = for {
+  override def getStorageAt(address: Address, position: BigInt, blockParam: BlockParam): Response[ByteVector] = ok {
+    for {
       account <- resolveAccount(address, blockParam)
       storage <- blockChain.getAccountStorageAt(account.storageRoot, position)
     } yield storage
-
-    storage
   }
 
-  override def getTransactionCount(address: Address, blockParam: BlockParam): R[BigInt] = {
-    val count = for {
+  override def getTransactionCount(address: Address, blockParam: BlockParam): Response[BigInt] = ok {
+    for {
       account <- resolveAccount(address, blockParam)
     } yield account.nonce.toBigInt
-
-    count
   }
 
   override def newFilter(
@@ -297,34 +290,31 @@ class PublicApiImpl[F[_]](
       toBlock: Option[BlockParam],
       address: Option[Address],
       topics: List[List[ByteVector]]
-  ): R[BigInt] = {
+  ): Response[BigInt] = {
     val id = filterManager.newLogFilter(fromBlock, toBlock, address, topics)
-    id
+    ok(id)
   }
 
-  override def newBlockFilter: R[BigInt] = {
+  override def newBlockFilter: Response[BigInt] = {
     val id = filterManager.newBlockFilter
-    id
+    ok(id)
   }
 
-  override def newPendingTransactionFilter: R[BigInt] = {
+  override def newPendingTransactionFilter: Response[BigInt] = {
     val id = filterManager.newPendingTxFilter
-    id
+    ok(id)
   }
 
-  override def uninstallFilter(filterId: BigInt): R[Boolean] = {
-    val succeed = filterManager.uninstallFilter(filterId).map(_ => true)
-    succeed
+  override def uninstallFilter(filterId: BigInt): Response[Boolean] = {
+    ok(filterManager.uninstallFilter(filterId).map(_ => true))
   }
 
-  override def getFilterChanges(filterId: BigInt): R[FilterChanges] = {
-    val changes = filterManager.getFilterChanges(filterId)
-    changes
+  override def getFilterChanges(filterId: BigInt): Response[FilterChanges] = {
+    ok(filterManager.getFilterChanges(filterId))
   }
 
-  override def getFilterLogs(filterId: BigInt): R[FilterLogs] = {
-    val logs = filterManager.getFilterLogs(filterId)
-    logs
+  override def getFilterLogs(filterId: BigInt): Response[FilterLogs] = {
+    ok(filterManager.getFilterLogs(filterId))
   }
 
   override def getLogs(
@@ -332,15 +322,17 @@ class PublicApiImpl[F[_]](
       toBlock: Option[BlockParam],
       address: Option[Address],
       topics: List[List[ByteVector]]
-  ): R[LogFilterLogs] = {
+  ): Response[LogFilterLogs] = {
     val logs = filterManager
       .getLogs(LogFilter(0, fromBlock, toBlock, address, topics))
       .map(LogFilterLogs)
 
-    logs
+    ok(logs)
   }
 
-  override def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): R[List[Transaction]] = {
+  override def getAccountTransactions(address: Address,
+                                      fromBlock: BigInt,
+                                      toBlock: BigInt): Response[List[Transaction]] = {
     val numBlocksToSearch = toBlock - fromBlock
     ???
   }
@@ -348,28 +340,28 @@ class PublicApiImpl[F[_]](
   /////////////////////
   /////////////////////
 
-  private[jbok] def doCall[A](callTx: CallTx, blockParam: BlockParam): F[(SignedTransaction, Block)] =
+  private[jbok] def doCall[A](callTx: CallTx, blockParam: BlockParam): IO[(SignedTransaction, Block)] =
     for {
-      stx <- prepareTransaction(callTx, blockParam)
+      stx   <- prepareTransaction(callTx, blockParam)
       block <- resolveBlock(blockParam)
     } yield (stx, block)
 
-  private[jbok] def prepareTransaction(callTx: CallTx, blockParam: BlockParam) =
+  private[jbok] def prepareTransaction(callTx: CallTx, blockParam: BlockParam): IO[SignedTransaction] =
     for {
       gasLimit <- getGasLimit(callTx, blockParam)
       from <- OptionT
-        .fromOption[F](callTx.from.map(Address.apply))
+        .fromOption[IO](callTx.from.map(Address.apply))
         .getOrElseF(
           EitherT(keyStore.listAccounts).getOrElse(Nil).map(_.head)
         )
-      to = callTx.to.map(Address.apply)
-      tx = Transaction(0, callTx.gasPrice, gasLimit, to, callTx.value, callTx.data)
-      fakeSignature = CryptoSignature(0, 0, Some(0.toByte))
+      to            = callTx.to.map(Address.apply)
+      tx            = Transaction(0, callTx.gasPrice, gasLimit, to, callTx.value, callTx.data)
+      fakeSignature = CryptoSignature(0, 0, 0.toByte)
     } yield SignedTransaction(tx, 0.toByte, ByteVector(0), ByteVector(0), from)
 
-  private[jbok] def getGasLimit(callTx: CallTx, blockParam: BlockParam): F[BigInt] =
+  private[jbok] def getGasLimit(callTx: CallTx, blockParam: BlockParam): IO[BigInt] =
     if (callTx.gas.isDefined) {
-      F.pure(callTx.gas.get)
+      callTx.gas.get.pure[IO]
     } else {
       resolveBlock(BlockParam.Latest).map(_.header.gasLimit)
     }
@@ -381,21 +373,21 @@ class PublicApiImpl[F[_]](
         Duration.between(reported.toInstant, now.toInstant).toMillis < miningConfig.activeTimeout.toMillis
     }
 
-  private[jbok] def reportActive: F[Unit] = {
+  private[jbok] def reportActive: Response[Unit] = ok {
     val now = new Date()
     lastActive.modify(_ => Some(now)).void
   }
 
-  private[jbok] def resolveAccount(address: Address, blockParam: BlockParam): F[Account] =
+  private[jbok] def resolveAccount(address: Address, blockParam: BlockParam): IO[Account] =
     for {
       block <- resolveBlock(blockParam)
       account <- blockChain
-        .getAccount(address, block.header.number)
-        .map(_.getOrElse(Account.empty(blockChainConfig.accountStartNonce)))
+          .getAccount(address, block.header.number)
+          .map(_.getOrElse(Account.empty(blockChainConfig.accountStartNonce)))
     } yield account
 
-  private[jbok] def resolveBlock(blockParam: BlockParam): F[Block] = {
-    def getBlock(number: BigInt): F[Block] = blockChain.getBlockByNumber(number).map(_.get)
+  private[jbok] def resolveBlock(blockParam: BlockParam): IO[Block] = {
+    def getBlock(number: BigInt): IO[Block] = blockChain.getBlockByNumber(number).map(_.get)
 
     blockParam match {
       case BlockParam.WithNumber(blockNumber) => getBlock(blockNumber)

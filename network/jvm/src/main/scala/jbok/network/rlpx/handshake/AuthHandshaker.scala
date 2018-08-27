@@ -4,16 +4,16 @@ import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.security.SecureRandom
 
-import cats.effect.{IO, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
-import jbok.crypto.signature.SecP256k1._
-import jbok.crypto.signature.{CryptoSignature, KeyPair, SecP256k1}
+import jbok.codec.rlp.codecs._
+import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.crypto.signature.{KeyPair, CryptoSignature}
 import jbok.crypto.{ECIES, _}
 import org.bouncycastle.crypto.agreement.ECDHBasicAgreement
 import org.bouncycastle.crypto.digests.KeccakDigest
 import scodec.bits.{BitVector, ByteVector}
-import jbok.codec.rlp.codecs._
 
 import scala.util.Random
 
@@ -82,20 +82,20 @@ case class AuthHandshaker[F[_]](
 
     for {
       encryptedPayload <- ECIES.encrypt[F](
-        SecP256k1.toECPublicKeyParameters(KeyPair.Public(remotePubKey)).getQ,
+        SecP256k1.toECPublicKeyParameters(remotePubKey).getQ,
         secureRandom,
         padded,
         Some(sizePrefix)
       )
     } yield {
       val packet = ByteVector(sizePrefix) ++ encryptedPayload
-      (packet, copy(isInitiator = true, initiatePacketOpt = Some(packet), remotePubKeyOpt = Some(remotePubKey)))
+      (packet, copy(isInitiator = true, initiatePacketOpt = Some(packet), remotePubKeyOpt = Some(remotePubKey.bytes)))
     }
   }
 
   def handleResponseMessage(data: ByteVector): F[(AuthHandshakeResult, ByteVector)] =
     for {
-      plaintext <- ECIES.decrypt[F](nodeKey.secret.d.underlying(), data.toArray)
+      plaintext <- ECIES.decrypt[F](nodeKey.secret.d, data.toArray)
       message = AuthResponseMessage.decode(plaintext.toArray)
     } yield {
       val result = copy(responsePacketOpt = Some(data.take(ResponsePacketLength))).finalizeHandshake(message.ephemeralPublicKey, message.nonce)
@@ -109,7 +109,7 @@ case class AuthHandshaker[F[_]](
 
     for {
       plaintext <- ECIES.decrypt[F](
-        privKey = nodeKey.secret.d.underlying(),
+        privKey = nodeKey.secret.d,
         ciphertext = encryptedPayload.toArray,
         macData = Some(sizeBytes.toArray)
       )
@@ -144,10 +144,10 @@ case class AuthHandshaker[F[_]](
   def handleInitialMessage(data: ByteVector): F[(ByteVector, AuthHandshakeResult, ByteVector)] = {
     val initData = data.take(InitiatePacketLength)
     for {
-      plaintext <- ECIES.decrypt[F](nodeKey.secret.d.underlying(), initData.toArray)
+      plaintext <- ECIES.decrypt[F](nodeKey.secret.d, initData.toArray)
       message = AuthInitiateMessage.decode(plaintext.toArray)
       response = AuthResponseMessage(
-        ephemeralPublicKey = ephemeralKey.public.bytes,
+        ephemeralPublicKey = ephemeralKey.public,
         nonce = nonce,
         knownPeer = false
       )
@@ -177,13 +177,13 @@ case class AuthHandshaker[F[_]](
 
     for {
       plaintext <- ECIES.decrypt[F](
-        privKey = nodeKey.secret.d.underlying(),
+        privKey = nodeKey.secret.d,
         ciphertext = encryptedPayload.toArray,
         macData = Some(sizeBytes.toArray)
       )
       message = RlpCodec.decode[AuthInitiateMessageV4](BitVector(plaintext)).require.value
       response = AuthResponseMessageV4(
-        ephemeralPublicKey = ephemeralKey.public.bytes,
+        ephemeralPublicKey = ephemeralKey.public,
         nonce = nonce,
         version = ProtocolVersion
       )
@@ -210,7 +210,7 @@ case class AuthHandshaker[F[_]](
     }
   }
 
-  private def extractEphemeralKey(signature: CryptoSignature, nonce: ByteVector, publicKey: ByteVector): ByteVector = {
+  private def extractEphemeralKey(signature: CryptoSignature, nonce: ByteVector, publicKey: ByteVector): KeyPair.Public = {
     val agreement = new ECDHBasicAgreement
     agreement.init(SecP256k1.toECPrivateKeyParameters(nodeKey.secret))
     val sharedSecret = agreement.calculateAgreement(SecP256k1.toECPublicKeyParameters(KeyPair.Public(publicKey)))
@@ -218,33 +218,21 @@ case class AuthHandshaker[F[_]](
     val token = bigIntegerToBytes(sharedSecret, NonceSize)
     val signed = xor(token, nonce.toArray)
 
-    val signaturePubBytes = SecP256k1
-      .recoverPublicBytes(
-        signature.r,
-        signature.s,
-        signature.v.get,
-        None,
-        ByteVector(signed)
-      )
-      .get
-      .toArray
-
-    ByteVector(uncompressedIndicator +: signaturePubBytes)
+    SecP256k1.recoverPublic(signed, signature, None).get
   }
 
   private def xor(a: Array[Byte], b: Array[Byte]): Array[Byte] =
     (a zip b) map { case (b1, b2) => (b1 ^ b2).toByte }
 
-  private def createAuthInitiateMessageV4(remotePubKey: ByteVector): AuthInitiateMessageV4 = {
+  private def createAuthInitiateMessageV4(remotePubKey: KeyPair.Public): AuthInitiateMessageV4 = {
     val sharedSecret = {
       val agreement = new ECDHBasicAgreement
       agreement.init(SecP256k1.toECPrivateKeyParameters(nodeKey.secret))
-      bigIntegerToBytes(agreement.calculateAgreement(SecP256k1.toECPublicKeyParameters(KeyPair.Public(remotePubKey))),
-                        NonceSize)
+      bigIntegerToBytes(agreement.calculateAgreement(SecP256k1.toECPublicKeyParameters(remotePubKey)), NonceSize)
     }
 
     val messageToSign = ByteVector(sharedSecret).xor(nonce)
-    val signature = SecP256k1.sign[IO](messageToSign, ephemeralKey).unsafeRunSync()
+    val signature = SecP256k1.sign(messageToSign.toArray, ephemeralKey).unsafeRunSync()
 
     AuthInitiateMessageV4(signature, nodeKey.public.bytes, nonce, ProtocolVersion)
   }
@@ -258,7 +246,7 @@ case class AuthHandshaker[F[_]](
     bytes
   }
 
-  private def finalizeHandshake(remoteEphemeralKey: ByteVector, remoteNonce: ByteVector): AuthHandshakeResult = {
+  private def finalizeHandshake(remoteEphemeralKey: KeyPair.Public, remoteNonce: ByteVector): AuthHandshakeResult = {
     val successOpt = for {
       initiatePacket <- initiatePacketOpt
       responsePacket <- responsePacketOpt
@@ -267,7 +255,7 @@ case class AuthHandshaker[F[_]](
       val secretScalar = {
         val agreement = new ECDHBasicAgreement
         agreement.init(SecP256k1.toECPrivateKeyParameters(ephemeralKey.secret))
-        agreement.calculateAgreement(SecP256k1.toECPublicKeyParameters(KeyPair.Public(remoteEphemeralKey)))
+        agreement.calculateAgreement(SecP256k1.toECPublicKeyParameters(remoteEphemeralKey))
       }
 
       val agreedSecret = bigIntegerToBytes(secretScalar, SecretSize)
@@ -323,9 +311,8 @@ case class AuthHandshaker[F[_]](
     else (mac2, mac1)
   }
 
-  private[jbok] def publicKeyFromNodeId(nodeId: String): ByteVector = {
-    val bytes = uncompressedIndicator +: ByteVector.fromValidHex(nodeId)
-    bytes
+  private[jbok] def publicKeyFromNodeId(nodeId: String): KeyPair.Public = {
+    KeyPair.Public(nodeId)
   }
 }
 
@@ -348,7 +335,6 @@ object AuthHandshaker {
 
   def apply[F[_]: Sync](nodeKey: KeyPair, secureRandom: SecureRandom): AuthHandshaker[F] = {
     val nonce = secureRandomByteArray(secureRandom, NonceSize)
-    AuthHandshaker(nodeKey, ByteVector(nonce), SecP256k1.generateKeyPair[IO].unsafeRunSync(), secureRandom)
+    AuthHandshaker(nodeKey, ByteVector(nonce), SecP256k1.generateKeyPair(secureRandom).unsafeRunSync(), secureRandom)
   }
-
 }

@@ -23,7 +23,7 @@ case class RegularSync[F[_]](
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
-  def stream: Stream[F, Unit] = peerManager.subscribeMessages().evalMap {
+  def stream: Stream[F, Unit] = peerManager.subscribe().evalMap {
     case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
       log.info(s"received NewBlock")
       ledger.importBlock(block).flatMap { br =>

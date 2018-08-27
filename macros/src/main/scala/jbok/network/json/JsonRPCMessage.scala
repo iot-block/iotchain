@@ -5,8 +5,8 @@ import java.nio.charset.StandardCharsets
 import cats.implicits._
 import io.circe._
 import io.circe.generic.JsonCodec
-import io.circe.syntax._
 import io.circe.parser._
+import io.circe.syntax._
 import jbok.network.json.JsonRPCMessage.RequestId
 import scodec.Codec
 
@@ -21,9 +21,9 @@ object JsonRPCMessage {
   implicit def encoder[A: Encoder]: Encoder[JsonRPCMessage[A]] = new Encoder[JsonRPCMessage[A]] {
     override def apply(a: JsonRPCMessage[A]): Json = {
       val json = a match {
-        case r: JsonRPCRequest[A] => r.asJson
+        case r: JsonRPCRequest[A]      => r.asJson
         case r: JsonRPCNotification[A] => r.asJson
-        case r: JsonRPCResponse[A] => r.asJson
+        case r: JsonRPCResponse[A]     => r.asJson
       }
       json.mapObject(_.add("jsonrpc", "2.0".asJson))
     }
@@ -67,7 +67,7 @@ object JsonRPCResponse {
     override def apply(a: JsonRPCResponse[A]): Json = {
       val json = a match {
         case r: JsonRPCResult[A] => r.asJson
-        case e: JsonRPCError => e.asJson
+        case e: JsonRPCError     => e.asJson
       }
       json.mapObject(_.add("jsonrpc", "2.0".asJson))
     }
@@ -83,34 +83,26 @@ object JsonRPCResponse {
       result.leftMap(_.toString)
   }
 
-  def ok[A](id: RequestId, result: A): JsonRPCResult[A] = JsonRPCResult(id, result)
+  def ok[A](id: String, result: A): JsonRPCResult[A] = JsonRPCResult(id, result)
 
-  def error(id: RequestId, error: ErrorObject): JsonRPCError =
-    JsonRPCError(id, error)
+  def internalError(message: String, id: Option[String] = None): JsonRPCError =
+    JsonRPCError(id.getOrElse(""), ErrorObject(ErrorCode.InternalError, message, None))
 
-  def internalError(message: String): JsonRPCError =
-    internalError(RequestId.Null, message)
+  def invalidParams(message: String, id: Option[String] = None): JsonRPCError =
+    JsonRPCError(id.getOrElse(""), ErrorObject(ErrorCode.InvalidParams, message, None))
 
-  def internalError(id: RequestId, message: String): JsonRPCError =
-    JsonRPCError(id, ErrorObject(ErrorCode.InternalError, message, None))
+  def invalidRequest(message: String, id: Option[String] = None): JsonRPCError =
+    JsonRPCError(id.getOrElse(""), ErrorObject(ErrorCode.InvalidRequest, message, None))
 
-  def invalidParams(message: String): JsonRPCError =
-    invalidParams(RequestId.Null, message)
-
-  def invalidParams(id: RequestId, message: String): JsonRPCError =
-    JsonRPCError(id, ErrorObject(ErrorCode.InvalidParams, message, None))
-
-  def invalidRequest(message: String): JsonRPCError =
-    JsonRPCError(RequestId.Null, ErrorObject(ErrorCode.InvalidRequest, message, None))
-
-  def cancelled(id: RequestId): JsonRPCError =
+  def cancelled(id: String): JsonRPCError =
     JsonRPCError(id, ErrorObject(ErrorCode.RequestCancelled, "", None))
 
-  def parseError(message: String): JsonRPCError =
-    JsonRPCError(RequestId.Null, ErrorObject(ErrorCode.ParseError, message, None))
+  def parseError(message: String, id: Option[String] = None): JsonRPCError =
+    JsonRPCError(id.getOrElse(""), ErrorObject(ErrorCode.ParseError, message, None))
 
-  def methodNotFound(method: String, id: Option[RequestId] = None): JsonRPCError =
+  def methodNotFound(method: String, id: Option[String] = None): JsonRPCError =
     JsonRPCError(
-      id.getOrElse(RequestId.Null),
-      ErrorObject(ErrorCode.MethodNotFound, s"method $method does not exist", None))
+      id.getOrElse(""),
+      ErrorObject(ErrorCode.MethodNotFound, s"""method ($method) does not exist""", None)
+    )
 }

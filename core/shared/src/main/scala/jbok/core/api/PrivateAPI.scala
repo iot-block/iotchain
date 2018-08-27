@@ -1,14 +1,13 @@
 package jbok.core.api
 
-import cats.effect.Concurrent
-import cats.implicits._
-import jbok.core.{BlockChain, TxPool}
+import cats.effect.IO
 import jbok.core.api.impl.PrivateApiImpl
 import jbok.core.configs.BlockChainConfig
 import jbok.core.keystore.{KeyStore, Wallet}
 import jbok.core.models.{Address, Transaction}
+import jbok.core.{BlockChain, TxPool}
 import jbok.crypto.signature.CryptoSignature
-import jbok.network.JsonRpcAPI
+import jbok.network.rpc.RpcAPI
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.Duration
@@ -37,41 +36,41 @@ case class TransactionRequest(
     )
 }
 
-trait PrivateAPI[F[_]] extends JsonRpcAPI[F] {
-  def importRawKey(privateKey: ByteVector, passphrase: String): R[Address]
+trait PrivateAPI extends RpcAPI {
+  def importRawKey(privateKey: ByteVector, passphrase: String): Response[Address]
 
-  def newAccount(passphrase: String): R[Address]
+  def newAccount(passphrase: String): Response[Address]
 
-  def delAccount(address: Address): R[Boolean]
+  def delAccount(address: Address): Response[Boolean]
 
-  def listAccounts: R[List[Address]]
+  def listAccounts: Response[List[Address]]
 
-  def unlockAccount(address: Address, passphrase: String, duration: Option[Duration]): R[Boolean]
+  def unlockAccount(address: Address, passphrase: String, duration: Option[Duration]): Response[Boolean]
 
-  def lockAccount(address: Address): R[Boolean]
+  def lockAccount(address: Address): Response[Boolean]
 
-  def sign(message: ByteVector, address: Address, passphrase: Option[String]): R[CryptoSignature]
+  def sign(message: ByteVector, address: Address, passphrase: Option[String]): Response[CryptoSignature]
 
-  def ecRecover(message: ByteVector, signature: CryptoSignature): R[Address]
+  def ecRecover(message: ByteVector, signature: CryptoSignature): Response[Address]
 
-  def sendTransaction(tx: TransactionRequest, passphrase: Option[String]): R[ByteVector]
+  def sendTransaction(tx: TransactionRequest, passphrase: Option[String]): Response[ByteVector]
 
-  def deleteWallet(address: Address): R[Boolean]
+  def deleteWallet(address: Address): Response[Boolean]
 
-  def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): R[Boolean]
+  def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): Response[Boolean]
 }
 
 object PrivateAPI {
-  def apply[F[_]: Concurrent](
-      keyStore: KeyStore[F],
-      blockchain: BlockChain[F],
+  def apply(
+      keyStore: KeyStore[IO],
+      blockchain: BlockChain[IO],
       blockChainConfig: BlockChainConfig,
-      txPool: TxPool[F],
-  ): F[PrivateAPI[F]] =
+      txPool: TxPool[IO],
+  ): IO[PrivateAPI] =
     for {
-      unlockedWallets <- fs2.async.refOf[F, Map[Address, Wallet]](Map.empty)
+      unlockedWallets <- fs2.async.refOf[IO, Map[Address, Wallet]](Map.empty)
     } yield
-      new PrivateApiImpl[F](
+      new PrivateApiImpl(
         keyStore,
         blockchain,
         blockChainConfig,

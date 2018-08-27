@@ -2,16 +2,16 @@ package jbok.core.api
 
 import java.util.Date
 
-import cats.effect.Sync
-import cats.implicits._
+import cats.effect.IO
 import jbok.core.api.impl.PublicApiImpl
+//import jbok.core.api.impl.PublicApiImpl
 import jbok.core.configs.{BlockChainConfig, MiningConfig}
 import jbok.core.keystore.KeyStore
 import jbok.core.ledger.{Ledger, OmmersPool}
 import jbok.core.mining.BlockGenerator
 import jbok.core.models._
 import jbok.core.{BlockChain, TxPool}
-import jbok.network.JsonRpcAPI
+import jbok.network.rpc.RpcAPI
 import scodec.bits.ByteVector
 
 case class GetWorkResponse(powHeaderHash: ByteVector, dagSeed: ByteVector, target: ByteVector)
@@ -34,117 +34,117 @@ case class CallTx(
 
 case class SyncingStatus(startingBlock: BigInt, currentBlock: BigInt, highestBlock: BigInt)
 
-trait PublicAPI[F[_]] extends JsonRpcAPI[F] {
-  def protocolVersion: R[String]
+trait PublicAPI extends RpcAPI {
+  def protocolVersion: Response[String]
 
-  def bestBlockNumber: R[BigInt]
+  def bestBlockNumber: Response[BigInt]
 
-  def getBlockTransactionCountByHash(blockHash: ByteVector): R[Option[Int]]
+  def getBlockTransactionCountByHash(blockHash: ByteVector): Response[Option[Int]]
 
-  def getBlockByHash(blockHash: ByteVector): R[Option[Block]]
+  def getBlockByHash(blockHash: ByteVector): Response[Option[Block]]
 
-  def getBlockByNumber(blockNumber: BigInt): R[Option[Block]]
+  def getBlockByNumber(blockNumber: BigInt): Response[Option[Block]]
 
-  def getTransactionByHash(txHash: ByteVector): R[Option[SignedTransaction]]
+  def getTransactionByHash(txHash: ByteVector): Response[Option[SignedTransaction]]
 
-  def getTransactionReceipt(txHash: ByteVector): R[Option[Receipt]]
+  def getTransactionReceipt(txHash: ByteVector): Response[Option[Receipt]]
 
-  def getTransactionByBlockHashAndIndexRequest(blockHash: ByteVector, txIndex: Int): R[Option[SignedTransaction]]
+  def getTransactionByBlockHashAndIndexRequest(blockHash: ByteVector, txIndex: Int): Response[Option[SignedTransaction]]
 
-  def getUncleByBlockHashAndIndex(blockHash: ByteVector, uncleIndex: Int): R[Option[BlockHeader]]
+  def getUncleByBlockHashAndIndex(blockHash: ByteVector, uncleIndex: Int): Response[Option[BlockHeader]]
 
-  def getUncleByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): R[Option[BlockHeader]]
+  def getUncleByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): Response[Option[BlockHeader]]
 
-  def submitHashRate(hashRate: BigInt, id: ByteVector): R[Boolean]
+  def submitHashRate(hashRate: BigInt, id: ByteVector): Response[Boolean]
 
-  def getGasPrice: R[BigInt]
+  def getGasPrice: Response[BigInt]
 
-  def getMining: R[Boolean]
+  def getMining: Response[Boolean]
 
-  def getHashRate: R[BigInt]
+  def getHashRate: Response[BigInt]
 
-  def getWork: R[GetWorkResponse]
+  def getWork: Response[GetWorkResponse]
 
-  def getCoinbase: R[Address]
+  def getCoinbase: Response[Address]
 
-  def submitWork(nonce: ByteVector, powHeaderHash: ByteVector, mixHash: ByteVector): R[Boolean]
+  def submitWork(nonce: ByteVector, powHeaderHash: ByteVector, mixHash: ByteVector): Response[Boolean]
 
-  def syncing: R[Option[SyncingStatus]]
+  def syncing: Response[Option[SyncingStatus]]
 
-  def sendRawTransaction(data: ByteVector): R[ByteVector]
+  def sendRawTransaction(data: ByteVector): Response[ByteVector]
 
-  def call(callTx: CallTx, blockParam: BlockParam): R[ByteVector]
+  def call(callTx: CallTx, blockParam: BlockParam): Response[ByteVector]
 
-  def estimateGas(callTx: CallTx, blockParam: BlockParam): R[BigInt]
+  def estimateGas(callTx: CallTx, blockParam: BlockParam): Response[BigInt]
 
-  def getCode(address: Address, blockParam: BlockParam): R[ByteVector]
+  def getCode(address: Address, blockParam: BlockParam): Response[ByteVector]
 
-  def getUncleCountByBlockNumber(blockParam: BlockParam): R[Int]
+  def getUncleCountByBlockNumber(blockParam: BlockParam): Response[Int]
 
-  def getUncleCountByBlockHash(blockHash: ByteVector): R[Int]
+  def getUncleCountByBlockHash(blockHash: ByteVector): Response[Int]
 
-  def getBlockTransactionCountByNumber(blockParam: BlockParam): R[Int]
+  def getBlockTransactionCountByNumber(blockParam: BlockParam): Response[Int]
 
-  def getTransactionByBlockNumberAndIndexRequest(blockParam: BlockParam, txIndex: Int): R[Option[SignedTransaction]]
+  def getTransactionByBlockNumberAndIndexRequest(blockParam: BlockParam, txIndex: Int): Response[Option[SignedTransaction]]
 
-  def getBalance(address: Address, blockParam: BlockParam): R[BigInt]
+  def getBalance(address: Address, blockParam: BlockParam): Response[BigInt]
 
-  def getStorageAt(address: Address, position: BigInt, blockParam: BlockParam): R[ByteVector]
+  def getStorageAt(address: Address, position: BigInt, blockParam: BlockParam): Response[ByteVector]
 
-  def getTransactionCount(address: Address, blockParam: BlockParam): R[BigInt]
+  def getTransactionCount(address: Address, blockParam: BlockParam): Response[BigInt]
 
   def newFilter(
       fromBlock: Option[BlockParam],
       toBlock: Option[BlockParam],
       address: Option[Address],
       topics: List[List[ByteVector]]
-  ): R[BigInt]
+  ): Response[BigInt]
 
-  def newBlockFilter: R[BigInt]
+  def newBlockFilter: Response[BigInt]
 
-  def newPendingTransactionFilter: R[BigInt]
+  def newPendingTransactionFilter: Response[BigInt]
 
-  def uninstallFilter(filterId: BigInt): R[Boolean]
+  def uninstallFilter(filterId: BigInt): Response[Boolean]
 
-  def getFilterChanges(filterId: BigInt): R[FilterChanges]
+  def getFilterChanges(filterId: BigInt): Response[FilterChanges]
 
-  def getFilterLogs(filterId: BigInt): R[FilterLogs]
+  def getFilterLogs(filterId: BigInt): Response[FilterLogs]
 
   def getLogs(
       fromBlock: Option[BlockParam],
       toBlock: Option[BlockParam],
       address: Option[Address],
       topics: List[List[ByteVector]]
-  ): R[LogFilterLogs]
+  ): Response[LogFilterLogs]
 
-  def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): R[List[Transaction]]
+  def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): Response[List[Transaction]]
 }
 
 object PublicAPI {
-  def apply[F[_]: Sync](
-      blockChain: BlockChain[F],
+  def apply(
+      blockChain: BlockChain[IO],
       blockChainConfig: BlockChainConfig,
-      ommersPool: OmmersPool[F],
-      txPool: TxPool[F],
-      ledger: Ledger[F],
-      blockGenerator: BlockGenerator[F],
-      keyStore: KeyStore[F],
-      filterManager: FilterManager[F],
+      ommersPool: OmmersPool[IO],
+      txPool: TxPool[IO],
+      ledger: Ledger[IO],
+      blockGenerator: BlockGenerator[IO],
+      keyStore: KeyStore[IO],
+      filterManager: FilterManager[IO],
       miningConfig: MiningConfig,
       version: Int,
-  ): F[PublicAPI[F]] =
+  ): IO[PublicAPI] =
     for {
-      hashRate <- fs2.async.refOf[F, Map[ByteVector, (BigInt, Date)]](Map.empty)
-      lastActive <- fs2.async.refOf[F, Option[Date]](None)
+      hashRate <- fs2.async.refOf[IO, Map[ByteVector, (BigInt, Date)]](Map.empty)
+      lastActive <- fs2.async.refOf[IO, Option[Date]](None)
     } yield {
-      new PublicApiImpl[F](
-        blockChain: BlockChain[F],
-        blockChainConfig: BlockChainConfig,
-        ommersPool: OmmersPool[F],
-        txPool: TxPool[F],
-        ledger: Ledger[F],
-        blockGenerator: BlockGenerator[F],
-        keyStore: KeyStore[F],
+      new PublicApiImpl(
+        blockChain,
+        blockChainConfig,
+        ommersPool,
+        txPool,
+        ledger,
+        blockGenerator,
+        keyStore,
         filterManager,
         miningConfig: MiningConfig,
         version: Int,

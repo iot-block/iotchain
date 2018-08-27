@@ -10,7 +10,7 @@ import scodec.bits._
 import scala.concurrent.duration._
 
 trait SyncServiceFixture extends PeerManageFixture {
-  val blockchain = pm1.blockchain
+  val blockchain = blockChain
   val syncService: SyncService[IO] =
     SyncService[IO](pm1, blockchain).unsafeRunSync()
 }

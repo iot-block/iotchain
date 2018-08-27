@@ -5,191 +5,157 @@ import java.net.InetSocketAddress
 import cats.effect.ConcurrentEffect
 import cats.implicits._
 import fs2._
-import fs2.async.mutable.{Signal, Topic}
-import fs2.async.{Promise, Ref}
-import fs2.io.tcp.Socket
 import jbok.core.BlockChain
 import jbok.core.configs.PeerManagerConfig
 import jbok.core.messages.{Message, Messages, Status}
-import jbok.network.NetAddress
+import jbok.core.peer.PeerEvent.PeerRecv
+import jbok.network.Connection
+import jbok.network.common.{RequestId, RequestMethod}
 import jbok.network.execution._
-import scodec.bits.ByteVector
+import jbok.network.transport.{TcpTransport, TransportEvent}
+import scodec.bits.BitVector
+import scodec.{Attempt, Codec, DecodeResult, Decoder, Encoder, SizeBound}
 
-case class PeerManager[F[_]](
-    config: PeerManagerConfig,
-    stopWhenTrue: Signal[F, Boolean],
-    pending: Ref[F, Map[PeerId, Peer[F]]],
-    handshaked: Ref[F, Map[PeerId, HandshakedPeer[F]]],
-    events: Topic[F, Option[PeerEvent]],
-    blockchain: BlockChain[F]
-)(implicit F: ConcurrentEffect[F]) {
+import scala.concurrent.ExecutionContext
 
-  private[this] val log = org.log4s.getLogger
+trait PeerManager[F[_]] {
+  def localAddress: F[InetSocketAddress]
 
-  private val decode: Pipe[F, Byte, Message] =
-    _.chunks.map(chunks => Messages.decode(ByteVector(chunks.toArray)).require)
+  def status: F[Status]
 
-  private val encode: Pipe[F, Message, Byte] =
-    _.flatMap[Byte](m => Stream.chunk(Chunk.array(Messages.encode(m).toArray)).covary[F])
+  def handshakedPeers: F[Map[PeerId, HandshakedPeer]]
 
-  private def fuse(socket: Socket[F], incoming: Boolean, p: Promise[F, Unit]): Stream[F, Unit] =
-    for {
-      conn <- Stream.eval(Connection[F](socket.close))
-      remote <- Stream.eval(socket.remoteAddress)
-      local <- Stream.eval(socket.localAddress)
+  def listen: F[Unit]
 
-      _ = if (incoming) {
-        log.info(s"accept a new incoming connection from ${remote} to ${local}")
-      } else {
-        log.info(s"create a new outgoing connection form ${local} to ${remote}")
-      }
+  def stop: F[Unit]
 
-      peer = Peer(remote, incoming = false, getStatus, conn)
-      _ <- Stream.eval(pending.modify(_ + (peer.id -> peer)))
-      _ <- socket
-        .reads(256 * 1024)
-        .through(decode)
-        .onFinalize(socket.endOfInput)
-        .evalMap {
-          case msg: Status => conn.inbound.publish1(msg.some)
-          case msg         => events.publish1(PeerEvent.PeerRecv(PeerId(remote.toString), msg).some)
-        }
-        .merge(
-          conn.outbound.dequeue
-            .through(encode)
-            .to(socket.writes())
-            .onFinalize(socket.endOfOutput)
-        )
-        .concurrently(Stream.eval(handshake(peer) *> p.complete(())))
-        .onFinalize(socket.close *> onPeerDrop(PeerId(remote.toString)))
-        .handleErrorWith(e => Stream.eval(F.delay(e.printStackTrace())))
+  def connect(to: InetSocketAddress): F[Unit]
 
-    } yield ()
+  def handshake(conn: Connection[F, Message]): F[Unit]
 
-  private def onPeerDrop(peerId: PeerId): F[Unit] =
-    pending.modify(_ - peerId) *>
-      handshaked.modify(_ - peerId) *>
-      events.publish1(PeerEvent.PeerDrop(peerId).some) *>
-      F.delay(log.info(s"${peerId} dropped"))
+  def broadcast(msg: Message): F[Unit]
 
-  private def handshake(peer: Peer[F]): F[Unit] =
-    for {
-      hp <- peer.handshake
-      _ <- pending.modify(_ - peer.id)
-      _ <- handshaked.modify(_ + (hp.id -> hp))
-      _ <- events.publish1(PeerEvent.PeerAdd(hp.id).some)
-      _ = log.info(s"peer ${peer.id} handshaked")
-    } yield ()
+  def sendMessage(peerId: PeerId, msg: Message): F[Unit]
 
-  def getPendingPeers: F[Map[PeerId, Peer[F]]] = pending.get
+  def subscribe(): Stream[F, PeerEvent]
 
-  def getHandshakedPeers: F[Map[PeerId, HandshakedPeer[F]]] = handshaked.get
-
-  def getStatus: F[Status] =
-    for {
-      number <- blockchain.getBestBlockNumber
-      headerOpt <- blockchain.getBlockHeaderByNumber(number)
-      genesis <- blockchain.genesisHeader
-      header = headerOpt.getOrElse(genesis)
-    } yield Status(1, 1, header.hash, genesis.hash)
-
-  def listen(addr: NetAddress = config.bindAddr, maxConcurrent: Int = config.maxIncomingPeers): F[Unit] = {
-    val bind = new InetSocketAddress(addr.host, addr.port.get)
-
-    fs2.async.promise[F, Unit].flatMap { p =>
-      val stream = fs2.io.tcp
-        .serverWithLocalAddress[F](bind, maxQueued = 0, reuseAddress = true, receiveBufferSize = 256 * 1024)
-        .map {
-          case Left(bindAddr) =>
-            log.info(s"listening on ${bindAddr}")
-            Stream.eval(p.complete(()))
-
-          case Right(s) =>
-            for {
-              socket <- s
-              p2 <- Stream.eval(fs2.async.promise[F, Unit])
-              _ <- fuse(socket, incoming = true, p2)
-            } yield ()
-        }
-        .join(maxConcurrent)
-        .handleErrorWith(e => Stream.eval(F.delay(e.printStackTrace())))
-        .interruptWhen(stopWhenTrue)
-
-      stopWhenTrue.set(false) *> F.start(stream.compile.drain).void *> p.get
-    }
-  }
-
-  def connect(addr: NetAddress): F[Unit] = {
-    val to = new InetSocketAddress(addr.host, addr.port.get)
-
-    fs2.async.promise[F, Unit].flatMap { p =>
-      val stream = fs2.io.tcp
-        .client[F](to, keepAlive = true, noDelay = true)
-        .flatMap(socket => fuse(socket, incoming = false, p))
-        .onFinalize(F.delay(log.info(s"connect down")))
-        .interruptWhen(stopWhenTrue)
-
-      stopWhenTrue.set(false) *> F.start(stream.compile.drain) *> p.get
-    }
-  }
-
-  def disconnect(peerId: PeerId): F[Unit] =
-    for {
-      peers <- handshaked.get
-      _ <- peers.get(peerId) match {
-        case Some(peer) =>
-          peer.conn.close *> handshaked.modify(_ - peerId) *> events.publish1(PeerEvent.PeerDrop(peerId).some)
-        case None => F.unit
-      }
-    } yield ()
-
-  def broadcast(msg: Message): F[Unit] =
-    for {
-      peers <- handshaked.get.map(_.values.toList)
-      _ <- peers match {
-        case Nil =>
-          log.info(s"empty peers, ignore")
-          F.unit
-        case l =>
-          log.info(s"broadcast message to ${l.length} peers")
-          peers.traverse(_.send(msg))
-      }
-    } yield ()
-
-  def sendMessage(peerId: PeerId, msg: Message): F[Unit] =
-    for {
-      peers <- handshaked.get
-      _ <- peers.get(peerId) match {
-        case Some(peer) => peer.send(msg)
-        case None       => F.unit
-      }
-    } yield ()
-
-  def subscribe() = events.subscribe(32).unNone
-
-  def subscribeEvents(): Stream[F, PeerEvent] = events.subscribe(32).unNone.collect {
-    case x: PeerEvent.PeerAdd  => x
-    case x: PeerEvent.PeerDrop => x
-  }
-
-  def subscribeMessages(): Stream[F, PeerEvent.PeerRecv] = events.subscribe(32).unNone.collect {
-    case x: PeerEvent.PeerRecv =>
-      log.info(s"received message $x")
-      x
-  }
-
-  def stop: F[Unit] = stopWhenTrue.set(true)
+  def subscribeMessages(): Stream[F, PeerRecv]
 }
 
 object PeerManager {
-  def apply[F[_]: ConcurrentEffect](
+  private[this] val log = org.log4s.getLogger
+
+  implicit val I: RequestId[Message] = new RequestId[Message] {
+    override def id(a: Message): Option[String] = None
+  }
+
+  implicit val M: RequestMethod[Message] = new RequestMethod[Message] {
+    override def method(a: Message): Option[String] = Some(a.name)
+  }
+
+  implicit val encoder: Encoder[Message] = new Encoder[Message] {
+    override def encode(value: Message): Attempt[BitVector] =
+      Attempt.successful(Messages.encode(value).bits)
+
+    override def sizeBound: SizeBound = SizeBound.unknown
+  }
+
+  implicit val decoder: Decoder[Message] = new Decoder[Message] {
+    override def decode(bits: BitVector): Attempt[DecodeResult[Message]] =
+      Messages.decode(bits.bytes).map(message => DecodeResult(message, BitVector.empty))
+  }
+
+  implicit val codec: Codec[Message] = Codec(encoder, decoder)
+
+  def defaultPipe[F[_]]: Pipe[F, Message, Message] = _.map(identity)
+
+  def apply[F[_]](
       config: PeerManagerConfig,
-      blockchain: BlockChain[F]
-  ): F[PeerManager[F]] =
+      blockchain: BlockChain[F],
+      pipe: Pipe[F, Message, Message] = defaultPipe[F]
+  )(implicit F: ConcurrentEffect[F], EC: ExecutionContext): F[PeerManager[F]] =
     for {
-      stopWhenTrue <- fs2.async.signalOf[F, Boolean](true)
-      pending <- fs2.async.refOf[F, Map[PeerId, Peer[F]]](Map.empty)
-      handshaked <- fs2.async.refOf[F, Map[PeerId, HandshakedPeer[F]]](Map.empty)
-      events <- fs2.async.topic[F, Option[PeerEvent]](None)
-    } yield PeerManager(config, stopWhenTrue, pending, handshaked, events, blockchain)
+      handshaked <- fs2.async.refOf[F, Map[PeerId, HandshakedPeer]](Map.empty)
+      transport  <- TcpTransport(pipe, config.timeout)
+    } yield
+      new PeerManager[F] {
+        override def localAddress: F[InetSocketAddress] = {
+          val bind = new InetSocketAddress(config.bindAddr.host, config.bindAddr.port.get)
+          F.pure(bind)
+        }
+
+        override def status: F[Status] =
+          for {
+            number    <- blockchain.getBestBlockNumber
+            headerOpt <- blockchain.getBlockHeaderByNumber(number)
+            genesis   <- blockchain.genesisHeader
+            header = headerOpt.getOrElse(genesis)
+          } yield Status(1, 1, header.hash, genesis.hash)
+
+        override def handshakedPeers: F[Map[PeerId, HandshakedPeer]] =
+          handshaked.get
+
+        override def listen: F[Unit] =
+          for {
+            local <- localAddress
+            _     <- transport.listen(local, handshake)
+          } yield ()
+
+        override def stop: F[Unit] =
+          transport.stop
+
+        override def connect(to: InetSocketAddress): F[Unit] =
+          transport.connect(to, handshake)
+
+        override def handshake(conn: Connection[F, Message]): F[Unit] =
+          for {
+            localStatus <- status
+            _           <- conn.write(localStatus, Some(config.handshakeTimeout))
+            remote      <- conn.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
+            peerOpt <- conn.read(timeout = Some(config.handshakeTimeout)).map {
+              case Some(status: Status) => Some(HandshakedPeer(remote, PeerInfo(status, 0)))
+              case _                    => None
+            }
+            _ <- peerOpt match {
+              case None =>
+                log.info(s"${remote} handshake failed, close")
+                conn.close
+              case Some(peer) =>
+                log.info(s"${remote} handshake succeed")
+                handshaked.modify(_ + (peer.peerId -> peer))
+            }
+          } yield ()
+
+        override def broadcast(msg: Message): F[Unit] =
+          for {
+            peers <- handshakedPeers.map(_.values.toList)
+            _     <- peers.traverse(peer => transport.write(peer.remote, msg))
+          } yield ()
+
+        override def sendMessage(peerId: PeerId, msg: Message): F[Unit] =
+          for {
+            peers <- handshakedPeers
+            _ <- peers.get(peerId) match {
+              case Some(peer) => transport.write(peer.remote, msg)
+              case None       => F.unit
+            }
+          } yield ()
+
+        override def subscribe(): Stream[F, PeerEvent] =
+          transport.subscribe().map {
+            case TransportEvent.Received(remote, msg) =>
+              PeerEvent.PeerRecv(PeerId(remote.toString), msg)
+
+            case TransportEvent.Add(remote, _) =>
+              PeerEvent.PeerAdd(PeerId(remote.toString))
+
+            case TransportEvent.Drop(remote, _) =>
+              PeerEvent.PeerDrop(PeerId(remote.toString))
+          }
+
+        override def subscribeMessages(): Stream[F, PeerRecv] =
+          subscribe().collect {
+            case x: PeerEvent.PeerRecv => x
+          }
+      }
 }

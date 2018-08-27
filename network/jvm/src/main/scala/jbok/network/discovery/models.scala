@@ -3,7 +3,9 @@ package jbok.network.discovery
 import java.net.{InetAddress, InetSocketAddress}
 
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, SecP256k1}
+import jbok.crypto.signature.CryptoSignature
+import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.network.discovery.UdpPacket._
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.FiniteDuration
@@ -64,12 +66,11 @@ case class DiscoveryConfig(
     messageExpiration: FiniteDuration
 )
 
-import jbok.network.discovery.UdpPacket._
 case class UdpPacket(bytes: ByteVector) extends AnyVal {
   def nodeId: ByteVector = {
     val msgHash = bytes.drop(MdcLength + 65).kec256
     val sig = signature
-    SecP256k1.recoverPublicBytes(sig.r, sig.s, sig.v.get, None, msgHash).get
+    SecP256k1.recoverPublic(msgHash.toArray, sig, None).get.bytes
   }
 
   def data: ByteVector = bytes.drop(UdpPacket.DataOffset)
@@ -84,7 +85,7 @@ case class UdpPacket(bytes: ByteVector) extends AnyVal {
     val s = signatureBytes.drop(32).take(32)
     val v = (signatureBytes.last + 27).toByte
 
-    CryptoSignature(r, s, Some(v))
+    CryptoSignature(r, s, v)
   }
 }
 

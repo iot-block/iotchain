@@ -1,26 +1,8 @@
-package jbok.network
+package jbok.network.rpc
 
-import cats.effect.Sync
-import fs2._
-import fs2.async.mutable.Topic
-import jbok.network.json.JsonRPCMessage.RequestId
-
-import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
 
-abstract class JsonRPCClient[F[_]](implicit val F: Sync[F]) {
-  def request(id: RequestId, json: String): F[String]
-
-  def getOrCreateTopic(method: String): F[Topic[F, Option[String]]]
-
-  def start: F[Unit]
-
-  def stop: F[Unit]
-
-  def useAPI[API]: API = macro JsonRPCClientMacro.useAPI[API]
-}
-
-object JsonRPCClientMacro {
+object RpcClientMacro {
   def useAPI[API: c.WeakTypeTag](c: blackbox.Context): c.Expr[API] = {
     import c.universe._
 
@@ -31,6 +13,7 @@ object JsonRPCClientMacro {
     val expr = c.Expr[API] {
       q"""
         new $returnType {
+          import fs2._
           import _root_.io.circe.syntax._
           import _root_.io.circe.parser._
           import _root_.io.circe.generic.auto._
@@ -41,7 +24,7 @@ object JsonRPCClientMacro {
 
           ..$members
         }
-        """
+      """
     }
 
     expr
@@ -59,29 +42,28 @@ object JsonRPCClientMacro {
       member: c.universe.Symbol): c.Tree = {
     import c.universe._
 
-    val macroUtils = MacroUtils[c.type](c)
-    val method = member.asMethod
+    val macroUtils           = MacroUtils[c.type](c)
+    val method               = member.asMethod
     val methodName: TermName = method.name
-    val fullName: String = method.fullName.toLowerCase
 
     val request = {
-      val parameterLists = macroUtils.getParameterLists(method)
-      val parametersAsTuple = macroUtils.getParametersAsTuple(method)
+      val parameterLists      = macroUtils.getParameterLists(method)
+      val parametersAsTuple   = macroUtils.getParametersAsTuple(method)
       val parameterType: Tree = macroUtils.getParameterType(method)
-      val resultType: Type = method.returnType.typeArgs.head
+      val resultType: Type    = method.returnType.typeArgs.head
+
+      java.util.UUID.randomUUID().toString
 
       val body =
         q"""
-          val requestId = jbok.network.json.RequestId.random
-
           val request =
             JsonRPCRequest[$parameterType](
-              id = requestId,
-              method = ${fullName.toString},
+              id = java.util.UUID.randomUUID().toString,
+              method = ${methodName.toString},
               params = $parametersAsTuple
             )
 
-          ${c.prefix.tree}.request(request.id, request.asJson.noSpaces).map(x => decode[JsonRPCResponse[$resultType]](x)).map {
+          client.request(request.asJson.noSpaces).map(x => decode[JsonRPCResponse[$resultType]](x)).map {
             case Left(e) =>
               Left(JsonRPCResponse.parseError("parsing JsonRPCResponse failed"))
             case Right(x) => x match {
@@ -92,29 +74,30 @@ object JsonRPCClientMacro {
        """
 
       q"""
-        override def $methodName(...$parameterLists) = {
+        override def $methodName(...$parameterLists): Response[${resultType}] = {
           $body
         }
       """
     }
 
     def notification = {
-      val resultType: Type = method.returnType.typeArgs(1)
-      val nestedType = resultType.typeArgs.head
+      val resultType: Type = method.returnType
+      val nestedType       = resultType.typeArgs(1)
       q"""
-        override val $methodName = {
-          def enc(x: $resultType): Option[String] = {
-            x.map(s => {
-              val notification = JsonRPCNotification(${fullName.toString}, s)
-              notification.asJson.noSpaces
-            })
+        override def $methodName: ${resultType} = {
+          def enc(x: $nestedType): String = {
+            val notification = JsonRPCNotification(${methodName.toString}, x)
+            notification.asJson.noSpaces
           }
 
-          def dec(s: Option[String]): $resultType = {
-            s.map(x => decode[JsonRPCNotification[$nestedType]](x).right.get.params)
+          def dec(s: String): $nestedType = {
+            decode[JsonRPCNotification[$nestedType]](s).right.get.params
           }
 
-          ${c.prefix.tree}.getOrCreateTopic(${fullName.toString}).unsafeRunSync.imap[$resultType](s => dec(s))(x => enc(x))
+          for {
+            queue <- Stream.eval(${c.prefix.tree}.client.getOrCreateQueue(Some(${methodName.toString})))
+            s <- queue.dequeue.imap[$nestedType](s => dec(s))(x => enc(x))
+          } yield s
         }
       """
     }

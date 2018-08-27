@@ -3,19 +3,17 @@ package jbok.network.discovery
 import java.net.{InetAddress, InetSocketAddress}
 
 import cats.effect.IO
+import fs2._
 import jbok.JbokSpec
 import jbok.codec.rlp.RlpCodec
-
-import scala.concurrent.duration._
-import jbok.network.execution._
-
-import fs2._
-import scala.concurrent.duration._
 import jbok.codec.rlp.codecs._
 import jbok.common.testkit.ByteGen
-import jbok.crypto.signature.SecP256k1
-import org.scalacheck.{Arbitrary, Gen}
+import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.network.execution._
+import org.scalacheck.Arbitrary
 import scodec.bits.ByteVector
+
+import scala.concurrent.duration._
 
 trait DiscoveryFixture {
   val config1 = DiscoveryConfig(
@@ -28,21 +26,10 @@ trait DiscoveryFixture {
     10.seconds
   )
   val config2 = config1.copy(port = config1.port + 1)
-  val keyPair1 = SecP256k1.generateKeyPair[IO].unsafeRunSync()
-  val keyPair2 = SecP256k1.generateKeyPair[IO].unsafeRunSync()
+  val keyPair1 = SecP256k1.generateKeyPair().unsafeRunSync()
+  val keyPair2 = SecP256k1.generateKeyPair().unsafeRunSync()
   val discovery1 = Discovery[IO](config1, keyPair1)
   val discovery2 = Discovery[IO](config2, keyPair2)
-
-//  val address = InetAddress.getLocalHost
-//  val port = 30303
-//  val localAddress = new InetSocketAddress(address, port)
-//  val toEndpoint = Endpoint.makeEndpoint(localAddress, port)
-//
-//  val remoteAddr = "localhost"
-//  val remoteUdpPort = 30304
-//  val remoteTcpPort = 9076
-//  val remoteUdpAddress = new InetSocketAddress(remoteAddr, remoteUdpPort)
-//  val remoteEndpoint = Endpoint.makeEndpoint(remoteUdpAddress, remoteTcpPort)
 
   val from = Endpoint.makeEndpoint(new InetSocketAddress(config1.interface, config1.port), 0)
   val to = Endpoint.makeEndpoint(new InetSocketAddress(config2.interface, config2.port), 0)

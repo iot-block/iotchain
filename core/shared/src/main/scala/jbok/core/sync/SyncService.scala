@@ -18,9 +18,8 @@ case class SyncService[F[_]](
   private[this] val log = org.log4s.getLogger
 
   def stream: Stream[F, Unit] =
-    peerManager.events
-      .subscribe(64)
-      .unNone
+    peerManager
+      .subscribe()
       .evalMap {
         case PeerEvent.PeerRecv(peerId, message) =>
           handleMessage(peerId, message).flatMap {

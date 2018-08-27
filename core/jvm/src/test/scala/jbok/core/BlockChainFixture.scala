@@ -8,11 +8,11 @@ trait BlockChainFixture {
 
   val daoForkConfig = DaoForkConfig()
 
-  val blockChain = newBlockChain
+  lazy val blockChain = newBlockChain
 
-  val blockChain2 = newBlockChain
+  lazy val blockChain2 = newBlockChain
 
-  val blockChain3 = newBlockChain
+  lazy val blockChain3 = newBlockChain
 
-  def newBlockChain = BlockChain.inMemory[IO].unsafeRunSync()
+  def newBlockChain = BlockChain.inMemory[IO]().unsafeRunSync()
 }

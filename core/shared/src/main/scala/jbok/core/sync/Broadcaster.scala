@@ -12,7 +12,7 @@ class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F]) {
 
   def broadcastBlock(newBlock: NewBlock): F[Unit] =
     for {
-      peers <- peerManager.getHandshakedPeers
+      peers <- peerManager.handshakedPeers
       _ <- if (peers.isEmpty) {
         log.info(s"no handshaked peers, ignore broadcasting")
         F.unit
@@ -21,7 +21,7 @@ class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F]) {
       }
     } yield ()
 
-  def broadcastBlock(newBlock: NewBlock, peers: Map[PeerId, HandshakedPeer[F]]): F[Unit] = {
+  def broadcastBlock(newBlock: NewBlock, peers: Map[PeerId, HandshakedPeer]): F[Unit] = {
     val peersWithoutBlock = peers.collect {
       case (peerId, peer) if shouldSendNewBlock(newBlock, peer.peerInfo) => peerId
     }.toSet

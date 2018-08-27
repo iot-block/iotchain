@@ -11,7 +11,8 @@ import fs2.io.udp.{AsynchronousSocketGroup, Packet}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.crypto._
-import jbok.crypto.signature.{KeyPair, SecP256k1}
+import jbok.crypto.signature.KeyPair
+import jbok.crypto.signature.ecdsa.SecP256k1
 import org.bouncycastle.util.BigIntegers
 import scodec.bits.ByteVector
 
@@ -66,8 +67,8 @@ abstract class Discovery[F[_]](
 
   private[jbok] def sendPing(toEndpoint: Endpoint, toAddr: InetSocketAddress): F[Unit] = {
     val selfAddr: InetSocketAddress = new InetSocketAddress(config.interface, config.port)
-    val tcpPort: Int = 0
-    val from = Endpoint.makeEndpoint(selfAddr, tcpPort)
+    val tcpPort: Int                = 0
+    val from                        = Endpoint.makeEndpoint(selfAddr, tcpPort)
     sendMessage(toAddr, Ping(4, from, toEndpoint, expirationTimestamp))
   }
 
@@ -84,7 +85,7 @@ object Discovery {
   )(implicit F: Effect[F], AG: AsynchronousSocketGroup, EC: ExecutionContext): Stream[F, Discovery[F]] =
     for {
       nodeInfo <- Stream.eval(fs2.async.refOf[F, Map[ByteVector, (Node, Long)]](Map.empty))
-      socket <- fs2.io.udp.open[F](new InetSocketAddress(config.interface, config.port), reuseAddress = true)
+      socket   <- fs2.io.udp.open[F](new InetSocketAddress(config.interface, config.port), reuseAddress = true)
     } yield
       new Discovery[F](config, keyPair, Clock.systemDefaultZone(), nodeInfo) {
         override def stop: F[Unit] =
@@ -103,7 +104,7 @@ object Discovery {
             .evalMap(packet => {
               for {
                 udpPacket <- decodePacket(ByteVector(packet.bytes.toArray))
-                message <- extractMessage(udpPacket)
+                message   <- extractMessage(udpPacket)
               } yield (packet.remote, message, udpPacket)
             })
       }
@@ -112,17 +113,17 @@ object Discovery {
                                                                                  C: RlpCodec[A]): F[UdpPacket] =
     F.delay {
       val encodedData = RlpCodec.encode(msg).require.bytes
-      val payload = msg.packetType +: encodedData
-      val toSign = payload.kec256
-      val signature = SecP256k1.sign[IO](toSign, keyPair, None).unsafeRunSync()
+      val payload     = msg.packetType +: encodedData
+      val toSign      = payload.kec256
+      val signature   = SecP256k1.sign(toSign.toArray, keyPair, None).unsafeRunSync()
 
       val sigBytes =
-        BigIntegers.asUnsignedByteArray(32, signature.r.bigInteger) ++
-          BigIntegers.asUnsignedByteArray(32, signature.s.bigInteger) ++
-          Array[Byte]((signature.v.get - 27).toByte)
+        BigIntegers.asUnsignedByteArray(32, signature.r) ++
+          BigIntegers.asUnsignedByteArray(32, signature.s) ++
+          Array[Byte]((signature.v - 27).toByte)
 
       val forSha = sigBytes ++ Array(msg.packetType) ++ encodedData.toArray
-      val mdc = forSha.kec256
+      val mdc    = forSha.kec256
 
       UdpPacket(ByteVector(mdc ++ sigBytes ++ Array(msg.packetType) ++ encodedData.toArray))
     }
@@ -131,7 +132,7 @@ object Discovery {
     if (bytes.length < 98) {
       F.raiseError[UdpPacket](new RuntimeException("bad message"))
     } else {
-      val packet = UdpPacket(bytes)
+      val packet   = UdpPacket(bytes)
       val mdcCheck = bytes.drop(32).kec256
       if (packet.mdc == mdcCheck) {
         F.pure(packet)
