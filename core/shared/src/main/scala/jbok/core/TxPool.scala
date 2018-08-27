@@ -31,25 +31,34 @@ case class TxPool[F[_]](
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext, T: Timer[F]) {
   private[this] val log = org.log4s.getLogger
 
-  def stream: Stream[F, Unit] = peerManager.subscribe().evalMap {
-    case PeerEvent.PeerRecv(peerId, SignedTransactions(txs)) =>
-      log.info(s"received ${txs.length} stxs from ${peerId}")
-      handleReceived(peerId, txs)
+  def stream: Stream[F, Unit] =
+    peerManager
+      .subscribe()
+      .evalMap {
+        case PeerEvent.PeerRecv(peerId, SignedTransactions(txs)) =>
+          log.info(s"received ${txs.length} stxs from ${peerId}")
+          handleReceived(peerId, txs)
 
-    case PeerEvent.PeerAdd(peerId) =>
-      getPendingTransactions.flatMap(xs => {
-        if (xs.nonEmpty) {
-          log.info(s"notify pending txs to new peer ${peerId}")
-          notifyPeer(peerId, xs.map(_.stx))
-        } else {
-          F.unit
-        }
-      })
+        case PeerEvent.PeerAdd(peerId) =>
+          getPendingTransactions.flatMap(xs => {
+            if (xs.nonEmpty) {
+              log.info(s"notify pending txs to new peer ${peerId}")
+              notifyPeer(peerId, xs.map(_.stx))
+            } else {
+              F.unit
+            }
+          })
 
-    case _ => F.unit
-  }
+        case _ => F.unit
+      }
+      .onFinalize(stopWhenTrue.set(true) *> F.delay(log.info(s"stop TxPool")))
 
-  def start: F[Unit] = stopWhenTrue.set(false) *> F.start(stream.interruptWhen(stopWhenTrue).compile.drain).void
+  def start: F[Unit] =
+    for {
+      _ <- stopWhenTrue.set(false)
+      _ <- F.start(stream.interruptWhen(stopWhenTrue).compile.drain).void
+      _ <- F.delay(log.info(s"start TxPool"))
+    } yield ()
 
   def stop: F[Unit] = stopWhenTrue.set(true)
 
@@ -70,10 +79,10 @@ case class TxPool[F[_]](
         log.info(s"add ${toAdd.length} pending stxs")
         val timestamp = System.currentTimeMillis()
         for {
-          _ <- toAdd.traverse(setTimeout)
-          _ <- pending.modify(xs => (toAdd.map(PendingTransaction(_, timestamp)) ++ xs).take(config.poolSize))
+          _     <- toAdd.traverse(setTimeout)
+          _     <- pending.modify(xs => (toAdd.map(PendingTransaction(_, timestamp)) ++ xs).take(config.poolSize))
           peers <- peerManager.handshakedPeers
-          _ <- peers.keys.toList.traverse(peerId => notifyPeer(peerId, toAdd))
+          _     <- peers.keys.toList.traverse(peerId => notifyPeer(peerId, toAdd))
         } yield ()
       }
     } yield ()
@@ -88,9 +97,9 @@ case class TxPool[F[_]](
             .senderAddress(Some(0x3d.toByte)) && tx.stx.nonce == newStx.nonce)
       _ <- a.traverse(x => clearTimeout(x.stx))
       timestamp = System.currentTimeMillis()
-      _ <- pending.modify(_ => (PendingTransaction(newStx, timestamp) +: b).take(config.poolSize))
+      _     <- pending.modify(_ => (PendingTransaction(newStx, timestamp) +: b).take(config.poolSize))
       peers <- peerManager.handshakedPeers
-      _ <- peers.keys.toList.traverse(peerId => notifyPeer(peerId, newStx :: Nil))
+      _     <- peers.keys.toList.traverse(peerId => notifyPeer(peerId, newStx :: Nil))
     } yield ()
 
   def removeTransactions(signedTransactions: List[SignedTransaction]): F[Unit] =
@@ -125,9 +134,9 @@ case class TxPool[F[_]](
 
   private def setTimeout(stx: SignedTransaction): F[Unit] =
     for {
-      _ <- clearTimeout(stx)
+      _     <- clearTimeout(stx)
       fiber <- F.start(T.sleep(config.transactionTimeout) *> removeTransactions(stx :: Nil))
-      _ <- timeouts.modify(_ + (stx.hash -> fiber))
+      _     <- timeouts.modify(_ + (stx.hash -> fiber))
     } yield ()
 
   private def clearTimeout(stx: SignedTransaction): F[Unit] =
@@ -147,9 +156,9 @@ object TxPool {
       T: Timer[F]
   ): F[TxPool[F]] =
     for {
-      pending <- fs2.async.refOf[F, List[PendingTransaction]](Nil)
-      known <- fs2.async.refOf[F, Map[ByteVector, Set[PeerId]]](Map.empty)
+      pending      <- fs2.async.refOf[F, List[PendingTransaction]](Nil)
+      known        <- fs2.async.refOf[F, Map[ByteVector, Set[PeerId]]](Map.empty)
       stopWhenTrue <- fs2.async.signalOf[F, Boolean](true)
-      timeouts <- fs2.async.refOf[F, Map[ByteVector, Fiber[F, Unit]]](Map.empty)
+      timeouts     <- fs2.async.refOf[F, Map[ByteVector, Fiber[F, Unit]]](Map.empty)
     } yield TxPool(pending, known, stopWhenTrue, timeouts, peerManager, config)
 }

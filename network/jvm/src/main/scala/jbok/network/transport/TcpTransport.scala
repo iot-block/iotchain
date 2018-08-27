@@ -108,7 +108,7 @@ class TcpTransport[F[_], A](
             .serverWithLocalAddress[F](bind, maxQueued = 0, reuseAddress = true, receiveBufferSize = receiveBufferSize)
             .map {
               case Left(bindAddr) =>
-                log.info(s"server bound to ${bindAddr}")
+                log.info(s"start listening to ${bindAddr}")
                 Stream.eval(done.complete(()))
               case Right(s) =>
                 s.flatMap(socket => {
@@ -154,6 +154,7 @@ class TcpTransport[F[_], A](
             }
             .join(maxConcurrent)
             .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(s"server error: ${e}"))))
+            .onFinalize(stopListen.set(true) *> F.delay(log.info(s"stop listening to ${bind}")))
 
         for {
           _    <- stopListen.set(false)

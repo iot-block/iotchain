@@ -19,7 +19,8 @@ object Validators {
       override val blockValidator: BlockValidator[F] = new BlockValidator[F]()
       override val blockHeaderValidator: BlockHeaderValidator[F] =
         new BlockHeaderValidator[F](blockChain, blockChainConfig, daoForkConfig)
-      override val ommersValidator: OmmersValidator[F] = new OmmersValidator[F](blockChain, blockChainConfig, daoForkConfig)
+      override val ommersValidator: OmmersValidator[F] =
+        new OmmersValidator[F](blockChain, blockChainConfig, daoForkConfig)
       override val transactionValidator: TransactionValidator[F] = new TransactionValidator[F](blockChainConfig)
     }
 }

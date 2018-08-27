@@ -11,9 +11,9 @@ import jbok.core.peer.{PeerEvent, PeerId, PeerManager}
 import scala.concurrent.ExecutionContext
 
 case class SyncService[F[_]](
-                              peerManager: PeerManager[F],
-                              blockchain: BlockChain[F],
-                              stopWhenTrue: Signal[F, Boolean]
+    peerManager: PeerManager[F],
+    blockchain: BlockChain[F],
+    stopWhenTrue: Signal[F, Boolean]
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
@@ -28,8 +28,14 @@ case class SyncService[F[_]](
           }
         case _ => F.unit
       }
+      .onFinalize(stopWhenTrue.set(true) *> F.delay(log.info(s"stop SyncService")))
 
-  def start: F[Unit] = stopWhenTrue.set(false) *> F.start(stream.interruptWhen(stopWhenTrue).compile.drain).void
+  def start: F[Unit] =
+    for {
+      _ <- stopWhenTrue.set(false)
+      _ <- F.start(stream.interruptWhen(stopWhenTrue).compile.drain).void
+      _ <- F.delay(log.info(s"start SyncService"))
+    } yield ()
 
   def stop: F[Unit] = stopWhenTrue.set(true)
 

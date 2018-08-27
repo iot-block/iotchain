@@ -49,6 +49,7 @@ package object configs {
       keystore: KeyStoreConfig,
       peer: PeerManagerConfig,
       blockChainConfig: BlockChainConfig,
+      daoForkConfig: DaoForkConfig,
       nodeId: String = UUID.randomUUID().toString
   )
 
@@ -137,16 +138,22 @@ package object configs {
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
       val rootDir                            = home / ".jbok" / suffix
-      val networkConfig                      = NetworkConfig(NetAddress("localhost", port), NetAddress("localhost", port + 1))
+      val networkConfig                      = NetworkConfig(NetAddress("localhost", port), NetAddress("localhost", port))
       val walletConfig                       = KeyStoreConfig((rootDir / "keystore").pathAsString)
       val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
-      val blockChainConfig: BlockChainConfig = ???
-      FullNodeConfig(rootDir.pathAsString, networkConfig, walletConfig, peerManagerConfig, blockChainConfig)
+      val blockChainConfig: BlockChainConfig = BlockChainConfig()
+      val daoForkConfig: DaoForkConfig       = DaoForkConfig()
+      FullNodeConfig(rootDir.pathAsString,
+                     networkConfig,
+                     walletConfig,
+                     peerManagerConfig,
+                     blockChainConfig,
+                     daoForkConfig)
     }
 
-    def random(): FullNodeConfig = {
-      val i = Random.nextInt(20000) + 1
-      apply(s"test-${10000 + i}", 10000 + i)
-    }
+    def fill(size: Int): List[FullNodeConfig] =
+      (0 until size).toList.map(i => {
+        FullNodeConfig(s"test-${10000 + i}", 10000 + i)
+      })
   }
 }

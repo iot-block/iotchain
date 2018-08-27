@@ -3,26 +3,25 @@ package jbok.core.mining
 import java.io.InputStream
 import java.util.Random
 
+import better.files._
+import cats.data.EitherT
 import cats.effect.{Bracket, Sync}
 import cats.implicits._
 import fs2.async.Ref
+import jbok.codec._
 import jbok.core.configs.MiningConfig
-import jbok.core.consensus.{Ethash, ProofOfWork}
-import jbok.core.{BlockChain, TxPool}
-import better.files._
-import cats.data.EitherT
+import jbok.core.consensus.pow.{Ethash, ProofOfWork}
 import jbok.core.ledger.OmmersPool
 import jbok.core.models.Block
 import jbok.core.utils.ByteUtils
+import jbok.core.{BlockChain, TxPool}
 import scodec.bits.ByteVector
-import jbok.codec._
-import jbok.core.api.PublicAPI
 
 sealed trait MiningResult {
   def triedHashes: Int
 }
 case class MiningSuccessful(triedHashes: Int, pow: ProofOfWork, nonce: ByteVector) extends MiningResult
-case class MiningUnsuccessful(triedHashes: Int) extends MiningResult
+case class MiningUnsuccessful(triedHashes: Int)                                    extends MiningResult
 
 class Miner[F[_]](
     blockChain: BlockChain[F],
@@ -30,7 +29,6 @@ class Miner[F[_]](
     ommersPool: OmmersPool[F],
     blockGenerator: BlockGenerator[F],
     miningConfig: MiningConfig,
-    publicAPI: PublicAPI[F],
     currentEpoch: Ref[F, Option[Long]],
     currentEpochDagSize: Ref[F, Option[Long]],
     currentEpochDag: Ref[F, Option[Array[Array[Int]]]]
@@ -47,16 +45,16 @@ class Miner[F[_]](
       epoch = Ethash.epoch(parentBlock.header.number.toLong + 1)
 
       currentEpochOpt <- currentEpoch.get
-      dagOpt <- currentEpochDag.get
-      dagSizeOpt <- currentEpochDagSize.get
+      dagOpt          <- currentEpochDag.get
+      dagSizeOpt      <- currentEpochDagSize.get
 
       (dag, dagSize) <- (currentEpochOpt, dagOpt, dagSizeOpt) match {
         case (Some(_), Some(dag), Some(dagSize)) =>
           F.pure((dag, dagSize))
 
         case _ =>
-          val seed = Ethash.seed(epoch)
-          val dagSize = Ethash.dagSize(epoch)
+          val seed         = Ethash.seed(epoch)
+          val dagSize      = Ethash.dagSize(epoch)
           val dagNumHashes = (dagSize / Ethash.HASH_BYTES).toInt
 
           for {
@@ -83,11 +81,10 @@ class Miner[F[_]](
 
         case Right(PendingBlock(block, _)) =>
           val headerHash = block.header.hashWithoutNonce
-          val startTime = System.currentTimeMillis()
+          val startTime  = System.currentTimeMillis()
           val mineResult = mine(headerHash, block.header.difficulty.toLong, dagSize, dag, miningConfig.mineRounds)
-          val time = System.currentTimeMillis() - startTime
-          val hashRate = (mineResult.triedHashes * 1000) / time
-          publicAPI.submitHashRate(hashRate, ByteVector("jbok-miner".getBytes))
+          val time       = System.currentTimeMillis() - startTime
+          val hashRate   = (mineResult.triedHashes * 1000) / time
           mineResult match {
             case MiningSuccessful(_, pow, nonce) =>
 //              syncController ! RegularSync.MinedBlock(block.copy(header = block.header.copy(nonce = nonce, mixHash = pow.mixHash)))
@@ -130,8 +127,8 @@ class Miner[F[_]](
               Left("Invalid DAG file prefix")
             } else {
               val buffer = new Array[Byte](64)
-              val res = new Array[Array[Int]](dagNumHashes)
-              var index = 0
+              val res    = new Array[Array[Int]](dagNumHashes)
+              var index  = 0
 
               while (in.read(buffer) > 0) {
                 if (index % 100000 == 0)
@@ -155,7 +152,7 @@ class Miner[F[_]](
   private[jbok] def getBlockForMining(parentBlock: Block): F[Either[String, PendingBlock]] =
     for {
       ommers <- getOmmersFromPool(parentBlock.header.number + 1)
-      txs <- getTransactionsFromPool
+      txs    <- getTransactionsFromPool
       pb <- blockGenerator
         .generateBlockForMining(parentBlock, txs.map(_.stx), ommers, miningConfig.coinbase)
         .value
@@ -166,19 +163,19 @@ class Miner[F[_]](
     } yield pb
 
   private[jbok] def mine(
-                          headerHash: ByteVector,
-                         difficulty: Long,
-                         dagSize: Long,
-                         dag: Array[Array[Int]],
-                         numRounds: Int
-                        ): MiningResult = {
+      headerHash: ByteVector,
+      difficulty: Long,
+      dagSize: Long,
+      dag: Array[Array[Int]],
+      numRounds: Int
+  ): MiningResult = {
     val initNonce = BigInt(64, new Random())
 
     (0 to numRounds).toStream
       .map { n =>
-        val nonce = (initNonce + n) % MaxNonce
+        val nonce      = (initNonce + n) % MaxNonce
         val nonceBytes = ByteVector(nonce.toUnsignedByteArray).padLeft(8)
-        val pow = Ethash.hashimoto(headerHash.toArray, nonceBytes.toArray, dagSize, dag.apply)
+        val pow        = Ethash.hashimoto(headerHash.toArray, nonceBytes.toArray, dagSize, dag.apply)
         (Ethash.checkDifficulty(difficulty, pow), pow, nonceBytes, n)
       }
       .collectFirst { case (true, pow, nonceBytes, n) => MiningSuccessful(n + 1, pow, nonceBytes) }

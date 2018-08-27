@@ -23,39 +23,48 @@ case class RegularSync[F[_]](
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
-  def stream: Stream[F, Unit] = peerManager.subscribe().evalMap {
-    case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
-      log.info(s"received NewBlock")
-      ledger.importBlock(block).flatMap { br =>
-        log.info(s"import block result: ${br}")
+  def stream: Stream[F, Unit] =
+    peerManager
+      .subscribe()
+      .evalMap {
+        case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
+          log.info(s"received NewBlock")
+          ledger.importBlock(block).flatMap { br =>
+            log.info(s"import block result: ${br}")
 
-        br match {
-          case BlockImported(newBlocks, _) =>
-            log.info(s"Added new block ${block.header.number} to the top of the chain received from $peerId")
-            broadcastBlocks(newBlocks) *> updateTxAndOmmerPools(newBlocks, Nil)
+            br match {
+              case BlockImported(newBlocks, _) =>
+                log.info(s"Added new block ${block.header.number} to the top of the chain received from $peerId")
+                broadcastBlocks(newBlocks) *> updateTxAndOmmerPools(newBlocks, Nil)
 
-          case BlockPooled =>
-            F.delay(log.info(s"queued block ${block.header.number}"))
+              case BlockPooled =>
+                F.delay(log.info(s"queued block ${block.header.number}"))
 
-          case DuplicateBlock =>
-            F.delay(log.info(s"Ignoring duplicate block ${block.header.number}) from ${peerId}"))
+              case DuplicateBlock =>
+                F.delay(log.info(s"Ignoring duplicate block ${block.header.number}) from ${peerId}"))
 
-          case UnknownParent =>
-            F.delay(log.info(s"Ignoring orphaned block ${block.header.number} from $peerId"))
+              case UnknownParent =>
+                F.delay(log.info(s"Ignoring orphaned block ${block.header.number} from $peerId"))
 
-          case BlockImportFailed(error) =>
-            F.delay(log.info(s"importing block error: ${error}"))
-        }
+              case BlockImportFailed(error) =>
+                F.delay(log.info(s"importing block error: ${error}"))
+            }
+          }
+
+        case PeerEvent.PeerRecv(peerId, NewBlockHashes(hashes)) =>
+          val request = GetBlockHeaders(Right(hashes.head.hash), hashes.length, 0, reverse = false)
+          peerManager.sendMessage(peerId, request)
+
+        case _ => F.unit
       }
+      .onFinalize(stopWhenTrue.set(true) *> F.delay(log.info(s"stop RegularSync")))
 
-    case PeerEvent.PeerRecv(peerId, NewBlockHashes(hashes)) =>
-      val request = GetBlockHeaders(Right(hashes.head.hash), hashes.length, 0, reverse = false)
-      peerManager.sendMessage(peerId, request)
-
-    case _ => F.unit
-  }
-
-  def start: F[Unit] = stopWhenTrue.set(false) *> F.start(stream.interruptWhen(stopWhenTrue).compile.drain).void
+  def start: F[Unit] =
+    for {
+      _ <- stopWhenTrue.set(false)
+      _ <- F.start(stream.interruptWhen(stopWhenTrue).compile.drain).void
+      _ <- F.delay(log.info("start RegularSync"))
+    } yield ()
 
   def stop: F[Unit] = stopWhenTrue.set(true)
 
