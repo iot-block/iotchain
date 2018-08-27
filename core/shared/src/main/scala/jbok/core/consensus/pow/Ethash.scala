@@ -1,11 +1,11 @@
-package jbok.core.consensus
+package jbok.core.consensus.pow
 
 import java.math.BigInteger
 
-import scodec.bits._
-import jbok.crypto._
 import jbok.core.utils.ByteUtils._
+import jbok.crypto._
 import org.bouncycastle.util.BigIntegers
+import scodec.bits._
 
 import scala.annotation.tailrec
 

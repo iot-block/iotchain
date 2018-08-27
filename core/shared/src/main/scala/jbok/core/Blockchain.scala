@@ -15,7 +15,7 @@ import scodec.bits._
 abstract class BlockChain[F[_]](implicit F: Sync[F]) {
   protected val log = org.log4s.getLogger
 
-  def loadGenesis: F[Unit] = {
+  def loadGenesis(genesis: Option[Block] = None): F[Unit] = {
     log.info(s"loading genesis data")
 
     for {
@@ -31,7 +31,7 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
           )
 
         case None =>
-          save(Genesis.block, Nil, Genesis.header.difficulty, saveAsBestBlock = true)
+          save(genesis.getOrElse(Genesis.block), Nil, Genesis.header.difficulty, saveAsBestBlock = true)
       }
     } yield ()
   }
@@ -231,11 +231,11 @@ abstract class BlockChain[F[_]](implicit F: Sync[F]) {
 }
 
 object BlockChain {
-  def inMemory[F[_]: Sync]: F[BlockChain[F]] =
+  def inMemory[F[_]: Sync](genesis: Option[Block] = None): F[BlockChain[F]] =
     for {
       db <- KeyValueDB.inMemory[F]
       blockchain <- apply[F](db)
-      _ <- blockchain.loadGenesis
+      _ <- blockchain.loadGenesis(genesis)
     } yield blockchain
 
   def apply[F[_]: Sync](db: KeyValueDB[F]): F[BlockChain[F]] = {

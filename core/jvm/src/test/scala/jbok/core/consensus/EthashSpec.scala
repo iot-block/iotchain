@@ -6,7 +6,7 @@ import org.scalacheck.Arbitrary
 import scodec.bits.ByteVector
 
 class EthashSpec extends JbokSpec {
-  import Ethash._
+  import jbok.core.consensus.pow.Ethash._
 
   def seedForBlockReference(blockNumber: BigInt): ByteVector =
     if (blockNumber < EPOCH_LENGTH) {

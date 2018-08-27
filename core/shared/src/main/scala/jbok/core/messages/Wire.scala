@@ -9,12 +9,4 @@ case class Hello(
     nodeId: ByteVector
 ) extends Message
 
-//object Hello {
-//  implicit val codec: Codec[Hello] = (uint8 :: codecString :: uint16 :: codecBytes).as[Hello]
-//}
-
 case class Status(version: Int, networkId: Int, bestHash: ByteVector, genesisHash: ByteVector) extends Message
-
-//object Status {
-//  implicit val codec = (uint8 :: uint8 :: codecBytes :: codecBytes).as[Status]
-//}

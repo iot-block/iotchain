@@ -9,10 +9,9 @@ import jbok.core.models.BlockHeader
 class OmmersPool[F[_]: Sync](blockChain: BlockChain[F], ommersList: Ref[F, List[BlockHeader]]) {
   private[this] val log = org.log4s.getLogger
 
-  var ommersPool: Seq[BlockHeader] = Nil
   val ommerGenerationLimit: Int = 6 //Stated on section 11.1, eq. (143) of the YP
   val ommerSizeLimit: Int = 2
-  val ommersPoolSize: Int = 2
+  val ommersPoolSize: Int = 30
 
   def addOmmers(ommers: List[BlockHeader]): F[Unit] = {
     log.info(s"add ${ommers.length} ommers")

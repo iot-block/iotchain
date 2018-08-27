@@ -3,21 +3,22 @@ package jbok.evm
 import cats.effect.Sync
 import jbok.core.models._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, SecP256k1}
+import jbok.crypto.signature.CryptoSignature
+import jbok.crypto.signature.ecdsa.SecP256k1
 import scodec.bits.ByteVector
 
 object PrecompiledContracts {
 
   val EcDsaRecAddr = Address(1)
-  val Sha256Addr = Address(2)
-  val Rip160Addr = Address(3)
-  val IdAddr = Address(4)
+  val Sha256Addr   = Address(2)
+  val Rip160Addr   = Address(3)
+  val IdAddr       = Address(4)
 
   val contracts = Map(
     EcDsaRecAddr -> EllipticCurveRecovery,
-    Sha256Addr -> Sha256,
-    Rip160Addr -> Ripemd160,
-    IdAddr -> Identity
+    Sha256Addr   -> Sha256,
+    Rip160Addr   -> Ripemd160,
+    IdAddr       -> Identity
   )
 
   def runOptionally[F[_]: Sync](context: ProgramContext[F]): Option[ProgramResult[F]] =
@@ -52,17 +53,17 @@ object PrecompiledContracts {
   object EllipticCurveRecovery extends PrecompiledContract {
     def exec(inputData: ByteVector): ByteVector = {
       val data = inputData.padRight(128)
-      val h = data.slice(0, 32)
-      val v = data.slice(32, 64)
-      val r = data.slice(64, 96)
-      val s = data.slice(96, 128)
+      val h    = data.slice(0, 32)
+      val v    = data.slice(32, 64)
+      val r    = data.slice(64, 96)
+      val s    = data.slice(96, 128)
 
       if (hasOnlyLastByteSet(v)) {
-        val sig = CryptoSignature(r, s, Some(v.last))
-        val recovered = SecP256k1.recoverPublic(sig, h)
+        val sig       = CryptoSignature(r.toArray ++ s.toArray ++ Array(v.last))
+        val recovered = SecP256k1.recoverPublic(h.toArray, sig)
         recovered
           .map { pk =>
-            val hash = pk.uncompressed.kec256.slice(12, 32)
+            val hash = pk.bytes.kec256.slice(12, 32)
             hash.padLeft(32)
           }
           .getOrElse(ByteVector.empty)

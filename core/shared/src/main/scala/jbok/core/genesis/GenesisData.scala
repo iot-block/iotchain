@@ -37,5 +37,4 @@ object Genesis {
   )
 
   val block: Block = Block(header, BlockBody(Nil, Nil))
-
 }

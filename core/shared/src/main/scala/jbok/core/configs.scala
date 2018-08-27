@@ -39,7 +39,8 @@ package object configs {
       maxIncomingPeers: Int = 10,
       maxPendingPeers: Int = 10,
       connectionTimeout: FiniteDuration = 5.seconds,
-      handshakeTimeout: FiniteDuration = 5.seconds
+      handshakeTimeout: FiniteDuration = 5.seconds,
+      timeout: FiniteDuration = 5.seconds
   )
 
   case class FullNodeConfig(
@@ -135,10 +136,10 @@ package object configs {
 
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
-      val rootDir = home / ".jbok" / suffix
-      val networkConfig = NetworkConfig(NetAddress("localhost", port), NetAddress("localhost", port + 1))
-      val walletConfig = KeyStoreConfig((rootDir / "keystore").pathAsString)
-      val peerManagerConfig = PeerManagerConfig(NetAddress("localhost", port))
+      val rootDir                            = home / ".jbok" / suffix
+      val networkConfig                      = NetworkConfig(NetAddress("localhost", port), NetAddress("localhost", port + 1))
+      val walletConfig                       = KeyStoreConfig((rootDir / "keystore").pathAsString)
+      val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
       val blockChainConfig: BlockChainConfig = ???
       FullNodeConfig(rootDir.pathAsString, networkConfig, walletConfig, peerManagerConfig, blockChainConfig)
     }

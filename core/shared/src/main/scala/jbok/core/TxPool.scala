@@ -72,7 +72,7 @@ case class TxPool[F[_]](
         for {
           _ <- toAdd.traverse(setTimeout)
           _ <- pending.modify(xs => (toAdd.map(PendingTransaction(_, timestamp)) ++ xs).take(config.poolSize))
-          peers <- peerManager.getHandshakedPeers
+          peers <- peerManager.handshakedPeers
           _ <- peers.keys.toList.traverse(peerId => notifyPeer(peerId, toAdd))
         } yield ()
       }
@@ -89,7 +89,7 @@ case class TxPool[F[_]](
       _ <- a.traverse(x => clearTimeout(x.stx))
       timestamp = System.currentTimeMillis()
       _ <- pending.modify(_ => (PendingTransaction(newStx, timestamp) +: b).take(config.poolSize))
-      peers <- peerManager.getHandshakedPeers
+      peers <- peerManager.handshakedPeers
       _ <- peers.keys.toList.traverse(peerId => notifyPeer(peerId, newStx :: Nil))
     } yield ()
 

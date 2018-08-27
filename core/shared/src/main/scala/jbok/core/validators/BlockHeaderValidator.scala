@@ -9,7 +9,7 @@ import jbok.core.ledger.DifficultyCalculator
 import jbok.core.models.BlockHeader
 import jbok.core.validators.BlockHeaderInvalid._
 import scodec.bits.ByteVector
-import jbok.core.consensus.Ethash
+import jbok.core.consensus.pow.Ethash
 
 sealed trait BlockHeaderInvalid extends Invalid
 
