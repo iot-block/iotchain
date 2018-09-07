@@ -41,12 +41,6 @@ object MPTrie {
 
   val alphabet: Vector[String] = "0123456789abcdef".map(_.toString).toVector
 
-  def inMemory[F[_]: Sync](root: Option[ByteVector] = None): F[MPTrie[F]] =
-    for {
-      db <- KeyValueDB.inMemory[F]
-      rootHash <- fs2.async.refOf[F, Option[ByteVector]](root)
-    } yield new MPTrie[F](db, rootHash)
-
   def apply[F[_]: Sync](db: KeyValueDB[F], root: Option[ByteVector] = None): F[MPTrie[F]] =
     for {
       rootHash <- fs2.async.refOf[F, Option[ByteVector]](root)
@@ -68,27 +62,35 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
 
   override def put(key: ByteVector, newVal: ByteVector): F[Unit] =
     for {
-      rh <- rootHash.get
+      hashOpt <- rootHash.get
       nibbles = HexPrefix.bytesToNibbles(key)
-      _ <- rh.fold(ifEmpty = {
-        val newRoot = LeafNode(nibbles, newVal)
-        commitPut(NodeInsertResult(newRoot, Nil, newRoot :: Nil)).flatMap(newRootHash =>
-          rootHash.setSync(Some(newRootHash)))
-      })(hash => {
-        for {
-          root <- getRootOpt
-          newRootHash <- putNode(root.get, nibbles, newVal) >>= commitPut
-          _ <- rootHash.setSync(Some(newRootHash))
-        } yield ()
-      })
+      _ <- hashOpt match {
+        case Some(hash) if hash != MPTrie.emptyRootHash =>
+          for {
+            root        <- getRootOpt
+            newRootHash <- putNode(root.get, nibbles, newVal) >>= commitPut
+            _           <- rootHash.setSync(Some(newRootHash))
+          } yield ()
+
+        case _ =>
+          val newRoot = LeafNode(nibbles, newVal)
+          commitPut(NodeInsertResult(newRoot, Nil, newRoot :: Nil)).flatMap(newRootHash =>
+            rootHash.setSync(Some(newRootHash)))
+      }
     } yield ()
 
   override def del(key: ByteVector): F[Unit] =
     for {
-      root <- getRootOpt
-      nibbles = HexPrefix.bytesToNibbles(key)
-      newRootHash <- delNode(root.get, nibbles) >>= commitDel
-      _ <- rootHash.setSync(Some(newRootHash))
+      rootOpt <- getRootOpt
+      _ <- rootOpt match {
+        case None => F.unit
+        case Some(root) =>
+          val nibbles = HexPrefix.bytesToNibbles(key)
+          for {
+            newRootHash <- delNode(root, nibbles) >>= commitDel
+            _           <- rootHash.setSync(Some(newRootHash))
+          } yield ()
+      }
     } yield ()
 
   override def has(key: ByteVector): F[Boolean] = getOpt(key).map(_.isDefined)
@@ -104,7 +106,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
       case Some(ExtensionNode(key, entry)) =>
         for {
           decoded <- getNodeByEntry(entry)
-          subMap <- toMap0(decoded)
+          subMap  <- toMap0(decoded)
         } yield subMap.map { case (k, v) => key ++ k -> v }
       case Some(bn @ BranchNode(_, value)) =>
         for {
@@ -117,7 +119,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
 
     for {
       root <- getRootOpt
-      m <- toMap0(root)
+      m    <- toMap0(root)
     } yield m.map { case (k, v) => ByteVector.fromValidHex(k) -> v }
   }
 
@@ -165,7 +167,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         if (nibbles.length >= ext.key.length && (ext.key == commonKey)) {
           val node = for {
             child <- OptionT(getNodeByEntry(ext.child))
-            node <- OptionT(getNodeByNibbles(child, remainingKey))
+            node  <- OptionT(getNodeByNibbles(child, remainingKey))
           } yield node
           node.value
         } else {
@@ -178,7 +180,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         } else {
           val v = for {
             branch <- OptionT(getNodeByBranch(branch.branchAt(nibbles.head)))
-            v <- OptionT(getNodeByNibbles(branch, nibbles.tail))
+            v      <- OptionT(getNodeByNibbles(branch, nibbles.tail))
           } yield v
           v.value
         }
@@ -187,12 +189,12 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
 
   private[jbok] def getNodes: F[List[(ByteVector, Node)]] =
     for {
-      keys <- db.keys
+      keys   <- db.keys
       values <- keys.traverse(db.get).map(_.map(x => NodeCodec.decode(x).require))
     } yield keys.zip(values)
 
   private def commit(newRoot: Option[Node], toDel: List[Node], toPut: List[Node]): F[ByteVector] = {
-    val newRootHash = newRoot.map(_.hash).getOrElse(MPTrie.emptyRootHash)
+    val newRootHash  = newRoot.map(_.hash).getOrElse(MPTrie.emptyRootHash)
     val newRootBytes = newRoot.map(_.capped).getOrElse(ByteVector.empty)
 
     getRootHash.flatMap { previousRootHash =>
@@ -240,7 +242,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         if (nibbles.length >= ext.key.length && (ext.key == commonKey)) {
           val v = for {
             node <- OptionT(getNodeByEntry(ext.child))
-            v <- OptionT(getNodeValue(node, remainingKey))
+            v    <- OptionT(getNodeValue(node, remainingKey))
           } yield v
           v.value
         } else {
@@ -253,7 +255,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         } else {
           val v = for {
             branch <- OptionT(getNodeByBranch(branch.branchAt(nibbles.head)))
-            v <- OptionT(getNodeValue(branch, nibbles.tail))
+            v      <- OptionT(getNodeValue(branch, nibbles.tail))
           } yield v
           v.value
         }
@@ -348,7 +350,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
 
         for {
           child <- getNodeByEntry(extNode.child)
-          r <- putNode(child.get, key.drop(l), value)
+          r     <- putNode(child.get, key.drop(l), value)
         } yield {
           val newExtNode = ExtensionNode(extNode.key, r.newNode.entry)
           NodeInsertResult(
@@ -362,7 +364,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         // Partially shared prefix, replace the node with an extension with the shared prefix
         // and the child as a new branch node
         val (sharedKeyPrefix, sharedKeySuffix) = extNode.key.splitAt(l)
-        val tempExtNode = ExtensionNode(sharedKeySuffix, extNode.child)
+        val tempExtNode                        = ExtensionNode(sharedKeySuffix, extNode.child)
         putNode(tempExtNode, key.drop(l), value).map { r =>
           val newExtNode = ExtensionNode(sharedKeyPrefix, r.newNode.entry)
           NodeInsertResult(
@@ -388,7 +390,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         // The associated branch is not empty, we recursively insert in that child
         for {
           branch <- getNodeByBranch(branchNode.branchAt(key.head))
-          r <- putNode(branch.get, key.tail, value)
+          r      <- putNode(branch.get, key.tail, value)
         } yield {
           val newBranchNode = branchNode.updateBranch(key.head, Some(r.newNode.entry))
           NodeInsertResult(
@@ -399,7 +401,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         }
       } else {
         // The associated child is empty, just insert with a leaf node
-        val newLeafNode = LeafNode(key.tail, value)
+        val newLeafNode   = LeafNode(key.tail, value)
         val newBranchNode = branchNode.updateBranch(key.head, Some(newLeafNode.entry))
         NodeInsertResult(
           newNode = newBranchNode,
@@ -433,7 +435,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         // recursively delete the child
         for {
           next <- getNodeByEntry(node.child)
-          r <- delNode(next.get, key.drop(l))
+          r    <- delNode(next.get, key.drop(l))
           result <- r match {
             case NodeRemoveResult(true, newNodeOpt, toDel, toPut) =>
               // If we changed the child, we need to fix this extension node

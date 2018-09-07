@@ -4,16 +4,20 @@ import cats.effect.IO
 import jbok.JbokSpec
 import jbok.codec.rlp.codecs._
 import jbok.common.testkit.HexGen
+import jbok.persistent.KeyValueDB
 import org.scalacheck.Gen
+
+import scala.util.Random
 
 class MPTrieStoreSpec extends JbokSpec {
   class Setup {
-    val trie = MPTrieStore.inMemory[IO, String, String].unsafeRunSync()
+    val db   = KeyValueDB.inMemory[IO].unsafeRunSync()
+    val trie = MPTrieStore[IO, String, String](db).unsafeRunSync()
   }
 
   "merkle patricia trie store" should {
     val kvsGen = for {
-      n <- Gen.chooseNum(0, 32)
+      n    <- Gen.chooseNum(0, 32)
       size <- Gen.chooseNum(0, 100)
     } yield (1 to n).toList.map(_ => HexGen.genHex(0, size).sample.get -> HexGen.genHex(0, size).sample.get).toMap
 
@@ -29,7 +33,7 @@ class MPTrieStoreSpec extends JbokSpec {
     }
 
     "put large key and value" in new Setup {
-      val key = HexGen.genHex(0, 1024).sample.get
+      val key   = HexGen.genHex(0, 1024).sample.get
       val value = HexGen.genHex(1024, 2048).sample.get
       trie.put(key, value).unsafeRunSync()
       trie.getOpt(key).unsafeRunSync() shouldBe Some(value)
@@ -51,11 +55,35 @@ class MPTrieStoreSpec extends JbokSpec {
       }
     }
 
-    "have same root on differnt orders of insertion" in {}
+    "have same root on different orders of insertion" in new Setup {
+      forAll(kvsGen) { m =>
+        val kvs = m.toList
+        kvs.foreach { case (k, v) => trie.put(k, v).unsafeRunSync() }
+        val h1 = trie.getRootHash.unsafeRunSync()
 
-    "Remove key from an empty tree" ignore {}
+        trie.clear().unsafeRunSync()
 
-    "Remove a key that does not exist" ignore {}
+        val kvs2 = Random.shuffle(kvs)
+        kvs2.foreach { case (k, v) => trie.put(k, v).unsafeRunSync() }
+        val h2 = trie.getRootHash.unsafeRunSync()
+        h1 shouldBe h2
+
+        trie.clear().unsafeRunSync()
+      }
+    }
+
+    "Remove key from an empty tree" in new Setup {
+      trie.del("1").unsafeRunSync()
+      trie.getRootHash.unsafeRunSync() shouldBe MPTrie.emptyRootHash
+    }
+
+    "Remove a key that does not exist" in new Setup {
+      trie.put("1", "5").unsafeRunSync()
+      trie.get("1").unsafeRunSync() shouldBe "5"
+
+      trie.del("2").unsafeRunSync()
+      trie.get("1").unsafeRunSync() shouldBe "5"
+    }
 
     "Insert only one (key, value) pair to a trie and then deleted" ignore {}
 

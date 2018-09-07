@@ -3,11 +3,13 @@ package jbok.crypto.authds.mpt
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.crypto.authds.mpt.Node.{BranchNode, ExtensionNode, LeafNode}
+import jbok.persistent.KeyValueDB
 import scodec.bits._
 
 class MPTrieSpec extends JbokSpec {
-  class Setup {
-    val trie = MPTrie.inMemory[IO]().unsafeRunSync()
+  trait Setup {
+    val db = KeyValueDB.inMemory[IO].unsafeRunSync()
+    val trie = MPTrie[IO](db).unsafeRunSync()
   }
 
   "codec round trip" in {
