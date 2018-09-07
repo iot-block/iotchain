@@ -1,8 +1,9 @@
-package jbok.simulations
+package jbok.app.simulations
 
 import _root_.io.circe.generic.JsonCodec
 import cats.effect.IO
 import fs2._
+import jbok.core.FullNode
 import jbok.network.NetAddress
 import jbok.network.rpc.RpcAPI
 
@@ -18,6 +19,11 @@ case class NodeInfo(
   override def toString: String = s"NodeInfo(id=${id}, rpc=${rpcAddress}, p2p=${p2pAddress})"
 }
 
+object NodeInfo {
+  def apply[F[_]](fullNode: FullNode[F]): NodeInfo =
+    NodeInfo(fullNode.id, fullNode.config.network.rpcBindAddress, fullNode.config.network.peerBindAddress)
+}
+
 trait SimulationAPI extends RpcAPI {
   def startNetwork: Response[Unit]
 
@@ -29,11 +35,11 @@ trait SimulationAPI extends RpcAPI {
 
   def getNodeInfo(id: String): Response[NodeInfo]
 
-  def startNode(id: String): Response[NodeInfo]
+  def startNode(id: String): Response[Unit]
 
-  def stopNode(id: String): Response[NodeInfo]
+  def stopNode(id: String): Response[Unit]
 
   def connect(topology: String): Response[Unit]
 
-  val events: Stream[IO, SimulationEvent]
+  def events: Stream[IO, SimulationEvent]
 }

@@ -1,14 +1,13 @@
-package jbok.core.api
+package jbok.app.api
 
 import cats.effect.{Concurrent, Fiber, Timer}
 import cats.implicits._
 import fs2.async.Ref
-import jbok.core.configs.FilterConfig
+import jbok.core.Configs.FilterConfig
 import jbok.core.keystore.KeyStore
 import jbok.core.ledger.BloomFilter
-import jbok.core.mining.BlockGenerator
+import jbok.core.mining.BlockMiner
 import jbok.core.models.{Address, Block, Receipt}
-import jbok.core.{BlockChain, TxPool, TxPoolConfig}
 import scodec.bits.ByteVector
 
 import scala.util.Random
@@ -32,13 +31,13 @@ case class TxLog(
 //)
 
 sealed trait FilterChanges
-case class LogFilterChanges(logs: List[TxLog]) extends FilterChanges
-case class BlockFilterChanges(blockHashes: List[ByteVector]) extends FilterChanges
+case class LogFilterChanges(logs: List[TxLog])                         extends FilterChanges
+case class BlockFilterChanges(blockHashes: List[ByteVector])           extends FilterChanges
 case class PendingTransactionFilterChanges(txHashes: List[ByteVector]) extends FilterChanges
 
 sealed trait FilterLogs
-case class LogFilterLogs(logs: List[TxLog]) extends FilterLogs
-case class BlockFilterLogs(blockHashes: List[ByteVector]) extends FilterLogs
+case class LogFilterLogs(logs: List[TxLog])                         extends FilterLogs
+case class BlockFilterLogs(blockHashes: List[ByteVector])           extends FilterLogs
 case class PendingTransactionFilterLogs(txHashes: List[ByteVector]) extends FilterLogs
 
 sealed trait Filter {
@@ -51,22 +50,22 @@ case class LogFilter(
     address: Option[Address],
     topics: List[List[ByteVector]]
 ) extends Filter
-case class BlockFilter(id: BigInt) extends Filter
+case class BlockFilter(id: BigInt)              extends Filter
 case class PendingTransactionFilter(id: BigInt) extends Filter
 
 class FilterManager[F[_]](
-    blockChain: BlockChain[F],
-    blockGenerator: BlockGenerator[F],
+    miner: BlockMiner[F],
     keyStore: KeyStore[F],
-    txPool: TxPool[F],
     filterConfig: FilterConfig,
-    txPoolConfig: TxPoolConfig,
     filters: Ref[F, Map[BigInt, Filter]],
     lastCheckBlocks: Ref[F, Map[BigInt, BigInt]],
     lastCheckTimestamps: Ref[F, Map[BigInt, Long]],
     filterTimeouts: Ref[F, Map[BigInt, Fiber[F, Unit]]]
 )(implicit F: Concurrent[F], T: Timer[F]) {
   val maxBlockHashesChanges = 256
+
+  val history = miner.history
+  val txPool = miner.synchronizer.txPool
 
   def newLogFilter(
       fromBlock: Option[BlockParam],
@@ -101,9 +100,9 @@ class FilterManager[F[_]](
   def getFilterLogs(filterId: BigInt): F[FilterLogs] =
     for {
       filterOpt <- filters.get.map(_.get(filterId))
-      bn <- blockChain.getBestBlockNumber
+      bn        <- history.getBestBlockNumber
       _ <- if (filterOpt.isDefined) {
-        lastCheckBlocks.modify(_ + (filterId -> bn)) *>
+        lastCheckBlocks.modify(_ + (filterId       -> bn)) *>
           lastCheckTimestamps.modify(_ + (filterId -> System.currentTimeMillis()))
       } else {
         F.unit
@@ -126,12 +125,12 @@ class FilterManager[F[_]](
 
   def getFilterChanges(id: BigInt): F[FilterChanges] =
     for {
-      bestBlockNumber <- blockChain.getBestBlockNumber
-      lastCheckBlock <- lastCheckBlocks.get.map(_.getOrElse(id, bestBlockNumber))
+      bestBlockNumber    <- history.getBestBlockNumber
+      lastCheckBlock     <- lastCheckBlocks.get.map(_.getOrElse(id, bestBlockNumber))
       lastCheckTimestamp <- lastCheckTimestamps.get.map(_.getOrElse(id, System.currentTimeMillis()))
-      filterOpt <- filters.get.map(_.get(id))
+      filterOpt          <- filters.get.map(_.get(id))
       _ <- if (filterOpt.isDefined) {
-        lastCheckBlocks.modify(_ + (id -> bestBlockNumber)) *>
+        lastCheckBlocks.modify(_ + (id       -> bestBlockNumber)) *>
           lastCheckTimestamps.modify(_ + (id -> System.currentTimeMillis()))
       } else {
         F.unit
@@ -165,13 +164,13 @@ class FilterManager[F[_]](
       if (currentBlockNumber > toBlockNumber) {
         F.pure(logsSoFar)
       } else {
-        blockChain.getBlockHeaderByNumber(currentBlockNumber).flatMap {
+        history.getBlockHeaderByNumber(currentBlockNumber).flatMap {
           case Some(header)
               if bytesToCheckInBloomFilter.isEmpty || BloomFilter.containsAnyOf(header.logsBloom,
                                                                                 bytesToCheckInBloomFilter) =>
-            blockChain.getReceiptsByHash(header.hash).flatMap {
+            history.getReceiptsByHash(header.hash).flatMap {
               case Some(receipts) =>
-                blockChain
+                history
                   .getBlockBodyByHash(header.hash)
                   .map(_.get)
                   .flatMap(body => {
@@ -189,15 +188,16 @@ class FilterManager[F[_]](
       }
 
     for {
-      bestBlockNumber <- blockChain.getBestBlockNumber
+      bestBlockNumber <- history.getBestBlockNumber
       fromBlockNumber = startingBlockNumber.getOrElse(
         resolveBlockNumber(filter.fromBlock.getOrElse(BlockParam.Latest), bestBlockNumber))
       toBlockNumber = resolveBlockNumber(filter.toBlock.getOrElse(BlockParam.Latest), bestBlockNumber)
       logs <- recur(fromBlockNumber, toBlockNumber, Nil)
       l <- if (filter.toBlock.contains(BlockParam.Pending)) {
-        blockGenerator.getPending
-          .map(_.map(p => getLogsFromBlock(filter, p.block, p.receipts)).getOrElse(Nil))
-          .map(xs => logs ++ xs)
+        ???
+//        blockGenerator.getUnconfirmed
+//          .map(_.map(p => getLogsFromBlock(filter, p.block, p.receipts)).getOrElse(Nil))
+//          .map(xs => logs ++ xs)
       } else {
         F.pure(logs)
       }
@@ -211,19 +211,19 @@ class FilterManager[F[_]](
 
   private[jbok] def addFilterAndSendResponse(filter: Filter): F[BigInt] =
     for {
-      _ <- filters.modify(_ + (filter.id -> filter))
-      bn <- blockChain.getBestBlockNumber
-      _ <- lastCheckBlocks.modify(_ + (filter.id -> bn))
-      _ <- lastCheckTimestamps.modify(_ + (filter.id -> System.currentTimeMillis()))
-      _ <- resetTimeout(filter.id)
+      _  <- filters.modify(_ + (filter.id -> filter))
+      bn <- history.getBestBlockNumber
+      _  <- lastCheckBlocks.modify(_ + (filter.id -> bn))
+      _  <- lastCheckTimestamps.modify(_ + (filter.id -> System.currentTimeMillis()))
+      _  <- resetTimeout(filter.id)
     } yield filter.id
 
   private[jbok] def resetTimeout(id: BigInt): F[Unit] =
     for {
-      fiber <- filterTimeouts.get.map(_.get(id))
-      _ <- fiber.map(_.cancel).getOrElse(F.unit)
+      fiber       <- filterTimeouts.get.map(_.get(id))
+      _           <- fiber.map(_.cancel).getOrElse(F.unit)
       cancellable <- F.start(T.sleep(filterConfig.filterTimeout) *> uninstallFilter(id))
-      _ <- filterTimeouts.modify(_ + (id -> cancellable))
+      _           <- filterTimeouts.modify(_ + (id -> cancellable))
     } yield ()
 
   private[jbok] def getLogsFromBlock(filter: LogFilter, block: Block, receipts: List[Receipt]): List[TxLog] = {
@@ -273,40 +273,34 @@ class FilterManager[F[_]](
       if (currentBlockNumber > bestBlockNumber) {
         F.pure(hashesSoFar)
       } else {
-        blockChain.getBlockHeaderByNumber(currentBlockNumber).flatMap {
+        history.getBlockHeaderByNumber(currentBlockNumber).flatMap {
           case Some(header) => recur(bestBlockNumber, currentBlockNumber + 1, hashesSoFar :+ header.hash)
           case None         => F.pure(hashesSoFar)
         }
       }
     for {
-      bestBlock <- blockChain.getBestBlockNumber
-      hashes <- recur(bestBlock, blockNumber + 1, Nil)
+      bestBlock <- history.getBestBlockNumber
+      hashes    <- recur(bestBlock, blockNumber + 1, Nil)
     } yield hashes
   }
 }
 
 object FilterManager {
   def apply[F[_]: Concurrent](
-      blockChain: BlockChain[F],
-      blockGenerator: BlockGenerator[F],
+      miner: BlockMiner[F],
       keyStore: KeyStore[F],
-      txPool: TxPool[F],
-      filterConfig: FilterConfig,
-      txPoolConfig: TxPoolConfig
+      filterConfig: FilterConfig
   )(implicit T: Timer[F]): F[FilterManager[F]] =
     for {
-      filters <- fs2.async.refOf[F, Map[BigInt, Filter]](Map.empty)
-      lastCheckBlocks <- fs2.async.refOf[F, Map[BigInt, BigInt]](Map.empty)
+      filters             <- fs2.async.refOf[F, Map[BigInt, Filter]](Map.empty)
+      lastCheckBlocks     <- fs2.async.refOf[F, Map[BigInt, BigInt]](Map.empty)
       lastCheckTimestamps <- fs2.async.refOf[F, Map[BigInt, Long]](Map.empty)
-      filterTimeouts <- fs2.async.refOf[F, Map[BigInt, Fiber[F, Unit]]](Map.empty)
+      filterTimeouts      <- fs2.async.refOf[F, Map[BigInt, Fiber[F, Unit]]](Map.empty)
     } yield
       new FilterManager[F](
-        blockChain,
-        blockGenerator,
+        miner,
         keyStore,
-        txPool,
         filterConfig,
-        txPoolConfig,
         filters,
         lastCheckBlocks,
         lastCheckTimestamps,

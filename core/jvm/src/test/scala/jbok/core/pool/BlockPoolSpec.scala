@@ -1,25 +1,25 @@
-package jbok.core.ledger
+package jbok.core.pool
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.BlockChainFixture
-import jbok.core.ledger.BlockPool.Leaf
+import jbok.core.HistoryFixture
 import jbok.core.models.{Block, BlockBody, BlockHeader}
+import jbok.core.pool.BlockPool.Leaf
 import jbok.testkit.Gens
 import scodec.bits.ByteVector
 
-trait BlockPoolFixture extends BlockChainFixture {
-  val blockPool = BlockPool[IO](blockChain, 10, 10).unsafeRunSync()
+trait BlockPoolFixture extends HistoryFixture {
+  val blockPool = BlockPool[IO](history).unsafeRunSync()
 
   def setBestBlockNumber(n: BigInt) =
-    blockChain.setBestBlockNumber(n).unsafeRunSync()
+    history.setBestBlockNumber(n).unsafeRunSync()
 
   def setTotalDifficultyForParent(block: Block, td: BigInt) =
-    blockChain.save(block.header.parentHash, td).unsafeRunSync()
+    history.save(block.header.parentHash, td).unsafeRunSync()
 
   def setBlockExists(block: Block, inChain: Boolean, inQueue: Boolean) =
     if (inChain) {
-      blockChain.save(block).unsafeRunSync()
+      history.save(block).unsafeRunSync()
     } else if (inQueue) {
       blockPool.addBlock(block, 1).unsafeRunSync()
     } else {
@@ -27,28 +27,12 @@ trait BlockPoolFixture extends BlockChainFixture {
     }
 
   def setBestBlock(block: Block) = {
-    blockChain.save(block).unsafeRunSync()
-    blockChain.setBestBlockNumber(block.header.number).unsafeRunSync()
+    history.save(block).unsafeRunSync()
+    history.setBestBlockNumber(block.header.number).unsafeRunSync()
   }
 
   def setTotalDifficultyForBlock(block: Block, td: BigInt) =
-    blockChain.save(block.header.hash, td).unsafeRunSync()
-
-//  def expectBlockSaved(block: Block, receipts: Seq[Receipt], td: BigInt, saveAsBestBlock: Boolean) = {
-//    (blockchain.save(_: Block, _: Seq[Receipt], _: BigInt, _: Boolean))
-//      .expects(block, receipts, td, saveAsBestBlock).once()
-//  }
-//
-//  def setHeaderByHash(hash: ByteString, header: Option[BlockHeader]) =
-//    (blockchain.getBlockHeaderByHash _).expects(hash).returning(header)
-//
-//  def setBlockByNumber(number: BigInt, block: Option[Block]) =
-//    (blockchain.getBlockByNumber _).expects(number).returning(block)
-//
-//  def setGenesisHeader(header: BlockHeader) = {
-//    (blockchain.getBlockHeaderByNumber _).expects(BigInt(0)).returning(Some(header))
-//    setHeaderByHash(header.parentHash, None)
-//  }
+    history.save(block.header.hash, td).unsafeRunSync()
 
   def randomHash() = Gens.byteVectorOfLengthNGen(32).sample.get
 
@@ -89,8 +73,6 @@ class BlockPoolSpec extends JbokSpec {
       val block = getBlock(1)
       setBestBlockNumber(1)
       setTotalDifficultyForParent(block, 0)
-
-      println(blockChain.getTotalDifficultyByHash(block.header.parentHash).unsafeRunSync())
 
       blockPool.addBlock(block, 1).unsafeRunSync() shouldEqual Some(Leaf(block.header.hash, block.header.difficulty))
       blockPool.addBlock(block, 1).unsafeRunSync() shouldEqual None

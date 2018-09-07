@@ -3,9 +3,9 @@ package jbok.core.sync
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
-import jbok.core.PeerManageFixture
 import jbok.core.messages.NewBlock
 import jbok.core.models.{Block, BlockBody, BlockHeader}
+import jbok.core.peer.PeerManageFixture
 
 import scala.concurrent.duration._
 

@@ -1,10 +1,11 @@
-package jbok.core
+package jbok.core.pool
 
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.core.messages.{Messages, SignedTransactions}
 import jbok.core.models.{Address, SignedTransaction, Transaction}
+import jbok.core.peer.PeerManageFixture
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.network.execution._
@@ -57,9 +58,7 @@ class TxPoolSpec extends JbokSpec {
         _ <- connect
         _ <- txPool.start
         _ <- pm2.broadcast(msg)
-        _ = println("pm2")
         _ <- pm3.broadcast(msg)
-        _ = println("pm3")
         _ <- IO(Thread.sleep(1000))
         p <- txPool.getPendingTransactions
         _ = p.length shouldBe 1

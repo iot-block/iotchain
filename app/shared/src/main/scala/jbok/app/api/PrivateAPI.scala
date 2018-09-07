@@ -1,11 +1,12 @@
-package jbok.core.api
+package jbok.app.api
 
 import cats.effect.IO
-import jbok.core.api.impl.PrivateApiImpl
-import jbok.core.configs.BlockChainConfig
+import jbok.app.api.impl.PrivateApiImpl
+import jbok.core.Configs.BlockChainConfig
 import jbok.core.keystore.{KeyStore, Wallet}
 import jbok.core.models.{Address, Transaction}
-import jbok.core.{BlockChain, TxPool}
+import jbok.core.History
+import jbok.core.pool.TxPool
 import jbok.crypto.signature.CryptoSignature
 import jbok.network.rpc.RpcAPI
 import scodec.bits.ByteVector
@@ -63,7 +64,7 @@ trait PrivateAPI extends RpcAPI {
 object PrivateAPI {
   def apply(
       keyStore: KeyStore[IO],
-      blockchain: BlockChain[IO],
+      history: History[IO],
       blockChainConfig: BlockChainConfig,
       txPool: TxPool[IO],
   ): IO[PrivateAPI] =
@@ -72,7 +73,7 @@ object PrivateAPI {
     } yield
       new PrivateApiImpl(
         keyStore,
-        blockchain,
+        history,
         blockChainConfig,
         txPool,
         unlockedWallets

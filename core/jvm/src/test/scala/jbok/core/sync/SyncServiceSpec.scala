@@ -2,15 +2,16 @@ package jbok.core.sync
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.PeerManageFixture
 import jbok.core.messages._
 import jbok.core.models.{BlockBody, BlockHeader}
+import jbok.core.peer.PeerManageFixture
 import jbok.network.execution._
 import scodec.bits._
+
 import scala.concurrent.duration._
 
 trait SyncServiceFixture extends PeerManageFixture {
-  val blockchain = blockChain
+  val blockchain = history
   val syncService: SyncService[IO] =
     SyncService[IO](pm1, blockchain).unsafeRunSync()
 }

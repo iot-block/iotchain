@@ -17,7 +17,7 @@ object CreateOpFixture {
     WorldStateProxy
       .inMemory[IO](db)
       .unsafeRunSync()
-      .saveAccount(creatorAddr, Account.empty().increaseBalance(endowment))
+      .putAccount(creatorAddr, Account.empty().increaseBalance(endowment))
   val newAddr = initWorld.createAddressWithOpCode(creatorAddr).unsafeRunSync()._1
 
   // doubles the value passed in the input data
@@ -146,7 +146,7 @@ class CreateOpcodeSpec extends JbokSpec {
       "not modify world state except for the creator's nonce" in {
         val creatorsAccount = context.world.getAccount(CreateOpFixture.creatorAddr).unsafeRunSync()
         val expectedWorld =
-          context.world.saveAccount(CreateOpFixture.creatorAddr,
+          context.world.putAccount(CreateOpFixture.creatorAddr,
                                     creatorsAccount.copy(nonce = creatorsAccount.nonce + 1))
         result.world shouldBe expectedWorld
       }
@@ -187,7 +187,7 @@ class CreateOpcodeSpec extends JbokSpec {
       "not modify world state except for the creator's nonce" in {
         val creatorsAccount = context.world.getAccount(CreateOpFixture.creatorAddr).unsafeRunSync()
         val expectedWorld =
-          context.world.saveAccount(CreateOpFixture.creatorAddr,
+          context.world.putAccount(CreateOpFixture.creatorAddr,
                                     creatorsAccount.copy(nonce = creatorsAccount.nonce + 1))
         result.world shouldBe expectedWorld
       }
@@ -297,7 +297,7 @@ class CreateOpcodeSpec extends JbokSpec {
     "fail to create contract" in {
       val accountNonEmptyCode = Account(codeHash = ByteVector("abc".getBytes()))
 
-      val world = CreateOpFixture.initWorld.saveAccount(CreateOpFixture.newAddr, accountNonEmptyCode)
+      val world = CreateOpFixture.initWorld.putAccount(CreateOpFixture.newAddr, accountNonEmptyCode)
       val context = CreateOpFixture.context.copy(world = world)
       val result = CreateResult(context = context)
 
@@ -312,7 +312,7 @@ class CreateOpcodeSpec extends JbokSpec {
     "fail to create contract" in {
       val accountNonZeroNonce = Account(nonce = 1)
 
-      val world = CreateOpFixture.initWorld.saveAccount(CreateOpFixture.newAddr, accountNonZeroNonce)
+      val world = CreateOpFixture.initWorld.putAccount(CreateOpFixture.newAddr, accountNonZeroNonce)
       val context = CreateOpFixture.context.copy(world = world)
       val result = CreateResult(context = context)
 
@@ -327,7 +327,7 @@ class CreateOpcodeSpec extends JbokSpec {
     "succeed in creating new contract" in {
       val accountNonZeroBalance = Account(balance = 1)
 
-      val world = CreateOpFixture.initWorld.saveAccount(CreateOpFixture.newAddr, accountNonZeroBalance)
+      val world = CreateOpFixture.initWorld.putAccount(CreateOpFixture.newAddr, accountNonZeroBalance)
       val context = CreateOpFixture.context.copy(world = world)
       val result = CreateResult(context = context)
 

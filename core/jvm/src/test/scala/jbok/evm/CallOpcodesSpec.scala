@@ -154,7 +154,7 @@ class CallOpcodesSpec extends JbokSpec {
     "calling a precompiled contract" should {
       val contractAddress = Address(1) // ECDSA recovery
       val invalidSignature = ByteVector(Array.fill(128)(0.toByte))
-      val world = fxt.worldWithoutExtAccount.saveAccount(contractAddress, Account(balance = 1))
+      val world = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
       val context = fxt.context.copy(world = world)
       val call = fxt.CallResult(
         op = CALL,
@@ -402,7 +402,7 @@ class CallOpcodesSpec extends JbokSpec {
     "calling a precompiled contract" should {
       val contractAddress = Address(2) // SHA256
       val inputData = ByteVector(Array.fill(128)(1.toByte))
-      val world = fxt.worldWithoutExtAccount.saveAccount(contractAddress, Account(balance = 1))
+      val world = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
       val context = fxt.context.copy(world = world)
       val call = fxt.CallResult(op = CALLCODE,
                                 context = context,
@@ -579,7 +579,7 @@ class CallOpcodesSpec extends JbokSpec {
     "calling a precompiled contract" should {
       val contractAddress = Address(3) // RIPEMD160
       val inputData = ByteVector(Array.fill(128)(1.toByte))
-      val world = fxt.worldWithoutExtAccount.saveAccount(contractAddress, Account(balance = 1))
+      val world = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
       val context = fxt.context.copy(world = world)
       val call = fxt.CallResult(op = DELEGATECALL,
                                 context = context,

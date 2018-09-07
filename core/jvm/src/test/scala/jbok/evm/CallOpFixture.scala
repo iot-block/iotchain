@@ -112,33 +112,33 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldStateProxy[IO]) 
   val sstoreWithClearProgram = sstoreWithClearCode.program
   val accountWithCode: ByteVector => Account = code => Account.empty().withCode(code.kec256)
 
-  val worldWithoutExtAccount = startState.saveAccount(ownerAddr, initialOwnerAccount)
+  val worldWithoutExtAccount = startState.putAccount(ownerAddr, initialOwnerAccount)
 
   val worldWithExtAccount = worldWithoutExtAccount
-    .saveAccount(extAddr, accountWithCode(extProgram.code))
-    .saveCode(extAddr, extProgram.code)
+    .putAccount(extAddr, accountWithCode(extProgram.code))
+    .putCode(extAddr, extProgram.code)
 
-  val worldWithExtEmptyAccount = worldWithoutExtAccount.saveAccount(extAddr, Account.empty())
+  val worldWithExtEmptyAccount = worldWithoutExtAccount.putAccount(extAddr, Account.empty())
 
   val worldWithInvalidProgram = worldWithoutExtAccount
-    .saveAccount(extAddr, accountWithCode(invalidProgram.code))
-    .saveCode(extAddr, invalidProgram.code)
+    .putAccount(extAddr, accountWithCode(invalidProgram.code))
+    .putCode(extAddr, invalidProgram.code)
 
   val worldWithSelfDestructProgram = worldWithoutExtAccount
-    .saveAccount(extAddr, accountWithCode(selfDestructProgram.code))
-    .saveCode(extAddr, selfDestructCode.code)
+    .putAccount(extAddr, accountWithCode(selfDestructProgram.code))
+    .putCode(extAddr, selfDestructCode.code)
 
   val worldWithSelfDestructSelfProgram = worldWithoutExtAccount
-    .saveAccount(extAddr, Account.empty())
-    .saveCode(extAddr, selfDestructTransferringToSelfCode.code)
+    .putAccount(extAddr, Account.empty())
+    .putCode(extAddr, selfDestructTransferringToSelfCode.code)
 
   val worldWithSstoreWithClearProgram = worldWithoutExtAccount
-    .saveAccount(extAddr, accountWithCode(sstoreWithClearProgram.code))
-    .saveCode(extAddr, sstoreWithClearCode.code)
+    .putAccount(extAddr, accountWithCode(sstoreWithClearProgram.code))
+    .putCode(extAddr, sstoreWithClearCode.code)
 
   val worldWithReturnSingleByteCode = worldWithoutExtAccount
-    .saveAccount(extAddr, accountWithCode(returnSingleByteProgram.code))
-    .saveCode(extAddr, returnSingleByteProgram.code)
+    .putAccount(extAddr, accountWithCode(returnSingleByteProgram.code))
+    .putCode(extAddr, returnSingleByteProgram.code)
 
   val env = ExecEnv(ownerAddr, callerAddr, callerAddr, 1, ByteVector.empty, 123, Program(ByteVector.empty), null, 0)
   val context = ProgramContext(env, ownerAddr, 2 * requiredGas, worldWithExtAccount, config)

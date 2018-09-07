@@ -1,13 +1,15 @@
-package jbok.core.api
+package jbok.app.api
 
 import java.net.InetSocketAddress
 
 import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
+import jbok.core.Configs.BlockChainConfig
 import jbok.core.keystore.{KeyStoreFixture, Wallet}
 import jbok.core.models.{Address, SignedTransaction}
-import jbok.core.{BlockChainFixture, TxPoolFixture}
+import jbok.core.HistoryFixture
+import jbok.core.pool.TxPoolFixture
 import jbok.crypto.signature.{CryptoSignature, KeyPair}
 import jbok.network.client.{Client, WebSocketClientBuilder}
 import jbok.network.execution._
@@ -15,11 +17,11 @@ import jbok.network.rpc.{RpcClient, RpcServer}
 import jbok.network.server.{Server, WebSocketServerBuilder}
 import scodec.bits._
 
-trait PrivateAPIFixture extends BlockChainFixture with KeyStoreFixture with TxPoolFixture {
+trait PrivateAPIFixture extends HistoryFixture with KeyStoreFixture with TxPoolFixture {
   val privateApiImpl = PrivateAPI(
     keyStore,
-    blockChain,
-    blockChainConfig,
+    history,
+    BlockChainConfig(),
     txPool
   ).unsafeRunSync()
 

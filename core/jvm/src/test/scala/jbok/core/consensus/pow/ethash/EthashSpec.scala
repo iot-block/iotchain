@@ -1,12 +1,12 @@
-package jbok.core.consensus
+package jbok.core.consensus.pow.ethash
 
 import jbok.JbokSpec
 import jbok.crypto._
 import org.scalacheck.Arbitrary
 import scodec.bits.ByteVector
+import jbok.core.consensus.pow.ethash.Ethash._
 
 class EthashSpec extends JbokSpec {
-  import jbok.core.consensus.pow.Ethash._
 
   def seedForBlockReference(blockNumber: BigInt): ByteVector =
     if (blockNumber < EPOCH_LENGTH) {

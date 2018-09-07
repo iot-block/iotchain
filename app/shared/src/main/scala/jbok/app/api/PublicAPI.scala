@@ -1,15 +1,14 @@
-package jbok.core.api
+package jbok.app.api
 
 import java.util.Date
 
 import cats.effect.IO
-import jbok.core.api.impl.PublicApiImpl
-import jbok.core.configs.{BlockChainConfig, MiningConfig}
+import jbok.app.api.impl.PublicApiImpl
+import jbok.core.Configs.{BlockChainConfig, MiningConfig}
+import jbok.core.History
 import jbok.core.keystore.KeyStore
-import jbok.core.ledger.{Ledger, OmmersPool}
-import jbok.core.mining.BlockGenerator
+import jbok.core.mining.BlockMiner
 import jbok.core.models._
-import jbok.core.{BlockChain, TxPool}
 import jbok.network.rpc.RpcAPI
 import scodec.bits.ByteVector
 
@@ -17,9 +16,9 @@ case class GetWorkResponse(powHeaderHash: ByteVector, dagSeed: ByteVector, targe
 sealed trait BlockParam
 object BlockParam {
   case class WithNumber(n: BigInt) extends BlockParam
-  case object Latest extends BlockParam
-  case object Pending extends BlockParam
-  case object Earliest extends BlockParam
+  case object Latest               extends BlockParam
+  case object Pending              extends BlockParam
+  case object Earliest             extends BlockParam
 }
 
 case class CallTx(
@@ -84,7 +83,8 @@ trait PublicAPI extends RpcAPI {
 
   def getBlockTransactionCountByNumber(blockParam: BlockParam): Response[Int]
 
-  def getTransactionByBlockNumberAndIndexRequest(blockParam: BlockParam, txIndex: Int): Response[Option[SignedTransaction]]
+  def getTransactionByBlockNumberAndIndexRequest(blockParam: BlockParam,
+                                                 txIndex: Int): Response[Option[SignedTransaction]]
 
   def getBalance(address: Address, blockParam: BlockParam): Response[BigInt]
 
@@ -121,31 +121,24 @@ trait PublicAPI extends RpcAPI {
 
 object PublicAPI {
   def apply(
-      blockChain: BlockChain[IO],
+      blockChain: History[IO],
       blockChainConfig: BlockChainConfig,
-      ommersPool: OmmersPool[IO],
-      txPool: TxPool[IO],
-      ledger: Ledger[IO],
-      blockGenerator: BlockGenerator[IO],
+      miningConfig: MiningConfig,
+      miner: BlockMiner[IO],
       keyStore: KeyStore[IO],
       filterManager: FilterManager[IO],
-      miningConfig: MiningConfig,
       version: Int,
   ): IO[PublicAPI] =
     for {
-      hashRate <- fs2.async.refOf[IO, Map[ByteVector, (BigInt, Date)]](Map.empty)
+      hashRate   <- fs2.async.refOf[IO, Map[ByteVector, (BigInt, Date)]](Map.empty)
       lastActive <- fs2.async.refOf[IO, Option[Date]](None)
     } yield {
       new PublicApiImpl(
-        blockChain,
         blockChainConfig,
-        ommersPool,
-        txPool,
-        ledger,
-        blockGenerator,
+        miningConfig: MiningConfig,
+        miner,
         keyStore,
         filterManager,
-        miningConfig: MiningConfig,
         version: Int,
         hashRate,
         lastActive

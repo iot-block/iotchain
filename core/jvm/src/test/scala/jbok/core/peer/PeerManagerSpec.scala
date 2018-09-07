@@ -1,31 +1,31 @@
-package jbok.core
+package jbok.core.peer
 
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
-import jbok.core.configs.PeerManagerConfig
-import jbok.core.genesis.Genesis
+import jbok.core.HistoryFixture
+import jbok.core.Configs.PeerManagerConfig
+import jbok.core.genesis.GenesisConfig
 import jbok.core.messages.Hello
-import jbok.core.peer.PeerManager
 import jbok.network.NetAddress
 import jbok.network.execution._
 import scodec.bits.ByteVector
 
-trait PeerManageFixture extends BlockChainFixture {
+trait PeerManageFixture extends HistoryFixture {
   val N = 3
 
   val peerManagerConfigs = (1 to N).toList
     .map(i => PeerManagerConfig(NetAddress("localhost", 10000 + i)))
 
-  val pm1 = PeerManager[IO](peerManagerConfigs(0), blockChain).unsafeRunSync()
-  val pm2 = PeerManager[IO](peerManagerConfigs(1), blockChain2).unsafeRunSync()
-  val pm3 = PeerManager[IO](peerManagerConfigs(2), blockChain3).unsafeRunSync()
+  val pm1 = PeerManager[IO](peerManagerConfigs(0), history).unsafeRunSync()
+  val pm2 = PeerManager[IO](peerManagerConfigs(1), history2).unsafeRunSync()
+  val pm3 = PeerManager[IO](peerManagerConfigs(2), history3).unsafeRunSync()
 
   val peerManagers = List(pm1, pm2, pm3)
 
   val listen = peerManagers.traverse(_.listen)
   val connect =
-    listen.flatMap(_ => peerManagers.tail.traverse(p => peerManagers.head.connect(p.localAddress.unsafeRunSync())))
+    listen.flatMap(_ => peerManagers.tail.traverse(p => peerManagers.head.connect(p.localAddress.unsafeRunSync()))) *> IO (Thread.sleep(1000))
   val stopAll = peerManagers.traverse(_.stop)
 }
 
@@ -33,7 +33,7 @@ class PeerManagerSpec extends JbokSpec with PeerManageFixture {
   "peer manager" should {
     "get local status" in {
       val status = pm1.status.unsafeRunSync()
-      status.genesisHash shouldBe Genesis.header.hash
+      status.genesisHash shouldBe history.getBestBlock.unsafeRunSync().header.hash
     }
 
     "handshake" in {

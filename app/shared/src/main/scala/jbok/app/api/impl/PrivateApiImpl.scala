@@ -1,14 +1,15 @@
-package jbok.core.api.impl
+package jbok.app.api.impl
 
 import cats.data.EitherT
 import cats.effect.IO
 import cats.implicits._
 import fs2.async.Ref
-import jbok.core.api.{PrivateAPI, TransactionRequest}
-import jbok.core.configs.BlockChainConfig
+import jbok.app.api.{PrivateAPI, TransactionRequest}
+import jbok.core.Configs.BlockChainConfig
 import jbok.core.keystore.{KeyStore, Wallet}
 import jbok.core.models.Address
-import jbok.core.{BlockChain, TxPool}
+import jbok.core.History
+import jbok.core.pool.TxPool
 import jbok.crypto._
 import jbok.crypto.signature.CryptoSignature
 import jbok.crypto.signature.ecdsa.SecP256k1
@@ -21,7 +22,7 @@ import scala.util.Try
 
 class PrivateApiImpl(
     keyStore: KeyStore[IO],
-    blockchain: BlockChain[IO],
+    history: History[IO],
     blockChainConfig: BlockChainConfig,
     txPool: TxPool[IO],
     unlockedWallets: Ref[IO, Map[Address, Wallet]]
@@ -112,8 +113,8 @@ class PrivateApiImpl(
       latestNonceOpt = Try(pending.collect {
         case ptx if ptx.stx.senderAddress(Some(0x3d.toByte)).get == wallet.address => ptx.stx.nonce
       }.max).toOption
-      bn              <- blockchain.getBestBlockNumber
-      currentNonceOpt <- blockchain.getAccount(request.from, bn).map(_.map(_.nonce.toBigInt))
+      bn              <- history.getBestBlockNumber
+      currentNonceOpt <- history.getAccount(request.from, bn).map(_.map(_.nonce.toBigInt))
       maybeNextTxNonce = latestNonceOpt.map(_ + 1).orElse(currentNonceOpt)
       tx               = request.toTransaction(maybeNextTxNonce.getOrElse(blockChainConfig.accountStartNonce))
       stx = if (bn >= blockChainConfig.eip155BlockNumber) {

@@ -1,8 +1,8 @@
 package jbok.core.validators
 
 import cats.effect.IO
-import jbok.core.BlockChainFixture
-import jbok.core.Fixtures.Blocks.Block3125369
+import jbok.JbokSpec
+import jbok.core.HistoryFixture
 import jbok.core.models._
 import jbok.core.validators.BlockInvalid.{
   BlockLogBloomInvalid,
@@ -11,11 +11,9 @@ import jbok.core.validators.BlockInvalid.{
   BlockTransactionsHashInvalid
 }
 import jbok.testkit.Gens
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits._
 
-class BlockValidatorFixture extends BlockChainFixture {
+class CommonBlockValidatorFixture extends HistoryFixture {
   val validBlockHeader = BlockHeader(
     parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
     ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
@@ -128,75 +126,78 @@ class BlockValidatorFixture extends BlockChainFixture {
   val blockValidator = new BlockValidator[IO]()
 }
 
-class BlockValidatorSpec extends FlatSpec with Matchers with PropertyChecks with Gens {
-  "BlockValidator" should "return ture if valid block" in new BlockValidatorFixture {
-    blockValidator.validate(block, validReceipts).value.unsafeRunSync() shouldBe Right(())
-  }
-
-  it should "return a failure if created based on invalid transactions header" in new BlockValidatorFixture {
-    forAll(randomSizeByteStringGen(0, 32)) { txHash =>
-      val invalidTxHash = validBlockHeader.copy(transactionsRoot = txHash)
-      val result = blockValidator.validate(Block(invalidTxHash, validBlockBody), validReceipts).value.unsafeRunSync()
-      if (txHash == validBlockHeader.transactionsRoot) Right(())
-      else result shouldBe Left(BlockTransactionsHashInvalid)
+class CommonBlockValidatorSpec extends JbokSpec with Gens {
+  "BlockValidator" should {
+    "return true if valid block" in new CommonBlockValidatorFixture {
+      blockValidator.validate(block, validReceipts).attempt.unsafeRunSync() shouldBe Right(())
     }
-  }
 
-  it should "return a failure if created based on invalid ommers header" in new BlockValidatorFixture {
-    forAll(randomSizeByteStringGen(0, 32)) { ommersHash =>
-      val invalidOmmersHash = validBlockHeader.copy(ommersHash = ommersHash)
-      val result = blockValidator
-        .validate(Block(invalidOmmersHash, validBlockBody), validReceipts)
-        .value
-        .unsafeRunSync()
-      if (ommersHash == validBlockHeader.ommersHash) result shouldBe Right(())
-      else result shouldBe Left(BlockOmmersHashInvalid)
+    "return a failure if created based on invalid transactions header" in new CommonBlockValidatorFixture {
+      forAll(randomSizeByteStringGen(0, 32)) { txHash =>
+        val invalidTxHash = validBlockHeader.copy(transactionsRoot = txHash)
+        val result =
+          blockValidator.validate(Block(invalidTxHash, validBlockBody), validReceipts).attempt.unsafeRunSync()
+        if (txHash == validBlockHeader.transactionsRoot) Right(())
+        else result shouldBe Left(BlockTransactionsHashInvalid)
+      }
     }
-  }
 
-  it should "return a failure if created based on invalid receipts header" in new BlockValidatorFixture {
-    forAll(randomSizeByteStringGen(0, 32)) { receiptesHash =>
-      val invalidReceiptsHash = validBlockHeader.copy(receiptsRoot = receiptesHash)
-      val result = blockValidator
-        .validate(Block(invalidReceiptsHash, validBlockBody), validReceipts)
-        .value
-        .unsafeRunSync()
-      if (receiptesHash == validBlockHeader.receiptsRoot) result shouldBe Right(())
-      else result shouldBe Left(BlockReceiptsHashInvalid)
+    "return a failure if created based on invalid ommers header" in new CommonBlockValidatorFixture {
+      forAll(randomSizeByteStringGen(0, 32)) { ommersHash =>
+        val invalidOmmersHash = validBlockHeader.copy(ommersHash = ommersHash)
+        val result = blockValidator
+          .validate(Block(invalidOmmersHash, validBlockBody), validReceipts)
+          .attempt
+          .unsafeRunSync()
+        if (ommersHash == validBlockHeader.ommersHash) result shouldBe Right(())
+        else result shouldBe Left(BlockOmmersHashInvalid)
+      }
     }
-  }
 
-  it should "return a failure if created based on invalid log bloom header" in new BlockValidatorFixture {
-    forAll(randomSizeByteStringGen(0, 32)) { logBloom =>
-      val invalidLogBloom = validBlockHeader.copy(logsBloom = logBloom)
-      val result = blockValidator
-        .validate(Block(invalidLogBloom, validBlockBody), validReceipts)
-        .value
-        .unsafeRunSync()
-      if (logBloom == validBlockHeader.logsBloom) result shouldBe Right(())
-      else result shouldBe Left(BlockLogBloomInvalid)
+    "return a failure if created based on invalid receipts header" in new CommonBlockValidatorFixture {
+      forAll(randomSizeByteStringGen(0, 32)) { receiptesHash =>
+        val invalidReceiptsHash = validBlockHeader.copy(receiptsRoot = receiptesHash)
+        val result = blockValidator
+          .validate(Block(invalidReceiptsHash, validBlockBody), validReceipts)
+          .attempt
+          .unsafeRunSync()
+        if (receiptesHash == validBlockHeader.receiptsRoot) result shouldBe Right(())
+        else result shouldBe Left(BlockReceiptsHashInvalid)
+      }
     }
-  }
 
-  it should "return a failure if a block body doesn't corresponds to a block header due to wrong tx hash" in new BlockValidatorFixture {
-    blockValidator
-      .validateHeaderAndBody(
-        Block(validBlockHeader, validBlockBody.copy(transactionList = validBlockBody.transactionList.reverse)))
-      .value
-      .unsafeRunSync() shouldBe Left(BlockTransactionsHashInvalid)
-  }
+    "return a failure if created based on invalid log bloom header" in new CommonBlockValidatorFixture {
+      forAll(randomSizeByteStringGen(0, 32)) { logBloom =>
+        val invalidLogBloom = validBlockHeader.copy(logsBloom = logBloom)
+        val result = blockValidator
+          .validate(Block(invalidLogBloom, validBlockBody), validReceipts)
+          .attempt
+          .unsafeRunSync()
+        if (logBloom == validBlockHeader.logsBloom) result shouldBe Right(())
+        else result shouldBe Left(BlockLogBloomInvalid)
+      }
+    }
 
-  it should "return a failure if a block body doesn't corresponds to a block header due to wrong ommers hash" in new BlockValidatorFixture {
-    blockValidator
-      .validateHeaderAndBody(Block(validBlockHeader, validBlockBody.copy(uncleNodesList = List(validBlockHeader))))
-      .value
-      .unsafeRunSync() shouldBe Left(BlockOmmersHashInvalid)
-  }
+    "return a failure if a block body doesn't corresponds to a block header due to wrong tx hash" in new CommonBlockValidatorFixture {
+      blockValidator
+        .validateHeaderAndBody(
+          Block(validBlockHeader, validBlockBody.copy(transactionList = validBlockBody.transactionList.reverse)))
+        .attempt
+        .unsafeRunSync() shouldBe Left(BlockTransactionsHashInvalid)
+    }
 
-  it should "return a failure if a receiptes is not valid due to wrong receipts hash" in new BlockValidatorFixture {
-    blockValidator
-      .validateBlockAndReceipts(validBlockHeader, validReceipts.reverse)
-      .value
-      .unsafeRunSync() shouldBe Left(BlockReceiptsHashInvalid)
+    "return a failure if a block body doesn't corresponds to a block header due to wrong ommers hash" in new CommonBlockValidatorFixture {
+      blockValidator
+        .validateHeaderAndBody(Block(validBlockHeader, validBlockBody.copy(uncleNodesList = List(validBlockHeader))))
+        .attempt
+        .unsafeRunSync() shouldBe Left(BlockOmmersHashInvalid)
+    }
+
+    "return a failure if a receiptes is not valid due to wrong receipts hash" in new CommonBlockValidatorFixture {
+      blockValidator
+        .validateBlockAndReceipts(validBlockHeader, validReceipts.reverse)
+        .attempt
+        .unsafeRunSync() shouldBe Left(BlockReceiptsHashInvalid)
+    }
   }
 }

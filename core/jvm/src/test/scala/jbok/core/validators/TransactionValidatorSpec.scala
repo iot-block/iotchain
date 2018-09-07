@@ -1,16 +1,16 @@
 package jbok.core.validators
 
 import cats.effect.IO
-import jbok.core.{BlockChainFixture, Fixtures}
+import jbok.JbokSpec
+import jbok.core.Configs.BlockChainConfig
 import jbok.core.models._
-import jbok.core.validators.SignedTransactionInvalid._
+import jbok.core.validators.TransactionInvalid._
+import jbok.core.{Fixtures, HistoryFixture}
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.testkit.Gens
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.prop.PropertyChecks
 import scodec.bits._
 
-class TransactionValidatorFixture extends BlockChainFixture {
+class TransactionValidatorFixture extends HistoryFixture {
   val keyPair = SecP256k1.generateKeyPair().unsafeRunSync()
   val txBeforeHomestead = Transaction(
     nonce = 81,
@@ -61,217 +61,219 @@ class TransactionValidatorFixture extends BlockChainFixture {
 
   val upfrontGasCost: UInt256 = UInt256(senderBalance / 2)
 
-  val transactionValidator = new TransactionValidator[IO](blockChainConfig)
+  val transactionValidator = new TransactionValidator[IO](BlockChainConfig())
 }
 
-class TransactionValidatorSpec extends FlatSpec with Matchers with PropertyChecks with Gens {
-  it should "report as valid a tx from before homestead" in new TransactionValidatorFixture {
-    transactionValidator
-      .validate(signedTxBeforeHomestead,
-                senderAccountBeforeHomestead,
-                blockHeaderBeforeHomestead,
-                upfrontGasCost,
-                accumGasUsed)
-      .value
-      .unsafeRunSync() shouldBe Right(signedTxBeforeHomestead)
-  }
-
-  it should "report as valid a tx from after homestead" in new TransactionValidatorFixture {
-    transactionValidator
-      .validate(signedTxAfterHomestead,
-                senderAccountAfterHomestead,
-                blockHeaderAfterHomestead,
-                upfrontGasCost,
-                accumGasUsed)
-      .value
-      .unsafeRunSync() shouldBe Right(signedTxAfterHomestead)
-  }
-
-  it should "report as valid a tx from after EIP155" in new TransactionValidatorFixture {
-    transactionValidator
-      .validate(signedTxAfterEIP155, senderAccountAfterEIP155, blockHeaderAfterEIP155, upfrontGasCost, accumGasUsed)
-      .value
-      .unsafeRunSync() shouldBe Right(signedTxAfterEIP155)
-  }
-
-  it should "report as invalid if a tx with error nonce" in new TransactionValidatorFixture {
-    forAll(bigInt64Gen) { nonce =>
-      val invalidSSignedTx = signedTxBeforeHomestead.copy(nonce = nonce)
-      val result = transactionValidator
-        .validate(invalidSSignedTx,
+class TransactionValidatorSpec extends JbokSpec with Gens {
+  "TxValidator" should {
+    "report as valid a tx from before homestead" in new TransactionValidatorFixture {
+      transactionValidator
+        .validate(signedTxBeforeHomestead,
                   senderAccountBeforeHomestead,
                   blockHeaderBeforeHomestead,
                   upfrontGasCost,
                   accumGasUsed)
-        .value
-        .unsafeRunSync()
-      result.left.get shouldBe a[TransactionSyntaxInvalid]
+        .attempt
+        .unsafeRunSync() shouldBe Right(())
     }
-  }
 
-  it should "report as syntactic invalid a tx with long gas limit" in new TransactionValidatorFixture {
-    forAll(bigInt64Gen) { nonce =>
-      val invalidSSignedTx = signedTxBeforeHomestead.copy(nonce = nonce)
-      val result = transactionValidator
-        .validate(invalidSSignedTx,
-                  senderAccountBeforeHomestead,
-                  blockHeaderBeforeHomestead,
-                  upfrontGasCost,
-                  accumGasUsed)
-        .value
-        .unsafeRunSync()
-      result.left.get shouldBe a[TransactionSyntaxInvalid]
-    }
-  }
-
-  it should "report as syntactic invalid a tx with long gas price" in new TransactionValidatorFixture {
-    forAll(bigInt64Gen) { gasPrice =>
-      val invalidGasPriceTx = signedTxBeforeHomestead.copy(gasPrice = gasPrice)
-      val result = transactionValidator
-        .validate(invalidGasPriceTx,
-                  senderAccountBeforeHomestead,
-                  blockHeaderBeforeHomestead,
-                  upfrontGasCost,
-                  accumGasUsed)
-        .value
-        .unsafeRunSync()
-      result.left.get shouldBe a[TransactionSyntaxInvalid]
-    }
-  }
-
-  it should "report as syntactic invalid a tx with long value" in new TransactionValidatorFixture {
-    forAll(bigInt64Gen) { value =>
-      val invalidValueTx = signedTxBeforeHomestead.copy(value = value)
-      val result = transactionValidator
-        .validate(invalidValueTx,
-                  senderAccountBeforeHomestead,
-                  blockHeaderBeforeHomestead,
-                  upfrontGasCost,
-                  accumGasUsed)
-        .value
-        .unsafeRunSync()
-      result.left.get shouldBe a[TransactionSyntaxInvalid]
-    }
-  }
-
-  it should "report as syntactic invalid a tx with long s" in new TransactionValidatorFixture {
-    forAll(bigInt64Gen) { s =>
-      val invalidSTx = signedTxBeforeHomestead.copy(s = s)
-      val result = transactionValidator
-        .validate(invalidSTx, senderAccountBeforeHomestead, blockHeaderBeforeHomestead, upfrontGasCost, accumGasUsed)
-        .value
-        .unsafeRunSync()
-      result.left.get shouldBe a[TransactionSyntaxInvalid]
-    }
-  }
-
-  it should "report as syntactic invalid a tx with long r" in new TransactionValidatorFixture {
-    forAll(bigInt64Gen) { r =>
-      val invalidRTx = signedTxBeforeHomestead.copy(r = r)
-      val result = transactionValidator
-        .validate(invalidRTx, senderAccountBeforeHomestead, blockHeaderBeforeHomestead, upfrontGasCost, accumGasUsed)
-        .value
-        .unsafeRunSync()
-      result.left.get shouldBe a[TransactionSyntaxInvalid]
-    }
-  }
-
-  it should "report a tx with invalid r as having invalid signature" in new TransactionValidatorFixture {
-    forAll(bigIntGen) { r =>
-      val invalidRSignedTx = signedTxBeforeHomestead.copy(r = r)
-      val result = transactionValidator
-        .validate(invalidRSignedTx,
-                  senderAccountBeforeHomestead,
-                  blockHeaderBeforeHomestead,
-                  upfrontGasCost,
-                  accumGasUsed)
-        .value
-        .unsafeRunSync()
-      if (r < transactionValidator.secp256k1n && r > 0) result shouldBe Right(invalidRSignedTx)
-      else result shouldBe Left(TransactionSignatureInvalid)
-    }
-  }
-
-  it should "report a tx with invalid s as having invalid signature before homestead" in new TransactionValidatorFixture {
-    forAll(bigIntGen) { s =>
-      val invalidSSignedTx = signedTxBeforeHomestead.copy(s = s)
-      val result = transactionValidator
-        .validate(invalidSSignedTx,
-                  senderAccountBeforeHomestead,
-                  blockHeaderBeforeHomestead,
-                  upfrontGasCost,
-                  accumGasUsed)
-        .value
-        .unsafeRunSync()
-      if (s < transactionValidator.secp256k1n && s > 0) result shouldBe Right(invalidSSignedTx)
-      else result shouldBe Left(TransactionSignatureInvalid)
-    }
-  }
-
-  it should "report a tx with invalid s as having invalid signature after homestead" in new TransactionValidatorFixture {
-    forAll(bigIntGen) { s =>
-      val invalidSSignedTx = signedTxAfterHomestead.copy(s = s)
-      val result = transactionValidator
-        .validate(invalidSSignedTx,
+    "report as valid a tx from after homestead" in new TransactionValidatorFixture {
+      transactionValidator
+        .validate(signedTxAfterHomestead,
                   senderAccountAfterHomestead,
                   blockHeaderAfterHomestead,
                   upfrontGasCost,
                   accumGasUsed)
-        .value
-        .unsafeRunSync()
-      if (s < transactionValidator.secp256k1n / 2 + 1 && s > 0) result shouldBe Right(invalidSSignedTx)
-      else result shouldBe Left(TransactionSignatureInvalid)
+        .attempt
+        .unsafeRunSync() shouldBe Right(())
     }
-  }
 
-  it should "report as invalid if a tx with invalid nonce" in new TransactionValidatorFixture {
-    forAll(bigIntGen) { nonce =>
-      val invalidNonceSignedTx = signedTxBeforeHomestead.copy(nonce = nonce)
-      val result = transactionValidator
-        .validate(invalidNonceSignedTx,
-                  senderAccountBeforeHomestead,
-                  blockHeaderBeforeHomestead,
-                  upfrontGasCost,
-                  accumGasUsed)
-        .value
-        .unsafeRunSync()
-      if (nonce == txBeforeHomestead.nonce) result shouldBe Right(signedTxBeforeHomestead)
-      else result.left.get shouldBe a[TransactionNonceInvalid]
+    "report as valid a tx from after EIP155" in new TransactionValidatorFixture {
+      transactionValidator
+        .validate(signedTxAfterEIP155, senderAccountAfterEIP155, blockHeaderAfterEIP155, upfrontGasCost, accumGasUsed)
+        .attempt
+        .unsafeRunSync() shouldBe Right(())
     }
-  }
 
-  it should "report as invalid a tx with too low gas limit for intrinsic gas" in new TransactionValidatorFixture {
-    forAll(bigIntGen) { gasLimit =>
-      val invalidGasLimitTx = signedTxBeforeHomestead.copy(gasLimit = gasLimit)
-      val result = transactionValidator
-        .validate(invalidGasLimitTx,
-                  senderAccountBeforeHomestead,
-                  blockHeaderBeforeHomestead,
-                  upfrontGasCost,
-                  accumGasUsed)
-        .value
-        .unsafeRunSync()
-      if (gasLimit == txBeforeHomestead.gasLimit) result shouldBe Right(invalidGasLimitTx)
-      else if (gasLimit > txBeforeHomestead.gasLimit)
-        if (gasLimit + accumGasUsed <= upfrontGasCost) result shouldBe Right(invalidGasLimitTx)
-        else result.left.get shouldBe a[TransactionGasLimitTooBigInvalid]
-      else result.left.get shouldBe a[TransactionNotEnoughGasForIntrinsicInvalid]
+    "report as invalid if a tx with error nonce" in new TransactionValidatorFixture {
+      forAll(bigInt64Gen) { nonce =>
+        val invalidSSignedTx = signedTxBeforeHomestead.copy(nonce = nonce)
+        val result = transactionValidator
+          .validate(invalidSSignedTx,
+                    senderAccountBeforeHomestead,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        result.left.get shouldBe a[TransactionSyntaxInvalid]
+      }
     }
-  }
 
-  it should "report as invalid a tx with upfront cost higher than the sender's balance" in new TransactionValidatorFixture {
-    forAll(byteVectorOfLengthNGen(32)) { balance =>
-      val invalidBalanceAccount = senderAccountBeforeHomestead.copy(balance = UInt256(balance))
-      val result = transactionValidator
-        .validate(signedTxBeforeHomestead,
-                  invalidBalanceAccount,
-                  blockHeaderBeforeHomestead,
-                  upfrontGasCost,
-                  accumGasUsed)
-        .value
-        .unsafeRunSync()
-      if (UInt256(balance) >= upfrontGasCost) result shouldBe Right(signedTxBeforeHomestead)
-      else result.left.get shouldBe a[TransactionSenderCantPayUpfrontCostInvalid]
+    "report as syntactic invalid a tx with long gas limit" in new TransactionValidatorFixture {
+      forAll(bigInt64Gen) { nonce =>
+        val invalidSSignedTx = signedTxBeforeHomestead.copy(nonce = nonce)
+        val result = transactionValidator
+          .validate(invalidSSignedTx,
+                    senderAccountBeforeHomestead,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        result.left.get shouldBe a[TransactionSyntaxInvalid]
+      }
+    }
+
+    "report as syntactic invalid a tx with long gas price" in new TransactionValidatorFixture {
+      forAll(bigInt64Gen) { gasPrice =>
+        val invalidGasPriceTx = signedTxBeforeHomestead.copy(gasPrice = gasPrice)
+        val result = transactionValidator
+          .validate(invalidGasPriceTx,
+                    senderAccountBeforeHomestead,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        result.left.get shouldBe a[TransactionSyntaxInvalid]
+      }
+    }
+
+    "report as syntactic invalid a tx with long value" in new TransactionValidatorFixture {
+      forAll(bigInt64Gen) { value =>
+        val invalidValueTx = signedTxBeforeHomestead.copy(value = value)
+        val result = transactionValidator
+          .validate(invalidValueTx,
+                    senderAccountBeforeHomestead,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        result.left.get shouldBe a[TransactionSyntaxInvalid]
+      }
+    }
+
+    "report as syntactic invalid a tx with long s" in new TransactionValidatorFixture {
+      forAll(bigInt64Gen) { s =>
+        val invalidSTx = signedTxBeforeHomestead.copy(s = s)
+        val result = transactionValidator
+          .validate(invalidSTx, senderAccountBeforeHomestead, blockHeaderBeforeHomestead, upfrontGasCost, accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        result.left.get shouldBe a[TransactionSyntaxInvalid]
+      }
+    }
+
+    "report as syntactic invalid a tx with long r" in new TransactionValidatorFixture {
+      forAll(bigInt64Gen) { r =>
+        val invalidRTx = signedTxBeforeHomestead.copy(r = r)
+        val result = transactionValidator
+          .validate(invalidRTx, senderAccountBeforeHomestead, blockHeaderBeforeHomestead, upfrontGasCost, accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        result.left.get shouldBe a[TransactionSyntaxInvalid]
+      }
+    }
+
+    "report a tx with invalid r as having invalid signature" in new TransactionValidatorFixture {
+      forAll(bigIntGen) { r =>
+        val invalidRSignedTx = signedTxBeforeHomestead.copy(r = r)
+        val result = transactionValidator
+          .validate(invalidRSignedTx,
+                    senderAccountBeforeHomestead,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        if (r < transactionValidator.secp256k1n && r > 0) result shouldBe Right(())
+        else result shouldBe Left(TransactionSignatureInvalid)
+      }
+    }
+
+    "report a tx with invalid s as having invalid signature before homestead" in new TransactionValidatorFixture {
+      forAll(bigIntGen) { s =>
+        val invalidSSignedTx = signedTxBeforeHomestead.copy(s = s)
+        val result = transactionValidator
+          .validate(invalidSSignedTx,
+                    senderAccountBeforeHomestead,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        if (s < transactionValidator.secp256k1n && s > 0) result shouldBe Right(())
+        else result shouldBe Left(TransactionSignatureInvalid)
+      }
+    }
+
+    "report a tx with invalid s as having invalid signature after homestead" in new TransactionValidatorFixture {
+      forAll(bigIntGen) { s =>
+        val invalidSSignedTx = signedTxAfterHomestead.copy(s = s)
+        val result = transactionValidator
+          .validate(invalidSSignedTx,
+                    senderAccountAfterHomestead,
+                    blockHeaderAfterHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        if (s < transactionValidator.secp256k1n / 2 + 1 && s > 0) result shouldBe Right(())
+        else result shouldBe Left(TransactionSignatureInvalid)
+      }
+    }
+
+    "report as invalid if a tx with invalid nonce" in new TransactionValidatorFixture {
+      forAll(bigIntGen) { nonce =>
+        val invalidNonceSignedTx = signedTxBeforeHomestead.copy(nonce = nonce)
+        val result = transactionValidator
+          .validate(invalidNonceSignedTx,
+                    senderAccountBeforeHomestead,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        if (nonce == txBeforeHomestead.nonce) result shouldBe Right(())
+        else result.left.get shouldBe a[TransactionNonceInvalid]
+      }
+    }
+
+    "report as invalid a tx with too low gas limit for intrinsic gas" in new TransactionValidatorFixture {
+      forAll(bigIntGen) { gasLimit =>
+        val invalidGasLimitTx = signedTxBeforeHomestead.copy(gasLimit = gasLimit)
+        val result = transactionValidator
+          .validate(invalidGasLimitTx,
+                    senderAccountBeforeHomestead,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        if (gasLimit == txBeforeHomestead.gasLimit) result shouldBe Right(())
+        else if (gasLimit > txBeforeHomestead.gasLimit)
+          if (gasLimit + accumGasUsed <= upfrontGasCost) result shouldBe Right(())
+          else result.left.get shouldBe a[TransactionGasLimitTooBigInvalid]
+        else result.left.get shouldBe a[TransactionNotEnoughGasForIntrinsicInvalid]
+      }
+    }
+
+    "report as invalid a tx with upfront cost higher than the sender's balance" in new TransactionValidatorFixture {
+      forAll(byteVectorOfLengthNGen(32)) { balance =>
+        val invalidBalanceAccount = senderAccountBeforeHomestead.copy(balance = UInt256(balance))
+        val result = transactionValidator
+          .validate(signedTxBeforeHomestead,
+                    invalidBalanceAccount,
+                    blockHeaderBeforeHomestead,
+                    upfrontGasCost,
+                    accumGasUsed)
+          .attempt
+          .unsafeRunSync()
+        if (UInt256(balance) >= upfrontGasCost) result shouldBe Right(())
+        else result.left.get shouldBe a[TransactionSenderCantPayUpfrontCostInvalid]
+      }
     }
   }
 }

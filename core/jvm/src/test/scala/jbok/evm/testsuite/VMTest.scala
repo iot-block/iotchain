@@ -116,14 +116,13 @@ class VMTest extends WordSpec with Matchers {
     WorldStateProxy[IO](
       db,
       accountProxy,
+      new EvmCodeStore[IO](db),
+      MPTrie.emptyRootHash,
       Set.empty,
       accountCodes,
       storages,
-      new EvmCodeStore[IO](db),
-      MPTrie.emptyRootHash,
       UInt256.Zero,
-      noEmptyAccounts = true,
-      number => IO(Some(UInt256(ByteVector(number.toString.getBytes).kec256)))
+      noEmptyAccounts = true
     )
   }
 
@@ -169,7 +168,7 @@ class VMTest extends WordSpec with Matchers {
         result.world.accountCodes
           .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.accountCodes.filter(
           !_._2.isEmpty)
-        result.world.deleteAccount(result.addressesToDelete.head)
+        result.world.delAccount(result.addressesToDelete.head)
       } else {
         result.world.accountCodes.filter(!_._2.isEmpty) shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
         result.world

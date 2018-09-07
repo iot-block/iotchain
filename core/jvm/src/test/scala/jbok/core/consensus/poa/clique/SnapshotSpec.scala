@@ -2,9 +2,8 @@ package jbok.core.consensus.poa.clique
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.BlockChain
+import jbok.core.History
 import jbok.core.Fixtures.Blocks.Genesis
-import jbok.core.consensus.ChainReader
 import jbok.core.models.{Address, BlockHeader}
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
@@ -22,12 +21,15 @@ case class TestVote(
 case class Test(signers: List[String], votes: List[TestVote], results: List[String], epoch: BigInt = 30000)
 
 trait SnapshotFixture {
-  def newBlockchain(signers: List[Address]) = {
-    val bytes  = signers.foldLeft(ByteVector.empty)(_ ++ _.bytes)
-    val extra  = ByteVector.fill(Clique.extraVanity)(0.toByte) ++ bytes ++ ByteVector.fill(Clique.extraSeal)(0.toByte)
-    val header = Genesis.header.copy(extraData = extra)
-    val block  = Genesis.block.copy(header = header)
-    BlockChain.inMemory[IO](Some(block)).unsafeRunSync()
+  def mkHistory(signers: List[Address]) = {
+    val bytes   = signers.foldLeft(ByteVector.empty)(_ ++ _.bytes)
+    val extra   = ByteVector.fill(Clique.extraVanity)(0.toByte) ++ bytes
+    val header  = Genesis.header.copy(extraData = extra)
+    val block   = Genesis.block.copy(header = header)
+    val db      = KeyValueDB.inMemory[IO].unsafeRunSync()
+    val history = History[IO](db).unsafeRunSync()
+    history.loadGenesis(Some(block)).unsafeRunSync()
+    history
   }
 
   val accounts: mutable.Map[String, KeyPair] = mutable.Map.empty
@@ -53,9 +55,9 @@ trait SnapshotFixture {
 
 class SnapshotSpec extends JbokSpec {
   def check(test: Test) = new SnapshotFixture {
-    val config     = CliqueConfig().copy(epoch = test.epoch)
-    val signers    = test.signers.map(signer => address(signer))
-    val blockChain = newBlockchain(signers) // genesis signers
+    val config  = CliqueConfig().copy(epoch = test.epoch)
+    val signers = test.signers.map(signer => address(signer))
+    val history = mkHistory(signers) // genesis signers
 
     // Assemble a chain of headers from the cast votes
     val headers: List[BlockHeader] = test.votes.zipWithIndex.map {
@@ -76,9 +78,9 @@ class SnapshotSpec extends JbokSpec {
     }
 
     val head           = headers.last
-    val chainReader    = ChainReader(blockChain)
     val db             = KeyValueDB.inMemory[IO].unsafeRunSync()
-    val clique         = Clique[IO](config, chainReader, db)
+    val keyPair        = SecP256k1.generateKeyPair().unsafeRunSync()
+    val clique         = Clique[IO](config, history, keyPair)
     val snap           = clique.snapshot(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd
@@ -112,7 +114,7 @@ class SnapshotSpec extends JbokSpec {
         List(TestVote("A", "B", auth = true), TestVote("B"), TestVote("A", "C", auth = true)),
         List("A", "B")
       )
-      for (i <- 1 to 10)  {
+      for (i <- 1 to 10) {
         check(test)
       }
     }

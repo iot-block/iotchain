@@ -474,7 +474,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     // Sending refund to an already existing account
     forAll(stateGen) { stateIn =>
       val (refund, _) = stateIn.stack.pop
-      val world = stateIn.world.saveAccount(
+      val world = stateIn.world.putAccount(
         Address(refund),
         Account.empty())
       val updatedStateIn = stateIn.withWorld(world)

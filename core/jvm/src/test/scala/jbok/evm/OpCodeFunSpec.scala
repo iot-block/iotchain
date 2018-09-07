@@ -156,7 +156,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val (addr, stack1) = stateIn.stack.pop
 
       val account = Account(balance = accountBalance)
-      val world1 = stateIn.world.saveAccount(Address(addr mod UInt256(BigInt(2).pow(160))), account)
+      val world1 = stateIn.world.putAccount(Address(addr mod UInt256(BigInt(2).pow(160))), account)
 
       val stateInWithAccount = stateIn.withWorld(world1)
       val stateOutWithAccount = executeOp(op, stateInWithAccount)
@@ -247,7 +247,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       val (addr, stack1) = stateIn.stack.pop
       val program = Program(extCode)
-      val world1 = stateIn.world.saveCode(Address(addr), program.code)
+      val world1 = stateIn.world.putCode(Address(addr), program.code)
 
       val stateInWithExtCode = stateIn.withWorld(world1)
       val stateOutWithExtCode = executeOp(op, stateInWithExtCode)
@@ -273,7 +273,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       addr = Address(stateIn.stack.pop._1)
       hash = extCode.kec256
-      world = if (doSave) stateIn.world.saveAccount(addr, Account.empty().copy(codeHash = hash)) else stateIn.world
+      world = if (doSave) stateIn.world.putAccount(addr, Account.empty().copy(codeHash = hash)) else stateIn.world
     } yield stateIn.withWorld(world)
 
     forAll(stateGen) { stateIn =>
@@ -729,8 +729,8 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
         val stackIn = Stack.empty().push(refundAddr.toUInt256)
         val stateSample = getProgramStateGen().sample.get
         val initialWorld = stateSample.world
-          .saveAccount(refundAddr, Account.empty())
-          .saveAccount(ownerAddr, Account.empty().increaseBalance(initialEther))
+          .putAccount(refundAddr, Account.empty())
+          .putAccount(ownerAddr, Account.empty().increaseBalance(initialEther))
         val stateIn = stateSample.copy(world = initialWorld, stack = stackIn)
 
         val stateOut = executeOp(op, stateIn)

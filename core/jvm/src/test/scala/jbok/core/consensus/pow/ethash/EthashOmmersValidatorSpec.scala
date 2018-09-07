@@ -1,13 +1,14 @@
-package jbok.core.validators
+package jbok.core.consensus.pow.ethash
 
-import jbok.core.BlockChainFixture
+import jbok.JbokSpec
+import jbok.core.Configs.{BlockChainConfig, DaoForkConfig}
+import jbok.core.HistoryFixture
+import jbok.core.consensus.pow.ethash.OmmersError._
 import jbok.core.models.{Block, BlockBody, BlockHeader}
-import jbok.core.validators.OmmersInvalid._
-import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.prop.PropertyChecks
+import jbok.core.validators.CommonHeaderInvalid.HeaderNumberInvalid
 import scodec.bits._
 
-class OmmersValidatorFixture extends BlockChainFixture {
+class OmmersValidatorFixture extends HistoryFixture {
   val ommer1 = BlockHeader(
     parentHash = hex"fd07e36cfaf327801e5696134b36678f6a89fb1e8f017f2411a29d0ae810ab8b",
     ommersHash = hex"7766c4251396a6833ccbe4be86fbda3a200dccbe6a15d80ae3de5378b1540e04",
@@ -45,7 +46,7 @@ class OmmersValidatorFixture extends BlockChainFixture {
     nonce = hex"40b0b2c0b6d14706"
   )
   val ommers: List[BlockHeader] = List[BlockHeader](ommer1, ommer2)
-  val ommersBlockNumber = 97
+  val ommersBlockNumber         = 97
 
   val block89 = Block(
     BlockHeader(
@@ -262,64 +263,68 @@ class OmmersValidatorFixture extends BlockChainFixture {
 
   val ommersBlockParentHash = block96.header.hash
 
-  blockChain.save(block89).unsafeRunSync()
-  blockChain.save(block90).unsafeRunSync()
-  blockChain.save(block91).unsafeRunSync()
-  blockChain.save(block92).unsafeRunSync()
-  blockChain.save(block93).unsafeRunSync()
-  blockChain.save(block94).unsafeRunSync()
-  blockChain.save(block95).unsafeRunSync()
-  blockChain.save(block96).unsafeRunSync()
+  history.save(block89).unsafeRunSync()
+  history.save(block90).unsafeRunSync()
+  history.save(block91).unsafeRunSync()
+  history.save(block92).unsafeRunSync()
+  history.save(block93).unsafeRunSync()
+  history.save(block94).unsafeRunSync()
+  history.save(block95).unsafeRunSync()
+  history.save(block96).unsafeRunSync()
 
-  val ommersValidator = new OmmersValidator(blockChain, blockChainConfig, daoForkConfig)
+  val blockChainConfig = BlockChainConfig()
+  val daoForkConfig    = DaoForkConfig()
+  val ommersValidator  = new EthashOmmersValidator(history, blockChainConfig, daoForkConfig)
 }
 
-class OmmersValidatorSpec extends FlatSpec with Matchers with PropertyChecks {
-  it should "validate correctly a valid list of ommers" in new OmmersValidatorFixture {
-    ommersValidator.validate(ommersBlockParentHash, ommersBlockNumber, ommers).value.unsafeRunSync() shouldBe Right(())
-  }
+class EthashOmmersValidatorSpec extends JbokSpec {
+  "EthashOmmersValidator" should {
+    "validate correctly a valid list of ommers" in new OmmersValidatorFixture {
+      ommersValidator.validate(ommersBlockParentHash, ommersBlockNumber, ommers).attempt.unsafeRunSync() shouldBe Right(
+        ())
+    }
 
-  it should "report a invalid if the list of ommers is too big" in new OmmersValidatorFixture {
-    ommersValidator
-      .validate(ommersBlockParentHash, ommersBlockNumber, List(ommer1, ommer2, ommer2))
-      .value
-      .unsafeRunSync() shouldBe Left(OmmersLengthInvalid)
-  }
+    "report a invalid if the list of ommers is too big" in new OmmersValidatorFixture {
+      ommersValidator
+        .validate(ommersBlockParentHash, ommersBlockNumber, List(ommer1, ommer2, ommer2))
+        .attempt
+        .unsafeRunSync() shouldBe Left(OmmersLengthInvalid)
+    }
 
-  it should "report a invalid if there is an invalid header in the list of ommers" in new OmmersValidatorFixture {
-    val invalidOmmer1: BlockHeader = ommer1.copy(number = ommer1.number + 1)
-    ommersValidator
-      .validate(ommersBlockParentHash, ommersBlockNumber, List(invalidOmmer1, ommer2))
-      .value
-      .unsafeRunSync() shouldBe Left(OmmersNotValid)
-  }
+    "report a invalid if there is an invalid header in the list of ommers" in new OmmersValidatorFixture {
+      val invalidOmmer1: BlockHeader = ommer1.copy(number = ommer1.number + 1)
+      ommersValidator
+        .validate(ommersBlockParentHash, ommersBlockNumber, List(invalidOmmer1, ommer2))
+        .attempt
+        .unsafeRunSync() shouldBe Left(HeaderNumberInvalid)
+    }
 
-  it should "report a invalid if there is an ommer that was previously used" in new OmmersValidatorFixture {
-    ommersValidator
-      .validate(ommersBlockParentHash, ommersBlockNumber, List(block93.body.uncleNodesList.head, ommer2))
-      .value
-      .unsafeRunSync() shouldBe Left(OmmersAncestorsInvalid)
-  }
+    "report a invalid if there is an ommer that was previously used" in new OmmersValidatorFixture {
+      ommersValidator
+        .validate(ommersBlockParentHash, ommersBlockNumber, List(block93.body.uncleNodesList.head, ommer2))
+        .attempt
+        .unsafeRunSync() shouldBe Left(OmmersAncestorsInvalid)
+    }
 
-  it should "report a invalid if there is an ommer which is of the last ancestors" in new OmmersValidatorFixture {
-    ommersValidator
-      .validate(ommersBlockParentHash, ommersBlockNumber, List(ommer1, block92.header))
-      .value
-      .unsafeRunSync() shouldBe Left(OmmersAncestorsInvalid)
-  }
+    "report a invalid if there is an ommer which is of the last ancestors" in new OmmersValidatorFixture {
+      ommersValidator
+        .validate(ommersBlockParentHash, ommersBlockNumber, List(ommer1, block92.header))
+        .attempt
+        .unsafeRunSync() shouldBe Left(OmmersAncestorsInvalid)
+    }
 
-  it should "report a invalid if there is an ommer too old" in new OmmersValidatorFixture {
-    ommersValidator
-      .validate(ommersBlockParentHash, ommersBlockNumber, List(ommer1, block90.header))
-      .value
-      .unsafeRunSync() shouldBe Left(OmmersAncestorsInvalid)
-  }
+    "report a invalid if there is an ommer too old" in new OmmersValidatorFixture {
+      ommersValidator
+        .validate(ommersBlockParentHash, ommersBlockNumber, List(ommer1, block90.header))
+        .attempt
+        .unsafeRunSync() shouldBe Left(OmmersAncestorsInvalid)
+    }
 
-  it should "report a invalid if there is a duplicated ommer in the ommer list" in new OmmersValidatorFixture {
-    ommersValidator
-      .validate(ommersBlockParentHash, ommersBlockNumber, List(ommer1, ommer1))
-      .value
-      .unsafeRunSync() shouldBe Left(OmmersDuplicated)
+    "report a invalid if there is a duplicated ommer in the ommer list" in new OmmersValidatorFixture {
+      ommersValidator
+        .validate(ommersBlockParentHash, ommersBlockNumber, List(ommer1, ommer1))
+        .attempt
+        .unsafeRunSync() shouldBe Left(OmmersDuplicated)
+    }
   }
-
 }

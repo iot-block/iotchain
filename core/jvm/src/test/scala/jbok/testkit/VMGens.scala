@@ -108,9 +108,9 @@ trait VMGens extends Gens {
 
       db = KeyValueDB.inMemory[IO].unsafeRunSync()
       world = WorldStateProxy.inMemory[IO](db).unsafeRunSync()
-        .saveCode(ownerAddr, program.code)
-        .saveStorage(ownerAddr, storage)
-        .saveAccount(ownerAddr, Account.empty().increaseBalance(value))
+        .putCode(ownerAddr, program.code)
+        .putStorage(ownerAddr, storage)
+        .putAccount(ownerAddr, Account.empty().increaseBalance(value))
 
       context = ProgramContext(env, ownerAddr, gas, world, evmConfig)
     } yield ProgramState(context).withStack(stack).withMemory(memory)
