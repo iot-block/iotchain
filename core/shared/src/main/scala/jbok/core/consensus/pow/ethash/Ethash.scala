@@ -1,7 +1,8 @@
-package jbok.core.consensus.pow
+package jbok.core.consensus.pow.ethash
 
 import java.math.BigInteger
 
+import jbok.core.consensus.pow.ProofOfWork
 import jbok.core.utils.ByteUtils._
 import jbok.crypto._
 import org.bouncycastle.util.BigIntegers
@@ -9,7 +10,6 @@ import scodec.bits._
 
 import scala.annotation.tailrec
 
-case class ProofOfWork(mixHash: ByteVector, difficultyBoundary: ByteVector)
 object Ethash {
   // Revision number of https://github.com/ethereum/wiki/wiki/Ethash
   val Revision: Int = 23
@@ -128,10 +128,10 @@ object Ethash {
   ): ProofOfWork = {
     /* watch out, arrays are mutable here */
 
-    val w = MIX_BYTES / WORD_BYTES
+    val w         = MIX_BYTES / WORD_BYTES
     val mixHashes = MIX_BYTES / HASH_BYTES
-    val s = bytesToInts((hashWithoutNonce ++ nonce.reverse).kec512)
-    val mix = new Array[Int](MIX_BYTES / 4)
+    val s         = bytesToInts((hashWithoutNonce ++ nonce.reverse).kec512)
+    val mix       = new Array[Int](MIX_BYTES / 4)
 
     (0 until mixHashes).foreach { i =>
       System.arraycopy(s, 0, mix, i * s.length, s.length)
@@ -140,9 +140,9 @@ object Ethash {
     val numFullPages = (fullSize / MIX_BYTES).toInt
 
     (0 until ACCESSES).foreach { i =>
-      val p = remainderUnsigned(fnv(i ^ s(0), mix(i % w)), numFullPages)
+      val p       = remainderUnsigned(fnv(i ^ s(0), mix(i % w)), numFullPages)
       val newData = new Array[Int](mix.length)
-      val off = p * mixHashes
+      val off     = p * mixHashes
 
       (0 until mixHashes).foreach { j =>
         val lookup = datasetLookup(off + j)
@@ -171,18 +171,18 @@ object Ethash {
   def calcDatasetItem(cache: Array[Int], index: Int): Array[Int] = {
     /* watch out, arrays are mutable here */
 
-    val r = HASH_BYTES / WORD_BYTES
-    val n = cache.length / r
+    val r          = HASH_BYTES / WORD_BYTES
+    val n          = cache.length / r
     val initialMix = java.util.Arrays.copyOfRange(cache, index % n * r, (index % n + 1) * r)
 
     initialMix(0) = index ^ initialMix(0)
-    val mix = bytesToInts(intsToBytes(initialMix).kec512)
+    val mix       = bytesToInts(intsToBytes(initialMix).kec512)
     val dsParents = DATASET_PARENTS
-    val mixLen = mix.length
+    val mixLen    = mix.length
 
     (0 until dsParents).foreach { j =>
       val cacheIdx = remainderUnsigned(fnv(index ^ j, mix(j % r)), n)
-      val off = cacheIdx * r
+      val off      = cacheIdx * r
       (0 until mixLen).foreach { k =>
         mix(k) = fnv(mix(k), cache(off + k))
       }
@@ -220,7 +220,7 @@ object Ethash {
       }
 
     val headerDifficultyAsByteArray: Array[Byte] =
-        BigIntegers.asUnsignedByteArray(32, BigInteger.ONE.shiftLeft(256).divide(BigInteger.valueOf(blockDifficulty)))
+      BigIntegers.asUnsignedByteArray(32, BigInteger.ONE.shiftLeft(256).divide(BigInteger.valueOf(blockDifficulty)))
 
     compare(headerDifficultyAsByteArray, proofOfWork.difficultyBoundary.toArray) >= 0
   }

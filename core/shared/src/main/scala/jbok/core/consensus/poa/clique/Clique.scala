@@ -1,18 +1,18 @@
 package jbok.core.consensus.poa.clique
 
-import jbok.core.consensus.{ChainReader, Engine}
-import jbok.core.models._
-import scodec.bits._
-import cats.effect.Sync
-import Clique._
 import cats.data.OptionT
-import jbok.persistent.{KeyValueDB, KeyValueStore, LruMap}
+import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
+import jbok.core.History
+import jbok.core.consensus.poa.clique.Clique._
+import jbok.core.models._
 import jbok.crypto._
-import jbok.crypto.signature.CryptoSignature
+import jbok.crypto.signature.{CryptoSignature, KeyPair}
 import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.persistent.{KeyValueDB, KeyValueStore, LruMap}
+import scodec.bits._
 
 import scala.concurrent.duration._
 
@@ -21,50 +21,17 @@ class SnapshotStore[F[_]: Sync](db: KeyValueDB[F])
 
 class Clique[F[_]](
     val config: CliqueConfig,
-    val chain: ChainReader[F],
+    val history: History[F],
     val store: SnapshotStore[F],
     val recents: LruMap[ByteVector, Snapshot],
-    val proposals: Map[Address, Boolean] // Current list of proposals we are pushing
-)(implicit F: Sync[F])
-    extends Engine[F](chain) {
+    val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
+    val keyPair: KeyPair
+)(implicit F: Sync[F]) {
+  val signer = Address(keyPair)
+
   private[this] val log = org.log4s.getLogger
 
-  override def author(header: BlockHeader): F[Address] =
-    F.delay(ecrecover(header))
-
-  override def verifyHeader(header: BlockHeader, seal: Boolean): F[Unit] =
-    F.unit
-
-  override def verifyHeaders(headers: List[BlockHeader], seals: List[Boolean]): F[Unit] =
-    F.unit
-
-  override def verifyUncles(block: Block): F[Unit] =
-    F.unit
-
-  override def verifySeal(header: BlockHeader): F[Unit] =
-    F.unit
-
-  override def prepare(header: BlockHeader): F[Unit] = {
-    // If the block isn't a checkpoint, cast a random vote (good enough for now)
-    val number = header.number
-    F.unit
-  }
-
-  override def finalize(
-      header: BlockHeader,
-      txs: List[SignedTransaction],
-      uncles: List[BlockHeader],
-      receipts: List[Receipt]
-  ): F[Block] = ???
-
-  override def seal(block: Block): F[Block] = ???
-
-  override def calcDifficulty(time: Long, parent: BlockHeader): F[BigInt] = ???
-
-  /////////////////////////
-  /////////////////////////
-
-  private[jbok] def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
+  def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
     // try to read snapshot from cache or db
     log.info(s"try to read snapshot @ number ${number} from cache")
     OptionT
@@ -81,11 +48,11 @@ class Clique[F[_]](
       )
   }
 
-  private[jbok] def genesisSnapshot: F[Snapshot] = {
+  def genesisSnapshot: F[Snapshot] = {
     log.info(s"making a genesis snapshot")
     for {
-      genesis <- chain.getHeaderByNumber(0)
-      n = (genesis.extraData.length - extraVanity - extraSeal).toInt / 20
+      genesis <- history.genesisHeader
+      n = (genesis.extraData.length - extraVanity).toInt / 20
       signers: Set[Address] = (0 until n)
         .map(i => Address(genesis.extraData.slice(i * 20 + extraVanity, i * 20 + extraVanity + 20)))
         .toSet
@@ -121,7 +88,8 @@ class Clique[F[_]](
             F.pure((parents.last, parents.slice(0, parents.length - 1)))
           } else {
             // No explicit parents (or no more left), reach out to the database
-            chain.getHeader(hash, number).map(header => header -> parents)
+            history.getBlockHeaderByHash(hash).map(header => header.get -> parents)
+//            chain.getHeader(hash, number).map(header => header -> parents)
           }
           snap <- snapshot(number - 1, h.parentHash, p, h :: headers)
         } yield snap
@@ -145,12 +113,18 @@ object Clique {
   val nonceAuthVote = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
   val nonceDropVote = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
 
-  def apply[F[_]: Sync](config: CliqueConfig, chain: ChainReader[F], db: KeyValueDB[F]): Clique[F] =
-    new Clique[F](config,
-                  chain,
-                  new SnapshotStore[F](db),
-                  new LruMap[ByteVector, Snapshot](inMemorySnapshots),
-                  Map.empty)
+  def apply[F[_]: Sync](config: CliqueConfig, history: History[F], keyPair: KeyPair): Clique[F] =
+    new Clique[F](
+      config,
+      history,
+      new SnapshotStore[F](history.db),
+      new LruMap[ByteVector, Snapshot](inMemorySnapshots),
+      Map.empty,
+      keyPair
+    )
+
+  def fillExtraData(signers: List[Address]): ByteVector =
+    ByteVector.fill(32)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes)
 
   def sigHash(header: BlockHeader): ByteVector = {
     val bytes = RlpCodec.encode(header.copy(extraData = header.extraData.dropRight(65))).require.bytes
