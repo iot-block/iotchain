@@ -11,6 +11,7 @@ import jbok.network.Connection
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext
+import jbok.network.execution._
 
 class Server[F[_], A](
     val stream: Stream[F, Unit],
@@ -43,7 +44,7 @@ object Server {
       maxQueued: Int = 32,
       reuseAddress: Boolean = true,
       receiveBufferSize: Int = 256 * 1024
-  )(implicit F: ConcurrentEffect[F], C: Codec[A], EC: ExecutionContext): F[Server[F, A]] =
+  )(implicit F: ConcurrentEffect[F], C: Codec[A]): F[Server[F, A]] =
     for {
       conns  <- fs2.async.refOf[F, Map[InetSocketAddress, Connection[F, A]]](Map.empty)
       queue  <- fs2.async.boundedQueue[F, (InetSocketAddress, A)](maxQueued)

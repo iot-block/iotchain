@@ -15,13 +15,13 @@ import jbok.network.rpc.RpcServer._
 import scodec.Codec
 import scodec.codecs._
 
-import scala.concurrent.ExecutionContext
 import scala.language.experimental.macros
+import jbok.network.execution._
 
 class RpcServer(
     val handlers: Map[String, String => IO[String]],
     val queue: Queue[IO, String]
-)(implicit EC: ExecutionContext) {
+) {
   def mountAPI[API <: RpcAPI](api: API): RpcServer = macro RpcServerMacro.mountAPI[RpcServer, API]
 
   val pipe: Pipe[IO, String, String] = { input =>
@@ -66,7 +66,7 @@ object RpcServer {
 
   def apply(
       handlers: Map[String, String => IO[String]] = Map.empty
-  )(implicit EC: ExecutionContext): IO[RpcServer] =
+  ): IO[RpcServer] =
     for {
       queue <- fs2.async.boundedQueue[IO, String](32)
     } yield new RpcServer(handlers, queue)

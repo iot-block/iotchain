@@ -12,6 +12,7 @@ import scodec.Codec
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
+import jbok.network.execution._
 
 class Client[F[_], A](
     private val stream: Stream[F, Unit],
@@ -80,8 +81,7 @@ object Client {
   )(implicit F: ConcurrentEffect[F],
     I: RequestId[A],
     M: RequestMethod[A],
-    EC: ExecutionContext,
-    S: Scheduler): F[Client[F, A]] =
+  ): F[Client[F, A]] =
     for {
       in       <- fs2.async.boundedQueue[F, A](maxQueued)
       out      <- fs2.async.boundedQueue[F, A](maxQueued)

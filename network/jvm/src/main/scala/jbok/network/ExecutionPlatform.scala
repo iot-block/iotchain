@@ -1,4 +1,5 @@
 package jbok.network
+
 import java.lang.Thread.UncaughtExceptionHandler
 import java.nio.channels.AsynchronousChannelGroup
 import java.util.concurrent.atomic.AtomicInteger
@@ -10,10 +11,10 @@ import fs2.io.udp.AsynchronousSocketGroup
 import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
 
-object execution {
+trait ExecutionPlatform extends execution {
   private def mkThreadFactory(name: String, daemon: Boolean, exitJvmOnFatalError: Boolean = true): ThreadFactory =
     new ThreadFactory {
-      val idx = new AtomicInteger(0)
+      val idx            = new AtomicInteger(0)
       val defaultFactory = Executors.defaultThreadFactory()
       def newThread(r: Runnable): Thread = {
         val t = defaultFactory.newThread(r)
@@ -34,13 +35,16 @@ object execution {
       }
     }
 
-  implicit val EC: ExecutionContext = ExecutionContext.Implicits.global
+  override def executionContext: ExecutionContext =
+    ExecutionContext.Implicits.global
 
-  implicit val Sch: Scheduler = Scheduler.fromScheduledExecutorService(
-    Executors.newScheduledThreadPool(1, mkThreadFactory("fs2-scheduler", daemon = true)))
+  override def scheduler: Scheduler =
+    Scheduler.fromScheduledExecutorService(
+      Executors.newScheduledThreadPool(1, mkThreadFactory("fs2-scheduler", daemon = true)))
 
-  implicit val AG: AsynchronousChannelGroup =
+  override def asyncChannelGroup: AsynchronousChannelGroup =
     AsynchronousChannelGroup.withThreadPool(Executors.newCachedThreadPool(mkThreadFactory("AG", daemon = true)))
 
-  implicit val AsyncSocketGroup: AsynchronousSocketGroup = AsynchronousSocketGroup.apply()
+  override def asyncSocketGroup: AsynchronousSocketGroup =
+    AsynchronousSocketGroup.apply()
 }
