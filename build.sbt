@@ -57,7 +57,7 @@ lazy val commonSettings = Seq(
 
 lazy val jbok = project
   .in(file("."))
-  .aggregate(coreJVM)
+  .aggregate(coreJVM, appJVM)
   .settings(noPublishSettings)
 
 lazy val common = crossProject(JSPlatform, JVMPlatform)
@@ -165,22 +165,6 @@ lazy val examples = crossProject(JSPlatform, JVMPlatform)
 lazy val examplesJS  = examples.js
 lazy val examplesJVM = examples.jvm
 
-lazy val simulations = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-simulations",
-    libraryDependencies ++= Seq(
-      "com.monovore" %% "decline" % "0.4.0-RC1"
-    )
-  )
-  .dependsOn(common % CompileAndTest, core)
-  .enablePlugins(JavaAppPackaging)
-
-lazy val simJS  = simulations.js
-lazy val simJVM = simulations.jvm
-
 lazy val commonJsSettings = Seq(
   scalaJSUseMainModuleInitializer := true,
   jsEnv := new org.scalajs.jsenv.nodejs.NodeJSEnv(),
@@ -203,7 +187,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
       "com.monovore"             %% "decline"    % "0.4.0-RC1"
     )
   )
-  .dependsOn(core, network, simulations)
+  .dependsOn(common % CompileAndTest, core % CompileAndTest, network)
 
 lazy val appJS  = app.js
 lazy val appJVM = app.jvm
@@ -225,14 +209,11 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
   .settings(commonSettings)
   .settings(
     name := "jbok-network",
-    libraryDependencies ++= logging
-  )
-  .jsSettings(commonJsSettings)
-  .jvmSettings(
-    libraryDependencies ++= http4s ++ logging ++ Seq(
+    libraryDependencies ++= logging ++ Seq(
       "com.spinoco" %% "fs2-http" % "0.3.0"
     )
   )
+  .jsSettings(commonJsSettings)
   .dependsOn(common % CompileAndTest, macros, crypto)
 
 lazy val networkJS  = network.js
