@@ -69,7 +69,7 @@ object SignedTransaction {
     )
   }
 
-  def sign(tx: Transaction, keyPair: KeyPair, chainId: Option[Byte]): SignedTransaction = {
+  def sign(tx: Transaction, keyPair: KeyPair, chainId: Option[Byte] = None): SignedTransaction = {
     val stx = new SignedTransaction(
       tx.nonce,
       tx.gasPrice,
@@ -104,7 +104,7 @@ object SignedTransaction {
     SecP256k1.recoverPublic(bytesToSign.toArray, txSig, chainId)
   }
 
-  private def getSender(stx: SignedTransaction, chainId: Option[Byte]): Option[Address] =
+  private[jbok] def getSender(stx: SignedTransaction, chainId: Option[Byte] = None): Option[Address] =
     SignedTransaction.recoverPublicKey(stx, chainId).map(pk => Address(pk.bytes.kec256))
 
   private def generalTransactionBytes(stx: SignedTransaction): ByteVector = {

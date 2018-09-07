@@ -1,39 +1,41 @@
 package jbok.evm
 
 import cats.Foldable
-import cats.data.{Kleisli, OptionT}
+import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.codecs._
 import jbok.common._
 import jbok.core.models.{Account, Address, UInt256}
-import jbok.core.store.EvmCodeStore
+import jbok.core.store.{AddressAccountStore, EvmCodeStore}
 import jbok.crypto._
 import jbok.crypto.authds.mpt.{MPTrie, MPTrieStore}
 import jbok.persistent.{KeyValueDB, SnapshotKeyValueStore}
 import scodec.bits.ByteVector
 import shapeless._
-import jbok.codec.rlp.codecs._
 
-case class WorldStateProxy[F[_]: Sync](
+case class WorldStateProxy[F[_]](
     db: KeyValueDB[F],
     accountProxy: SnapshotKeyValueStore[F, Address, Account],
-    touchedAccounts: Set[Address],
-    accountCodes: Map[Address, ByteVector],
-    contractStorages: Map[Address, Storage[F]],
     evmCodeStorage: EvmCodeStore[F],
-    stateRootHash: ByteVector,
-    accountStartNonce: UInt256,
-    noEmptyAccounts: Boolean,
-    getBlockHash: UInt256 => F[Option[UInt256]]
-) {
+    stateRootHash: ByteVector = MPTrie.emptyRootHash,
+    touchedAccounts: Set[Address] = Set.empty[Address],
+    accountCodes: Map[Address, ByteVector] = Map.empty[Address, ByteVector],
+    contractStorages: Map[Address, Storage[F]] = Map.empty[Address, Storage[F]],
+    accountStartNonce: UInt256 = UInt256.Zero,
+    noEmptyAccounts: Boolean = true
+)(implicit F: Sync[F]) {
+  def getBlockHash(number: UInt256): F[Option[UInt256]] =
+    Sync[F].pure(Some(UInt256(ByteVector(number.toString.getBytes).kec256)))
+
   def getAccountOpt(address: Address): OptionT[F, Account] =
     OptionT(accountProxy.getOpt(address))
 
-  def saveAccount(address: Address, account: Account): WorldStateProxy[F] =
+  def putAccount(address: Address, account: Account): WorldStateProxy[F] =
     this.copy(accountProxy = accountProxy.put(address, account))
 
-  def deleteAccount(address: Address): WorldStateProxy[F] =
+  def delAccount(address: Address): WorldStateProxy[F] =
     this.copy(accountProxy = accountProxy.del(address))
 
   def getEmptyAccount: Account = Account.empty(accountStartNonce)
@@ -55,32 +57,32 @@ case class WorldStateProxy[F[_]: Sync](
     OptionT.fromOption[F](accountCodes.get(address)).getOrElseF {
       val code = for {
         account <- getAccountOpt(address)
-        code <- OptionT(evmCodeStorage.getOpt(account.codeHash))
+        code    <- OptionT(evmCodeStorage.getOpt(account.codeHash))
       } yield code
 
       code.getOrElse(ByteVector.empty)
     }
 
-  def saveCode(address: Address, code: ByteVector): WorldStateProxy[F] =
+  def putCode(address: Address, code: ByteVector): WorldStateProxy[F] =
     this.copy(accountCodes = accountCodes + (address -> code))
 
   def getStorage(address: Address): F[Storage[F]] =
     OptionT.fromOption[F](contractStorages.get(address)).getOrElseF {
       for {
-        storageRoot <- getAccountOpt(address).map(_.storageRoot).getOrElse(Account.EmptyStorageRootHash)
-        mpt <- MPTrieStore[F, UInt256, UInt256](db)
+        storageRoot <- getAccountOpt(address).map(_.storageRoot).value
+        mpt         <- MPTrieStore[F, UInt256, UInt256](db, storageRoot)
         s = SnapshotKeyValueStore(mpt)
       } yield Storage[F](s)
     }
 
-  def saveStorage(address: Address, storage: Storage[F]): WorldStateProxy[F] =
+  def putStorage(address: Address, storage: Storage[F]): WorldStateProxy[F] =
     this.copy(contractStorages = contractStorages + (address -> storage))
 
   def combineTouchedAccounts(world: WorldStateProxy[F]): WorldStateProxy[F] =
     this.copy(touchedAccounts = world.touchedAccounts ++ touchedAccounts)
 
   def newEmptyAccount(address: Address): WorldStateProxy[F] =
-    saveAccount(address, getEmptyAccount)
+    putAccount(address, getEmptyAccount)
 
   def accountExists(address: Address): F[Boolean] =
     getAccountOpt(address).isDefined
@@ -96,9 +98,9 @@ case class WorldStateProxy[F[_]: Sync](
 
   def guaranteedTransfer(from: Address, to: Address, value: UInt256): F[WorldStateProxy[F]] =
     for {
-      debited <- getAccount(from).map(_.increaseBalance(-value))
+      debited  <- getAccount(from).map(_.increaseBalance(-value))
       credited <- getAccountOpt(to).getOrElse(getEmptyAccount).map(_.increaseBalance(value))
-    } yield saveAccount(from, debited).saveAccount(to, credited)
+    } yield putAccount(from, debited).putAccount(to, credited)
 
   /**
     * IF EIP-161 is in effect this sets new contract's account initial nonce to 1 over the default value
@@ -112,7 +114,7 @@ case class WorldStateProxy[F[_]: Sync](
       for {
         newAccount <- getAccountOpt(newAddress).getOrElse(getEmptyAccount)
         account = newAccount.copy(nonce = accountStartNonce + 1)
-      } yield saveAccount(newAddress, account)
+      } yield putAccount(newAddress, account)
     }
 
   /**
@@ -123,7 +125,7 @@ case class WorldStateProxy[F[_]: Sync](
   def removeAllEther(address: Address): F[WorldStateProxy[F]] =
     for {
       debited <- getAccount(address)
-    } yield saveAccount(address, debited.copy(balance = 0)).touchAccounts(address)
+    } yield putAccount(address, debited.copy(balance = 0)).touchAccounts(address)
 
   /**
     * Creates a new address based on the address and nonce of the creator. YP equation 82
@@ -148,7 +150,7 @@ case class WorldStateProxy[F[_]: Sync](
   def createAddressWithOpCode(creatorAddr: Address): F[(Address, WorldStateProxy[F])] =
     for {
       creatorAccount <- getAccount(creatorAddr)
-      updatedWorld = saveAccount(creatorAddr, creatorAccount.increaseNonce())
+      updatedWorld = putAccount(creatorAddr, creatorAccount.increaseNonce())
       createdAddress <- updatedWorld.createAddress(creatorAddr)
     } yield createdAddress -> updatedWorld
 
@@ -167,30 +169,39 @@ case class WorldStateProxy[F[_]: Sync](
 
   def isZeroValueTransferToNonExistentAccount(address: Address, value: UInt256): F[Boolean] =
     noEmptyAccounts.pure[F] && (value == UInt256(0)).pure[F] && !accountExists(address)
+
+  def persisted: F[WorldStateProxy[F]] =
+    WorldStateProxy.persist[F](this)
 }
 
 object WorldStateProxy {
-  def inMemory[F[_]: Sync](db: KeyValueDB[F], noEmptyAccounts: Boolean = false): F[WorldStateProxy[F]] =
+  def inMemory[F[_]: Sync](
+      db: KeyValueDB[F],
+      noEmptyAccounts: Boolean = false
+  ): F[WorldStateProxy[F]] =
     for {
       mpt <- MPTrieStore[F, Address, Account](db)
-      accountProxy = SnapshotKeyValueStore(mpt)
+      accountProxy   = SnapshotKeyValueStore(mpt)
       evmCodeStorage = new EvmCodeStore[F](db)
     } yield
       WorldStateProxy[F](
         db,
         accountProxy,
+        evmCodeStorage,
+        MPTrie.emptyRootHash,
         Set.empty,
         Map.empty,
         Map.empty,
-        evmCodeStorage,
-        MPTrie.emptyRootHash,
         UInt256.Zero,
-        noEmptyAccounts,
-        (_: UInt256) => Sync[F].pure(None)
+        noEmptyAccounts
       )
 
   def persist[F[_]: Sync](world: WorldStateProxy[F]): F[WorldStateProxy[F]] =
-    Kleisli(persistCode[F] _).andThen(persistContractStorage[F] _).andThen(persistAccountsStateTrie[F] _).run(world)
+    for {
+      world1 <- persistCode[F](world)
+      world2 <- persistStorage(world1)
+      world3 <- persistAccount(world2)
+    } yield world3
 
   def persistCode[F[_]: Sync](world: WorldStateProxy[F]): F[WorldStateProxy[F]] =
     Foldable[List].foldLeftM(world.accountCodes.toList, world) {
@@ -207,22 +218,23 @@ object WorldStateProxy {
         }
     }
 
-  def persistContractStorage[F[_]: Sync](world: WorldStateProxy[F]): F[WorldStateProxy[F]] =
+  def persistStorage[F[_]: Sync](world: WorldStateProxy[F]): F[WorldStateProxy[F]] =
     Foldable[List].foldLeftM(world.contractStorages.toList, world) {
       case (updatedWorldState, (address, storageTrie)) =>
         for {
-          persistedStorage <- storageTrie.commit
+          persistedStorage   <- storageTrie.commit
           newStorageRootHash <- persistedStorage.db.inner.asInstanceOf[MPTrieStore[F, UInt256, UInt256]].getRootHash
-          account <- updatedWorldState.getAccount(address)
+          account            <- updatedWorldState.getAccount(address)
         } yield
           updatedWorldState.copy(
             contractStorages = updatedWorldState.contractStorages + (address -> persistedStorage),
-            accountProxy = updatedWorldState.accountProxy + (address -> account.copy(storageRoot = newStorageRootHash))
+            accountProxy = updatedWorldState.accountProxy + (address         -> account.copy(storageRoot = newStorageRootHash))
           )
     }
 
-  def persistAccountsStateTrie[F[_]: Sync](world: WorldStateProxy[F]): F[WorldStateProxy[F]] =
+  def persistAccount[F[_]: Sync](world: WorldStateProxy[F]): F[WorldStateProxy[F]] =
     for {
-      p <- world.accountProxy.commit()
-    } yield world.copy(accountProxy = p)
+      p                <- world.accountProxy.commit()
+      newStateRootHash <- p.inner.asInstanceOf[AddressAccountStore[F]].getRootHash
+    } yield world.copy(accountProxy = p, stateRootHash = newStateRootHash)
 }

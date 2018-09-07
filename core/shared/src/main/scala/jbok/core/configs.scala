@@ -4,21 +4,24 @@ import java.util.UUID
 
 import better.files.File._
 import better.files._
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigFactory}
 import jbok.core.models.{Address, UInt256}
 import jbok.network.NetAddress
 import pureconfig.{ConfigReader, Derivation}
 import scodec.bits._
 
 import scala.concurrent.duration._
-import scala.util.Random
 
-package object configs {
+object Configs {
+  lazy val defaultConfig = ConfigFactory.load()
+
   implicit val bytesReader: ConfigReader[ByteVector] = ConfigReader[String].map(x => ByteVector.fromValidHex(x))
 
   implicit val byteReader: ConfigReader[Byte] = ConfigReader[Int].map(x => x.toByte)
 
-  def loadConfig[A](config: Config, namespace: String)(implicit ev: Derivation[ConfigReader[A]]) =
+  implicit val bigIntReader: ConfigReader[BigInt] = ConfigReader[String].map(x => BigInt(x))
+
+  def loadConfig[A](namespace: String, config: Config = defaultConfig)(implicit ev: Derivation[ConfigReader[A]]) =
     pureconfig.loadConfig[A](config, namespace)
 
   val defaultRootDir: File = home / ".jbok"
@@ -50,6 +53,7 @@ package object configs {
       peer: PeerManagerConfig,
       blockChainConfig: BlockChainConfig,
       daoForkConfig: DaoForkConfig,
+      miningConfig: MiningConfig,
       nodeId: String = UUID.randomUUID().toString
   )
 
@@ -143,12 +147,16 @@ package object configs {
       val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
       val blockChainConfig: BlockChainConfig = BlockChainConfig()
       val daoForkConfig: DaoForkConfig       = DaoForkConfig()
-      FullNodeConfig(rootDir.pathAsString,
-                     networkConfig,
-                     walletConfig,
-                     peerManagerConfig,
-                     blockChainConfig,
-                     daoForkConfig)
+      val miningConfig                       = MiningConfig()
+      FullNodeConfig(
+        rootDir.pathAsString,
+        networkConfig,
+        walletConfig,
+        peerManagerConfig,
+        blockChainConfig,
+        daoForkConfig,
+        miningConfig
+      )
     }
 
     def fill(size: Int): List[FullNodeConfig] =

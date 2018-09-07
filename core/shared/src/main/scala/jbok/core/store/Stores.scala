@@ -91,7 +91,7 @@ class EvmCodeStore[F[_]: Sync](db: KeyValueDB[F])
     extends KeyValueStore[F, ByteVector, ByteVector](Namespaces.CodeNamespace, db)
 
 class AddressAccountStore[F[_]: Sync](val mpt: MPTrie[F])
-    extends KeyValueStore[F, Address, Account](Namespaces.NodeNamespace, mpt) {
+    extends KeyValueStore[F, Address, Account](ByteVector.empty, mpt) {
 
   def getRootHash: F[ByteVector] = mpt.getRootHash
 
@@ -99,15 +99,19 @@ class AddressAccountStore[F[_]: Sync](val mpt: MPTrie[F])
 
   def getNodeByHash(hash: ByteVector): F[Option[Node]] = mpt.getNodeByHash(hash)
 
+  def putNode(hash: ByteVector, node: ByteVector): F[Unit] = mpt.put(hash, node)
+
   def size: F[Int] = mpt.size
 
   def clear(): F[Unit] = mpt.clear()
 }
 
 object AddressAccountStore {
-  def apply[F[_]: Sync](db: KeyValueDB[F]): F[AddressAccountStore[F]] =
+  def apply[F[_]: Sync](trie: MPTrie[F]): AddressAccountStore[F] = new AddressAccountStore[F](trie)
+
+  def apply[F[_]: Sync](db: KeyValueDB[F], root: Option[ByteVector] = None): F[AddressAccountStore[F]] =
     for {
-      trie <- MPTrie[F](db)
+      trie <- MPTrie[F](db, root)
     } yield new AddressAccountStore[F](trie)
 }
 

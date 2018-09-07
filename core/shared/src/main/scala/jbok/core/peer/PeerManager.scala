@@ -5,8 +5,8 @@ import java.net.InetSocketAddress
 import cats.effect.ConcurrentEffect
 import cats.implicits._
 import fs2._
-import jbok.core.BlockChain
-import jbok.core.configs.PeerManagerConfig
+import jbok.core.History
+import jbok.core.Configs.PeerManagerConfig
 import jbok.core.messages.{Message, Messages, Status}
 import jbok.core.peer.PeerEvent.PeerRecv
 import jbok.network.Connection
@@ -71,7 +71,7 @@ object PeerManager {
 
   def apply[F[_]](
       config: PeerManagerConfig,
-      blockchain: BlockChain[F],
+      history: History[F],
       pipe: Pipe[F, Message, Message] = defaultPipe[F]
   )(implicit F: ConcurrentEffect[F], EC: ExecutionContext): F[PeerManager[F]] =
     for {
@@ -86,9 +86,9 @@ object PeerManager {
 
         override def status: F[Status] =
           for {
-            number    <- blockchain.getBestBlockNumber
-            headerOpt <- blockchain.getBlockHeaderByNumber(number)
-            genesis   <- blockchain.genesisHeader
+            number    <- history.getBestBlockNumber
+            headerOpt <- history.getBlockHeaderByNumber(number)
+            genesis   <- history.genesisHeader
             header = headerOpt.getOrElse(genesis)
           } yield Status(1, 1, header.hash, genesis.hash)
 
@@ -130,7 +130,7 @@ object PeerManager {
           for {
             peers <- handshakedPeers.map(_.values.toList)
             _ = log.info(s"broadcast ${msg.name} to ${peers.length} peers")
-            _     <- peers.traverse(peer => transport.write(peer.remote, msg))
+            _ <- peers.traverse(peer => transport.write(peer.remote, msg))
           } yield ()
 
         override def sendMessage(peerId: PeerId, msg: Message): F[Unit] =

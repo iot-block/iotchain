@@ -870,7 +870,7 @@ abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
                 if (!enoughGasForDeposit)
                   state.withWorld(result.world).spendGas(gasUsedInVm)
                 else {
-                  val world3 = result.world.saveCode(newAddress, result.returnData)
+                  val world3 = result.world.putCode(newAddress, result.returnData)
                   val internalTx = InternalTransaction(CREATE, state.env.ownerAddr, None, startGas, initCode, endowment)
                   state.withWorld(world3).spendGas(totalGasRequired).withInternalTxs(internalTx +: result.internalTxs)
                 }

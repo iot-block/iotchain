@@ -2,6 +2,7 @@ package jbok.core.models
 
 import jbok.codec.rlp.codecs._
 import jbok.crypto._
+import jbok.crypto.authds.mpt.MPTrie
 import scodec.bits.ByteVector
 
 case class Account(
@@ -37,7 +38,7 @@ case class Account(
 }
 
 object Account {
-  val EmptyStorageRootHash: ByteVector = rbytes.encode(ByteVector.empty).require.bytes.kec256
+  val EmptyStorageRootHash: ByteVector = MPTrie.emptyRootHash
 
   val EmptyCodeHash: ByteVector = ByteVector.empty.kec256
 

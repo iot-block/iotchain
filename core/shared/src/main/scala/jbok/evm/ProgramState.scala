@@ -61,7 +61,7 @@ case class ProgramState[F[_]: Sync](
     copy(world = updated)
 
   def withStorage(updated: Storage[F]): ProgramState[F] =
-    withWorld(world.saveStorage(ownAddress, updated))
+    withWorld(world.putStorage(ownAddress, updated))
 
   def program: Program = env.program
 
