@@ -4,24 +4,26 @@ import cats.effect.ConcurrentEffect
 import cats.implicits._
 import fs2._
 import fs2.async.mutable.Signal
-import jbok.core.TxPool
+import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.BlockImportResult._
-import jbok.core.ledger.{Ledger, OmmersPool}
 import jbok.core.messages.{GetBlockHeaders, NewBlock, NewBlockHashes}
 import jbok.core.models.Block
 import jbok.core.peer.{PeerEvent, PeerManager}
+import jbok.core.pool.{OmmerPool, TxPool}
 
 import scala.concurrent.ExecutionContext
 
-case class RegularSync[F[_]](
+case class Synchronizer[F[_]](
     peerManager: PeerManager[F],
-    ledger: Ledger[F],
-    ommersPool: OmmersPool[F],
+    executor: BlockExecutor[F],
     txPool: TxPool[F],
+    ommerPool: OmmerPool[F],
     broadcaster: Broadcaster[F],
     stopWhenTrue: Signal[F, Boolean]
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
+
+  val history = executor.history
 
   def stream: Stream[F, Unit] =
     peerManager
@@ -29,24 +31,18 @@ case class RegularSync[F[_]](
       .evalMap {
         case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
           log.info(s"received NewBlock")
-          ledger.importBlock(block).flatMap { br =>
+          executor.importBlock(block).flatMap { br =>
             log.info(s"import block result: ${br}")
 
             br match {
-              case BlockImported(newBlocks, _) =>
+              case Succeed(newBlocks, _) =>
                 log.info(s"Added new block ${block.header.number} to the top of the chain received from $peerId")
                 broadcastBlocks(newBlocks) *> updateTxAndOmmerPools(newBlocks, Nil)
 
-              case BlockPooled =>
+              case Pooled =>
                 F.delay(log.info(s"queued block ${block.header.number}"))
 
-              case DuplicateBlock =>
-                F.delay(log.info(s"Ignoring duplicate block ${block.header.number}) from ${peerId}"))
-
-              case UnknownParent =>
-                F.delay(log.info(s"Ignoring orphaned block ${block.header.number} from $peerId"))
-
-              case BlockImportFailed(error) =>
+              case Failed(error) =>
                 F.delay(log.info(s"importing block error: ${error}"))
             }
           }
@@ -58,6 +54,19 @@ case class RegularSync[F[_]](
         case _ => F.unit
       }
       .onFinalize(stopWhenTrue.set(true) *> F.delay(log.info(s"stop RegularSync")))
+
+  def handleMinedBlock(block: Block): F[Unit] =
+    executor.importBlock(block).flatMap {
+      case Succeed(newBlocks, _) =>
+        log.info(s"Mined block at ${block.header.number} added to the top of the chain")
+        broadcastBlocks(newBlocks) *> updateTxAndOmmerPools(newBlocks, Nil)
+
+      case Pooled =>
+        F.delay(log.info(s"Mined block added to the pool"))
+
+      case Failed(error) =>
+        F.delay(log.error(s"Mined block execution error: ${error}"))
+    }
 
   def start: F[Unit] =
     for {
@@ -71,10 +80,10 @@ case class RegularSync[F[_]](
   private def updateTxAndOmmerPools(blocksAdded: List[Block], blocksRemoved: List[Block]): F[Unit] = {
     log.info(s"update txPool and ommerPool with ${blocksAdded.length} ADDs and ${blocksRemoved.length} REMOVEs")
     for {
-      _ <- ommersPool.addOmmers(blocksRemoved.headOption.toList.map(_.header))
+      _ <- ommerPool.addOmmers(blocksRemoved.headOption.toList.map(_.header))
       _ <- blocksRemoved.map(_.body.transactionList).traverse(txPool.addTransactions)
       _ <- blocksAdded.map { block =>
-        ommersPool.removeOmmers(block.header :: block.body.uncleNodesList) *>
+        ommerPool.removeOmmers(block.header :: block.body.uncleNodesList) *>
           txPool.removeTransactions(block.body.transactionList)
       }.sequence
     } yield ()
@@ -84,15 +93,15 @@ case class RegularSync[F[_]](
     blocks.traverse(block => broadcaster.broadcastBlock(NewBlock(block))).void
 }
 
-object RegularSync {
+object Synchronizer {
   def apply[F[_]](
       peerManager: PeerManager[F],
-      ledger: Ledger[F],
-      ommersPool: OmmersPool[F],
+      executor: BlockExecutor[F],
       txPool: TxPool[F],
+      ommerPool: OmmerPool[F],
       broadcaster: Broadcaster[F],
-  )(implicit F: ConcurrentEffect[F], EC: ExecutionContext): F[RegularSync[F]] =
+  )(implicit F: ConcurrentEffect[F], EC: ExecutionContext): F[Synchronizer[F]] =
     fs2.async
       .signalOf[F, Boolean](true)
-      .map(s => RegularSync(peerManager, ledger, ommersPool, txPool, broadcaster, s))
+      .map(s => Synchronizer(peerManager, executor, txPool, ommerPool, broadcaster, s))
 }
