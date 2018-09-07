@@ -5,6 +5,7 @@ import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.crypto.authds.mpt.MPTrieStore
+import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
 class MPTValidator[F[_]](implicit F: Sync[F]) {
@@ -20,7 +21,8 @@ class MPTValidator[F[_]](implicit F: Sync[F]) {
     */
   def isValid[V](hash: ByteVector, toValidate: List[V])(implicit cv: RlpCodec[V]): F[Boolean] =
     for {
-      trie <- MPTrieStore.inMemory[F, Int, V]
+      db <- KeyValueDB.inMemory[F]
+      trie <- MPTrieStore[F, Int, V](db)
       _ <- toValidate.zipWithIndex.map { case (v, k) => trie.put(k, v) }.sequence
       root <- trie.getRootHash
       r = root equals hash
