@@ -1,24 +1,23 @@
-package jbok.core
+package jbok.core.pool
 
 import cats.effect._
-import fs2.async.Ref
-import jbok.core.models.SignedTransaction
-import scodec.bits.ByteVector
 import cats.implicits._
-import messages.SignedTransactions
 import fs2._
+import fs2.async.Ref
 import fs2.async.mutable.Signal
+import jbok.core.messages.SignedTransactions
+import jbok.core.models.SignedTransaction
 import jbok.core.peer.{PeerEvent, PeerId, PeerManager}
+import scodec.bits.ByteVector
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{FiniteDuration, _}
 
 case class PendingTransaction(stx: SignedTransaction, addTimestamp: Long)
 
 case class TxPoolConfig(
-    poolSize: Int = 64,
-    transactionTimeout: FiniteDuration = 60.seconds
+    poolSize: Int = 1000,
+    transactionTimeout: FiniteDuration = 2.minutes
 )
 
 case class TxPool[F[_]](
