@@ -8,26 +8,26 @@ import fs2._
 @JsonCodec
 case class Person(name: String, age: Int)
 
-trait TestAPI extends RpcAPI {
-  def foo: Response[Int]
+trait TestAPI {
+  def foo: IO[Int]
 
-  def bar: Response[String]
+  def bar: IO[String]
 
-  def qux(name: String, age: Int): Response[Person]
+  def qux(name: String, age: Int): IO[Person]
 
-  def error: Response[Unit]
+  def error: IO[Unit]
 
   def events: Stream[IO, Int]
 }
 
 class TestApiImpl extends TestAPI {
-  override def foo: Response[Int] = IO.pure(Right(42))
+  override def foo: IO[Int] = IO.pure(42)
 
-  override def bar: Response[String] = IO.pure(Right("oho"))
+  override def bar: IO[String] = IO.pure("oho")
 
-  override def qux(name: String, age: Int): Response[Person] = IO.pure(Right(Person(name, age)))
+  override def qux(name: String, age: Int): IO[Person] = IO.pure(Person(name, age))
 
-  override def error: Response[Unit] = IO.pure(Left(JsonRPCResponse.internalError("error")))
+  override def error: IO[Unit] = IO.raiseError(JsonRPCResponse.internalError("error"))
 
   override def events: Stream[IO, Int] = Stream(1 to 1000: _*).covary[IO]
 }

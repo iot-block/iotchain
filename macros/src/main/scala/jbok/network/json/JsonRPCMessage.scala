@@ -60,7 +60,7 @@ sealed trait JsonRPCResponse[+A] extends JsonRPCMessage[A]
 case class JsonRPCResult[A](id: RequestId, result: A) extends JsonRPCResponse[A]
 
 @JsonCodec
-case class JsonRPCError(id: RequestId, error: ErrorObject) extends JsonRPCResponse[Nothing]
+case class JsonRPCError(id: RequestId, error: ErrorObject) extends Exception(error.message) with JsonRPCResponse[Nothing]
 
 object JsonRPCResponse {
   implicit def encoder[A: Encoder]: Encoder[JsonRPCResponse[A]] = new Encoder[JsonRPCResponse[A]] {

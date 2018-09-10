@@ -22,7 +22,7 @@ class RpcServer(
     val handlers: Map[String, String => IO[String]],
     val queue: Queue[IO, String]
 ) {
-  def mountAPI[API <: RpcAPI](api: API): RpcServer = macro RpcServerMacro.mountAPI[RpcServer, API]
+  def mountAPI[API](api: API): RpcServer = macro RpcServerMacro.mountAPI[RpcServer, API]
 
   val pipe: Pipe[IO, String, String] = { input =>
     val s = input.evalMap { s =>

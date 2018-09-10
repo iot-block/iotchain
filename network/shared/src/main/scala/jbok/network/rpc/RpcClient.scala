@@ -6,7 +6,7 @@ import jbok.network.client.Client
 import scala.language.experimental.macros
 
 class RpcClient[F[_]: ConcurrentEffect](val client: Client[F, String]) {
-  def useAPI[API <: RpcAPI]: API = macro RpcClientMacro.useAPI[API]
+  def useAPI[API]: API = macro RpcClientMacro.useAPI[API]
 }
 
 object RpcClient {

@@ -26,7 +26,7 @@ class RpcSpec extends JbokSpec {
       api.foo.unsafeRunSync() shouldBe impl.foo.unsafeRunSync()
       api.bar.unsafeRunSync() shouldBe impl.bar.unsafeRunSync()
       api.qux("oho", 42).unsafeRunSync() shouldBe impl.qux("oho", 42).unsafeRunSync()
-      api.error.unsafeRunSync().isLeft shouldBe true
+      api.error.attempt.unsafeRunSync().isLeft shouldBe true
     }
 
     "client subscribe" in {

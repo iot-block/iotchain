@@ -3,11 +3,12 @@ package jbok.core.consensus.pow.ethash
 import cats.effect.IO
 import jbok.core.Configs.{BlockChainConfig, DaoForkConfig, MiningConfig}
 import jbok.core.History
+import jbok.core.consensus.ConsensusFixture
 import jbok.core.mining.TxGen
 import jbok.core.pool.BlockPool
 import jbok.persistent.KeyValueDB
 
-trait EthashFixture {
+trait EthashFixture extends ConsensusFixture {
   val db = KeyValueDB.inMemory[IO].unsafeRunSync()
   val history = History[IO](db).unsafeRunSync()
   val blockChainConfig = BlockChainConfig()

@@ -43,7 +43,7 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
     "import private keys" in {
       val p = for {
         x <- api.importRawKey(prvKey, passphrase)
-        _ = x shouldBe Right(address)
+        _ = x shouldBe address
       } yield ()
 
       p.unsafeRunSync()
@@ -54,7 +54,7 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
         acc1 <- api.listAccounts
         _    <- api.newAccount("")
         acc2 <- api.listAccounts
-        _ = acc2.right.get.length shouldBe acc1.right.get.length + 1
+        _ = acc2.length shouldBe acc1.length + 1
       } yield ()
 
       p.unsafeRunSync()
@@ -63,7 +63,7 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
     "return an error when trying to import an invalid key" in {
       val invalidKey = prvKey.tail
       val p = for {
-        r <- api.importRawKey(invalidKey, passphrase)
+        r <- api.importRawKey(invalidKey, passphrase).attempt
         _ = r.isLeft shouldBe true
       } yield ()
 
@@ -73,11 +73,11 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
     "unlock an account given a correct passphrase" in {
       val p = for {
         _  <- api.importRawKey(prvKey, passphrase)
-        b1 <- api.unlockAccount(address, "", None)
+        b1 <- api.unlockAccount(address, "", None).attempt
         _ = b1.isLeft shouldBe true
 
         b2 <- api.unlockAccount(address, passphrase, None)
-        _ = b2 shouldBe Right(true)
+        _ = b2 shouldBe true
         _ <- api.lockAccount(address)
       } yield ()
 
@@ -96,9 +96,9 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
 
         r <- api.sendTransaction(tx, Some(passphrase))
         p <- txPool.getPendingTransactions
-        _ = r.right.get shouldBe p.head.stx.hash
+        _ = r shouldBe p.head.stx.hash
 
-        r2 <- api.sendTransaction(tx, Some("wrongPassphrase"))
+        r2 <- api.sendTransaction(tx, Some("wrongPassphrase")).attempt
         _ = r2.isLeft shouldBe true
       } yield ()
 
@@ -115,18 +115,18 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
       val p = for {
         _ <- api.importRawKey(prvKey, passphrase)
 
-        x <- api.sign(message, address, Some("wrong"))
+        x <- api.sign(message, address, Some("wrong")).attempt
         _ = x.isLeft shouldBe true
 
         x1 <- api.sign(message, address, Some(passphrase))
-        _ = x1 shouldBe Right(sig)
+        _ = x1 shouldBe sig
 
-        x2 <- api.sign(message, address, None)
+        x2 <- api.sign(message, address, None).attempt
         _ = x2.isLeft shouldBe true
 
         _  <- api.unlockAccount(address, passphrase, None)
         x3 <- api.sign(message, address, None)
-        _ = x3 shouldBe Right(sig)
+        _ = x3 shouldBe sig
       } yield ()
 
       p.unsafeRunSync()
@@ -142,7 +142,7 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
 
       val p = for {
         addr <- api.ecRecover(message, CryptoSignature(r, s, v))
-        _ = addr shouldBe Right(sigAddress)
+        _ = addr shouldBe sigAddress
       } yield ()
 
       p.unsafeRunSync()
@@ -154,8 +154,8 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
       val p = for {
         _    <- api.importRawKey(prvKey, passphrase)
         sig  <- api.sign(message, address, Some(passphrase))
-        addr <- api.ecRecover(message, sig.right.get)
-        _ = addr shouldBe Right(address)
+        addr <- api.ecRecover(message, sig)
+        _ = addr shouldBe address
       } yield ()
 
       p.unsafeRunSync()
@@ -166,16 +166,16 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
       val p = for {
         _ <- api.importRawKey(prvKey, passphrase)
 
-        x1 <- api.changePassphrase(address, "wrong", newPass)
+        x1 <- api.changePassphrase(address, "wrong", newPass).attempt
         _ = x1.isLeft shouldBe true
 
-        x2 <- api.changePassphrase(address, passphrase, newPass)
+        x2 <- api.changePassphrase(address, passphrase, newPass).attempt
         _ = x2.isRight shouldBe true
 
-        r1 <- api.unlockAccount(address, passphrase, None)
+        r1 <- api.unlockAccount(address, passphrase, None).attempt
         _ = r1.isLeft shouldBe true
 
-        r2 <- api.unlockAccount(address, newPass, None)
+        r2 <- api.unlockAccount(address, newPass, None).attempt
         _ = r2.isRight shouldBe true
       } yield ()
 
@@ -192,6 +192,5 @@ class PrivateAPISpec extends JbokSpec with PrivateAPIFixture {
   override protected def afterAll(): Unit = {
     client.stop.unsafeRunSync()
     server.stop.unsafeRunSync()
-    keyStore.clear.unsafeRunSync()
   }
 }

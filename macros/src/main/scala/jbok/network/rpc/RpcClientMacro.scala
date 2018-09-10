@@ -63,18 +63,20 @@ object RpcClientMacro {
               params = $parametersAsTuple
             )
 
-          client.request(request.asJson.noSpaces).map(x => decode[JsonRPCResponse[$resultType]](x)).map {
+          client.request(request.asJson.noSpaces).map(x => decode[JsonRPCResponse[$resultType]](x)).flatMap {
             case Left(e) =>
-              Left(JsonRPCResponse.parseError("parsing JsonRPCResponse failed"))
+              IO.raiseError(JsonRPCResponse.parseError("parsing JsonRPCResponse failed"))
             case Right(x) => x match {
-              case e: JsonRPCError => Left(e)
-              case r: JsonRPCResult[${TypeName(resultType.toString)}] => Right(r.result)
+              case e: JsonRPCError =>
+                IO.raiseError(e)
+              case r: JsonRPCResult[${TypeName(resultType.toString)}] =>
+                IO.pure(r.result)
             }
           }
        """
 
       q"""
-        override def $methodName(...$parameterLists): Response[${resultType}] = {
+        override def $methodName(...$parameterLists): IO[${resultType}] = {
           $body
         }
       """

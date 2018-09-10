@@ -1,9 +1,9 @@
 package jbok.core.mining
 
-import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.consensus.{Consensus, ConsensusFixture}
+import jbok.core.consensus.ConsensusFixture
 import jbok.core.consensus.poa.clique.CliqueFixture
+import jbok.core.consensus.pow.ethash.EthashFixture
 import jbok.core.models.{Address, SignedTransaction, UInt256}
 
 class BlockMinerSpec extends JbokSpec {
