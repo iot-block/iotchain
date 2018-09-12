@@ -13,13 +13,11 @@ class OmmerPool[F[_]: Sync](history: History[F], poolSize: Int, ommersList: Ref[
   val ommerSizeLimit: Int       = 2
 
   def addOmmers(ommers: List[BlockHeader]): F[Unit] = {
-    log.info(s"add ${ommers.length} ommers")
     ommersList.modify(xs => (ommers ++ xs).take(poolSize)).void
   }
 
   def removeOmmers(ommers: List[BlockHeader]): F[Unit] = {
     val toDelete = ommers.map(_.hash).toSet
-    log.info(s"remove ${toDelete.size} ommers")
     ommersList.modify(xs => xs.filter(b => !toDelete.contains(b.hash))).void
   }
 

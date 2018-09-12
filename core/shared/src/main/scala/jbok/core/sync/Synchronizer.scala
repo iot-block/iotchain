@@ -58,14 +58,14 @@ case class Synchronizer[F[_]](
   def handleMinedBlock(block: Block): F[Unit] =
     executor.importBlock(block).flatMap {
       case Succeed(newBlocks, _) =>
-        log.info(s"Mined block at ${block.header.number} added to the top of the chain")
+        log.info(s"add mined block${block.header.number} to the main chain")
         broadcastBlocks(newBlocks) *> updateTxAndOmmerPools(newBlocks, Nil)
 
       case Pooled =>
-        F.delay(log.info(s"Mined block added to the pool"))
+        F.delay(log.info(s"mined block added to the pool"))
 
-      case Failed(error) =>
-        F.delay(log.error(s"Mined block execution error: ${error}"))
+      case Failed(e) =>
+        F.delay(log.error(e)("mined block execution error"))
     }
 
   def start: F[Unit] =

@@ -9,7 +9,7 @@ import jbok.core.store._
 import jbok.core.sync.SyncState
 import jbok.crypto.authds.mpt.{MPTrie, Node}
 import jbok.evm.WorldStateProxy
-import jbok.persistent.{KeyValueDB, SnapshotKeyValueStore}
+import jbok.persistent.{KeyValueDB, RefCountKeyValueDB, SnapshotKeyValueStore}
 import scodec.bits._
 
 abstract class History[F[_]](val db: KeyValueDB[F])(implicit F: Sync[F]) {
@@ -24,7 +24,7 @@ abstract class History[F[_]](val db: KeyValueDB[F])(implicit F: Sync[F]) {
           log.info("genesis data already in the database")
           F.unit
 
-        case Some(h) =>
+        case Some(_) =>
           F.raiseError(
             new RuntimeException("Genesis data present in the database does not match genesis block from file")
           )
@@ -110,8 +110,6 @@ abstract class History[F[_]](val db: KeyValueDB[F])(implicit F: Sync[F]) {
   def getAccountStorageAt(rootHash: ByteVector, position: BigInt): F[ByteVector]
 
   /**
-    * Returns the receipts based on a block hash
-    * @param blockhash
     * @return Receipts if found
     */
   def getReceiptsByHash(blockhash: ByteVector): F[Option[List[Receipt]]]
@@ -195,10 +193,6 @@ abstract class History[F[_]](val db: KeyValueDB[F])(implicit F: Sync[F]) {
 
   def saveBestBlockNumber(number: BigInt): F[Unit]
 
-  def saveNode(nodeHash: ByteVector, nodeEncoded: ByteVector, blockNumber: BigInt): F[Unit]
-
-  def saveAccount(address: Address, account: Account): F[Unit]
-
   /**
     * Returns a block hash given a block number
     *
@@ -218,9 +212,20 @@ abstract class History[F[_]](val db: KeyValueDB[F])(implicit F: Sync[F]) {
       noEmptyAccounts: Boolean = false
   ): F[WorldStateProxy[F]]
 
-  def pruneState(blockNumber: BigInt): F[Unit]
+  def getMptFor(blockNumber: BigInt, root: Option[ByteVector] = None): F[MPTrie[F]] = {
+    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
+    MPTrie[F](refCountDB, root)
+  }
 
-  def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit]
+  def pruneState(blockNumber: BigInt): F[Unit] = {
+    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
+    refCountDB.prune(blockNumber)
+  }
+
+  def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit] = {
+    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
+    refCountDB.rollback(blockNumber)
+  }
 
   def getSyncState: F[Option[SyncState]]
 
@@ -233,7 +238,7 @@ object History {
   def withGenesisConfig[F[_]: Sync](db: KeyValueDB[F], genesisConfig: GenesisConfig): F[History[F]] =
     for {
       history <- apply[F](db)
-      _          <- history.loadGenesisConfig(genesisConfig)
+      _       <- history.loadGenesisConfig(genesisConfig)
     } yield history
 
   def apply[F[_]: Sync](db: KeyValueDB[F]): F[History[F]] = {
@@ -246,22 +251,20 @@ object History {
     val appStateStore        = new AppStateStore[F](db)
     val evmCodeStore         = new EvmCodeStore[F](db)
     val fastSyncStore        = new FastSyncStore[F](db)
-
-    AddressAccountStore[F](db).map(
-      accountStore =>
-        new HistoryImpl[F](
-          db,
-          headerStore,
-          bodyStore,
-          receiptStore,
-          numberHashStore,
-          txLocationStore,
-          totalDifficultyStore,
-          fastSyncStore,
-          appStateStore,
-          accountStore,
-          evmCodeStore
-      ))
+    Sync[F].pure {
+      new HistoryImpl[F](
+        db,
+        headerStore,
+        bodyStore,
+        receiptStore,
+        numberHashStore,
+        txLocationStore,
+        totalDifficultyStore,
+        fastSyncStore,
+        appStateStore,
+        evmCodeStore
+      )
+    }
   }
 }
 
@@ -275,20 +278,23 @@ class HistoryImpl[F[_]](
     totalDifficultyStore: TotalDifficultyStore[F],
     fastSyncStore: FastSyncStore[F],
     appStateStore: AppStateStore[F],
-    accountStore: AddressAccountStore[F],
     evmCodeStore: EvmCodeStore[F]
-)(implicit F: Sync[F]) extends History[F](db) {
+)(implicit F: Sync[F])
+    extends History[F](db) {
 
   override def loadGenesisConfig(config: GenesisConfig): F[Unit] = {
     log.info(s"load genesis config with ${config.alloc.size} alloc")
     val header = GenesisConfig.genesisHeader(config)
     val body   = GenesisConfig.genesisBody(config)
     for {
+      mpt <- MPTrie(RefCountKeyValueDB.forVersion(db, 0))
+      accountStore = AddressAccountStore(mpt)
       _ <- config.alloc.toList.traverse {
         case (address, AllocAccount(balance)) =>
           accountStore.put(Address(ByteVector.fromValidHex(address)), Account(0, UInt256(balance)))
       }
       stateRootHash <- accountStore.getRootHash
+      _ = log.info(s"stateRoothash: ${stateRootHash}")
       block = Block(header.copy(stateRoot = stateRootHash), body)
       _ <- save(block, Nil, block.header.difficulty, saveAsBestBlock = true)
     } yield ()
@@ -318,7 +324,11 @@ class HistoryImpl[F[_]](
     * @param rootHash storage root hash
     * @param position storage position
     */
-  override def getAccountStorageAt(rootHash: ByteVector, position: BigInt): F[ByteVector] = ???
+  override def getAccountStorageAt(rootHash: ByteVector, position: BigInt): F[ByteVector] =
+    for {
+      storage <- ContractStorageStore(db, Some(rootHash))
+      bytes   <- storage.getOpt(UInt256(position)).map(_.getOrElse(UInt256.Zero).bytes)
+    } yield bytes
 
   /**
     * Get an account for an address and a block number
@@ -327,12 +337,16 @@ class HistoryImpl[F[_]](
     * @param blockNumber the block that determines the state of the account
     */
   override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] =
-    accountStore.getOpt(address)
+    (for {
+      header <- OptionT(getBlockHeaderByNumber(blockNumber))
+      mpt    <- OptionT.liftF(getMptFor(blockNumber, Some(header.stateRoot)))
+      accountStore = AddressAccountStore(mpt)
+      account <- OptionT(accountStore.getOpt(address))
+    } yield account).value
 
   /**
     * Returns the receipts based on a block hash
     *
-    * @param blockhash
     * @return Receipts if found
     */
   override def getReceiptsByHash(blockhash: ByteVector): F[Option[List[Receipt]]] =
@@ -374,7 +388,7 @@ class HistoryImpl[F[_]](
 
     headerStore.del(blockHash) *>
       bodyStore.del(blockHash) *>
-//    totalDifficultyStorage.remove(blockHash)
+      //    totalDifficultyStorage.remove(blockHash)
       receiptStore.del(blockHash) *>
       maybeTxList.map {
         case Some(txs) => txs.map(tx => txLocationStore.del(tx.hash)).sequence.void
@@ -427,14 +441,8 @@ class HistoryImpl[F[_]](
   override def save(blockhash: ByteVector, totalDifficulty: BigInt): F[Unit] =
     totalDifficultyStore.put(blockhash, totalDifficulty)
 
-  override def saveAccount(address: Address, account: Account): F[Unit] =
-    accountStore.put(address, account)
-
   override def saveBestBlockNumber(number: BigInt): F[Unit] =
     appStateStore.putBestBlockNumber(number)
-
-  override def saveNode(nodeHash: ByteVector, nodeEncoded: ByteVector, blockNumber: BigInt): F[Unit] =
-    accountStore.putNode(nodeHash, nodeEncoded)
 
   /**
     * Returns a block hash given a block number
@@ -445,30 +453,28 @@ class HistoryImpl[F[_]](
   override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
     numberHashStore.getOpt(number)
 
-  override def pruneState(blockNumber: BigInt): F[Unit] = F.unit
-
-  override def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit] = ???
-
   /**
     * Returns MPT node searched by it's hash
     *
     * @param hash Node Hash
     * @return MPT node
     */
-  override def getMptNodeByHash(hash: ByteVector): F[Option[Node]] = accountStore.getNodeByHash(hash)
+  override def getMptNodeByHash(hash: ByteVector): F[Option[Node]] = ???
 
   override def getWorldStateProxy(
       blockNumber: BigInt,
       accountStartNonce: UInt256,
       stateRootHash: Option[ByteVector],
       noEmptyAccounts: Boolean
-  ): F[WorldStateProxy[F]] =
+  ): F[WorldStateProxy[F]] = {
+    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
     for {
-      accountStore <- AddressAccountStore[F](db, stateRootHash)
+      mpt <- MPTrie[F](refCountDB, stateRootHash)
+      accountStore = AddressAccountStore[F](mpt)
       accountProxy = SnapshotKeyValueStore(accountStore)
     } yield
       WorldStateProxy[F](
-        db,
+        refCountDB,
         accountProxy,
         evmCodeStore,
         stateRootHash.getOrElse(MPTrie.emptyRootHash),
@@ -478,10 +484,15 @@ class HistoryImpl[F[_]](
         accountStartNonce,
         noEmptyAccounts
       )
+  }
 
-  override def getSyncState: F[Option[SyncState]] = fastSyncStore.getSyncState
+  override def getSyncState: F[Option[SyncState]] =
+    fastSyncStore.getSyncState
 
-  override def putSyncState(syncState: SyncState): F[Unit] = fastSyncStore.putSyncState(syncState)
+  override def putSyncState(syncState: SyncState): F[Unit] =
+    fastSyncStore.putSyncState(syncState)
 
-  override def purgeSyncState: F[Unit] = fastSyncStore.purge
+  override def purgeSyncState: F[Unit] =
+    fastSyncStore.purge
+
 }

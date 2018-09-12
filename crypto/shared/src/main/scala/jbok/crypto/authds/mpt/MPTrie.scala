@@ -64,6 +64,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
     for {
       hashOpt <- rootHash.get
       nibbles = HexPrefix.bytesToNibbles(key)
+      _ = log.trace(s"put nibbles: ${nibbles}")
       _ <- hashOpt match {
         case Some(hash) if hash != MPTrie.emptyRootHash =>
           for {
@@ -79,19 +80,24 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
       }
     } yield ()
 
-  override def del(key: ByteVector): F[Unit] =
+  override def del(key: ByteVector): F[Unit] = {
+    log.trace(s"delete key ${key}")
     for {
-      rootOpt <- getRootOpt
-      _ <- rootOpt match {
-        case None => F.unit
-        case Some(root) =>
+      hashOpt <- rootHash.get
+      _ <- hashOpt match {
+        case Some(hash) if hash != MPTrie.emptyRootHash =>
           val nibbles = HexPrefix.bytesToNibbles(key)
           for {
-            newRootHash <- delNode(root, nibbles) >>= commitDel
+            root        <- getRootOpt
+            _ = log.trace(s"delNode: ${root.get}, ${nibbles}")
+            newRootHash <- delNode(root.get, nibbles) >>= commitDel
             _           <- rootHash.setSync(Some(newRootHash))
           } yield ()
+
+        case _ => F.unit
       }
     } yield ()
+  }
 
   override def has(key: ByteVector): F[Boolean] = getOpt(key).map(_.isDefined)
 
@@ -158,7 +164,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
     getNodeByNibbles(node, HexPrefix.bytesToNibbles(key))
 
   private[jbok] def getNodeByNibbles(node: Node, nibbles: Nibbles): F[Option[Node]] = {
-    log.debug(s"""get nibbles "${nibbles}" in $node""")
+    log.trace(s"""get nibbles "${nibbles}" in $node""")
     node match {
       case leaf @ LeafNode(k, _) => F.pure(if (k == nibbles) Some(leaf) else None)
 
@@ -202,14 +208,14 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         .filter { node =>
           node.entry.isLeft || node.hash == previousRootHash
         }
-        .map(x => { log.debug(s"del $x"); x })
+        .map(x => { log.trace(s"del $x"); x })
         .map(x => x.hash -> None)
 
       val putOps = toPut
         .filter { node =>
           node.entry.isLeft || node.capped == newRootBytes
         }
-        .map(x => { log.debug(s"put$x"); x })
+        .map(x => { log.trace(s"put$x"); x })
         .map(x => x.hash -> Some(x.bytes))
 
       val batch = delOps ++ putOps
@@ -233,7 +239,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
     a.zip(b).takeWhile(t => t._1 == t._2).length
 
   private def getNodeValue(node: Node, nibbles: Nibbles): F[Option[ByteVector]] = {
-    log.debug(s"""get nibbles "${nibbles}" in $node""")
+    log.trace(s"""get nibbles "${nibbles}" in $node""")
     node match {
       case LeafNode(k, v) => F.pure(if (k == nibbles) Some(v) else None)
 
@@ -264,18 +270,27 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
 
   private def putNode(node: Node, key: Nibbles, value: ByteVector): F[NodeInsertResult] = node match {
     case leafNode: LeafNode =>
-      log.debug(s"put ${key} in ${leafNode}")
+      log.trace(s"put ${key} in ${leafNode}")
       putLeafNode(leafNode, key, value)
     case extNode: ExtensionNode =>
-      log.debug(s"put ${key} in ${extNode}")
+      log.trace(s"put ${key} in ${extNode}")
       putExtensionNode(extNode, key, value)
     case branchNode: BranchNode =>
-      log.debug(s"put ${key} in ${branchNode}")
+      log.trace(s"put ${key} in ${branchNode}")
       putBranchNode(branchNode, key, value)
   }
 
   private def putLeafNode(leafNode: LeafNode, key: Nibbles, value: ByteVector): F[NodeInsertResult] =
     longestCommonPrefix(leafNode.key, key) match {
+      case l if l == leafNode.key.length && l == key.length =>
+        // same keys, update value
+        val newNode = leafNode.copy(value = value)
+        NodeInsertResult(
+          newNode,
+          leafNode :: Nil,
+          newNode :: Nil
+        ).pure[F]
+
       case 0 =>
         // split to a branch node
         val (branchNode, maybeNewLeaf) =
@@ -295,15 +310,6 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
             toPut = maybeNewLeaf.toList ++ r.toPut
           )
         }
-
-      case l if l == leafNode.key.length && l == key.length =>
-        // same keys, update value
-        val newNode = leafNode.copy(value = value)
-        NodeInsertResult(
-          newNode,
-          leafNode :: Nil,
-          newNode :: Nil
-        ).pure[F]
 
       case l =>
         // partially matched prefix, replace this leaf node with an extension and a branch node
@@ -435,6 +441,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         // recursively delete the child
         for {
           next <- getNodeByEntry(node.child)
+          _ = log.trace(s"del next: ${next.get}")
           r    <- delNode(next.get, key.drop(l))
           result <- r match {
             case NodeRemoveResult(true, newNodeOpt, toDel, toPut) =>
@@ -453,7 +460,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
 
                 case None =>
                   F.raiseError[NodeRemoveResult](
-                    new RuntimeException("A trie with newRoot extension should have at least 2 values stored")
+                    new Exception("A trie with newRoot extension should have at least 2 values stored")
                   )
               }
 
@@ -471,26 +478,24 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
     case (BranchNode(_, None), true) => NodeRemoveResult.noChanges.pure[F]
 
     // 2. the key matches and value isDefined, delete the value
-    case (BranchNode(branches, Some(_)), true) =>
+    case (BranchNode(_, Some(_)), true) =>
       // We need to remove old node and fix it because we removed the value
-      fix(BranchNode(branches, None), Nil).map(fixedNode =>
+      fix(node.copy(value = None), Nil).map(fixedNode =>
         NodeRemoveResult(hasChanged = true, newNode = Some(fixedNode), toDel = node :: Nil, toPut = fixedNode :: Nil))
 
     // 3. otherwise
-    case (branchNode @ BranchNode(branches, value), false) =>
+    case (branchNode, false) =>
       // try to remove 1 of the 16 branches
       for {
         child <- getNodeByBranch(branchNode.branchAt(key.head))
+        _ = log.trace(s"should be here, ${child}")
         result <- child match {
-          case n =>
+          case Some(n) =>
             // recursively delete
-            delNode(n.get, key.tail).flatMap {
+            delNode(n, key.tail).flatMap {
               // branch changes, need to fix
               case NodeRemoveResult(true, newNodeOpt, toDel, toPut) =>
-                val nodeToFix = newNodeOpt match {
-                  case Some(newNode) => branchNode.updateBranch(key.head, Some(newNode.entry))
-                  case None          => BranchNode(branches.updated(key.head, None), value)
-                }
+                val nodeToFix = branchNode.updateBranch(key.head, newNodeOpt.map(_.entry))
 
                 fix(nodeToFix, toPut).map { fixedNode =>
                   NodeRemoveResult(
@@ -505,16 +510,19 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
               case r @ NodeRemoveResult(false, _, _, _) =>
                 r.copy(newNode = None).pure[F]
             }
+
+          case None =>
+            // child not found in this branch node, so key is not present
+            NodeRemoveResult(hasChanged = false, newNode = None).pure[F]
         }
       } yield result
   }
 
   private def fix(node: Node, notStoredYet: List[Node]): F[Node] = node match {
-    case BranchNode(branches, value) =>
-      val usedIndexes = branches.indices.toList
-        .filter(i => branches(i) != None)
+    case bn @ BranchNode(branches, value) =>
+      val activeIndexes = bn.activated.map(_._1)
 
-      (usedIndexes, value) match {
+      (activeIndexes, value) match {
         case (Nil, None) => F.raiseError(EmptyBranchException)
         case (index :: Nil, None) =>
           val temporalExtNode = ExtensionNode(MPTrie.alphabet(index), branches(index).get)
@@ -524,37 +532,36 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
       }
 
     case extensionNode @ ExtensionNode(sharedKey, entry) =>
-      val nextNode: F[Option[Node]] = entry match {
+      val nextNode: F[Node] = entry match {
         case Left(nextHash) =>
           // If the node is not in the extension node then it might be a node to be inserted at the end of this remove
           // so we search in this list too
           notStoredYet.find(n => n.hash == nextHash) match {
-            case Some(n) => F.pure(Some(n))
-            case None    => getNodeByEntry(extensionNode.child) // We search for the node in the db
+            case Some(n) => F.pure(n)
+            case None    => getNodeByEntry(extensionNode.child).map(_.get) // We search for the node in the db
           }
 
-        case Right(nextNodeOnExt) => F.pure(Some(nextNodeOnExt))
+        case Right(nextNodeOnExt) => F.pure(nextNodeOnExt)
       }
 
       nextNode.map {
         // Compact Two extensions into one
-        case Some(ExtensionNode(subSharedKey, subNext)) => ExtensionNode(sharedKey ++ subSharedKey, subNext)
+        case ExtensionNode(subSharedKey, subNext) => ExtensionNode(sharedKey ++ subSharedKey, subNext)
         // Compact the extension and the leaf into the same leaf node
-        case Some(LeafNode(subRemainingKey, subValue)) => LeafNode(sharedKey ++ subRemainingKey, subValue)
+        case LeafNode(subRemainingKey, subValue) => LeafNode(sharedKey ++ subRemainingKey, subValue)
         // It's ok
-        case Some(_: BranchNode) => node
-        case None                => ???
+        case _: BranchNode => node
       }
 
     case _ => node.pure[F]
   }
 
-  def size: F[Int] = {
+  override def size: F[Int] = {
     def size0(node: Option[Node]): F[Int] = node match {
       case None                          => 0.pure[F]
       case Some(LeafNode(_, _))          => 1.pure[F]
       case Some(ExtensionNode(_, child)) => getNodeByEntry(child) >>= size0
-      case Some(bn @ BranchNode(branches, value)) =>
+      case Some(bn @ BranchNode(_, value)) =>
         for {
           bn <- bn.activated.traverse { case (i, e) => getNodeByBranch(e) >>= size0 }.map(_.sum)
         } yield bn + (if (value.isEmpty) 0 else 1)

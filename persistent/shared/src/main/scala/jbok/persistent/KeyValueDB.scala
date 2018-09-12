@@ -17,6 +17,8 @@ trait KeyValueDB[F[_]] {
 
   def keys: F[List[ByteVector]]
 
+  def size: F[Int]
+
   def toMap: F[Map[ByteVector, ByteVector]]
 
   def writeBatch[G[_]: Traverse](ops: G[(ByteVector, Option[ByteVector])]): F[Unit]

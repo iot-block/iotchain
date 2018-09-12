@@ -21,7 +21,10 @@ class BlockMiner[F[_]](
     val synchronizer: Synchronizer[F],
     val stopWhenTrue: Signal[F, Boolean]
 )(implicit F: ConcurrentEffect[F]) {
+  private[this] val log = org.log4s.getLogger
+
   val history = synchronizer.history
+
   val executor = synchronizer.executor
 
   // sort and truncate transactions
@@ -83,8 +86,11 @@ class BlockMiner[F[_]](
   ): F[Block] =
     for {
       header           <- executor.consensus.prepareHeader(parent, ommers)
+      _ = log.info(s"prepared header: ${header}")
       txs              <- prepareTransactions(stxs, header.gasLimit)
+      _ = log.info(s"prepared txs: ${txs}")
       prepared         <- prepareBlock(header, BlockBody(txs, ommers))
+      _ = log.info(s"prepared block: ${prepared}")
       transactionsRoot <- calcMerkleRoot(prepared.block.body.transactionList)
       receiptsRoot     <- calcMerkleRoot(prepared.blockResult.receipts)
     } yield {
@@ -102,19 +108,31 @@ class BlockMiner[F[_]](
 
   // mine a prepared block
   def mine(block: Block): F[Option[Block]] =
-    executor.consensus.mine(block).attemptT.toOption.value
+    executor.consensus.mine(block).attempt.map {
+      case Left(e) =>
+        log.error(e)(s"mining for block(${block.header.number}) failed")
+        None
+      case Right(b) =>
+        Some(b)
+    }
+
+  def mine: F[Option[Block]] =
+    for {
+      parent   <- executor.history.getBestBlock
+      block    <- generateBlock(parent)
+      minedOpt <- mine(block)
+      _        <- minedOpt.fold(F.unit)(block => submitNewBlock(block))
+    } yield minedOpt
 
   // submit a newly mined block
   def submitNewBlock(block: Block): F[Unit] =
     synchronizer.handleMinedBlock(block)
 
   def miningStream: Stream[F, Block] =
-    (for {
-      parent <- Stream.eval(executor.history.getBestBlock)
-      block  <- Stream.eval(generateBlock(parent))
-      mined  <- Stream.eval(mine(block)).unNone
-      _      <- Stream.eval(submitNewBlock(mined))
-    } yield mined).onFinalize(stopWhenTrue.set(true))
+    Stream
+      .repeatEval(mine)
+      .unNone
+      .onFinalize(stopWhenTrue.set(true))
 
   def start: F[Unit] =
     stopWhenTrue.get.flatMap {

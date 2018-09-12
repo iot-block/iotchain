@@ -25,10 +25,13 @@ class InMemoryKeyValueDB[F[_]](ref: Ref[F, Map[ByteVector, ByteVector]])(implici
   override def keys: F[List[ByteVector]] =
     ref.get.map(_.keys.toList)
 
+  override def size: F[Int] =
+    ref.get.map(_.size)
+
   override def toMap: F[Map[ByteVector, ByteVector]] =
     ref.get
 
-  override def writeBatch[G[_] : Traverse](ops: G[(ByteVector, Option[ByteVector])]): F[Unit] =
+  override def writeBatch[G[_]: Traverse](ops: G[(ByteVector, Option[ByteVector])]): F[Unit] =
     ops
       .map {
         case (key, Some(v)) => put(key, v)

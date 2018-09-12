@@ -24,7 +24,7 @@ package object json {
   implicit val durationDecoder: Decoder[Duration] = Decoder[String].map(s => Duration.apply(s))
 
   implicit val finiteDurationEncoder: Encoder[FiniteDuration] =
-    Encoder.instance[FiniteDuration](d => s"${d.length}${d.unit}".asJson)
+    Encoder.instance[FiniteDuration](d => s"${d.length}${d.unit.toString.toLowerCase}".asJson)
 
   implicit val finiteDurationDecoder: Decoder[FiniteDuration] =
     Decoder[String].map(s => Duration.apply(s).asInstanceOf[FiniteDuration])

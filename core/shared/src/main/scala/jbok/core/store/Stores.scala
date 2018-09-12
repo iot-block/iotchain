@@ -39,8 +39,7 @@ class FastSyncStore[F[_]: Sync](db: KeyValueDB[F])
   def purge: F[Unit] = del(syncStateKey)
 }
 
-class AppStateStore[F[_]: Sync](db: KeyValueDB[F])
-    extends KeyValueStore[F, String, ByteVector](Namespaces.AppStateNamespace, db) {
+class AppStateStore[F[_]: Sync](db: KeyValueDB[F]) extends KeyValueStore[F, String, ByteVector](Namespaces.AppStateNamespace, db) {
   private val BestBlockNumber = "BestBlockNumber"
   private val FastSyncDone = "FastSyncDone"
   private val EstimatedHighestBlock = "EstimatedHighestBlock"

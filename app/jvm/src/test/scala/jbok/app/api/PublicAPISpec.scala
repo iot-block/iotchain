@@ -2,7 +2,7 @@ package jbok.app.api
 
 import jbok.JbokSpec
 
-class PublicAPISpec extends JbokSpec{
+class PublicAPISpec extends JbokSpec {
   "MainAPI" should {
     "get bestBlockNumber" ignore {}
 

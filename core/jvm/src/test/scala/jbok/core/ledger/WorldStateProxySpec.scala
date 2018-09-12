@@ -14,15 +14,15 @@ import scodec.bits._
 class WorldStateProxySpec extends JbokSpec {
   trait Fixture {
     val db           = KeyValueDB.inMemory[IO].unsafeRunSync()
-    val blockChain   = History[IO](db).unsafeRunSync()
+    val history   = History[IO](db).unsafeRunSync()
     val accountStore = AddressAccountStore(db).unsafeRunSync()
     val accountProxy = SnapshotKeyValueStore(accountStore)
 
-    val world = blockChain
+    val world = history
       .getWorldStateProxy(-1, UInt256.Zero, None, noEmptyAccounts = false)
       .unsafeRunSync()
 
-    val postEIP161WorldState = blockChain
+    val postEIP161WorldState = history
       .getWorldStateProxy(-1, UInt256.Zero, None, noEmptyAccounts = true)
       .unsafeRunSync()
 
@@ -155,7 +155,7 @@ class WorldStateProxySpec extends JbokSpec {
       validateInitialWorld(persistedWorldState)
 
       // Create a new WS instance based on storages and new root state and check
-      val newWorldState = blockChain
+      val newWorldState = history
         .getWorldStateProxy(-1, UInt256.Zero, Some(persistedWorldState.stateRootHash))
         .unsafeRunSync()
       validateInitialWorld(newWorldState)
@@ -245,6 +245,31 @@ class WorldStateProxySpec extends JbokSpec {
 
       acc1.nonce shouldBe UInt256.One
       acc1.balance shouldBe UInt256.Zero
+    }
+
+    "get old state" in new Fixture {
+      val w1 = history.getWorldStateProxy(0, 0, None).unsafeRunSync()
+
+      val root = w1
+        .putAccount(address1, Account(0, 1000))
+        .persisted.unsafeRunSync().stateRootHash
+
+      val w2=  history.getWorldStateProxy(0, 0, Some(root)).unsafeRunSync()
+      println(w2.getAccountOpt(address1).value.unsafeRunSync())
+
+      val root2 =
+        w2
+          .putAccount(address1, Account(0, 999))
+          .putAccount(address2, Account(0, 998))
+          .persisted.unsafeRunSync().stateRootHash
+
+      val w3=  history.getWorldStateProxy(0, 0, Some(root2)).unsafeRunSync()
+      println(w3.getAccountOpt(address1).value.unsafeRunSync())
+      println(w3.getAccountOpt(address2).value.unsafeRunSync())
+
+
+      println(w2.getAccountOpt(address1).value.unsafeRunSync())
+      println(w2.getAccountOpt(address2).value.unsafeRunSync())
     }
   }
 }

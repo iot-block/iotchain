@@ -55,10 +55,13 @@ class BlockExecutor[F[_]](
       consensusResult <- consensus.run(parent, block)
       importResult <- consensusResult match {
         case ConsensusResult.BlockInvalid(e) =>
+          log.info(s"import block failed")
           F.pure(BlockImportResult.Failed(e))
         case ConsensusResult.ImportToTop =>
+          log.info(s"should import to top")
           importBlockToTop(block, parent.header.number, currentTd)
         case ConsensusResult.Pooled =>
+          log.info(s"should import to pool")
           blockPool.addBlock(block, parent.header.number).map(_ => BlockImportResult.Pooled)
       }
     } yield importResult
@@ -94,13 +97,13 @@ class BlockExecutor[F[_]](
       minerAccount <- getAccountToPay(minerAddress, world)
       minerReward  <- consensus.calcBlockMinerReward(block.header.number, block.body.uncleNodesList.size)
       afterMinerReward = world.putAccount(minerAddress, minerAccount.increaseBalance(UInt256(minerReward)))
-      _                = log.info(s"Paying block-${block.header.number} reward of $minerReward to miner $minerAddress")
+      _                = log.info(s"paying block${block.header.number} reward of $minerReward to miner $minerAddress")
       world <- Foldable[List].foldLeftM(block.body.uncleNodesList, afterMinerReward) { (ws, ommer) =>
         val ommerAddress = Address(ommer.beneficiary)
         for {
           account     <- getAccountToPay(ommerAddress, ws)
           ommerReward <- consensus.calcOmmerMinerReward(block.header.number, ommer.number)
-          _ = log.info(s"Paying block-${block.header.number} reward of $ommerReward to ommer $ommerAddress")
+          _ = log.info(s"paying block${block.header.number} reward of $ommerReward to ommer $ommerAddress")
         } yield ws.putAccount(ommerAddress, account.increaseBalance(UInt256(ommerReward)))
       }
     } yield world
@@ -136,11 +139,11 @@ class BlockExecutor[F[_]](
         parentStateRoot,
         EvmConfig.forBlock(block.header.number, config).noEmptyAccounts
       )
+      _ = println(s"parnetStateRoot: ${parentStateRoot}, ${world}")
       result <- executeTransactions(block.body.transactionList, block.header, world, shortCircuit = shortCircuit)
     } yield result
 
   def executeBlocks(blocks: List[Block], parentTd: BigInt): F[List[Block]] = {
-    log.info(s"start executing ${blocks.length} blocks")
     blocks match {
       case block :: tail =>
         executeBlock(block, alreadyValidated = true).attempt.flatMap {
@@ -149,6 +152,7 @@ class BlockExecutor[F[_]](
             val td = parentTd + block.header.difficulty
             for {
               _              <- history.save(block, receipts, td, saveAsBestBlock = true)
+              _ = log.info(s"saved block${block.header.number} as the best block")
               executedBlocks <- executeBlocks(tail, td)
             } yield block :: executedBlocks
 

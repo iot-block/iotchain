@@ -2,15 +2,14 @@ package jbok.core.mining
 
 import jbok.JbokSpec
 import jbok.core.consensus.ConsensusFixture
-import jbok.core.consensus.poa.clique.CliqueFixture
-import jbok.core.consensus.pow.ethash.EthashFixture
+import jbok.core.consensus.poa.clique.{Clique, CliqueFixture}
 import jbok.core.models.{Address, SignedTransaction, UInt256}
+import jbok.core.PrettyPrinter._
 
 class BlockMinerSpec extends JbokSpec {
   def check(newConsensus: () => ConsensusFixture): Unit =
     "BlockMiner" should {
-
-      "generate block with no transaction" in new BlockMinerFixture(new CliqueFixture {}) {
+      "generate block with no transaction" in new BlockMinerFixture(newConsensus()) {
         val parent = miner.history.getBestBlock.unsafeRunSync()
         val block  = miner.generateBlock(parent).unsafeRunSync()
       }
@@ -22,13 +21,17 @@ class BlockMinerSpec extends JbokSpec {
         val block  = miner.generateBlock(parent, txs, Nil).unsafeRunSync()
       }
 
+      "mine block" in new BlockMinerFixture(newConsensus()) {
+        val mined = miner.mine.unsafeRunSync()
+        println(pprint(mined.get))
+
+        val mined2 = miner.mine.unsafeRunSync()
+        println(pprint(mined2.get))
+      }
+
       "mine blocks" in new BlockMinerFixture(newConsensus()) {
-        val txs = txGen.nextTxs(100)
-        val stx = txs.head
-        val parent = miner.history.getBestBlock.unsafeRunSync()
-        val block  = miner.generateBlock(parent, txs, Nil).unsafeRunSync()
-        val mined  = miner.mine(block).unsafeRunSync().get
-        miner.submitNewBlock(mined).unsafeRunSync()
+        val blocks = miner.miningStream.take(10).compile.toList.unsafeRunSync()
+        blocks.foreach(block => println(pprint(block)))
       }
 
       "calculate the value, gas and reward transfer" in new BlockMinerFixture(newConsensus()) {

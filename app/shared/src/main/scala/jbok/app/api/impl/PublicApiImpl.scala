@@ -3,7 +3,7 @@ package jbok.app.api.impl
 import java.time.Duration
 import java.util.Date
 
-import cats.data.{EitherT, OptionT}
+import cats.data.OptionT
 import cats.effect.IO
 import cats.implicits._
 import fs2.async.Ref

@@ -67,6 +67,8 @@ case class LevelDB[F[_]](db: Ref[F, DB], close: F[Unit], destroy: F[Unit], reope
 
   override def keys: F[List[ByteVector]] = stream().map(_._1).compile.toList
 
+  override def size: F[Int] = keys.map(_.length)
+
   override def toMap: F[Map[ByteVector, ByteVector]] =
     keys.flatMap(_.map(k => get(k).map(v => k -> v)).sequence.map(_.toMap))
 
