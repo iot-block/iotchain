@@ -11,12 +11,9 @@ trait ExecutionPlatform extends execution {
   override def executionContext: ExecutionContext =
     ExecutionContext.Implicits.global
 
-  override def scheduler: Scheduler =
-    ???
+  override def scheduler: Scheduler = null
 
-  override def asyncChannelGroup: AsynchronousChannelGroup =
-    ???
+  override def asyncChannelGroup: AsynchronousChannelGroup = null
 
-  override def asyncSocketGroup: AsynchronousSocketGroup =
-    ???
+  override def asyncSocketGroup: AsynchronousSocketGroup = null
 }

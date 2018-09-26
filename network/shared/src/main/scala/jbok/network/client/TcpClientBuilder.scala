@@ -21,6 +21,7 @@ class TcpClientBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends 
     fs2.io.tcp
       .client[F](to, reuseAddress, sendBufferSize, receiveBufferSize, keepAlive, noDelay)
       .flatMap(socket => {
+        log.debug(s"connected to ${socket}")
         val conn = TcpUtil.socketToConnection(socket)
         conn.reads().through(pipe).to(conn.writes())
       })

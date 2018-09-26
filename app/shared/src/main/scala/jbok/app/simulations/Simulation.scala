@@ -5,9 +5,9 @@ import java.util.concurrent.Executors
 
 import cats.effect.{ConcurrentEffect, IO, Timer}
 import cats.implicits._
-import fs2.{Pipe, _}
 import fs2.async.Ref
 import fs2.async.mutable.Topic
+import fs2.{Pipe, _}
 import jbok.app.api.{FilterManager, PublicAPI}
 import jbok.app.simulations.Simulation.NodeId
 import jbok.core.Configs.{FilterConfig, FullNodeConfig}
@@ -33,6 +33,7 @@ import scodec.bits.ByteVector
 
 import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import scala.util.Random
 
 class Simulation(val topic: Topic[IO, Option[SimulationEvent]],
@@ -41,7 +42,7 @@ class Simulation(val topic: Topic[IO, Option[SimulationEvent]],
     extends SimulationAPI {
   private[this] val log = org.log4s.getLogger
 
-  val cliqueConfig = CliqueConfig()
+  val cliqueConfig = CliqueConfig(period = 5.seconds)
   val txGraphGen   = new TxGraphGen(10)
 
   private def newFullNode(config: FullNodeConfig, history: History[IO], consensus: Consensus[IO])(

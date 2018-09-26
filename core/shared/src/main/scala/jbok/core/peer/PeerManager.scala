@@ -43,8 +43,6 @@ trait PeerManager[F[_]] {
 }
 
 object PeerManager {
-  private[this] val log = org.log4s.getLogger
-
   implicit val I: RequestId[Message] = new RequestId[Message] {
     override def id(a: Message): Option[String] = None
   }
@@ -79,6 +77,8 @@ object PeerManager {
       transport  <- TcpTransport(pipe, config.timeout)
     } yield
       new PeerManager[F] {
+        private[this] val log = org.log4s.getLogger(EC.toString)
+
         override def localAddress: F[InetSocketAddress] = {
           val bind = new InetSocketAddress(config.bindAddr.host, config.bindAddr.port.get)
           F.pure(bind)

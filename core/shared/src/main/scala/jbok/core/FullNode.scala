@@ -5,15 +5,17 @@ import java.security.SecureRandom
 
 import cats.effect._
 import cats.implicits._
+import fs2.{Pipe, Stream}
 import jbok.core.Configs.FullNodeConfig
-import jbok.core.consensus.pow.ethash.{EthashConsensus, EthashHeaderValidator, EthashMiner, EthashOmmersValidator}
+import jbok.core.consensus.Consensus
 import jbok.core.keystore.KeyStore
 import jbok.core.ledger.BlockExecutor
+import jbok.core.messages.Message
 import jbok.core.mining.BlockMiner
 import jbok.core.peer.PeerManager
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.sync.{Broadcaster, SyncService, Synchronizer}
-import jbok.persistent.KeyValueDB
+import jbok.network.server.Server
 
 import scala.concurrent.ExecutionContext
 
@@ -23,7 +25,8 @@ case class FullNode[F[_]](
     synchronizer: Synchronizer[F],
     syncService: SyncService[F],
     keyStore: KeyStore[F],
-    miner: Option[BlockMiner[F]]
+    miner: BlockMiner[F],
+    rpcServer: Option[Server[F, String]]
 )(implicit F: ConcurrentEffect[F]) {
   val id = config.nodeId
 
@@ -33,38 +36,34 @@ case class FullNode[F[_]](
   def start: F[Unit] =
     for {
       _ <- peerManager.listen
+      _ <- synchronizer.txPool.start
       _ <- synchronizer.start
       _ <- syncService.start
+      _ <- rpcServer.map(_.start).sequence
+      _ <- if (config.miningConfig.miningEnabled) miner.start else F.pure(Unit)
     } yield ()
 
   def stop: F[Unit] =
     for {
+      _ <- synchronizer.txPool.stop
       _ <- syncService.stop
       _ <- synchronizer.stop
+      _ <- rpcServer.map(_.stop).sequence
+      _ <- miner.stop
       _ <- peerManager.stop
     } yield ()
 }
 
 object FullNode {
-  def inMemory[F[_]](
-      config: FullNodeConfig)(implicit F: ConcurrentEffect[F], EC: ExecutionContext, T: Timer[F]): F[FullNode[F]] = {
-    val random = new SecureRandom()
+  def inMemory[F[_]](config: FullNodeConfig, history: History[F], consensus: Consensus[F])(
+      implicit F: ConcurrentEffect[F],
+      EC: ExecutionContext,
+      T: Timer[F]): F[FullNode[F]] = {
+    val random                                 = new SecureRandom()
+    val managerPipe: Pipe[F, Message, Message] = _.flatMap(m => Stream.empty.covary[F])
     for {
-      db          <- KeyValueDB.inMemory[F]
-      history     <- History[F](db)
-      _           <- history.loadGenesis()
-      peerManager <- PeerManager[F](config.peer, history)
+      peerManager <- PeerManager[F](config.peer, history, managerPipe)
       blockPool   <- BlockPool(history)
-      ommersValidator = new EthashOmmersValidator[F](history, config.blockChainConfig, config.daoForkConfig)
-      headerValidator = new EthashHeaderValidator[F](config.blockChainConfig, config.daoForkConfig)
-      realMiner <- EthashMiner[F](config.miningConfig)
-      consensus = new EthashConsensus(config.blockChainConfig,
-                                      config.miningConfig,
-                                      history,
-                                      blockPool,
-                                      realMiner,
-                                      ommersValidator,
-                                      headerValidator)
       executor = BlockExecutor[F](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[F](peerManager)
       ommerPool <- OmmerPool[F](history)
@@ -73,7 +72,6 @@ object FullNode {
       syncService  <- SyncService[F](peerManager, history)
       keyStore     <- KeyStore[F](config.keystore.keystoreDir, random)
       miner        <- BlockMiner[F](synchronizer)
-    } yield new FullNode[F](config, peerManager, synchronizer, syncService, keyStore, Some(miner))
+    } yield new FullNode[F](config, peerManager, synchronizer, syncService, keyStore, miner, None)
   }
-
 }

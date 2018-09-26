@@ -38,7 +38,7 @@ class TcpServerBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends 
           })
       }
       .join(maxConcurrent)
-      .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(s"server error: ${e}"))))
+      .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(e)(s"server error: ${e}"))))
 }
 
 object TcpServerBuilder {

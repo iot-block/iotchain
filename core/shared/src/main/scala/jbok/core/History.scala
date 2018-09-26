@@ -294,8 +294,8 @@ class HistoryImpl[F[_]](
           accountStore.put(Address(ByteVector.fromValidHex(address)), Account(0, UInt256(balance)))
       }
       stateRootHash <- accountStore.getRootHash
-      _ = log.info(s"stateRoothash: ${stateRootHash}")
-      block = Block(header.copy(stateRoot = stateRootHash), body)
+      _     = log.info(s"stateRoothash: ${stateRootHash}")
+      block = Block(header.copy(stateRoot = stateRootHash, unixTimestamp = config.timestamp), body)
       _ <- save(block, Nil, block.header.difficulty, saveAsBestBlock = true)
     } yield ()
   }

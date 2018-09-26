@@ -7,6 +7,7 @@ import jbok.core.consensus.ConsensusFixture
 import jbok.core.mining.TxGen
 import jbok.core.pool.BlockPool
 import jbok.persistent.KeyValueDB
+import jbok.network.execution._
 
 trait EthashFixture extends ConsensusFixture {
   val db               = KeyValueDB.inMemory[IO].unsafeRunSync()

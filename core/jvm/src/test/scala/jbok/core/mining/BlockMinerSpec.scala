@@ -9,10 +9,6 @@ import jbok.core.PrettyPrinter._
 class BlockMinerSpec extends JbokSpec {
   def check(newConsensus: () => ConsensusFixture): Unit =
     "BlockMiner" should {
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
       "generate block with no transaction" in new BlockMinerFixture(newConsensus()) {
         val parent = miner.history.getBestBlock.unsafeRunSync()
         val block  = miner.generateBlock(parent).unsafeRunSync()
@@ -34,17 +30,8 @@ class BlockMinerSpec extends JbokSpec {
       }
 
       "mine blocks" in new BlockMinerFixture(newConsensus()) {
-<<<<<<< Updated upstream
         val blocks = miner.miningStream.take(10).compile.toList.unsafeRunSync()
         blocks.foreach(block => println(pprint(block)))
-=======
-        val txs    = txGen.nextTxs(100)
-        val stx    = txs.head
-        val parent = miner.history.getBestBlock.unsafeRunSync()
-        val block  = miner.generateBlock(parent, txs, Nil).unsafeRunSync()
-        val mined  = miner.mine(block).unsafeRunSync().get
-        miner.submitNewBlock(mined).unsafeRunSync()
->>>>>>> Stashed changes
       }
 
       "calculate the value, gas and reward transfer" in new BlockMinerFixture(newConsensus()) {
@@ -115,7 +102,7 @@ class BlockMinerSpec extends JbokSpec {
       "produce empty block if all txs fail" ignore {}
     }
 
-//  check(() => new CliqueFixture {})
+  check(() => new CliqueFixture {})
 
-  check(() => new EthashFixture {})
+//  check(() => new EthashFixture {})
 }
