@@ -8,7 +8,7 @@ import cats.implicits._
 import fs2.async.Ref
 import fs2.async.mutable.Topic
 import fs2.{Pipe, _}
-import jbok.app.api.{FilterManager, PublicAPI}
+import jbok.app.api.{FilterManager, PrivateAPI, PublicAPI}
 import jbok.app.simulations.Simulation.NodeId
 import jbok.core.Configs.{FilterConfig, FullNodeConfig}
 import jbok.core.consensus.Consensus
@@ -45,6 +45,18 @@ class Simulation(val topic: Topic[IO, Option[SimulationEvent]],
   val cliqueConfig = CliqueConfig(period = 5.seconds)
   val txGraphGen   = new TxGraphGen(10)
 
+  private def newAPIServer[API](api: API, enable: Boolean, address: String, port: Int): IO[Option[Server[IO, String]]] =
+    if (enable) {
+      for {
+        rpcServer <- RpcServer()
+        _    = rpcServer.mountAPI[API](api)
+        _    = log.info("api rpc server binding...")
+        bind = new InetSocketAddress(address, port)
+        _    = log.info("api rpc server bind done")
+        server <- Server(TcpServerBuilder[IO, String], bind, rpcServer.pipe)
+      } yield Some(server)
+    } else { IO(None) }
+
   private def newFullNode(config: FullNodeConfig, history: History[IO], consensus: Consensus[IO])(
       implicit F: ConcurrentEffect[IO],
       EC: ExecutionContext,
@@ -63,26 +75,31 @@ class Simulation(val topic: Topic[IO, Option[SimulationEvent]],
       keyStore      <- KeyStore[IO](config.keystore.keystoreDir, random)
       miner         <- BlockMiner[IO](synchronizer)
       filterManager <- FilterManager[IO](miner, keyStore, new FilterConfig())
-      publicApiServer <- if (config.rpcApi.publicApiEnable) {
-        for {
-          publicAPI <- PublicAPI(history,
-                                 config.blockChainConfig,
-                                 config.miningConfig,
-                                 miner,
-                                 keyStore,
-                                 filterManager,
-                                 config.rpcApi.publicApiVersion)
-          rpcServer <- RpcServer()
-          _ = rpcServer.mountAPI(publicAPI)
-          _ = log.info("public api rpc server binding...")
-          bind = new InetSocketAddress(config.rpcApi.publicApiBindAddress.toString,
-                                       config.rpcApi.publicApiBindAddress.port.get)
-          _ = log.info("public api rpc server bind done")
-          server <- Server(TcpServerBuilder[IO, String], bind, rpcServer.pipe)
-        } yield Some(server)
-      } else { IO(None) }
-//      privateAPI <- PrivateAPI(keyStore, history, config.blockChainConfig, txPool)
-    } yield new FullNode[IO](config, peerManager, synchronizer, syncService, keyStore, miner, publicApiServer)
+      publicAPI <- PublicAPI(history,
+                             config.blockChainConfig,
+                             config.miningConfig,
+                             miner,
+                             keyStore,
+                             filterManager,
+                             config.rpcApi.publicApiVersion)
+      publicApiServer <- newAPIServer[PublicAPI](publicAPI,
+                                                 config.rpcApi.publicApiEnable,
+                                                 config.rpcApi.publicApiBindAddress.toString,
+                                                 config.rpcApi.publicApiBindAddress.port.get)
+      privateAPI <- PrivateAPI(keyStore, history, config.blockChainConfig, txPool)
+      privateApiServer <- newAPIServer[PrivateAPI](privateAPI,
+                                                   config.rpcApi.privateApiEnable,
+                                                   config.rpcApi.privateApiBindAddress.toString,
+                                                   config.rpcApi.privateApiBindAddress.port.get)
+    } yield
+      new FullNode[IO](config,
+                       peerManager,
+                       synchronizer,
+                       syncService,
+                       keyStore,
+                       miner,
+                       publicApiServer,
+                       privateApiServer)
   }
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
@@ -107,12 +124,7 @@ class Simulation(val topic: Topic[IO, Option[SimulationEvent]],
       newNodes <- configs.zipWithIndex.parTraverse { ci =>
         implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2))
         IO.shift(ec) *> {
-          val sign = (bv: ByteVector) => {
-            SecP256k1.sign(bv.toArray, signers(ci._2))
-          }
-//          implicit val CE = implicitly[ConcurrentEffect[IO]]
-//          implicit val EC = implicitly[ExecutionContext]
-//          implicit val T  = implicitly[Timer[IO]]
+          val sign = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, signers(ci._2)) }
           for {
             db      <- KeyValueDB.inMemory[IO]
             history <- History[IO](db)
@@ -236,16 +248,20 @@ class Simulation(val topic: Topic[IO, Option[SimulationEvent]],
 
   override def events: fs2.Stream[IO, SimulationEvent] = ???
 
-  override def submitStxsToNetwork(nStx: Int): IO[Unit] =
+  override def submitStxsToNetwork(nStx: Int, t: String): IO[Unit] =
     for {
       nodeIdList <- nodes.get.map(_.keys.toList)
       nodeId = Random.shuffle(nodeIdList).take(1).head
-      _ <- submitStxsToNode(nStx, nodeId)
+      _ <- submitStxsToNode(nStx, t, nodeId)
     } yield ()
 
-  override def submitStxsToNode(nStx: Int, id: String): IO[Unit] = {
+  override def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit] = {
     val minerTxPool = nodes.get.unsafeRunSync()(id).synchronizer.txPool
-    minerTxPool.addTransactions(txGraphGen.nextValidTxs(nStx))
+    val stxs = t match {
+      case "DoubleSpend" => txGraphGen.nextDoubleSpendTxs2(nStx)
+      case _             => txGraphGen.nextValidTxs(nStx)
+    }
+    minerTxPool.addTransactions(stxs)
   }
 
   override def getBestBlock: IO[List[Block]] =

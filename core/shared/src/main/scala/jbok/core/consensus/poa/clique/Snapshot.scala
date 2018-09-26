@@ -193,9 +193,6 @@ object Snapshot {
 
     // Delete the oldest signer from the recent list to allow it signing again
     val limit = if (snap.signers.size > 2) BigInt(snap.signers.size / 2 + 1) else BigInt(snap.signers.size / 2)
-    println(s"$limit: ${limit}")
-    println(s"signer: ${snap.signers}")
-    println(s"recents: ${snap.recents}")
     if (number >= limit) {
       snap.recents.remove(number - limit)
     }
@@ -203,8 +200,6 @@ object Snapshot {
     // Resolve the authorization key and check against signers
     val signer = Clique.ecrecover(header)
     if (!snap.signers.contains(signer)) {
-      println(s"signers: ${snap.signers}")
-      println(s"signer: ${signer}")
       throw new Exception("unauthorized signer")
     }
     if (snap.recents.exists(_._2 == signer)) {

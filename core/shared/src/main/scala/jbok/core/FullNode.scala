@@ -26,7 +26,8 @@ case class FullNode[F[_]](
     syncService: SyncService[F],
     keyStore: KeyStore[F],
     miner: BlockMiner[F],
-    rpcServer: Option[Server[F, String]]
+    publicRpcServer: Option[Server[F, String]],
+    privateRpcServer: Option[Server[F, String]]
 )(implicit F: ConcurrentEffect[F]) {
   val id = config.nodeId
 
@@ -39,7 +40,8 @@ case class FullNode[F[_]](
       _ <- synchronizer.txPool.start
       _ <- synchronizer.start
       _ <- syncService.start
-      _ <- rpcServer.map(_.start).sequence
+      _ <- publicRpcServer.map(_.start).sequence
+      _ <- privateRpcServer.map(_.start).sequence
       _ <- if (config.miningConfig.miningEnabled) miner.start else F.pure(Unit)
     } yield ()
 
@@ -48,7 +50,8 @@ case class FullNode[F[_]](
       _ <- synchronizer.txPool.stop
       _ <- syncService.stop
       _ <- synchronizer.stop
-      _ <- rpcServer.map(_.stop).sequence
+      _ <- publicRpcServer.map(_.stop).sequence
+      _ <- privateRpcServer.map(_.stop).sequence
       _ <- miner.stop
       _ <- peerManager.stop
     } yield ()
@@ -72,6 +75,6 @@ object FullNode {
       syncService  <- SyncService[F](peerManager, history)
       keyStore     <- KeyStore[F](config.keystore.keystoreDir, random)
       miner        <- BlockMiner[F](synchronizer)
-    } yield new FullNode[F](config, peerManager, synchronizer, syncService, keyStore, miner, None)
+    } yield new FullNode[F](config, peerManager, synchronizer, syncService, keyStore, miner, None, None)
   }
 }

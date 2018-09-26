@@ -55,9 +55,9 @@ trait SimulationAPI {
   def events: Stream[IO, SimulationEvent]
 
   // simulation txs
-  def submitStxsToNetwork(nStx: Int): IO[Unit]
+  def submitStxsToNetwork(nStx: Int, t: String): IO[Unit]
 
-  def submitStxsToNode(nStx: Int, id: String): IO[Unit]
+  def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit]
 
   // get status of blocks
   def getBestBlock: IO[List[Block]]

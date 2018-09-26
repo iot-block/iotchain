@@ -42,19 +42,43 @@ class SimulationSpec extends JbokSpec {
       p.unsafeRunSync()
     }
 
-    "submit stx to miner" in {
+//    "submit stx to miner" in {
+//      val p = for {
+//        peers <- api.getNodes
+//        _     <- api.submitStxsToNode(100, peers.last.id)
+//        _ = Thread.sleep(22000)
+//        miners <- api.getMiners
+//        _ = api.stopMiners(miners.map(_.id))
+//        _ = Thread.sleep(2000)
+//        blocks <- api.getBestBlock
+//        minBlockNumber = blocks.map(_.header.number).min
+//        _              = log.info(blocks.map(_.header.number).toString)
+//        consistent <- api.getBlocksByNumber(minBlockNumber)
+//        _ = consistent.tail.map(_ shouldBe consistent.head)
+//      } yield ()
+//
+//      p.unsafeRunSync()
+//    }
+
+    "submit double spend stx to miner" in {
       val p = for {
         peers <- api.getNodes
-        _     <- api.submitStxsToNode(40, peers.last.id)
-        _ = Thread.sleep(22000)
+        _     <- api.submitStxsToNetwork(10, "Valid")
+        _ = Thread.sleep(11000)
+        _ <- api.submitStxsToNetwork(10, "DoubleSpend")
+        _ = Thread.sleep(11000)
         miners <- api.getMiners
         _ = api.stopMiners(miners.map(_.id))
+        _ = Thread.sleep(2000)
+        blocks <- api.getBestBlock
+        minBlockNumber = blocks.map(_.header.number).min
+        _              = log.info(blocks.map(_.header.number).toString)
+        consistent <- api.getBlocksByNumber(minBlockNumber)
+        _ = consistent.tail.map(_ shouldBe consistent.head)
       } yield ()
 
       p.unsafeRunSync()
     }
-
-    "submit double spend stx to miner" ignore {}
   }
 
   override protected def beforeAll(): Unit = {
@@ -74,11 +98,6 @@ class SimulationSpec extends JbokSpec {
 
   override protected def afterAll(): Unit = {
     val cleanUp = for {
-      blocks <- api.getBestBlock
-      minBlockNumber = blocks.map(_.header.number).min
-      _              = log.info(blocks.map(_.header.number).toString)
-      consistent <- api.getBlocksByNumber(minBlockNumber)
-      _ = consistent.tail.map(_ shouldBe consistent.head)
       _ <- api.stopNetwork
     } yield ()
     cleanUp.unsafeRunSync()

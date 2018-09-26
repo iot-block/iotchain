@@ -152,8 +152,9 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
   }
 
   def nextDoubleSpendTxs2(nTx: Int): List[SignedTransaction] = {
-    val graph              = genDoubleSpendDAG(nTx, lastTransaction = lastTx.toMap)
-    val doubleSpendAccount = Random.shuffle(keyPairs).take(1).map(_.address).head
+    val graph              = genDAG(nTx, lastTransaction = lastTx.toMap)
+    val txAccounts         = graph.nodes.map(_.sender).toSet.toVector
+    val doubleSpendAccount = Random.shuffle(txAccounts).take(1).head
     val account            = accountMap(doubleSpendAccount)
     val (stx, mAccounts) = genTransactionFromDAG(
       graph,
