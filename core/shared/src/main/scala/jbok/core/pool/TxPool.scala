@@ -149,7 +149,7 @@ case class TxPool[F[_]](
 }
 
 object TxPool {
-  def apply[F[_]](peerManager: PeerManager[F], config: TxPoolConfig)(
+  def apply[F[_]](peerManager: PeerManager[F], config: TxPoolConfig = new TxPoolConfig())(
       implicit F: ConcurrentEffect[F],
       EC: ExecutionContext,
       T: Timer[F]

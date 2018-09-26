@@ -9,29 +9,27 @@ import jbok.core.pool._
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
+import jbok.network.execution._
 
 trait CliqueFixture extends ConsensusFixture {
-  val db               = KeyValueDB.inMemory[IO].unsafeRunSync()
-  val history          = History[IO](db).unsafeRunSync()
-  val blockPool        = BlockPool[IO](history, BlockPoolConfig()).unsafeRunSync()
-  val cliqueConfig     = CliqueConfig()
+  val db           = KeyValueDB.inMemory[IO].unsafeRunSync()
+  val history      = History[IO](db).unsafeRunSync()
+  val blockPool    = BlockPool[IO](history, BlockPoolConfig()).unsafeRunSync()
+  val cliqueConfig = CliqueConfig()
 
-  val txGen = new TxGen(3)
-  val miners        = txGen.addresses.take(2).toList
-  val genesisConfig = txGen.genesisConfig.copy(extraData = Clique.fillExtraData(miners.map(_.address)))
+  val txGen         = new TxGen(3)
+  val miner         = txGen.addresses.take(1).toList
+  val genesisConfig = txGen.genesisConfig.copy(extraData = Clique.fillExtraData(miner.map(_.address)))
   history.loadGenesisConfig(genesisConfig).unsafeRunSync()
 
-  val signer = (bi: BigInt) => IO {
-    miners((bi % miners.length).toInt).address
-  }
+  val signer = miner.head
 
-  val sign = (bi: BigInt, bv: ByteVector) => {
-    val keyPair = miners((bi % miners.length).toInt).keyPair
-    SecP256k1.sign(bv.toArray, keyPair)
+  val sign = (bv: ByteVector) => {
+    SecP256k1.sign(bv.toArray, signer.keyPair)
   }
-  val clique    = Clique[IO](cliqueConfig, history, signer, sign)
+  val clique = Clique[IO](cliqueConfig, history, signer.address, sign)
 
-  println(s"miners: ${miners.map(_.address)}")
+  println(s"miners: ${miner.map(_.address)}")
   println(s"genesis signers: ${clique.genesisSnapshot.unsafeRunSync().signers}")
   val consensus = new CliqueConsensus[IO](clique)
 }

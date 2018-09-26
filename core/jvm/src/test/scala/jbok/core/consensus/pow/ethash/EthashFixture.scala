@@ -9,17 +9,17 @@ import jbok.core.pool.BlockPool
 import jbok.persistent.KeyValueDB
 
 trait EthashFixture extends ConsensusFixture {
-  val db = KeyValueDB.inMemory[IO].unsafeRunSync()
-  val history = History[IO](db).unsafeRunSync()
+  val db               = KeyValueDB.inMemory[IO].unsafeRunSync()
+  val history          = History[IO](db).unsafeRunSync()
   val blockChainConfig = BlockChainConfig()
-  val miningConfig = MiningConfig()
-  val daoForkConfig = DaoForkConfig()
-  val ethashMiner = EthashMiner[IO](miningConfig).unsafeRunSync()
-  val blockPool = BlockPool[IO](history).unsafeRunSync()
+  val miningConfig     = MiningConfig()
+  val daoForkConfig    = DaoForkConfig()
+  val ethashMiner      = EthashMiner[IO](miningConfig).unsafeRunSync()
+  val blockPool        = BlockPool[IO](history).unsafeRunSync()
 
   val txGen = new TxGen(3)
   //  val blockChainGen = new BlockChainGen(txGen)
-  val miners = txGen.addresses.take(2).toList
+  val miners        = txGen.addresses.take(2).toList
   val genesisConfig = txGen.genesisConfig
   history.loadGenesisConfig(genesisConfig).unsafeRunSync()
 
@@ -33,5 +33,3 @@ trait EthashFixture extends ConsensusFixture {
     new EthashHeaderValidator[IO](blockChainConfig, daoForkConfig)
   )
 }
-
-
