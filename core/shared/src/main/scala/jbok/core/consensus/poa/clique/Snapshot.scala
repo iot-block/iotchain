@@ -192,7 +192,7 @@ object Snapshot {
     }
 
     // Delete the oldest signer from the recent list to allow it signing again
-    val limit = if (snap.signers.size > 2) BigInt(snap.signers.size / 2 + 1) else BigInt(snap.signers.size / 2)
+    val limit = BigInt(snap.signers.size / 2 + 1)
     if (number >= limit) {
       snap.recents.remove(number - limit)
     }
@@ -206,9 +206,7 @@ object Snapshot {
       throw new Exception("signer has signed recently")
     }
 
-    if (snap.signers.size > 1) {
-      snap.recents += (number -> signer)
-    }
+    snap.recents += (number -> signer)
 
     // Tally up the new vote from the signer
     val authorize = if (header.nonce == nonceAuthVote) {

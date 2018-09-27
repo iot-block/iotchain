@@ -4,18 +4,19 @@ import cats.effect.IO
 import jbok.core.History
 import jbok.core.consensus.ConsensusFixture
 import jbok.core.mining.TxGen
-import jbok.core.models.Address
 import jbok.core.pool._
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.network.execution._
 
+import scala.concurrent.duration._
+
 trait CliqueFixture extends ConsensusFixture {
   val db           = KeyValueDB.inMemory[IO].unsafeRunSync()
   val history      = History[IO](db).unsafeRunSync()
   val blockPool    = BlockPool[IO](history, BlockPoolConfig()).unsafeRunSync()
-  val cliqueConfig = CliqueConfig()
+  val cliqueConfig = CliqueConfig(period = 1.seconds)
 
   val txGen         = new TxGen(3)
   val miner         = txGen.addresses.take(1).toList
@@ -31,5 +32,5 @@ trait CliqueFixture extends ConsensusFixture {
 
   println(s"miners: ${miner.map(_.address)}")
   println(s"genesis signers: ${clique.genesisSnapshot.unsafeRunSync().signers}")
-  val consensus = new CliqueConsensus[IO](clique)
+  val consensus = new CliqueConsensus[IO](blockPool, clique)
 }

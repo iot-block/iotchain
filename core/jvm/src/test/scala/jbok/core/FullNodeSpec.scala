@@ -6,6 +6,7 @@ import jbok.JbokSpec
 import jbok.core.Configs.FullNodeConfig
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.mining.TxGen
+import jbok.core.pool.BlockPool
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.network.execution._
 import jbok.persistent.KeyValueDB
@@ -29,9 +30,10 @@ class FullNodeFixture {
     val history = History[IO](db).unsafeRunSync()
     history.loadGenesisConfig(genesisConfig).unsafeRunSync()
     val clique    = Clique[IO](cliqueConfig, history, signer, sign)
-    val consensus = new CliqueConsensus[IO](clique)
+    val blockPool = BlockPool(history).unsafeRunSync()
+    val consensus = new CliqueConsensus[IO](blockPool, clique)
 
-    FullNode.inMemory[IO](config, history, consensus).unsafeRunSync()
+    FullNode.inMemory[IO](config, history, consensus, blockPool).unsafeRunSync()
   }
 }
 

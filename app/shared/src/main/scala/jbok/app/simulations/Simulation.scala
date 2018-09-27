@@ -57,14 +57,15 @@ class Simulation(val topic: Topic[IO, Option[SimulationEvent]],
       } yield Some(server)
     } else { IO(None) }
 
-  private def newFullNode(config: FullNodeConfig, history: History[IO], consensus: Consensus[IO])(
-      implicit F: ConcurrentEffect[IO],
-      EC: ExecutionContext,
-      T: Timer[IO]): IO[FullNode[IO]] = {
+  private def newFullNode(config: FullNodeConfig,
+                          history: History[IO],
+                          consensus: Consensus[IO],
+                          blockPool: BlockPool[IO])(implicit F: ConcurrentEffect[IO],
+                                                    EC: ExecutionContext,
+                                                    T: Timer[IO]): IO[FullNode[IO]] = {
     val managerPipe: Pipe[IO, Message, Message] = _.flatMap(m => Stream.empty.covary[IO])
     for {
       peerManager <- PeerManager[IO](config.peer, history, managerPipe)
-      blockPool   <- BlockPool(history)
       executor = BlockExecutor[IO](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[IO](peerManager)
       ommerPool <- OmmerPool[IO](history)
@@ -129,9 +130,10 @@ class Simulation(val topic: Topic[IO, Option[SimulationEvent]],
             db      <- KeyValueDB.inMemory[IO]
             history <- History[IO](db)
             _       <- history.loadGenesisConfig(genesisConfig)
-            clique    = Clique[IO](cliqueConfig, history, Address(signers(ci._2)), sign)
-            consensus = new CliqueConsensus[IO](clique)
-          } yield newFullNode(ci._1, history, consensus).unsafeRunSync()
+            clique = Clique[IO](cliqueConfig, history, Address(signers(ci._2)), sign)
+            blockPool <- BlockPool(history)
+            consensus = new CliqueConsensus[IO](blockPool, clique)
+          } yield newFullNode(ci._1, history, consensus, blockPool).unsafeRunSync()
         }
       }
       _ <- nodes.modify(_ ++ newNodes.map(x => x.id                                                   -> x).toMap)

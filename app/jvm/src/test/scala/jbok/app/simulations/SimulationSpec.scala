@@ -42,25 +42,25 @@ class SimulationSpec extends JbokSpec {
       p.unsafeRunSync()
     }
 
-//    "submit stx to miner" in {
-//      val p = for {
-//        peers <- api.getNodes
-//        _     <- api.submitStxsToNode(100, peers.last.id)
-//        _ = Thread.sleep(22000)
-//        miners <- api.getMiners
-//        _ = api.stopMiners(miners.map(_.id))
-//        _ = Thread.sleep(2000)
-//        blocks <- api.getBestBlock
-//        minBlockNumber = blocks.map(_.header.number).min
-//        _              = log.info(blocks.map(_.header.number).toString)
-//        consistent <- api.getBlocksByNumber(minBlockNumber)
-//        _ = consistent.tail.map(_ shouldBe consistent.head)
-//      } yield ()
-//
-//      p.unsafeRunSync()
-//    }
+    "submit stx to miner" ignore {
+      val p = for {
+        peers <- api.getNodes
+        _     <- api.submitStxsToNode(100, "Valid", peers.last.id)
+        _ = Thread.sleep(22000)
+        miners <- api.getMiners
+        _ = api.stopMiners(miners.map(_.id))
+        _ = Thread.sleep(2000)
+        blocks <- api.getBestBlock
+        minBlockNumber = blocks.map(_.header.number).min
+        _              = log.info(blocks.map(_.header.number).toString)
+        consistent <- api.getBlocksByNumber(minBlockNumber)
+        _ = consistent.tail.map(_ shouldBe consistent.head)
+      } yield ()
 
-    "submit double spend stx to miner" in {
+      p.unsafeRunSync()
+    }
+
+    "submit double spend stx to miner" ignore {
       val p = for {
         peers <- api.getNodes
         _     <- api.submitStxsToNetwork(10, "Valid")

@@ -3,13 +3,14 @@ package jbok.core.consensus.poa.clique
 import cats.effect.Sync
 import cats.implicits._
 import jbok.core.consensus.{Consensus, ConsensusResult}
-import jbok.core.models.{Block, BlockHeader}
+import jbok.core.models.{Address, Block, BlockHeader}
+import jbok.core.pool.BlockPool
 import scodec.bits.ByteVector
 
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 
-class CliqueConsensus[F[_]](clique: Clique[F])(implicit F: Sync[F], EC: ExecutionContext)
+class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit F: Sync[F], EC: ExecutionContext)
     extends Consensus[F](clique.history) {
   private[this] val log = org.log4s.getLogger(EC.toString)
 
@@ -51,7 +52,7 @@ class CliqueConsensus[F[_]](clique: Clique[F])(implicit F: Sync[F], EC: Executio
         transactionsRoot = ByteVector.empty,
         receiptsRoot = ByteVector.empty,
         logsBloom = ByteVector.empty,
-        difficulty = if (snap.inturn(blockNumber, clique.signer)) Clique.diffInTurn else Clique.diffNoTurn,
+        difficulty = calcDifficulty(snap, clique.signer, blockNumber),
         number = blockNumber,
         gasLimit = calcGasLimit(parent.header.gasLimit),
         gasUsed = 0,
@@ -62,12 +63,23 @@ class CliqueConsensus[F[_]](clique: Clique[F])(implicit F: Sync[F], EC: Executio
       )
   }
 
+  private def calcDifficulty(snapshot: Snapshot, signer: Address, number: BigInt): BigInt =
+    if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn
+
   override def run(parent: Block, current: Block): F[ConsensusResult] =
-    if (current.header.number == parent.header.number + 1 && current.header.unixTimestamp == parent.header.unixTimestamp + clique.config.period.toMillis) {
-      F.pure(ConsensusResult.ImportToTop)
-    } else {
-      F.pure(ConsensusResult.BlockInvalid(new Exception("wrong number")))
-    }
+    for {
+      snap <- clique.snapshot(parent.header.number, parent.header.hash, Nil)
+      number     = current.header.number
+      difficulty = calcDifficulty(snap, Clique.ecrecover(current.header), number)
+      isDuplicate <- blockPool.isDuplicate(current.header.hash)
+    } yield
+      if (isDuplicate) {
+        ConsensusResult.BlockInvalid(new Exception(s"Duplicated Block: ${current.id}"))
+      } else if (number == parent.header.number + 1 &&
+                 current.header.unixTimestamp == parent.header.unixTimestamp + clique.config.period.toMillis &&
+                 current.header.difficulty == difficulty) {
+        ConsensusResult.ImportToTop
+      } else { ConsensusResult.Pooled }
 
   override def mine(block: Block): F[Block] = {
     log.info(s"${clique.signer} start mining block(${block.header.number})")

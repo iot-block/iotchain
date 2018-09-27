@@ -58,7 +58,7 @@ case class FullNode[F[_]](
 }
 
 object FullNode {
-  def inMemory[F[_]](config: FullNodeConfig, history: History[F], consensus: Consensus[F])(
+  def inMemory[F[_]](config: FullNodeConfig, history: History[F], consensus: Consensus[F], blockPool: BlockPool[F])(
       implicit F: ConcurrentEffect[F],
       EC: ExecutionContext,
       T: Timer[F]): F[FullNode[F]] = {
@@ -66,7 +66,6 @@ object FullNode {
     val managerPipe: Pipe[F, Message, Message] = _.flatMap(m => Stream.empty.covary[F])
     for {
       peerManager <- PeerManager[F](config.peer, history, managerPipe)
-      blockPool   <- BlockPool(history)
       executor = BlockExecutor[F](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[F](peerManager)
       ommerPool <- OmmerPool[F](history)
