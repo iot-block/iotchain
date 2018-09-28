@@ -1,6 +1,6 @@
 package jbok.network
 
-import java.net.InetSocketAddress
+import java.net.{InetSocketAddress, URI}
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
@@ -10,7 +10,6 @@ import jbok.JbokSpec
 import jbok.common.testkit.HexGen
 import jbok.network.client.{Client, WebSocketClientBuilder}
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.execution._
 import jbok.network.server.{Server, WebSocketServerBuilder}
 import scodec.Codec
 import scodec.codecs._
@@ -33,9 +32,10 @@ class WsClientServerSpec extends JbokSpec {
   implicit val codecString: Codec[String] = variableSizeBytes(uint16, string(StandardCharsets.US_ASCII))
   implicit val codecData: Codec[Data]     = (codecString :: codecString).as[Data]
   val bind                                = new InetSocketAddress("localhost", 9001)
+  val uri = new URI("ws://localhost:9001")
   val serverPipe: Pipe[IO, Data, Data]    = _.map { case Data(id, s) => Data(id, s"hello, $s") }
   val server: Server[IO, Data]            = Server(WebSocketServerBuilder[IO, Data], bind, serverPipe).unsafeRunSync()
-  val client: Client[IO, Data]            = Client(WebSocketClientBuilder[IO, Data], bind).unsafeRunSync()
+  val client: Client[IO, Data]            = Client(WebSocketClientBuilder[IO, Data], uri).unsafeRunSync()
 
   "WebSocket Client" should {
     "write and read" in {

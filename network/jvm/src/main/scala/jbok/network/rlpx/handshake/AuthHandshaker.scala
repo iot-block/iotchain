@@ -8,8 +8,8 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
+import jbok.crypto.signature.{CryptoSignature, KeyPair}
 import jbok.crypto.signature.ecdsa.SecP256k1
-import jbok.crypto.signature.{KeyPair, CryptoSignature}
 import jbok.crypto.{ECIES, _}
 import org.bouncycastle.crypto.agreement.ECDHBasicAgreement
 import org.bouncycastle.crypto.digests.KeccakDigest
@@ -334,7 +334,7 @@ object AuthHandshaker {
   }
 
   def apply[F[_]: Sync](nodeKey: KeyPair, secureRandom: SecureRandom): AuthHandshaker[F] = {
-    val nonce = secureRandomByteArray(secureRandom, NonceSize)
-    AuthHandshaker(nodeKey, ByteVector(nonce), SecP256k1.generateKeyPair(secureRandom).unsafeRunSync(), secureRandom)
+    val nonce = randomByteArray(secureRandom, NonceSize)
+    AuthHandshaker(nodeKey, ByteVector(nonce), SecP256k1.generateKeyPair(Some(secureRandom)).unsafeRunSync(), secureRandom)
   }
 }

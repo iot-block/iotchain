@@ -1,13 +1,13 @@
 package jbok.network.client
 
-import java.net.InetSocketAddress
+import java.net.URI
 
 import cats.effect.ConcurrentEffect
 import fs2._
 import scodec.Codec
 
 abstract class ClientBuilder[F[_]: ConcurrentEffect, A: Codec] {
-  def connect(to: InetSocketAddress,
+  def connect(to: URI,
               pipe: Pipe[F, A, A],
               reuseAddress: Boolean = true,
               sendBufferSize: Int = 256 * 1024,

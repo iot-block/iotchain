@@ -11,8 +11,7 @@ import fs2.io.udp.{AsynchronousSocketGroup, Packet}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.crypto._
-import jbok.crypto.signature.KeyPair
-import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import org.bouncycastle.util.BigIntegers
 import scodec.bits.ByteVector
 
@@ -115,7 +114,7 @@ object Discovery {
       val encodedData = RlpCodec.encode(msg).require.bytes
       val payload     = msg.packetType +: encodedData
       val toSign      = payload.kec256
-      val signature   = SecP256k1.sign(toSign.toArray, keyPair, None).unsafeRunSync()
+      val signature   = Signature[ECDSA].sign(toSign.toArray, keyPair, None).unsafeRunSync()
 
       val sigBytes =
         BigIntegers.asUnsignedByteArray(32, signature.r) ++

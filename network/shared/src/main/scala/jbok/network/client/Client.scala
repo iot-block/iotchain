@@ -1,6 +1,6 @@
 package jbok.network.client
 
-import java.net.InetSocketAddress
+import java.net.URI
 
 import cats.effect.ConcurrentEffect
 import cats.implicits._
@@ -70,7 +70,8 @@ class Client[F[_], A](
   def start: F[Unit] =
     signal.get.flatMap {
       case false => F.unit
-      case true  => signal.set(false) *> F.start(stream.interruptWhen(signal).compile.drain).void
+      case true  =>
+        signal.set(false) *> F.start(stream.interruptWhen(signal).compile.drain).void
     }
 
   def stop: F[Unit] =
@@ -80,7 +81,7 @@ class Client[F[_], A](
 object Client {
   def apply[F[_], A: Codec](
       builder: ClientBuilder[F, A],
-      to: InetSocketAddress,
+      to: URI,
       maxQueued: Int = 32
   )(implicit F: ConcurrentEffect[F], I: RequestId[A], M: RequestMethod[A]): F[Client[F, A]] =
     for {

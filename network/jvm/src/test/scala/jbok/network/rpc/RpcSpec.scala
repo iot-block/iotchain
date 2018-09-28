@@ -1,6 +1,6 @@
 package jbok.network.rpc
 
-import java.net.InetSocketAddress
+import java.net.{InetSocketAddress, URI}
 
 import cats.effect.IO
 import fs2._
@@ -15,9 +15,10 @@ class RpcSpec extends JbokSpec {
 
   import RpcServer._
   val bind                                 = new InetSocketAddress("localhost", 9002)
+  val uri = new URI("localhost:9002")
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
   val server: Server[IO, String]           = Server(WebSocketServerBuilder[IO, String], bind, serverPipe).unsafeRunSync()
-  val client: Client[IO, String]           = Client(WebSocketClientBuilder[IO, String], bind).unsafeRunSync()
+  val client: Client[IO, String]           = Client(WebSocketClientBuilder[IO, String], uri).unsafeRunSync()
   val api: TestAPI                         = RpcClient[IO](client).useAPI[TestAPI]
 
   "RPC Client & Server" should {

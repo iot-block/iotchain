@@ -1,23 +1,27 @@
 package jbok.network.client
 
-import java.net.InetSocketAddress
+import java.net.URI
 
 import cats.effect.ConcurrentEffect
 import fs2.Pipe
+import jbok.network.execution._
 import scodec.Codec
 import spinoco.fs2.http.websocket.{Frame, WebSocketRequest}
-import jbok.network.execution._
 
 class WebSocketClientBuilder[F[_]: ConcurrentEffect, A: Codec] extends ClientBuilder[F, A] {
 
-  override def connect(to: InetSocketAddress,
+  private[this] val log = org.log4s.getLogger
+
+  override def connect(to: URI,
                        pipe: Pipe[F, A, A],
                        reuseAddress: Boolean,
                        sendBufferSize: Int,
                        receiveBufferSize: Int,
                        keepAlive: Boolean,
                        noDelay: Boolean): fs2.Stream[F, Unit] = {
-    val request: WebSocketRequest = WebSocketRequest.ws(to.getHostName, to.getPort, "/")
+    val request: WebSocketRequest = WebSocketRequest.ws(to.getHost, to.getPort, "/")
+
+    log.debug(s"sending request: ${request}")
 
     val framePipe: Pipe[F, Frame[A], Frame[A]] = { input =>
       input.map(_.a).through(pipe).map(a => Frame.Binary(a))
