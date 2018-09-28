@@ -1,7 +1,6 @@
 package jbok.crypto.signature
 
 import java.math.BigInteger
-import java.security.SecureRandom
 
 import scodec.bits.ByteVector
 
@@ -31,18 +30,4 @@ object CryptoSignature {
 
   def apply(r: ByteVector, s: ByteVector, v: Byte): CryptoSignature =
     CryptoSignature(BigInt(1, r.toArray), BigInt(1, s.toArray), v)
-}
-
-trait SignatureAlg[F[_]] {
-  def generateKeyPair(secureRandom: SecureRandom): F[KeyPair]
-
-  def generatePublicKey(secret: KeyPair.Secret): F[KeyPair.Public]
-
-  def sign(hash: Array[Byte], keyPair: KeyPair, chainId: Option[Byte] = None): F[CryptoSignature]
-
-  def verify(hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public): F[Boolean]
-}
-
-trait RecoverableSignatureAlg[F[_]] extends SignatureAlg[F] {
-  def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: Option[Byte] = None): Option[KeyPair.Public]
 }

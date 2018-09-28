@@ -100,7 +100,7 @@ object ECIES {
       macData: Option[Array[Byte]] = None
   ): F[ByteVector] = Sync[F].delay {
     val gParam = new ECKeyGenerationParameters(curve, secureRandom)
-    val IV = secureRandomByteArray(secureRandom, KeySize / 8)
+    val IV = randomByteArray(secureRandom, KeySize / 8)
     val eGen = new ECKeyPairGenerator
     eGen.init(gParam)
     val ephemPair = eGen.generateKeyPair

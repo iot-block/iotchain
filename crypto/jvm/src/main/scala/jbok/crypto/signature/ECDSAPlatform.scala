@@ -1,37 +1,33 @@
-package jbok.crypto.signature.ecdsa
+package jbok.crypto.signature
 
 import java.math.BigInteger
 import java.security.SecureRandom
+import java.util.Random
 
 import cats.effect.{IO, Sync}
 import cats.implicits._
-import jbok.crypto.signature.{KeyPair, RecoverableSignatureAlg, CryptoSignature}
 import org.bouncycastle.asn1.x9.X9IntegerConverter
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.crypto.generators.ECKeyPairGenerator
-import org.bouncycastle.crypto.params.{
-  ECDomainParameters,
-  ECKeyGenerationParameters,
-  ECPrivateKeyParameters,
-  ECPublicKeyParameters
-}
+import org.bouncycastle.crypto.params.{ECDomainParameters, ECKeyGenerationParameters, ECPrivateKeyParameters, ECPublicKeyParameters}
 import org.bouncycastle.crypto.signers.{ECDSASigner, HMacDSAKCalculator}
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec
 import org.bouncycastle.math.ec.ECPoint
 import org.bouncycastle.math.ec.custom.sec.SecP256K1Curve
 
-class ECDSA[F[_]](curveName: String)(implicit F: Sync[F]) extends RecoverableSignatureAlg[F] {
+class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signature[F, ECDSA] {
 
   override def toString: String = s"ECDSASignature(${curveName})"
 
-  import ECDSA._
+  import ECDSAPlatform._
 
   val curve: ECNamedCurveParameterSpec = ECNamedCurveTable.getParameterSpec(curveName)
   val domain: ECDomainParameters       = new ECDomainParameters(curve.getCurve, curve.getG, curve.getN, curve.getH)
   val halfCurveOrder                   = curve.getN.shiftRight(1)
 
-  override def generateKeyPair(secureRandom: SecureRandom = new SecureRandom()): F[KeyPair] = {
+  override def generateKeyPair(random: Option[Random]): F[KeyPair] = {
+    val secureRandom = new SecureRandom()
     val generator    = new ECKeyPairGenerator()
     val keygenParams = new ECKeyGenerationParameters(domain, secureRandom)
     generator.init(keygenParams)
@@ -142,7 +138,7 @@ class ECDSA[F[_]](curveName: String)(implicit F: Sync[F]) extends RecoverableSig
   }
 }
 
-object ECDSA {
+object ECDSAPlatform {
   val UNCOMPRESSED_INDICATOR: Byte     = 0x04
   val NEGATIVE_POINT_SIGN: Byte        = 27
   val POSITIVE_POINT_SIGN: Byte        = 28
@@ -151,4 +147,3 @@ object ECDSA {
   val allowedPointSigns                = Set(NEGATIVE_POINT_SIGN, POSITIVE_POINT_SIGN)
 }
 
-object SecP256k1 extends ECDSA[IO]("secp256k1")

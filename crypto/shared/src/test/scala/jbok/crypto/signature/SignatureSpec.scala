@@ -1,89 +1,78 @@
 package jbok.crypto.signature
 
-import java.security.SecureRandom
+import java.util.Random
 
-import cats.effect.IO
-import jbok.JbokSpec
-import jbok.common.testkit.ByteGen
+import jbok.JbokAsyncSpec
 import jbok.crypto._
-import scodec.bits.ByteVector
 
-class CryptoSignatureAlgSpec extends JbokSpec {
-  val messageGen = ByteGen.genBoundedBytes(0, 128).map(_.kec256)
-  val random     = new SecureRandom()
+class SignatureSpec extends JbokAsyncSpec {
+  val hash = "jbok".utf8bytes.kec256.toArray
 
-  def check(s: SignatureAlg[IO]) =
-    s"${s.toString}" should {
-      "sign and verify for right keypair" in {
-        forAll(messageGen) { message =>
-          val p = for {
-            kp     <- s.generateKeyPair(random)
-            sig    <- s.sign(message, kp)
-            verify <- s.verify(message, sig, kp.public)
-          } yield verify
+  "ECDSA" should {
+    val ecdsa = Signature[ECDSA]
 
-          p.unsafeRunSync() shouldBe true
-        }
-      }
+    "sign and verify for right keypair" in {
 
-      "not verified for wrong keypair" in {
-        forAll(messageGen) { message =>
-          val p = for {
-            kp1    <- s.generateKeyPair(random)
-            kp2    <- s.generateKeyPair(random)
-            sig    <- s.sign(message, kp1)
-            verify <- s.verify(message, sig, kp2.public)
-          } yield verify
+      val p = for {
+        keyPair <- ecdsa.generateKeyPair()
+        signed  <- ecdsa.sign(hash, keyPair)
+        verify  <- ecdsa.verify(hash, signed, keyPair.public)
+        _ = verify shouldBe true
+      } yield ()
 
-          p.unsafeRunSync() shouldBe false
-        }
-      }
-
-      "generate keypair from secret" in {
-        val keyPair    = s.generateKeyPair(random).unsafeRunSync()
-        val bytes      = keyPair.secret.bytes
-        val privateKey = KeyPair.Secret(bytes)
-        val publicKey  = s.generatePublicKey(privateKey).unsafeRunSync()
-
-        privateKey shouldBe keyPair.secret
-        publicKey shouldBe keyPair.public
-      }
-
-      "roundtrip signature" in {
-        forAll(messageGen) { message =>
-          val p = for {
-            kp  <- s.generateKeyPair(random)
-            sig <- s.sign(message, kp)
-            bytes = sig.bytes
-            sig2  = CryptoSignature(bytes)
-            verify <- s.verify(message, sig2, kp.public)
-          } yield verify
-
-          p.unsafeRunSync() shouldBe true
-        }
-      }
+      p.unsafeToFuture()
     }
-}
 
-class RecoverableCryptoSignatureAlgSpec extends JbokSpec {
-  val messageGen = ByteGen.genBoundedBytes(0, 128).map(_.kec256)
-  val random     = new SecureRandom()
-  def check(s: RecoverableSignatureAlg[IO]) =
-    s"${s.toString}" should {
-      "recover public key from signature" in {
-        forAll(messageGen) { message =>
-          val p = for {
-            kp     <- s.generateKeyPair(random)
-            sig    <- s.sign(message, kp)
-            verify <- s.verify(message, sig, kp.public)
-            public = s.recoverPublic(message, sig)
+    "not verified for wrong keypair" in {
+      val p = for {
+        kp1    <- ecdsa.generateKeyPair()
+        kp2    <- ecdsa.generateKeyPair()
+        sig    <- ecdsa.sign(hash, kp1)
+        verify <- ecdsa.verify(hash, sig, kp2.public)
+        _ = verify shouldBe false
+      } yield ()
 
-            _ = verify shouldBe true
-            _ = public shouldBe Some(kp.public)
-          } yield ()
-
-          p.unsafeRunSync()
-        }
-      }
+      p.unsafeToFuture()
     }
+
+    "generate keypair from secret" in {
+      val p = for {
+        keyPair <- ecdsa.generateKeyPair()
+        bytes      = keyPair.secret.bytes
+        privateKey = KeyPair.Secret(bytes)
+        publicKey <- ecdsa.generatePublicKey(privateKey)
+        _ = privateKey shouldBe keyPair.secret
+        _ = publicKey shouldBe keyPair.public
+      } yield ()
+
+      p.unsafeToFuture()
+    }
+
+    "roundtrip signature" in {
+      val p = for {
+        kp  <- ecdsa.generateKeyPair()
+        sig <- ecdsa.sign(hash, kp)
+        bytes = sig.bytes
+        sig2  = CryptoSignature(bytes)
+        verify <- ecdsa.verify(hash, sig2, kp.public)
+        _ = verify shouldBe true
+      } yield ()
+
+      p.unsafeToFuture()
+    }
+
+    "recover public key from signature" in {
+      val p = for {
+        kp     <- ecdsa.generateKeyPair()
+        sig    <- ecdsa.sign(hash, kp)
+        verify <- ecdsa.verify(hash, sig, kp.public)
+        public = ecdsa.recoverPublic(hash, sig)
+
+        _ = verify shouldBe true
+        _ = public shouldBe Some(kp.public)
+      } yield ()
+
+      p.unsafeToFuture()
+    }
+  }
 }
