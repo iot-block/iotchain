@@ -2,7 +2,7 @@ package jbok.network.server
 
 import java.net.InetSocketAddress
 
-import cats.effect.{ConcurrentEffect, Sync}
+import cats.effect.ConcurrentEffect
 import cats.implicits._
 import fs2._
 import fs2.async.Ref
@@ -36,6 +36,8 @@ class Server[F[_], A](
 }
 
 object Server {
+  private[this] val log = org.log4s.getLogger
+
   def apply[F[_], A](
       builder: ServerBuilder[F, A],
       bind: InetSocketAddress,
@@ -63,8 +65,7 @@ object Server {
       }
       val stream: Stream[F, Unit] = builder
         .listen(bind, pipeWithPush, conns, maxConcurrent, maxQueued, reuseAddress, receiveBufferSize)
-        .handleErrorWith(e => Stream.eval(Sync[F].delay(println(e))))
-        .onFinalize(signal.set(true) *> Sync[F].delay(println("onFinalize")))
+        .onFinalize(signal.set(true) *> F.delay(log.info(s"on finalize")))
 
       new Server[F, A](stream, conns, queue, signal)
     }

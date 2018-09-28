@@ -31,6 +31,7 @@ class RpcServer(
       log.debug(s"received: ${s}")
       RequestMethod[String].method(s) match {
         case Some(m) =>
+          log.info(s"handling request ${s}")
           handlers.get(m) match {
             case Some(f) =>
               f(s).attempt.map {
