@@ -10,8 +10,9 @@ import fs2.async.Ref
 import jbok.app.api._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
-import jbok.core.Configs.{BlockChainConfig, MiningConfig}
-import jbok.core.keystore.KeyStore
+import jbok.core.History
+import jbok.core.config.Configs.{BlockChainConfig, MiningConfig}
+import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.mining.BlockMiner
 import jbok.core.models._
 import jbok.crypto.signature.CryptoSignature
@@ -319,4 +320,31 @@ class PublicApiImpl(
 //        OptionT(blockGenerator.getUnconfirmed.map(_.map(_.block))).getOrElseF(resolveBlock(BlockParam.Latest))
     }
   }
+}
+
+object PublicApiImpl {
+  def apply(
+      blockChain: History[IO],
+      blockChainConfig: BlockChainConfig,
+      miningConfig: MiningConfig,
+      miner: BlockMiner[IO],
+      keyStore: KeyStore[IO],
+      filterManager: FilterManager[IO],
+      version: Int,
+  ): IO[PublicAPI] =
+    for {
+      hashRate   <- fs2.async.refOf[IO, Map[ByteVector, (BigInt, Date)]](Map.empty)
+      lastActive <- fs2.async.refOf[IO, Option[Date]](None)
+    } yield {
+      new PublicApiImpl(
+        blockChainConfig,
+        miningConfig: MiningConfig,
+        miner,
+        keyStore,
+        filterManager,
+        version: Int,
+        hashRate,
+        lastActive
+      )
+    }
 }

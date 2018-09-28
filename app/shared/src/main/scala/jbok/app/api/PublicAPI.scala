@@ -1,13 +1,6 @@
 package jbok.app.api
 
-import java.util.Date
-
 import cats.effect.IO
-import jbok.app.api.impl.PublicApiImpl
-import jbok.core.Configs.{BlockChainConfig, MiningConfig}
-import jbok.core.History
-import jbok.core.keystore.KeyStore
-import jbok.core.mining.BlockMiner
 import jbok.core.models._
 import scodec.bits.ByteVector
 
@@ -117,29 +110,3 @@ trait PublicAPI {
   def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): IO[List[Transaction]]
 }
 
-object PublicAPI {
-  def apply(
-      blockChain: History[IO],
-      blockChainConfig: BlockChainConfig,
-      miningConfig: MiningConfig,
-      miner: BlockMiner[IO],
-      keyStore: KeyStore[IO],
-      filterManager: FilterManager[IO],
-      version: Int,
-  ): IO[PublicAPI] =
-    for {
-      hashRate   <- fs2.async.refOf[IO, Map[ByteVector, (BigInt, Date)]](Map.empty)
-      lastActive <- fs2.async.refOf[IO, Option[Date]](None)
-    } yield {
-      new PublicApiImpl(
-        blockChainConfig,
-        miningConfig: MiningConfig,
-        miner,
-        keyStore,
-        filterManager,
-        version: Int,
-        hashRate,
-        lastActive
-      )
-    }
-}

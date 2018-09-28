@@ -1,11 +1,12 @@
 package jbok.app.api
 
-import java.net.InetSocketAddress
+import java.net.{InetSocketAddress, URI}
 
 import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
-import jbok.core.Configs.BlockChainConfig
+import jbok.app.api.impl.PrivateApiImpl
+import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.keystore.{KeyStoreFixture, Wallet}
 import jbok.core.models.{Address, SignedTransaction}
 import jbok.core.HistoryFixture
@@ -18,7 +19,7 @@ import jbok.network.server.{Server, WebSocketServerBuilder}
 import scodec.bits._
 
 trait PrivateAPIFixture extends HistoryFixture with KeyStoreFixture with TxPoolFixture {
-  val privateApiImpl = PrivateAPI(
+  val privateApiImpl = PrivateApiImpl(
     keyStore,
     history,
     BlockChainConfig(),
@@ -28,9 +29,10 @@ trait PrivateAPIFixture extends HistoryFixture with KeyStoreFixture with TxPoolF
   import RpcServer._
   val rpcServer                            = RpcServer().unsafeRunSync().mountAPI(privateApiImpl)
   val bind                                 = new InetSocketAddress("localhost", 9998)
+  val uri = new URI("ws://localhost:9998")
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
   val server: Server[IO, String]           = Server(WebSocketServerBuilder[IO, String], bind, serverPipe).unsafeRunSync()
-  val client: Client[IO, String]           = Client(WebSocketClientBuilder[IO, String], bind).unsafeRunSync()
+  val client: Client[IO, String]           = Client(WebSocketClientBuilder[IO, String], uri).unsafeRunSync()
   val api: PrivateAPI                      = RpcClient[IO](client).useAPI[PrivateAPI]
 
   val prvKey     = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"

@@ -3,55 +3,14 @@ package jbok.app.api
 import cats.effect.{Concurrent, Fiber, Timer}
 import cats.implicits._
 import fs2.async.Ref
-import jbok.core.Configs.FilterConfig
-import jbok.core.keystore.KeyStore
+import jbok.core.config.Configs.FilterConfig
+import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.BloomFilter
 import jbok.core.mining.BlockMiner
 import jbok.core.models.{Address, Block, Receipt}
 import scodec.bits.ByteVector
 
 import scala.util.Random
-
-case class TxLog(
-    logIndex: BigInt,
-    transactionIndex: BigInt,
-    transactionHash: ByteVector,
-    blockHash: ByteVector,
-    blockNumber: BigInt,
-    address: Address,
-    data: ByteVector,
-    topics: List[ByteVector]
-)
-
-//case class Filter(
-//    fromBlock: Option[BlockParam],
-//    toBlock: Option[BlockParam],
-//    address: Option[Address],
-//    topics: List[List[ByteVector]]
-//)
-
-sealed trait FilterChanges
-case class LogFilterChanges(logs: List[TxLog])                         extends FilterChanges
-case class BlockFilterChanges(blockHashes: List[ByteVector])           extends FilterChanges
-case class PendingTransactionFilterChanges(txHashes: List[ByteVector]) extends FilterChanges
-
-sealed trait FilterLogs
-case class LogFilterLogs(logs: List[TxLog])                         extends FilterLogs
-case class BlockFilterLogs(blockHashes: List[ByteVector])           extends FilterLogs
-case class PendingTransactionFilterLogs(txHashes: List[ByteVector]) extends FilterLogs
-
-sealed trait Filter {
-  def id: BigInt
-}
-case class LogFilter(
-    id: BigInt,
-    fromBlock: Option[BlockParam],
-    toBlock: Option[BlockParam],
-    address: Option[Address],
-    topics: List[List[ByteVector]]
-) extends Filter
-case class BlockFilter(id: BigInt)              extends Filter
-case class PendingTransactionFilter(id: BigInt) extends Filter
 
 class FilterManager[F[_]](
     miner: BlockMiner[F],
@@ -65,7 +24,7 @@ class FilterManager[F[_]](
   val maxBlockHashesChanges = 256
 
   val history = miner.history
-  val txPool = miner.synchronizer.txPool
+  val txPool  = miner.synchronizer.txPool
 
   def newLogFilter(
       fromBlock: Option[BlockParam],
