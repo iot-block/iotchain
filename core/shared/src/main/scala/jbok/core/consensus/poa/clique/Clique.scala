@@ -14,6 +14,7 @@ import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.{KeyValueDB, KeyValueStore, LruMap}
 import scodec.bits._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class SnapshotStore[F[_]: Sync](db: KeyValueDB[F])
@@ -25,10 +26,10 @@ class Clique[F[_]](
     val store: SnapshotStore[F],
     val recents: LruMap[ByteVector, Snapshot],
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
-    val signer: BigInt => F[Address],
-    val sign: (BigInt, ByteVector) => F[CryptoSignature]
-)(implicit F: Sync[F]) {
-  private[this] val log = org.log4s.getLogger
+    val signer: Address,
+    val sign: ByteVector => F[CryptoSignature]
+)(implicit F: Sync[F], EC: ExecutionContext) {
+  private[this] val log = org.log4s.getLogger(EC.toString)
 
   def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
     // try to read snapshot from cache or db
@@ -114,9 +115,9 @@ object Clique {
   def apply[F[_]: Sync](
       config: CliqueConfig,
       history: History[F],
-      signer: BigInt => F[Address],
-      sign: (BigInt, ByteVector) => F[CryptoSignature]
-  ): Clique[F] =
+      signer: Address,
+      sign: ByteVector => F[CryptoSignature]
+  )(implicit EC: ExecutionContext): Clique[F] =
     new Clique[F](
       config,
       history,
@@ -128,7 +129,8 @@ object Clique {
     )
 
   def fillExtraData(signers: List[Address]): ByteVector =
-    ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(extraSeal)(0.toByte)
+    ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
+      extraSeal)(0.toByte)
 
   def sigHash(header: BlockHeader): ByteVector = {
     val bytes = RlpCodec.encode(header.copy(extraData = header.extraData.dropRight(extraSeal))).require.bytes

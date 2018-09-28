@@ -5,6 +5,7 @@ import java.util.UUID
 import better.files.File._
 import better.files._
 import com.typesafe.config.{Config, ConfigFactory}
+import io.circe.generic.JsonCodec
 import jbok.core.models.{Address, UInt256}
 import jbok.network.NetAddress
 import pureconfig.{ConfigReader, Derivation}
@@ -41,9 +42,9 @@ object Configs {
       maxOutgoingPeers: Int = 10,
       maxIncomingPeers: Int = 10,
       maxPendingPeers: Int = 10,
-      connectionTimeout: FiniteDuration = 5.seconds,
-      handshakeTimeout: FiniteDuration = 5.seconds,
-      timeout: FiniteDuration = 5.seconds
+      connectionTimeout: FiniteDuration = 10.seconds,
+      handshakeTimeout: FiniteDuration = 10.seconds,
+      timeout: FiniteDuration = 10.seconds
   )
 
   case class FullNodeConfig(
@@ -54,7 +55,16 @@ object Configs {
       blockChainConfig: BlockChainConfig,
       daoForkConfig: DaoForkConfig,
       miningConfig: MiningConfig,
+      rpcApi: RpcApiConfig,
       nodeId: String = UUID.randomUUID().toString
+  )
+
+  case class RpcApiConfig(
+      publicApiEnable: Boolean = false,
+      publicApiBindAddress: NetAddress,
+      publicApiVersion: Int = 1,
+      privateApiEnable: Boolean = false,
+      privateApiBindAddress: NetAddress,
   )
 
   case class BlockChainConfig(
@@ -142,12 +152,14 @@ object Configs {
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
       val rootDir                            = home / ".jbok" / suffix
-      val networkConfig                      = NetworkConfig(NetAddress("localhost", port), NetAddress("localhost", port))
+      val networkConfig                      = NetworkConfig(NetAddress("localhost", port + 10000), NetAddress("localhost", port))
       val walletConfig                       = KeyStoreConfig((rootDir / "keystore").pathAsString)
       val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
       val blockChainConfig: BlockChainConfig = BlockChainConfig()
       val daoForkConfig: DaoForkConfig       = DaoForkConfig()
       val miningConfig                       = MiningConfig()
+      val rpcApiConfig = RpcApiConfig(publicApiBindAddress = NetAddress("localhost", port + 10000),
+                                      privateApiBindAddress = NetAddress("localhost", port + 10000 + 1))
       FullNodeConfig(
         rootDir.pathAsString,
         networkConfig,
@@ -155,7 +167,8 @@ object Configs {
         peerManagerConfig,
         blockChainConfig,
         daoForkConfig,
-        miningConfig
+        miningConfig,
+        rpcApiConfig
       )
     }
 

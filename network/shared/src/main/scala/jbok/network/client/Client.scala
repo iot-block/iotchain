@@ -28,8 +28,12 @@ class Client[F[_], A](
   S: Scheduler,
   EC: ExecutionContext) {
 
-  def write(a: A): F[Unit] =
+  private[this] val log = org.log4s.getLogger
+
+  def write(a: A): F[Unit] = {
+    log.debug(s"write: ${a}")
     out.enqueue1(a)
+  }
 
   def writes: Sink[F, A] =
     out.enqueue
@@ -78,10 +82,7 @@ object Client {
       builder: ClientBuilder[F, A],
       to: InetSocketAddress,
       maxQueued: Int = 32
-  )(implicit F: ConcurrentEffect[F],
-    I: RequestId[A],
-    M: RequestMethod[A],
-  ): F[Client[F, A]] =
+  )(implicit F: ConcurrentEffect[F], I: RequestId[A], M: RequestMethod[A]): F[Client[F, A]] =
     for {
       in       <- fs2.async.boundedQueue[F, A](maxQueued)
       out      <- fs2.async.boundedQueue[F, A](maxQueued)
@@ -89,6 +90,8 @@ object Client {
       promises <- fs2.async.refOf[F, Map[String, Promise[F, A]]](Map.empty)
       queues   <- fs2.async.refOf[F, Map[String, Queue[F, A]]](Map.empty)
     } yield {
+
+      val log = org.log4s.getLogger
 
       def getOrCreateQueue(methodOpt: Option[String]): F[Queue[F, A]] =
         methodOpt match {
@@ -119,7 +122,10 @@ object Client {
             }
           }
 
-        val outbound: Stream[F, A] = out.dequeue
+        val outbound: Stream[F, A] = out.dequeue.map(o => {
+          log.debug(s"sending: ${o}")
+          o
+        })
         outbound.concurrently(inbound)
       }
       val stream: Stream[F, Unit] = builder.connect(to, pipe).onFinalize(signal.set(true))

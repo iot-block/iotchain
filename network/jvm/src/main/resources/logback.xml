@@ -12,7 +12,7 @@
     <logger name="org.http4s" level="WARN" />
     <logger name="org.http4s.server" level="WARN" />
 
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="OUTPUT"/>
     </root>
 </configuration>

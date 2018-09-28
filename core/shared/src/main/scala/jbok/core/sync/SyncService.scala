@@ -15,7 +15,7 @@ case class SyncService[F[_]](
                               blockchain: History[F],
                               stopWhenTrue: Signal[F, Boolean]
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger(EC.toString)
 
   def stream: Stream[F, Unit] =
     peerManager

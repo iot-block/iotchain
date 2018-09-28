@@ -4,6 +4,7 @@ import _root_.io.circe.generic.JsonCodec
 import cats.effect.IO
 import fs2._
 import jbok.core.FullNode
+import jbok.core.models.{Block, SignedTransaction}
 import jbok.network.NetAddress
 
 @JsonCodec
@@ -24,13 +25,24 @@ object NodeInfo {
 }
 
 trait SimulationAPI {
+  // simulation network
+  def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]]
+
+  def createNodes(n: Int): IO[List[NodeInfo]]
+
+  def deleteNode(id: String): IO[Unit]
+
   def startNetwork: IO[Unit]
 
   def stopNetwork: IO[Unit]
 
-  def getNodes: IO[List[NodeInfo]]
+  def setMiner(ids: List[String]): IO[Unit]
 
-  def createNodes(n: Int): IO[List[NodeInfo]]
+  def getMiners: IO[List[NodeInfo]]
+
+  def stopMiners(ids: List[String]): IO[Unit]
+
+  def getNodes: IO[List[NodeInfo]]
 
   def getNodeInfo(id: String): IO[NodeInfo]
 
@@ -41,4 +53,18 @@ trait SimulationAPI {
   def connect(topology: String): IO[Unit]
 
   def events: Stream[IO, SimulationEvent]
+
+  // simulation txs
+  def submitStxsToNetwork(nStx: Int, t: String): IO[Unit]
+
+  def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit]
+
+  // get status of blocks
+  def getBestBlock: IO[List[Block]]
+
+  def getBlocksByNumber(number: BigInt): IO[List[Block]]
+
+  def getShakedPeerID: IO[List[List[String]]]
+
+  def getPendingTx: IO[List[List[SignedTransaction]]]
 }

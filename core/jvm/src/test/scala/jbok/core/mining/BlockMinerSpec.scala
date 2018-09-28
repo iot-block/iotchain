@@ -15,8 +15,8 @@ class BlockMinerSpec extends JbokSpec {
       }
 
       "generate block with transactions" in new BlockMinerFixture(newConsensus()) {
-        val txs = txGen.nextTxs(1)
-        val stx = txs.head
+        val txs    = txGen.nextTxs(1)
+        val stx    = txs.head
         val parent = miner.history.getBestBlock.unsafeRunSync()
         val block  = miner.generateBlock(parent, txs, Nil).unsafeRunSync()
       }
@@ -35,8 +35,8 @@ class BlockMinerSpec extends JbokSpec {
       }
 
       "calculate the value, gas and reward transfer" in new BlockMinerFixture(newConsensus()) {
-        val txs = txGen.nextTxs(1)
-        val stx = txs.head
+        val txs    = txGen.nextTxs(1)
+        val stx    = txs.head
         val sender = SignedTransaction.getSender(stx).get
         val parent = history.getBestBlock.unsafeRunSync()
         val header = consensus.prepareHeader(parent, Nil).unsafeRunSync()
@@ -58,8 +58,8 @@ class BlockMinerSpec extends JbokSpec {
       }
 
       "change the nonce" in new BlockMinerFixture(newConsensus()) {
-        val txs = txGen.nextTxs(1)
-        val stx = txs.head
+        val txs    = txGen.nextTxs(1)
+        val stx    = txs.head
         val sender = SignedTransaction.getSender(stx).get
         val parent = miner.history.getBestBlock.unsafeRunSync()
         val header = miner.executor.consensus.prepareHeader(parent, Nil).unsafeRunSync()
@@ -103,4 +103,6 @@ class BlockMinerSpec extends JbokSpec {
     }
 
   check(() => new CliqueFixture {})
+
+//  check(() => new EthashFixture {})
 }

@@ -13,6 +13,9 @@ import spinoco.fs2.http.websocket.Frame
 import spinoco.protocol.http.{HttpRequestHeader, HttpStatusCode}
 
 class WebSocketServerBuilder[F[_]: ConcurrentEffect, A: Codec] extends ServerBuilder[F, A] {
+
+  private[this] val log = org.log4s.getLogger
+
   override def listen(bind: InetSocketAddress,
                       pipe: Pipe[F, A, A],
                       conns: Ref[F, Map[InetSocketAddress, Connection[F, A]]],
@@ -20,6 +23,7 @@ class WebSocketServerBuilder[F[_]: ConcurrentEffect, A: Codec] extends ServerBui
                       maxQueued: Int,
                       reuseAddress: Boolean,
                       receiveBufferSize: Int): fs2.Stream[F, Unit] = {
+
     val framePipe: Pipe[F, Frame[A], Frame[A]] = { input =>
       input.map(_.a).through(pipe).map(a => Frame.Binary(a))
     }
@@ -31,18 +35,22 @@ class WebSocketServerBuilder[F[_]: ConcurrentEffect, A: Codec] extends ServerBui
     )(spinoco.fs2.http.websocket.server[F, A, A](framePipe))
   }
 
-  def handleRequestParseError(err: Throwable): Stream[F, HttpResponse[F]] = {
-    Stream.suspend {
-      Stream.emit(HttpResponse[F](HttpStatusCode.BadRequest))
-    }.covary[F]
-  }
+  def handleRequestParseError(err: Throwable): Stream[F, HttpResponse[F]] =
+    Stream
+      .suspend {
+        log.error(err)("bad request")
+        Stream.emit(HttpResponse[F](HttpStatusCode.BadRequest))
+      }
+      .covary[F]
 
   /** default handler for failures of sending request/response **/
-  def handleSendFailure(header: Option[HttpRequestHeader], response: HttpResponse[F], err:Throwable): Stream[F, Nothing] = {
+  def handleSendFailure(header: Option[HttpRequestHeader],
+                        response: HttpResponse[F],
+                        err: Throwable): Stream[F, Nothing] =
     Stream.suspend {
+      log.error(err)(s"send failure: ${header}, ${response}")
       Stream.empty
     }
-  }
 
 }
 

@@ -26,4 +26,3 @@ object execution extends ExecutionPlatform {
 
   implicit val AsyncSocketGroup: AsynchronousSocketGroup = asyncSocketGroup
 }
-

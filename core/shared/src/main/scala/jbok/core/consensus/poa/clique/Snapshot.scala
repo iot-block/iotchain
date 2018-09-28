@@ -200,13 +200,12 @@ object Snapshot {
     // Resolve the authorization key and check against signers
     val signer = Clique.ecrecover(header)
     if (!snap.signers.contains(signer)) {
-      println(s"signers: ${snap.signers}")
-      println(s"signer: ${signer}")
       throw new Exception("unauthorized signer")
     }
     if (snap.recents.exists(_._2 == signer)) {
       throw new Exception("signer has signed recently")
     }
+
     snap.recents += (number -> signer)
 
     // Tally up the new vote from the signer
@@ -252,7 +251,8 @@ object Snapshot {
         }
 
         // Discard any previous votes the deauthorized signer cast
-        votes.filter(_.signer == beneficiary)
+        votes
+          .filter(_.signer == beneficiary)
           .foreach(v => snap.uncast(v.address, v.authorize))
 
         val newVotes = votes.filter(_.signer != beneficiary)

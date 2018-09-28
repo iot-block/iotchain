@@ -14,6 +14,8 @@ import jbok.core.validators.{BlockValidator, CommonHeaderValidator, TransactionV
 import jbok.evm._
 import scodec.bits.ByteVector
 
+import scala.concurrent.ExecutionContext
+
 case class BlockResult[F[_]](worldState: WorldStateProxy[F], gasUsed: BigInt = 0, receipts: List[Receipt] = Nil)
 case class TxResult[F[_]](
     world: WorldStateProxy[F],
@@ -39,8 +41,8 @@ class BlockExecutor[F[_]](
     val commonBlockValidator: BlockValidator[F],
     val txValidator: TransactionValidator[F],
     val vm: VM
-)(implicit F: Sync[F]) {
-  private[this] val log = org.log4s.getLogger
+)(implicit F: Sync[F], EC: ExecutionContext) {
+  private[this] val log = org.log4s.getLogger(s"${this.getClass}@${EC.toString}")
 
   def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxResult[F]] =
     ???
@@ -70,6 +72,7 @@ class BlockExecutor[F[_]](
     for {
       topBlockHash <- blockPool.addBlock(block, bestBlockNumber).map(_.get.hash)
       topBlocks    <- blockPool.getBranch(topBlockHash, dequeue = true)
+      _ = log.info(s"execute top blocks: ${topBlocks.map(_.id)}")
       result <- executeBlocks(topBlocks, currentTd).attempt.map {
         case Left(e) =>
           BlockImportResult.Failed(e)
@@ -139,32 +142,31 @@ class BlockExecutor[F[_]](
         parentStateRoot,
         EvmConfig.forBlock(block.header.number, config).noEmptyAccounts
       )
-      _ = println(s"parnetStateRoot: ${parentStateRoot}, ${world}")
+      _ = log.info(s"parentStateRoot: ${parentStateRoot}, ${world}")
       result <- executeTransactions(block.body.transactionList, block.header, world, shortCircuit = shortCircuit)
     } yield result
 
-  def executeBlocks(blocks: List[Block], parentTd: BigInt): F[List[Block]] = {
+  def executeBlocks(blocks: List[Block], parentTd: BigInt): F[List[Block]] =
     blocks match {
       case block :: tail =>
         executeBlock(block, alreadyValidated = true).attempt.flatMap {
           case Right(receipts) =>
-            log.info(s"execute block ${block.header.hash.toHex.take(7)} succeed")
+            log.info(s"execute block(${block.header.number}) ${block.header.hash.toHex.take(7)} succeed")
             val td = parentTd + block.header.difficulty
             for {
-              _              <- history.save(block, receipts, td, saveAsBestBlock = true)
-              _ = log.info(s"saved block${block.header.number} as the best block")
+              _ <- history.save(block, receipts, td, saveAsBestBlock = true)
+              _ = log.info(s"saved block(${block.header.number}) as the best block")
               executedBlocks <- executeBlocks(tail, td)
             } yield block :: executedBlocks
 
           case Left(error) =>
-            log.info(s"execute block ${block.header.hash.toHex.take(7)} failed")
+            log.error(error)(s"execute block(${block.header.hash.toHex.take(7)}) failed")
             F.raiseError(error)
         }
 
       case Nil =>
         F.pure(Nil)
     }
-  }
 
   def executeTransactions(
       stxs: List[SignedTransaction],
@@ -391,7 +393,7 @@ object BlockExecutor {
       history: History[F],
       blockPool: BlockPool[F],
       consensus: Consensus[F]
-  ): BlockExecutor[F] =
+  )(implicit EC: ExecutionContext): BlockExecutor[F] =
     new BlockExecutor[F](
       config,
       history,

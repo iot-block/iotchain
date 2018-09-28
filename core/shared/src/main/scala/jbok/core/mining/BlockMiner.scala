@@ -15,13 +15,15 @@ import jbok.network.execution._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
+import scala.concurrent.ExecutionContext
+
 case class BlockPreparationResult[F[_]](block: Block, blockResult: BlockResult[F], stateRootHash: ByteVector)
 
 class BlockMiner[F[_]](
     val synchronizer: Synchronizer[F],
     val stopWhenTrue: Signal[F, Boolean]
-)(implicit F: ConcurrentEffect[F]) {
-  private[this] val log = org.log4s.getLogger
+)(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
+  private[this] val log = org.log4s.getLogger(EC.toString)
 
   val history = synchronizer.history
 
@@ -85,12 +87,12 @@ class BlockMiner[F[_]](
       ommers: List[BlockHeader]
   ): F[Block] =
     for {
-      header           <- executor.consensus.prepareHeader(parent, ommers)
+      header <- executor.consensus.prepareHeader(parent, ommers)
       _ = log.info(s"prepared header: ${header}")
-      txs              <- prepareTransactions(stxs, header.gasLimit)
+      txs <- prepareTransactions(stxs, header.gasLimit)
       _ = log.info(s"prepared txs: ${txs}")
-      prepared         <- prepareBlock(header, BlockBody(txs, ommers))
-      _ = log.info(s"prepared block: ${prepared}")
+      prepared <- prepareBlock(header, BlockBody(txs, ommers))
+      _ = log.info(s"prepared block success")
       transactionsRoot <- calcMerkleRoot(prepared.block.body.transactionList)
       receiptsRoot     <- calcMerkleRoot(prepared.blockResult.receipts)
     } yield {
@@ -118,10 +120,12 @@ class BlockMiner[F[_]](
 
   def mine: F[Option[Block]] =
     for {
-      parent   <- executor.history.getBestBlock
+      parent <- executor.history.getBestBlock
+      _ = log.info("begin mine")
       block    <- generateBlock(parent)
       minedOpt <- mine(block)
       _        <- minedOpt.fold(F.unit)(block => submitNewBlock(block))
+      _ = log.info("mine end")
     } yield minedOpt
 
   // submit a newly mined block
@@ -135,10 +139,15 @@ class BlockMiner[F[_]](
       .onFinalize(stopWhenTrue.set(true))
 
   def start: F[Unit] =
-    stopWhenTrue.get.flatMap {
-      case true  => stopWhenTrue.set(false) *> F.start(miningStream.interruptWhen(stopWhenTrue).compile.drain).void
-      case false => F.unit
-    }
+    for {
+      _ <- stopWhenTrue.set(false)
+      _ <- F.start(miningStream.interruptWhen(stopWhenTrue).compile.drain).void
+      _ <- F.delay(log.info(s"start mining"))
+    } yield ()
+//  stopWhenTrue.get.flatMap {
+//    case true  => stopWhenTrue.set(false) *> F.start(miningStream.interruptWhen(stopWhenTrue).compile.drain).void
+//    case false => F.unit
+//  }
 
   def stop: F[Unit] =
     stopWhenTrue.set(true)
@@ -154,6 +163,7 @@ class BlockMiner[F[_]](
 
   def generateBlock(parent: Block): F[Block] =
     for {
+      tx     <- synchronizer.txPool.getPendingTransactions
       stxs   <- synchronizer.txPool.getPendingTransactions.map(_.map(_.stx))
       ommers <- synchronizer.ommerPool.getOmmers(parent.header.number + 1)
       block  <- generateBlock(parent, stxs, ommers)
@@ -180,7 +190,7 @@ class BlockMiner[F[_]](
 object BlockMiner {
   def apply[F[_]: ConcurrentEffect](
       synchronizer: Synchronizer[F]
-  ): F[BlockMiner[F]] = fs2.async.signalOf[F, Boolean](true).map { stopWhenTrue =>
+  )(implicit EC: ExecutionContext): F[BlockMiner[F]] = fs2.async.signalOf[F, Boolean](true).map { stopWhenTrue =>
     new BlockMiner[F](
       synchronizer,
       stopWhenTrue

@@ -5,7 +5,9 @@ import cats.implicits._
 import jbok.JbokSpec
 import jbok.core.messages.NewBlock
 import jbok.core.models.{Block, BlockBody, BlockHeader}
-import jbok.core.peer.PeerManageFixture
+import jbok.core.peer.{PeerId, PeerManageFixture}
+import scodec.bits.ByteVector
+import jbok.network.execution._
 
 import scala.concurrent.duration._
 
@@ -19,13 +21,14 @@ class BroadcasterSpec extends JbokSpec {
       val baseHeader: BlockHeader = BlockHeader.empty
       val header =
         baseHeader.copy(number = 1)
-      val body = BlockBody(Nil, Nil)
-      val block = Block(header, body)
-      val newBlock = NewBlock(block)
+      val body          = BlockBody(Nil, Nil)
+      val block         = Block(header, body)
+      val newBlock      = NewBlock(block)
+      val peerHasBlocks = IO { Map.empty[PeerId, Set[ByteVector]] }
 
       val p = for {
         _ <- connect
-        _ <- broadcaster.broadcastBlock(newBlock)
+        _ <- broadcaster.broadcastBlock(newBlock, peerHasBlocks)
         x <- peerManagers.tail.traverse(_.subscribeMessages().take(1).compile.toList)
         _ = x.flatten.length shouldBe peerManagers.length - 1
       } yield ()
@@ -38,13 +41,14 @@ class BroadcasterSpec extends JbokSpec {
       val baseHeader: BlockHeader = BlockHeader.empty
       val header =
         baseHeader.copy(number = 0)
-      val body = BlockBody(Nil, Nil)
-      val block = Block(header, body)
-      val newBlock = NewBlock(block)
+      val body          = BlockBody(Nil, Nil)
+      val block         = Block(header, body)
+      val newBlock      = NewBlock(block)
+      val peerHasBlocks = IO { Map.empty[PeerId, Set[ByteVector]] }
 
       val p = for {
         _ <- connect
-        _ <- broadcaster.broadcastBlock(newBlock)
+        _ <- broadcaster.broadcastBlock(newBlock, peerHasBlocks)
         x = peerManagers.tail.traverse(_.subscribeMessages().take(1).compile.toList.unsafeRunTimed(5.seconds))
         _ = x shouldBe None
         _ <- stopAll

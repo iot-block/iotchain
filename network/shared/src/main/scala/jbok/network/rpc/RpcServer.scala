@@ -22,17 +22,23 @@ class RpcServer(
     val handlers: Map[String, String => IO[String]],
     val queue: Queue[IO, String]
 ) {
+  private[this] val log = org.log4s.getLogger
+
   def mountAPI[API](api: API): RpcServer = macro RpcServerMacro.mountAPI[RpcServer, API]
 
   val pipe: Pipe[IO, String, String] = { input =>
     val s = input.evalMap { s =>
+      log.debug(s"received: ${s}")
       RequestMethod[String].method(s) match {
         case Some(m) =>
           handlers.get(m) match {
             case Some(f) =>
               f(s).attempt.map {
-                case Left(e)     => JsonRPCResponse.internalError(e.toString).asJson.noSpaces
-                case Right(resp) => resp
+                case Left(e) => JsonRPCResponse.internalError(e.toString).asJson.noSpaces
+                case Right(resp) => {
+                  log.debug(s"response: ${resp}")
+                  resp
+                }
               }
             case None =>
               IO.pure(JsonRPCResponse.methodNotFound(m, RequestId[String].id(s)).asJson.noSpaces)

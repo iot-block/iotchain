@@ -124,32 +124,33 @@ class EthashMiner[F[_]](
   }
 
   private[jbok] def loadDagFromFile(seed: ByteVector, dagNumHashes: Int): F[Array[Array[Int]]] =
-    Bracket[F, Throwable]
-      .bracket[InputStream, Array[Array[Int]]](F.delay(dagFile(seed).newInputStream)) { in =>
-        val prefix = new Array[Byte](8)
-        if (in.read(prefix) != 8 || ByteVector(prefix) != DagFilePrefix) {
-          F.raiseError(new Exception("Invalid DAG file prefix"))
-        } else {
-          val buffer = new Array[Byte](64)
-          val res    = new Array[Array[Int]](dagNumHashes)
-          var index  = 0
-
-          while (in.read(buffer) > 0) {
-            if (index % 100000 == 0)
-              log.info(s"Loading DAG from file ${((index / res.length.toDouble) * 100).toInt}%")
-            res(index) = ByteUtils.bytesToInts(buffer)
-            index += 1
-          }
-
-          if (index == dagNumHashes) {
-            F.pure(res)
-          } else {
-            F.raiseError(new Exception("DAG file ended unexpectedly"))
-          }
-        }
-      } { in =>
-        F.delay(in.close())
-      }
+    ???
+//    Bracket[F, Throwable]
+//      .bracket[InputStream, Array[Array[Int]]](F.delay(dagFile(seed).newInputStream)) { in =>
+//        val prefix = new Array[Byte](8)
+//        if (in.read(prefix) != 8 || ByteVector(prefix) != DagFilePrefix) {
+//          F.raiseError(new Exception("Invalid DAG file prefix"))
+//        } else {
+//          val buffer = new Array[Byte](64)
+//          val res    = new Array[Array[Int]](dagNumHashes)
+//          var index  = 0
+//
+//          while (in.read(buffer) > 0) {
+//            if (index % 100000 == 0)
+//              log.info(s"Loading DAG from file ${((index / res.length.toDouble) * 100).toInt}%")
+//            res(index) = ByteUtils.bytesToInts(buffer)
+//            index += 1
+//          }
+//
+//          if (index == dagNumHashes) {
+//            F.pure(res)
+//          } else {
+//            F.raiseError(new Exception("DAG file ended unexpectedly"))
+//          }
+//        }
+//      } { in =>
+//        F.delay(in.close())
+//      }
 }
 
 object EthashMiner {
