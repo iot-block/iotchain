@@ -11,9 +11,12 @@ import scala.concurrent.duration._
 object Configs {
   val defaultRootDir: String = "~/.jbok"
 
-  case class NetworkConfig(
-      rpcBindAddress: NetAddress,
-      peerBindAddress: NetAddress
+  case class RpcConfig(
+      publicApiEnable: Boolean = false,
+      publicApiBindAddress: NetAddress,
+      publicApiVersion: Int = 1,
+      privateApiEnable: Boolean = false,
+      privateApiBindAddress: NetAddress,
   )
 
   case class KeyStoreConfig(
@@ -33,7 +36,7 @@ object Configs {
 
   case class FullNodeConfig(
       rootDir: String = defaultRootDir,
-      network: NetworkConfig,
+      rpc: RpcConfig,
       keystore: KeyStoreConfig,
       peer: PeerManagerConfig,
       blockChainConfig: BlockChainConfig,
@@ -127,7 +130,7 @@ object Configs {
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
       val rootDir                            = s"${defaultRootDir}/${suffix}"
-      val networkConfig                      = NetworkConfig(NetAddress("localhost", port), NetAddress("localhost", port))
+      val rpcConfig = RpcConfig(false, NetAddress("localhost", port), 1, false, NetAddress("localhost", port))
       val walletConfig                       = KeyStoreConfig(s"${rootDir}/keystore")
       val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
       val blockChainConfig: BlockChainConfig = BlockChainConfig()
@@ -135,7 +138,7 @@ object Configs {
       val miningConfig                       = MiningConfig()
       FullNodeConfig(
         rootDir,
-        networkConfig,
+        rpcConfig,
         walletConfig,
         peerManagerConfig,
         blockChainConfig,

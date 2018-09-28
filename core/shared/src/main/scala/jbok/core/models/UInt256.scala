@@ -1,14 +1,11 @@
 package jbok.core.models
 
 import jbok.codec.rlp.RlpCodec
-import scodec.bits.ByteVector
-import pureconfig.ConfigReader
 import jbok.codec.rlp.codecs._
+import scodec.bits.ByteVector
 
 object UInt256 {
   implicit val codec: RlpCodec[UInt256] = rbytes.xmap[UInt256](UInt256.apply, _.unpaddedBytes)
-
-  implicit val reader: ConfigReader[UInt256] = ConfigReader[Long].map(x => UInt256(x))
 
   /** Size of UInt256 byte representation */
   val Size: Int = 32

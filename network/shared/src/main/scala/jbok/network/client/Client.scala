@@ -8,11 +8,11 @@ import fs2._
 import fs2.async.mutable.{Queue, Signal}
 import fs2.async.{Promise, Ref}
 import jbok.network.common.{RequestId, RequestMethod}
+import jbok.network.execution._
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
-import jbok.network.execution._
 
 class Client[F[_], A](
     private val stream: Stream[F, Unit],
@@ -28,10 +28,7 @@ class Client[F[_], A](
   S: Scheduler,
   EC: ExecutionContext) {
 
-  private[this] val log = org.log4s.getLogger
-
   def write(a: A): F[Unit] = {
-    log.debug(s"write: ${a}")
     out.enqueue1(a)
   }
 
@@ -92,8 +89,6 @@ object Client {
       queues   <- fs2.async.refOf[F, Map[String, Queue[F, A]]](Map.empty)
     } yield {
 
-      val log = org.log4s.getLogger
-
       def getOrCreateQueue(methodOpt: Option[String]): F[Queue[F, A]] =
         methodOpt match {
           case None =>
@@ -123,10 +118,7 @@ object Client {
             }
           }
 
-        val outbound: Stream[F, A] = out.dequeue.map(o => {
-          log.debug(s"sending: ${o}")
-          o
-        })
+        val outbound: Stream[F, A] = out.dequeue
         outbound.concurrently(inbound)
       }
       val stream: Stream[F, Unit] = builder.connect(to, pipe).onFinalize(signal.set(true))

@@ -1,7 +1,7 @@
 package jbok.core.consensus.pow.ethash
 
 import cats.effect.IO
-import jbok.core.Configs.{BlockChainConfig, DaoForkConfig, MiningConfig}
+import jbok.core.config.Configs.{BlockChainConfig, DaoForkConfig, MiningConfig}
 import jbok.core.History
 import jbok.core.consensus.ConsensusFixture
 import jbok.core.mining.TxGen
@@ -15,7 +15,7 @@ trait EthashFixture extends ConsensusFixture {
   val blockChainConfig = BlockChainConfig()
   val miningConfig     = MiningConfig()
   val daoForkConfig    = DaoForkConfig()
-  val ethashMiner      = EthashMiner[IO](miningConfig).unsafeRunSync()
+  val ethashMiner      = EthashMinerPlatform[IO](miningConfig).unsafeRunSync()
   val blockPool        = BlockPool[IO](history).unsafeRunSync()
 
   val txGen = new TxGen(3)

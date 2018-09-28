@@ -3,10 +3,11 @@ package jbok.app.views
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Vars}
-import jbok.app.JbokClient
+import jbok.app.{FutureUtil, JbokClient}
 import jbok.app.components.{Form, FormEntry, Modal}
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class AccountsView(client: JbokClient) {
 
@@ -19,6 +20,10 @@ class AccountsView(client: JbokClient) {
     client.admin.newAccount(data("password")).unsafeToFuture()
   })
   val modal = Modal("new account", form.render())
+
+  FutureUtil.delay(5000).map { _ =>
+    accounts.value += Address(0x45) -> Account()
+  }
 
   @binding.dom
   def render(accounts: Vars[(Address, Account)] = accounts): Binding[Element] = {

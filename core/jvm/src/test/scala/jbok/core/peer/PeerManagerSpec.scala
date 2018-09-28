@@ -4,8 +4,7 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.core.HistoryFixture
-import jbok.core.Configs.PeerManagerConfig
-import jbok.core.genesis.GenesisConfig
+import jbok.core.config.Configs.PeerManagerConfig
 import jbok.core.messages.Hello
 import jbok.network.NetAddress
 import jbok.network.execution._

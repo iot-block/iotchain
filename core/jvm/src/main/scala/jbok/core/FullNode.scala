@@ -8,7 +8,7 @@ import cats.implicits._
 import fs2.{Pipe, Stream}
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.Consensus
-import jbok.core.keystore.KeyStore
+import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.BlockExecutor
 import jbok.core.messages.Message
 import jbok.core.mining.BlockMiner
@@ -72,7 +72,7 @@ object FullNode {
       broadcaster = new Broadcaster[F](peerManager)
       synchronizer <- Synchronizer[F](peerManager, executor, txPool, ommerPool, broadcaster)
       syncService  <- SyncService[F](peerManager, history)
-      keyStore     <- KeyStore[F](config.keystore.keystoreDir, random)
+      keyStore     <- KeyStorePlatform[F](config.keystore.keystoreDir, random)
       miner        <- BlockMiner[F](synchronizer)
     } yield new FullNode[F](config, peerManager, synchronizer, syncService, keyStore, miner, None, None)
   }

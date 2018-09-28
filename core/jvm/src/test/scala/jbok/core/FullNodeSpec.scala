@@ -3,7 +3,7 @@ package jbok.core
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
-import jbok.core.Configs.FullNodeConfig
+import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.mining.TxGen
 import jbok.core.pool.BlockPool

@@ -115,7 +115,7 @@ class TxPoolSpec extends JbokSpec {
         _  <- txPool.addTransactions(stx :: Nil)
         p1 <- txPool.getPendingTransactions
         _ = p1.length shouldBe 1
-        p2 <- IO(Thread.sleep(200)) *> txPool.getPendingTransactions
+        p2 <- IO(Thread.sleep(2000)) *> txPool.getPendingTransactions
         _ = p2.length shouldBe 0
       } yield ()
 

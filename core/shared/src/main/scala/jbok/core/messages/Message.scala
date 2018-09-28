@@ -43,12 +43,12 @@ object Messages {
     val name = r.value
     codecMap(name).decode(r.remainder).require.value.asInstanceOf[Message]
   }
-
-  def main(args: Array[String]): Unit = {
-    val status = Status(1, 1, ByteVector.empty, ByteVector.empty)
-
-    val bytes = encode(status)
-    val msg = decode(bytes).require
-    println(msg)
-  }
+//
+//  def main(args: Array[String]): Unit = {
+//    val status = Status(1, 1, ByteVector.empty, ByteVector.empty)
+//
+//    val bytes = encode(status)
+//    val msg = decode(bytes).require
+//    println(msg)
+//  }
 }

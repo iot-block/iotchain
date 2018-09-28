@@ -1,7 +1,7 @@
 package jbok.app.simulations
 
 import jbok.common.GraphUtil
-import jbok.core.genesis.{AllocAccount, GenesisConfig}
+import jbok.core.config.GenesisConfig
 import jbok.core.models._
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
@@ -36,7 +36,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
     })
     .toVector
 
-  val alloc: Map[String, AllocAccount] = keyPairs.map(x => x.address.toString -> AllocAccount(initBalance)).toMap
+  val alloc: Map[String, BigInt] = keyPairs.map(x => x.address.toString -> initBalance).toMap
 
   val genesisConfig = GenesisConfig.default.copy(alloc = alloc)
 

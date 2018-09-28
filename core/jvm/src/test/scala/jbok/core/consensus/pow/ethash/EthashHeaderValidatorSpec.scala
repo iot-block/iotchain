@@ -2,7 +2,7 @@ package jbok.core.consensus.pow.ethash
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.Configs.{BlockChainConfig, DaoForkConfig}
+import jbok.core.config.Configs.{BlockChainConfig, DaoForkConfig}
 import jbok.core.HistoryFixture
 import jbok.core.consensus.pow.ethash.EthashHeaderInvalid._
 import jbok.core.models._

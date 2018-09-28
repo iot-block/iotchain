@@ -2,7 +2,7 @@ package jbok.core.validators
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.Configs.BlockChainConfig
+import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.models._
 import jbok.core.validators.TransactionInvalid._
 import jbok.core.{Fixtures, HistoryFixture}

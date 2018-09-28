@@ -9,8 +9,7 @@ import jbok.core.History
 import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.models._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, KeyPair}
-import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import jbok.persistent.{KeyValueDB, KeyValueStore, LruMap}
 import scodec.bits._
 
@@ -142,7 +141,7 @@ object Clique {
     val signature = header.extraData.takeRight(extraSeal)
     val hash      = sigHash(header)
     val sig       = CryptoSignature(signature.toArray)
-    val public    = SecP256k1.recoverPublic(hash.toArray, sig, None).get
+    val public    = Signature[ECDSA].recoverPublic(hash.toArray, sig, None).get
     Address(public.bytes.kec256)
   }
 }

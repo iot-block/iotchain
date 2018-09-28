@@ -59,7 +59,7 @@ object JbokApp {
   val navBar = Nav.render(left, right)
 
   val spinner = Spinner.render(FutureBinding {
-    FutureUtil.delay(1000000)
+    FutureUtil.delay(5000)
   })
 
   @dom def render: Binding[BindingSeq[Node]] =
@@ -78,6 +78,8 @@ object JbokApp {
         </div>
       }
     }
+
+    {spinner.bind}
     </main>
     <footer>
       {Copyright.render.bind}

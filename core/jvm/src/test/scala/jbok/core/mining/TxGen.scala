@@ -1,6 +1,6 @@
 package jbok.core.mining
 
-import jbok.core.genesis.{AllocAccount, GenesisConfig}
+import jbok.core.config.GenesisConfig
 import jbok.core.models.{Address, SignedTransaction, Transaction}
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
@@ -33,7 +33,7 @@ class TxGen(nAddr: Int, gasLimit: BigInt = BigInt(21000)) {
     })
     .toVector
 
-  val alloc: Map[String, AllocAccount] = addresses.map(x => x.address.toString -> AllocAccount(initBalance)).toMap
+  val alloc: Map[String, BigInt] = addresses.map(x => x.address.toString -> initBalance).toMap
 
   val genesisConfig = GenesisConfig.default.copy(alloc = alloc)
 

@@ -15,7 +15,7 @@ class RpcSpec extends JbokSpec {
 
   import RpcServer._
   val bind                                 = new InetSocketAddress("localhost", 9002)
-  val uri = new URI("localhost:9002")
+  val uri = new URI("ws://localhost:9002")
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
   val server: Server[IO, String]           = Server(WebSocketServerBuilder[IO, String], bind, serverPipe).unsafeRunSync()
   val client: Client[IO, String]           = Client(WebSocketClientBuilder[IO, String], uri).unsafeRunSync()

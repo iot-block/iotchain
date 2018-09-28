@@ -1,7 +1,7 @@
 package jbok.core.mining
 
 import cats.effect.IO
-import jbok.core.Configs.{BlockChainConfig, PeerManagerConfig}
+import jbok.core.config.Configs.{BlockChainConfig, PeerManagerConfig}
 import jbok.core.consensus.ConsensusFixture
 import jbok.core.ledger.BlockExecutor
 import jbok.core.peer.PeerManager

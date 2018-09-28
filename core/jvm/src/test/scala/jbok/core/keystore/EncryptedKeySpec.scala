@@ -45,7 +45,7 @@ class EncryptedKeySpec extends JbokSpec {
 
     "securely store private keys" in {
       val secureRandom = new SecureRandom
-      val prvKey = KeyPair.Secret(secureRandomByteString(secureRandom, 32))
+      val prvKey = KeyPair.Secret(randomByteString(secureRandom, 32))
       val passphrase = "P4S5W0rd"
       val encKey = EncryptedKey(prvKey, passphrase, secureRandom)
 

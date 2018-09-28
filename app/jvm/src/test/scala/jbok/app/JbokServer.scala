@@ -5,8 +5,8 @@ import java.net.InetSocketAddress
 import cats.effect.IO
 import fs2.Pipe
 import jbok.JbokSpec
-import jbok.app.api.FilterManager
-import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
+import jbok.app.api.{FilterManager, PublicAPI}
+import jbok.app.api.impl.PublicApiImpl
 import jbok.core.config.Configs.{BlockChainConfig, FilterConfig, MiningConfig}
 import jbok.core.consensus.poa.clique.CliqueFixture
 import jbok.core.keystore.KeyStoreFixture
@@ -17,16 +17,10 @@ import jbok.network.execution._
 
 import scala.io.StdIn
 
-class JbokServerSpec extends BlockMinerFixture(new CliqueFixture {}) with JbokSpec with KeyStoreFixture {
-  val privateApiImpl = PrivateApiImpl(
-    keyStore,
-    history,
-    BlockChainConfig(),
-    txPool
-  ).unsafeRunSync()
+class JbokServer extends BlockMinerFixture(new CliqueFixture {}) with KeyStoreFixture with JbokSpec {
+  val bind = new InetSocketAddress("localhost", 8888)
 
   val filterManager = FilterManager(miner, keyStore, FilterConfig()).unsafeRunSync()
-
   val publicApiImpl = PublicApiImpl(
     history,
     BlockChainConfig(),
@@ -36,20 +30,13 @@ class JbokServerSpec extends BlockMinerFixture(new CliqueFixture {}) with JbokSp
     filterManager,
     1
   ).unsafeRunSync()
-
-  import jbok.network.rpc.RpcServer._
-
-  val rpcServer                            = RpcServer().unsafeRunSync()
-    .mountAPI(publicApiImpl)
-
-  val bind                                 = new InetSocketAddress("localhost", 8888)
+  import RpcServer._
+  val rpcServer                            = RpcServer().unsafeRunSync().mountAPI[PublicAPI](publicApiImpl)
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
   val server: Server[IO, String]           = Server(WSServerBuilder[IO, String], bind, serverPipe).unsafeRunSync()
 
   server.start.unsafeRunSync()
-  println(s"rpc server started on ${bind}, press any key to stop")
+  println(s"server listen on ${bind}, press any key to quit")
   StdIn.readLine()
-
-  override protected def afterAll(): Unit =
-    server.stop.unsafeRunSync()
+  server.stop.unsafeRunSync()
 }

@@ -1,7 +1,7 @@
 package jbok.core.consensus.pow.ethash
 
 import jbok.JbokSpec
-import jbok.core.Configs.{BlockChainConfig, DaoForkConfig}
+import jbok.core.config.Configs.{BlockChainConfig, DaoForkConfig}
 import jbok.core.HistoryFixture
 import jbok.core.consensus.pow.ethash.OmmersError._
 import jbok.core.models.{Block, BlockBody, BlockHeader}

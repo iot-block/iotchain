@@ -3,8 +3,7 @@ package jbok.evm
 import cats.effect.Sync
 import jbok.core.models._
 import jbok.crypto._
-import jbok.crypto.signature.CryptoSignature
-import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.crypto.signature.{CryptoSignature, ECDSA, Signature}
 import scodec.bits.ByteVector
 
 object PrecompiledContracts {
@@ -60,7 +59,7 @@ object PrecompiledContracts {
 
       if (hasOnlyLastByteSet(v)) {
         val sig       = CryptoSignature(r.toArray ++ s.toArray ++ Array(v.last))
-        val recovered = SecP256k1.recoverPublic(h.toArray, sig)
+        val recovered = Signature[ECDSA].recoverPublic(h.toArray, sig)
         recovered
           .map { pk =>
             val hash = pk.bytes.kec256.slice(12, 32)

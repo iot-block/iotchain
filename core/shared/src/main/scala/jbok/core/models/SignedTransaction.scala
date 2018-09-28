@@ -1,10 +1,10 @@
 package jbok.core.models
 
+import cats.effect.IO
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.crypto._
-import jbok.crypto.signature.ecdsa.SecP256k1
-import jbok.crypto.signature.{KeyPair, CryptoSignature}
+import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import shapeless._
 
@@ -82,8 +82,26 @@ object SignedTransaction {
       BigInt(0)
     )
     val bytes = bytesToSign(stx, chainId)
-    val sig   = SecP256k1.sign(bytes.toArray, keyPair, chainId).unsafeRunSync()
+    val sig   = Signature[ECDSA].sign(bytes.toArray, keyPair, chainId).unsafeRunSync()
     stx.copy(v = BigInt(1, Array(sig.v)), r = sig.r, s = sig.s)
+  }
+
+  def signIO(tx: Transaction, keyPair: KeyPair, chainId: Option[Byte] = None): IO[SignedTransaction] = {
+    val stx = new SignedTransaction(
+      tx.nonce,
+      tx.gasPrice,
+      tx.gasLimit,
+      tx.receivingAddress.getOrElse(Address(ByteVector.empty)),
+      tx.value,
+      tx.payload,
+      BigInt(0),
+      BigInt(0),
+      BigInt(0)
+    )
+    val bytes = bytesToSign(stx, chainId)
+    for {
+      sig   <- Signature[ECDSA].sign(bytes.toArray, keyPair, chainId)
+    } yield stx.copy(v = BigInt(1, Array(sig.v)), r = sig.r, s = sig.s)
   }
 
   def verify(stx: SignedTransaction, chainId: Option[Byte], sender: Address): Boolean = {
@@ -101,7 +119,7 @@ object SignedTransaction {
     val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)
     val txSig       = CryptoSignature(stx.r, stx.s, stx.v.toByte)
 
-    SecP256k1.recoverPublic(bytesToSign.toArray, txSig, chainId)
+    Signature[ECDSA].recoverPublic(bytesToSign.toArray, txSig, chainId)
   }
 
   private[jbok] def getSender(stx: SignedTransaction, chainId: Option[Byte] = None): Option[Address] =

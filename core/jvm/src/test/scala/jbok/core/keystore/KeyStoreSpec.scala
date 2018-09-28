@@ -16,7 +16,7 @@ trait KeyStoreFixture {
 
   val key1     = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
   val addr1    = Address(hex"aa6826f00d01fe4085f0c3dd12778e206ce4e2ac")
-  val keyStore = KeyStore[IO](dir.pathAsString, secureRandom).unsafeRunSync()
+  val keyStore = KeyStorePlatform[IO](dir.pathAsString, secureRandom).unsafeRunSync()
 }
 
 class KeyStoreSpec extends JbokSpec {
@@ -46,7 +46,7 @@ class KeyStoreSpec extends JbokSpec {
 
     "return an error when the keystore dir cannot be initialized" in new KeyStoreFixture {
       intercept[IllegalArgumentException] {
-        KeyStore[IO]("/root/keystore", secureRandom).unsafeRunSync()
+        KeyStorePlatform[IO]("/root/keystore", secureRandom).unsafeRunSync()
       }
     }
 

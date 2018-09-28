@@ -154,7 +154,7 @@ class TcpTransport[F[_], A](
                 })
             }
             .join(maxConcurrent)
-            .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(s"server error: ${e.printStackTrace}"))))
+            .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(e)(s"server error"))))
             .onFinalize(stopListen.set(true) *> F.delay(log.info(s"stop listening to ${bind}")))
 
         for {
