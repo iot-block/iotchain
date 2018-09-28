@@ -1,31 +1,15 @@
-package jbok.core
+package jbok.core.config
 
 import java.util.UUID
 
-import better.files.File._
-import better.files._
-import com.typesafe.config.{Config, ConfigFactory}
-import io.circe.generic.JsonCodec
 import jbok.core.models.{Address, UInt256}
 import jbok.network.NetAddress
-import pureconfig.{ConfigReader, Derivation}
 import scodec.bits._
 
 import scala.concurrent.duration._
 
 object Configs {
-  lazy val defaultConfig = ConfigFactory.load()
-
-  implicit val bytesReader: ConfigReader[ByteVector] = ConfigReader[String].map(x => ByteVector.fromValidHex(x))
-
-  implicit val byteReader: ConfigReader[Byte] = ConfigReader[Int].map(x => x.toByte)
-
-  implicit val bigIntReader: ConfigReader[BigInt] = ConfigReader[String].map(x => BigInt(x))
-
-  def loadConfig[A](namespace: String, config: Config = defaultConfig)(implicit ev: Derivation[ConfigReader[A]]) =
-    pureconfig.loadConfig[A](config, namespace)
-
-  val defaultRootDir: File = home / ".jbok"
+  val defaultRootDir: String = "~/.jbok"
 
   case class NetworkConfig(
       rpcBindAddress: NetAddress,
@@ -33,7 +17,7 @@ object Configs {
   )
 
   case class KeyStoreConfig(
-      keystoreDir: String = (defaultRootDir / "keystore").pathAsString
+      keystoreDir: String = s"${defaultRootDir}/keystore"
   )
 
   case class PeerManagerConfig(
@@ -42,29 +26,20 @@ object Configs {
       maxOutgoingPeers: Int = 10,
       maxIncomingPeers: Int = 10,
       maxPendingPeers: Int = 10,
-      connectionTimeout: FiniteDuration = 10.seconds,
-      handshakeTimeout: FiniteDuration = 10.seconds,
-      timeout: FiniteDuration = 10.seconds
+      connectionTimeout: FiniteDuration = 5.seconds,
+      handshakeTimeout: FiniteDuration = 5.seconds,
+      timeout: FiniteDuration = 5.seconds
   )
 
   case class FullNodeConfig(
-      rootDir: String = defaultRootDir.pathAsString,
+      rootDir: String = defaultRootDir,
       network: NetworkConfig,
       keystore: KeyStoreConfig,
       peer: PeerManagerConfig,
       blockChainConfig: BlockChainConfig,
       daoForkConfig: DaoForkConfig,
       miningConfig: MiningConfig,
-      rpcApi: RpcApiConfig,
       nodeId: String = UUID.randomUUID().toString
-  )
-
-  case class RpcApiConfig(
-      publicApiEnable: Boolean = false,
-      publicApiBindAddress: NetAddress,
-      publicApiVersion: Int = 1,
-      privateApiEnable: Boolean = false,
-      privateApiBindAddress: NetAddress,
   )
 
   case class BlockChainConfig(
@@ -151,24 +126,21 @@ object Configs {
 
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
-      val rootDir                            = home / ".jbok" / suffix
-      val networkConfig                      = NetworkConfig(NetAddress("localhost", port + 10000), NetAddress("localhost", port))
-      val walletConfig                       = KeyStoreConfig((rootDir / "keystore").pathAsString)
+      val rootDir                            = s"${defaultRootDir}/${suffix}"
+      val networkConfig                      = NetworkConfig(NetAddress("localhost", port), NetAddress("localhost", port))
+      val walletConfig                       = KeyStoreConfig(s"${rootDir}/keystore")
       val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
       val blockChainConfig: BlockChainConfig = BlockChainConfig()
       val daoForkConfig: DaoForkConfig       = DaoForkConfig()
       val miningConfig                       = MiningConfig()
-      val rpcApiConfig = RpcApiConfig(publicApiBindAddress = NetAddress("localhost", port + 10000),
-                                      privateApiBindAddress = NetAddress("localhost", port + 10000 + 1))
       FullNodeConfig(
-        rootDir.pathAsString,
+        rootDir,
         networkConfig,
         walletConfig,
         peerManagerConfig,
         blockChainConfig,
         daoForkConfig,
-        miningConfig,
-        rpcApiConfig
+        miningConfig
       )
     }
 

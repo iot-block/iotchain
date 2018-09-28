@@ -6,7 +6,7 @@ import java.security.SecureRandom
 import cats.effect._
 import cats.implicits._
 import fs2.{Pipe, Stream}
-import jbok.core.Configs.FullNodeConfig
+import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.Consensus
 import jbok.core.keystore.KeyStore
 import jbok.core.ledger.BlockExecutor

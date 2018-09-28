@@ -5,11 +5,10 @@ import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.core.History
-import jbok.core.Configs.{BlockChainConfig, MiningConfig, MonetaryPolicyConfig}
+import jbok.core.config.Configs.{BlockChainConfig, MiningConfig, MonetaryPolicyConfig}
 import jbok.core.consensus.{Consensus, ConsensusResult}
 import jbok.core.models.{Block, BlockHeader}
 import jbok.core.pool.BlockPool
-import jbok.core.validators.BlockValidator
 import jbok.crypto._
 import scodec.bits.ByteVector
 

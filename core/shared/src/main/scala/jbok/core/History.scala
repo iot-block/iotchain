@@ -3,7 +3,7 @@ package jbok.core
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
-import jbok.core.genesis.{AllocAccount, GenesisConfig}
+import jbok.core.config.{Configs, GenesisConfig}
 import jbok.core.models._
 import jbok.core.store._
 import jbok.core.sync.SyncState
@@ -19,8 +19,9 @@ abstract class History[F[_]](val db: KeyValueDB[F])(implicit F: Sync[F]) {
     log.info(s"loading genesis data")
     for {
       headerOpt <- getBlockHeaderByNumber(0)
+      default = GenesisConfig.default
       _ <- headerOpt match {
-        case Some(h) if h.hash == GenesisConfig.header.hash =>
+        case Some(h) if h.hash == default.header.hash =>
           log.info("genesis data already in the database")
           F.unit
 
@@ -38,7 +39,21 @@ abstract class History[F[_]](val db: KeyValueDB[F])(implicit F: Sync[F]) {
     } yield ()
   }
 
-  def loadGenesisConfig(config: GenesisConfig = GenesisConfig.default): F[Unit]
+  def loadGenesisConfig(config: GenesisConfig = GenesisConfig.default): F[Unit] = {
+    log.info(s"load genesis config with ${config.alloc.size} alloc")
+    for {
+      mpt <- MPTrie(RefCountKeyValueDB.forVersion(db, 0))
+      accountStore = AddressAccountStore(mpt)
+      _ <- config.alloc.toList.traverse {
+        case (address, balance) =>
+          accountStore.put(Address(ByteVector.fromValidHex(address)), Account(0, UInt256(balance)))
+      }
+      stateRootHash <- accountStore.getRootHash
+      _ = log.info(s"stateRoothash: ${stateRootHash}")
+      block = Block(config.header.copy(stateRoot = stateRootHash), config.body)
+      _ <- save(block, Nil, block.header.difficulty, saveAsBestBlock = true)
+    } yield ()
+  }
 
   /**
     * Allows to query a blockHeader by block hash
@@ -281,24 +296,6 @@ class HistoryImpl[F[_]](
     evmCodeStore: EvmCodeStore[F]
 )(implicit F: Sync[F])
     extends History[F](db) {
-
-  override def loadGenesisConfig(config: GenesisConfig): F[Unit] = {
-    log.info(s"load genesis config with ${config.alloc.size} alloc")
-    val header = GenesisConfig.genesisHeader(config)
-    val body   = GenesisConfig.genesisBody(config)
-    for {
-      mpt <- MPTrie(RefCountKeyValueDB.forVersion(db, 0))
-      accountStore = AddressAccountStore(mpt)
-      _ <- config.alloc.toList.traverse {
-        case (address, AllocAccount(balance)) =>
-          accountStore.put(Address(ByteVector.fromValidHex(address)), Account(0, UInt256(balance)))
-      }
-      stateRootHash <- accountStore.getRootHash
-      _     = log.info(s"stateRoothash: ${stateRootHash}")
-      block = Block(header.copy(stateRoot = stateRootHash, unixTimestamp = config.timestamp), body)
-      _ <- save(block, Nil, block.header.difficulty, saveAsBestBlock = true)
-    } yield ()
-  }
 
   /**
     * Allows to query a blockHeader by block hash

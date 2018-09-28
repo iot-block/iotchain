@@ -6,7 +6,7 @@ import cats.effect.ConcurrentEffect
 import cats.implicits._
 import fs2._
 import jbok.core.History
-import jbok.core.Configs.PeerManagerConfig
+import jbok.core.config.Configs.PeerManagerConfig
 import jbok.core.messages.{Message, Messages, Status}
 import jbok.core.peer.PeerEvent.PeerRecv
 import jbok.network.Connection

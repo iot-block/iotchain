@@ -5,7 +5,6 @@ import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
-import pureconfig.ConfigReader
 import scodec.bits.ByteVector
 
 class Address private (val bytes: ByteVector) extends AnyVal {
@@ -22,8 +21,6 @@ object Address {
   implicit val je: io.circe.Encoder[Address] = bytesEncoder.contramap[Address](_.bytes)
 
   implicit val jd: io.circe.Decoder[Address] = bytesDecoder.map(Address.apply)
-
-  implicit val reader: ConfigReader[Address] = ConfigReader[String].map(x => Address.fromHex(x))
 
   def fromHex(hex: String): Address = Address.apply(ByteVector.fromValidHex(hex))
 

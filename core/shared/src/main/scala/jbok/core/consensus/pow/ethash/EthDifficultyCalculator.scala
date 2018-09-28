@@ -1,6 +1,6 @@
 package jbok.core.consensus.pow.ethash
 
-import jbok.core.Configs.BlockChainConfig
+import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.models.BlockHeader
 
 class EthDifficultyCalculator(config: BlockChainConfig) {

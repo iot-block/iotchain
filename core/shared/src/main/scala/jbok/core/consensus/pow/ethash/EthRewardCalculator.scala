@@ -1,6 +1,6 @@
 package jbok.core.consensus.pow.ethash
 
-import jbok.core.Configs.MonetaryPolicyConfig
+import jbok.core.config.Configs.MonetaryPolicyConfig
 
 /**
   * https://github.com/ethereumproject/ECIPs/blob/master/ECIPs/ECIP-1039.md

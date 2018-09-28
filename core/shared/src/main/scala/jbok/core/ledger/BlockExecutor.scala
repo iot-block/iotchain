@@ -4,7 +4,7 @@ import cats.Foldable
 import cats.data.Kleisli
 import cats.effect.Sync
 import cats.implicits._
-import jbok.core.Configs.BlockChainConfig
+import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.History
 import jbok.core.consensus.{Consensus, ConsensusResult}
 import jbok.core.models.UInt256._

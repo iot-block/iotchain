@@ -1,6 +1,6 @@
 package jbok.evm
 
-import jbok.core.Configs.BlockChainConfig
+import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.models.UInt256
 import scodec.bits.ByteVector
 
