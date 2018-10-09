@@ -10,7 +10,7 @@ object Spinner {
   @binding.dom
   def render[A](fb: Binding[Option[Try[A]]]): Binding[Element] = fb.bind match {
     case Some(Success(a)) =>
-      <div>{"ok"}</div>
+      <div>{a.toString}</div>
     case Some(Failure(e)) =>
       <div>{e.toString}</div>
     case None =>

@@ -3,23 +3,41 @@ package jbok.app
 import java.net.URI
 
 import com.thoughtworks.binding.Binding.{BindingSeq, Var, Vars}
-import com.thoughtworks.binding.{Binding, FutureBinding, dom}
+import com.thoughtworks.binding.{Binding, dom}
 import jbok.app.components.{SelectItem, SelectMenu, Spinner}
 import jbok.app.views.Nav.{Tab, TabList}
 import jbok.app.views._
 import jbok.network.execution._
 import org.scalajs.dom._
 
+import scala.scalajs.js
+import scala.scalajs.js.annotation.JSImport
+
+@JSImport("css/normalize.css", JSImport.Namespace)
+@js.native
+object NormalizeCss extends js.Object
+
+@JSImport("css/app.css", JSImport.Namespace)
+@js.native
+object AppCss extends js.Object
+
 object JbokApp {
+  val normalizeCss = NormalizeCss
+  val appCss = AppCss
+
   val uri    = new URI(s"ws://localhost:8888")
-  val client = JbokClient(uri).unsafeToFuture().value.get.get
 
   val selectMenu =
     new SelectMenu("please select max").render(Vars(SelectItem("50", "50"), SelectItem("100", "100")))
 
-  val statusView       = new StatusView(client).render()
-  val accountsView     = new AccountsView(client).render()
-  val blocksView       = new BlocksView(client).render()
+  val config = AppConfig.default
+  val state = AppState(Var(config))
+
+  JbokClient(config.uri).unsafeToFuture().map(c => state.client.value = Some(c))
+
+  val statusView       = StatusView(state).render
+  val accountsView     = AccountsView(state).render()
+  val blocksView       = BlocksView(state).render()
   val transactionsView = TxsView.render()
   val simulationsView  = SimulationsView.render()
   val configView       = ConfigView.render()
@@ -33,7 +51,7 @@ object JbokApp {
   )
 
   val tabList   = TabList(tabs, Var(tabs.value.head))
-  val searchBar = new SearchBar(client).render()
+  val searchBar = SearchBar(state).render
 
   @dom val left: Binding[Node] =
     <div class="nav-left">
@@ -58,10 +76,6 @@ object JbokApp {
 
   val navBar = Nav.render(left, right)
 
-  val spinner = Spinner.render(FutureBinding {
-    FutureUtil.delay(5000)
-  })
-
   @dom def render: Binding[BindingSeq[Node]] =
     <header>
       {navBar.bind}
@@ -78,8 +92,6 @@ object JbokApp {
         </div>
       }
     }
-
-    {spinner.bind}
     </main>
     <footer>
       {Copyright.render.bind}

@@ -136,13 +136,13 @@ a:hover {
 }
 
 .status-item {
-    display: inline-block;
     border-right: 1px solid darkgrey;
     padding: 20px;
 }
 
 .status {
     background-color: black;
+    display: flex;
 }
 
 .status-title {
@@ -154,6 +154,8 @@ a:hover {
 }
 
 .status-value {
+    display: flex;
+    align-items: center;
     color: orange;
     font-size: 1.2rem;
     margin: 0;
@@ -335,4 +337,23 @@ button:hover {
            transform: scaleY(1.0);
            -webkit-transform: scaleY(1.0);
        }
+}
+
+/* led */
+.led-red {
+    margin: 4px;
+    width: 16px;
+    height: 16px;
+    background-color: #F00;
+    border-radius: 50%;
+    box-shadow: rgba(0, 0, 0, 0.2) 0 -1px 1px 1px, inset #441313 0 -1px 9px, rgba(255, 0, 0, 0.5) 0 1px 1px;
+}
+
+.led-green {
+    margin: 4px;
+    width: 16px;
+    height: 16px;
+    background-color: #ABFF00;
+    border-radius: 50%;
+    box-shadow: rgba(0, 0, 0, 0.2) 0 -1px 1px 1px, inset #304701 0 -1px 9px, #89FF00 0 1px 1px;
 }

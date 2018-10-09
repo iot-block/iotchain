@@ -3,13 +3,14 @@ package jbok.app.views
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Vars}
-import jbok.app.{FutureUtil, JbokClient}
 import jbok.app.components.{Form, FormEntry, Modal}
+import jbok.app.{AppState, FutureUtil}
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom._
+
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class AccountsView(client: JbokClient) {
+case class AccountsView(state: AppState) {
 
   val accounts = Vars[(Address, Account)]()
   accounts.value += Address(0x42) -> Account()
@@ -17,7 +18,7 @@ class AccountsView(client: JbokClient) {
   accounts.value += Address(0x44) -> Account()
 
   val form = Form(Constants(FormEntry("password", "password")), { data =>
-    client.admin.newAccount(data("password")).unsafeToFuture()
+    state.client.value.get.admin.newAccount(data("password")).unsafeToFuture()
   })
   val modal = Modal("new account", form.render())
 

@@ -5,8 +5,8 @@ import java.net.InetSocketAddress
 import cats.effect.IO
 import fs2.Pipe
 import jbok.JbokSpec
-import jbok.app.api.{FilterManager, PublicAPI}
-import jbok.app.api.impl.PublicApiImpl
+import jbok.app.api.{FilterManager, PrivateAPI, PublicAPI}
+import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
 import jbok.core.config.Configs.{BlockChainConfig, FilterConfig, MiningConfig}
 import jbok.core.consensus.poa.clique.CliqueFixture
 import jbok.core.keystore.KeyStoreFixture
@@ -21,6 +21,14 @@ class JbokServer extends BlockMinerFixture(new CliqueFixture {}) with KeyStoreFi
   val bind = new InetSocketAddress("localhost", 8888)
 
   val filterManager = FilterManager(miner, keyStore, FilterConfig()).unsafeRunSync()
+
+  val privateApiImpl = PrivateApiImpl(
+    keyStore,
+    history,
+    BlockChainConfig(),
+    txPool
+  ).unsafeRunSync()
+
   val publicApiImpl = PublicApiImpl(
     history,
     BlockChainConfig(),
@@ -31,7 +39,12 @@ class JbokServer extends BlockMinerFixture(new CliqueFixture {}) with KeyStoreFi
     1
   ).unsafeRunSync()
   import RpcServer._
-  val rpcServer                            = RpcServer().unsafeRunSync().mountAPI[PublicAPI](publicApiImpl)
+  val rpcServer =
+    RpcServer()
+      .unsafeRunSync()
+      .mountAPI[PublicAPI](publicApiImpl)
+      .mountAPI[PrivateAPI](privateApiImpl)
+
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
   val server: Server[IO, String]           = Server(WSServerBuilder[IO, String], bind, serverPipe).unsafeRunSync()
 
