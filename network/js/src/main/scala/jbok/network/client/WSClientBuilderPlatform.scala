@@ -13,7 +13,7 @@ import scodec.bits.BitVector
 
 import scala.scalajs.js.typedarray.{ArrayBuffer, TypedArrayBuffer}
 
-class JsWebSocketClientBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends ClientBuilder[F, A] {
+class WSClientBuilderPlatform[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends ClientBuilder[F, A] {
 
   override def connect(
       to: URI,
@@ -71,6 +71,6 @@ class JsWebSocketClientBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) 
   }
 }
 
-object JsWebSocketClientBuilder {
-  def apply[F[_]: ConcurrentEffect, A: Codec] = new JsWebSocketClientBuilder[F, A]
+object WSClientBuilderPlatform {
+  def apply[F[_]: ConcurrentEffect, A: Codec] = new WSClientBuilderPlatform[F, A]
 }

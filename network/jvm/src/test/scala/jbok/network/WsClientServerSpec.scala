@@ -8,9 +8,9 @@ import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
 import jbok.common.testkit.HexGen
-import jbok.network.client.{Client, WebSocketClientBuilder}
+import jbok.network.client.{Client, WSClientBuilderPlatform}
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.server.{Server, WebSocketServerBuilder}
+import jbok.network.server.{Server, WSServerBuilder}
 import scodec.Codec
 import scodec.codecs._
 
@@ -34,8 +34,8 @@ class WsClientServerSpec extends JbokSpec {
   val bind                                = new InetSocketAddress("localhost", 9001)
   val uri = new URI("ws://localhost:9001")
   val serverPipe: Pipe[IO, Data, Data]    = _.map { case Data(id, s) => Data(id, s"hello, $s") }
-  val server: Server[IO, Data]            = Server(WebSocketServerBuilder[IO, Data], bind, serverPipe).unsafeRunSync()
-  val client: Client[IO, Data]            = Client(WebSocketClientBuilder[IO, Data], uri).unsafeRunSync()
+  val server: Server[IO, Data]            = Server(WSServerBuilder[IO, Data], bind, serverPipe).unsafeRunSync()
+  val client: Client[IO, Data]            = Client(WSClientBuilderPlatform[IO, Data], uri).unsafeRunSync()
 
   "WebSocket Client" should {
     "write and read" in {

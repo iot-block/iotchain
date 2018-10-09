@@ -26,6 +26,9 @@ class RpcServer(
 
   def mountAPI[API](api: API): RpcServer = macro RpcServerMacro.mountAPI[RpcServer, API]
 
+  def addHandlers(handlers: List[(String, String => IO[String])]): RpcServer =
+    new RpcServer(this.handlers ++ handlers.toMap, queue)
+
   val pipe: Pipe[IO, String, String] = { input =>
     val s = input.evalMap { s =>
       log.debug(s"received: ${s}")

@@ -8,7 +8,7 @@ import jbok.network.execution._
 import scodec.Codec
 import spinoco.fs2.http.websocket.{Frame, WebSocketRequest}
 
-class WebSocketClientBuilder[F[_]: ConcurrentEffect, A: Codec] extends ClientBuilder[F, A] {
+class WSClientBuilderPlatform[F[_]: ConcurrentEffect, A: Codec] extends ClientBuilder[F, A] {
 
   override def connect(to: URI,
                        pipe: Pipe[F, A, A],
@@ -29,6 +29,6 @@ class WebSocketClientBuilder[F[_]: ConcurrentEffect, A: Codec] extends ClientBui
   }
 }
 
-object WebSocketClientBuilder {
-  def apply[F[_]: ConcurrentEffect, A: Codec] = new WebSocketClientBuilder[F, A]
+object WSClientBuilderPlatform {
+  def apply[F[_]: ConcurrentEffect, A: Codec] = new WSClientBuilderPlatform[F, A]
 }

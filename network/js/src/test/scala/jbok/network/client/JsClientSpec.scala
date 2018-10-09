@@ -23,10 +23,10 @@ class JsClientSpec extends JbokAsyncSpec {
   implicit val requestMethod = RequestMethod.none[String]
 
   "JsClient" should {
-    "echo" in {
+    "echo" ignore {
       val uri = new URI("ws://echo.websocket.org:80")
       for {
-        client <- Client(JsWebSocketClientBuilder[IO, String], uri)
+        client <- Client(WSClientBuilderPlatform[IO, String], uri)
         _ <- client.start
         _ <- client.write("ohoho")
         resp <- client.read

@@ -14,6 +14,7 @@ import jbok.network.execution._
 import jbok.network.server.{Server, TcpServerBuilder}
 import scodec.Codec
 import scodec.codecs._
+import cats.implicits._
 
 class TcpClientServerSpec extends JbokSpec {
   case class Data(id: String, data: String)

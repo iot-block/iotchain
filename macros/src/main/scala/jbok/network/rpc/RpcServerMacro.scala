@@ -67,7 +67,8 @@ object RpcServerMacro {
         import cats.implicits._
         import jbok.network.json._
         import jbok.codec.json._
-        new RpcServer(${c.prefix.tree}.handlers ++ Map(..$handlers), ${c.prefix.tree}.queue)
+
+        ${c.prefix.tree}.addHandlers($handlers)
        """
     }
 
