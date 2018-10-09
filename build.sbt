@@ -19,8 +19,188 @@ lazy val V = new {
   val tsec   = "0.0.1-M11"
   val http4s = "0.18.12"
   val fs2    = "0.10.4"
+  val cats   = "1.0.0-RC"
 }
 
+lazy val jbok = project
+  .in(file("."))
+  .aggregate(core.jvm, core.js)
+  .settings(noPublishSettings)
+
+lazy val common = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Pure)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-common",
+    libraryDependencies ++= Seq(
+      // typelevel
+      "org.typelevel" %%% "cats-effect" % V.cats,
+      "co.fs2"        %%% "fs2-core"    % V.fs2,
+      // json
+      "io.circe" %%% "circe-core"    % V.circe,
+      "io.circe" %%% "circe-generic" % V.circe,
+      "io.circe" %%% "circe-parser"  % V.circe,
+      // binary
+      "org.scodec" %%% "scodec-bits"  % "1.1.5",
+      "org.scodec" %%% "scodec-core"  % "1.10.3",
+      "org.scodec" %% "scodec-stream" % "1.1.0",
+      // graph
+      "org.scala-graph" %%% "graph-core" % "1.12.5",
+      "org.scala-graph" %% "graph-dot"   % "1.12.1",
+      // enum
+      "com.beachape" %%% "enumeratum"       % "1.5.13",
+      "com.beachape" %%% "enumeratum-circe" % "1.5.13",
+      // logging
+      "ch.qos.logback" % "logback-classic" % "1.2.3",
+      "org.log4s"      %% "log4s"          % "1.6.1",
+      // test
+      "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
+      "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
+    )
+  )
+
+lazy val core = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-core",
+    libraryDependencies ++= Seq(
+      "com.github.pathikrit" %% "better-files" % "3.5.0"
+    )
+  )
+  .dependsOn(common % CompileAndTest, codec, crypto, p2p, persistent)
+
+lazy val crypto = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
+  .jsSettings(
+    npmDependencies in Compile ++= Seq(
+      "elliptic"  -> "6.4.0",
+      "crypto-js" -> "3.1.9-1"
+    ),
+    // https://github.com/indutny/elliptic/issues/149
+    jsEnv in Test := new org.scalajs.jsenv.nodejs.NodeJSEnv(),
+    requiresDOM in Test := false
+  )
+  .settings(
+    name := "jbok-crypto",
+    libraryDependencies ++= tsec
+  )
+  .dependsOn(common % CompileAndTest, codec, persistent)
+
+lazy val p2p = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-p2p"
+  )
+  .dependsOn(common % CompileAndTest, network, persistent, codec)
+
+lazy val codec = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-codec"
+  )
+  .dependsOn(common % CompileAndTest)
+
+lazy val examples = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-examples"
+  )
+  .dependsOn(core % CompileAndTest)
+
+lazy val app = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
+  .settings(
+    name := "jbok-app",
+    libraryDependencies ++= Seq(
+      "com.thoughtworks.binding" %%% "binding"   % "11.0.1",
+      "com.lihaoyi"              %%% "upickle"   % "0.6.6",
+      "com.lihaoyi"              %%% "scalatags" % "0.6.7",
+      "com.monovore"             %% "decline"    % "0.4.0-RC1"
+    ),
+    addCommandAlias("dev", ";fastOptJS::startWebpackDevServer;~fastOptJS")
+  )
+  .jsSettings(
+    npmDevDependencies in Compile ++= Seq(
+      "file-loader"         -> "1.1.11",
+      "style-loader"        -> "0.20.3",
+      "css-loader"          -> "0.28.11",
+      "html-webpack-plugin" -> "3.2.0",
+      "copy-webpack-plugin" -> "4.5.1",
+      "webpack-merge"       -> "4.1.2"
+    ),
+    version in webpack := "4.8.1",
+    version in startWebpackDevServer := "3.1.4",
+    webpackResources := baseDirectory.value / "webpack" * "*",
+    webpackConfigFile := Some(baseDirectory.value / "webpack" / "webpack.config.js"),
+    webpackBundlingMode := BundlingMode.LibraryAndApplication()
+  )
+  .dependsOn(core % CompileAndTest)
+
+lazy val macros = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-macros"
+  )
+  .dependsOn(common % CompileAndTest, codec)
+
+lazy val network = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .settings(
+    name := "jbok-network",
+    libraryDependencies ++= http4s ++ Seq(
+      "com.spinoco" %% "fs2-http" % "0.3.0"
+    )
+  )
+  .jsSettings(commonJsSettings)
+  .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
+  .dependsOn(common % CompileAndTest, macros, crypto)
+
+lazy val persistent = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-persistent",
+    libraryDependencies ++= Seq(
+      "org.iq80.leveldb" % "leveldb" % "0.10",
+      "io.monix"         %% "monix"  % "3.0.0-RC1"
+    )
+  )
+  .dependsOn(common % CompileAndTest, codec)
+
+lazy val benchmark = project
+  .settings(commonSettings, noPublishSettings)
+  .settings(
+    name := "jbok-benchmark"
+  )
+  .enablePlugins(JmhPlugin)
+  .dependsOn(persistent.jvm)
+
+lazy val docs = project
+  .settings(commonSettings, noPublishSettings, micrositeSettings)
+  .enablePlugins(MicrositesPlugin)
+  .enablePlugins(TutPlugin)
+  .dependsOn(core.jvm)
+
+// dependencies
 lazy val tsec = Seq(
   "io.github.jmcardon" %% "tsec-common"        % V.tsec,
   "io.github.jmcardon" %% "tsec-hash-jca"      % V.tsec,
@@ -49,213 +229,19 @@ lazy val commonSettings = Seq(
   scalacOpts
 )
 
-lazy val jbok = project
-  .in(file("."))
-  .aggregate(coreJVM, coreJS)
-  .settings(noPublishSettings)
-
-lazy val common = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-common",
-    libraryDependencies ++= Seq(
-      "org.typelevel"        %%% "cats-core"        % "1.1.0",
-      "org.typelevel"        %%% "cats-effect"      % "1.0.0-RC",
-      "io.circe"             %%% "circe-core"       % V.circe,
-      "io.circe"             %%% "circe-generic"    % V.circe,
-      "io.circe"             %%% "circe-parser"     % V.circe,
-      "org.scala-graph"      %%% "graph-core"       % "1.12.5",
-      "org.scala-graph"      %% "graph-dot"         % "1.12.1",
-      "com.github.mpilquist" %%% "simulacrum"       % "0.12.0",
-      "com.beachape"         %%% "enumeratum"       % "1.5.13",
-      "com.beachape"         %%% "enumeratum-circe" % "1.5.13",
-      "co.fs2"               %%% "fs2-core"         % V.fs2,
-      "org.scodec"           %%% "scodec-bits"      % "1.1.5",
-      "org.scodec"           %%% "scodec-core"      % "1.10.3",
-      "org.scodec"           %% "scodec-stream"     % "1.1.0",
-      // logging
-      "ch.qos.logback" % "logback-classic" % "1.2.3",
-      "org.log4s"      %% "log4s"          % "1.6.1",
-      // test
-      "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
-      "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
-    )
-  )
-
-lazy val commonJS  = common.js
-lazy val commonJVM = common.jvm
-
-lazy val core = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-core",
-    libraryDependencies ++= Seq(
-      "com.github.pathikrit" %% "better-files" % "3.5.0"
-    )
-  )
-  .dependsOn(common % CompileAndTest, codec, crypto, p2p, persistent)
-
-lazy val coreJS  = core.js
-lazy val coreJVM = core.jvm
-
-lazy val crypto = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .jsSettings(
-    npmDependencies in Compile ++= Seq(
-      "elliptic"  -> "6.4.0",
-      "crypto-js" -> "3.1.9-1"
-    ),
-    skip in packageJSDependencies := false
-  )
-  .settings(
-    name := "jbok-crypto",
-    libraryDependencies ++= tsec ++ Seq(
-      "org.scorexfoundation" %% "scrypto"       % "2.0.5",
-      "org.bouncycastle"     % "bcprov-jdk15on" % "1.58",
-      "net.i2p.crypto"       % "eddsa"          % "0.3.0"
-    )
-  )
-  .dependsOn(common % CompileAndTest, codec, persistent)
-
-lazy val cryptoJS  = crypto.js.enablePlugins(ScalaJSBundlerPlugin)
-lazy val cryptoJVM = crypto.jvm
-
-lazy val p2p = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-p2p"
-  )
-  .dependsOn(common % CompileAndTest, network, persistent, codec)
-
-lazy val p2pJS  = p2p.js
-lazy val p2pJVM = p2p.jvm
-
-lazy val codec = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-codec"
-  )
-  .dependsOn(common % CompileAndTest)
-
-lazy val codecJS  = codec.js
-lazy val codecJVM = codec.jvm
-
-lazy val examples = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-examples"
-  )
-  .dependsOn(core % CompileAndTest)
-
-lazy val examplesJS  = examples.js
-lazy val examplesJVM = examples.jvm
-
 lazy val commonJsSettings = Seq(
   scalaJSUseMainModuleInitializer := true,
-  jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv(),
-  jsEnv in Test := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv(),
-  fork in Test := false,
+  scalaJSUseMainModuleInitializer in Test := false,
+  requiresDOM in Test := true,
   webpackBundlingMode := BundlingMode.LibraryOnly(),
-  webpackBundlingMode in Test := BundlingMode.Application,
   libraryDependencies ++= Seq(
-    "org.scala-js"             %%% "scalajs-dom"   % "0.9.2",
+    "org.scala-js"             %%% "scalajs-dom"   % "0.9.6",
     "com.thoughtworks.binding" %%% "dom"           % "11.0.1",
     "com.thoughtworks.binding" %%% "futurebinding" % "11.0.1"
   )
 )
 
-lazy val app = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-app",
-    libraryDependencies ++= Seq(
-      "com.thoughtworks.binding" %%% "binding"   % "11.0.1",
-      "com.lihaoyi"              %%% "upickle"   % "0.6.6",
-      "com.lihaoyi"              %%% "scalatags" % "0.6.7",
-      "com.monovore"             %% "decline"    % "0.4.0-RC1"
-    )
-  )
-  .dependsOn(core % CompileAndTest)
-
-lazy val appJS  = app.js.enablePlugins(ScalaJSBundlerPlugin)
-lazy val appJVM = app.jvm
-
-lazy val macros = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-macros"
-  )
-  .dependsOn(common % CompileAndTest, codec)
-
-lazy val macrosJS  = macros.js
-lazy val macrosJVM = macros.jvm
-
-lazy val network = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .settings(
-    name := "jbok-network",
-    libraryDependencies ++= http4s ++ Seq(
-      "com.spinoco" %% "fs2-http" % "0.3.0"
-    )
-  )
-  .jsSettings(commonJsSettings)
-  .dependsOn(common % CompileAndTest, macros, crypto)
-
-lazy val networkJS  = network.js
-lazy val networkJVM = network.jvm
-
-lazy val persistent = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-persistent",
-    libraryDependencies ++= Seq(
-      "org.iq80.leveldb" % "leveldb" % "0.10",
-      "io.monix"         %% "monix"  % "3.0.0-RC1"
-    )
-  )
-  .dependsOn(common % CompileAndTest, codec)
-
-lazy val persistentJS  = persistent.js
-lazy val persistentJVM = persistent.jvm
-
-lazy val benchmark = project
-  .settings(commonSettings, noPublishSettings)
-  .settings(
-    name := "jbok-benchmark"
-  )
-  .enablePlugins(JmhPlugin)
-  .dependsOn(persistentJVM)
-
-lazy val docs = project
-  .settings(commonSettings, noPublishSettings, micrositeSettings)
-  .enablePlugins(MicrositesPlugin)
-  .enablePlugins(TutPlugin)
-  .dependsOn(coreJVM)
-
 lazy val CompileAndTest = "compile->compile;test->test"
-
-publishMavenStyle := true
-
-publishArtifact in Test := false
 
 lazy val scalacOpts = scalacOptions := Seq(
   "-unchecked",
