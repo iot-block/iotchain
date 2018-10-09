@@ -24,5 +24,5 @@ trait JbokAsyncSpec extends AsyncWordSpec with Matchers with AsyncTimeLimitedTes
 
   implicit def futureUnitToFutureAssertion(fu: Future[Unit]): Future[Assertion] = fu.map(_ => Succeeded)
 
-  implicit def futureUnitToFutureAssertion(iou: IO[Unit]): Future[Assertion] = iou.map(_ => Succeeded).unsafeToFuture()
+  implicit def ioUnitToFutureAssertion(iou: IO[Unit]): Future[Assertion] = iou.map(_ => Succeeded).unsafeToFuture()
 }

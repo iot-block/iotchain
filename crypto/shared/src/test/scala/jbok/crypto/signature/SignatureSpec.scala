@@ -1,6 +1,5 @@
 package jbok.crypto.signature
 
-import java.util.Random
 
 import jbok.JbokAsyncSpec
 import jbok.crypto._
@@ -13,30 +12,26 @@ class SignatureSpec extends JbokAsyncSpec {
 
     "sign and verify for right keypair" in {
 
-      val p = for {
+      for {
         keyPair <- ecdsa.generateKeyPair()
         signed  <- ecdsa.sign(hash, keyPair)
         verify  <- ecdsa.verify(hash, signed, keyPair.public)
         _ = verify shouldBe true
       } yield ()
-
-      p.unsafeToFuture()
     }
 
     "not verified for wrong keypair" in {
-      val p = for {
+      for {
         kp1    <- ecdsa.generateKeyPair()
         kp2    <- ecdsa.generateKeyPair()
         sig    <- ecdsa.sign(hash, kp1)
         verify <- ecdsa.verify(hash, sig, kp2.public)
         _ = verify shouldBe false
       } yield ()
-
-      p.unsafeToFuture()
     }
 
     "generate keypair from secret" in {
-      val p = for {
+      for {
         keyPair <- ecdsa.generateKeyPair()
         bytes      = keyPair.secret.bytes
         privateKey = KeyPair.Secret(bytes)
@@ -44,12 +39,10 @@ class SignatureSpec extends JbokAsyncSpec {
         _ = privateKey shouldBe keyPair.secret
         _ = publicKey shouldBe keyPair.public
       } yield ()
-
-      p.unsafeToFuture()
     }
 
     "roundtrip signature" in {
-      val p = for {
+      for {
         kp  <- ecdsa.generateKeyPair()
         sig <- ecdsa.sign(hash, kp)
         bytes = sig.bytes
@@ -57,12 +50,10 @@ class SignatureSpec extends JbokAsyncSpec {
         verify <- ecdsa.verify(hash, sig2, kp.public)
         _ = verify shouldBe true
       } yield ()
-
-      p.unsafeToFuture()
     }
 
     "recover public key from signature" in {
-      val p = for {
+      for {
         kp     <- ecdsa.generateKeyPair()
         sig    <- ecdsa.sign(hash, kp)
         verify <- ecdsa.verify(hash, sig, kp.public)
@@ -71,8 +62,6 @@ class SignatureSpec extends JbokAsyncSpec {
         _ = verify shouldBe true
         _ = public shouldBe Some(kp.public)
       } yield ()
-
-      p.unsafeToFuture()
     }
   }
 }
