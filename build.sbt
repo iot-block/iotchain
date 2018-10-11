@@ -126,15 +126,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
   .settings(
     name := "jbok-app",
-    libraryDependencies ++= Seq(
-      "com.thoughtworks.binding" %%% "binding"   % "11.0.1",
-      "com.lihaoyi"              %%% "upickle"   % "0.6.6",
-      "com.lihaoyi"              %%% "scalatags" % "0.6.7",
-      "com.monovore"             %% "decline"    % "0.4.0-RC1"
-    ),
-    addCommandAlias("dev", ";fastOptJS::startWebpackDevServer;~fastOptJS")
-  )
-  .jsSettings(
+    addCommandAlias("dev", ";fastOptJS::startWebpackDevServer;~fastOptJS"),
     npmDevDependencies in Compile ++= Seq(
       "file-loader"         -> "1.1.11",
       "style-loader"        -> "0.20.3",
@@ -188,11 +180,17 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
 
 lazy val benchmark = project
   .settings(commonSettings, noPublishSettings)
-  .settings(
-    name := "jbok-benchmark"
-  )
   .enablePlugins(JmhPlugin)
-  .dependsOn(persistent.jvm)
+  .settings(
+    name := "jbok-benchmark",
+    sourceDirectory in Jmh := (sourceDirectory in Test).value,
+    classDirectory in Jmh := (classDirectory in Test).value,
+    dependencyClasspath in Jmh := (dependencyClasspath in Test).value,
+    // rewire tasks, so that 'jmh:run' automatically invokes 'jmh:compile' (otherwise a clean 'jmh:run' would fail)
+    compile in Jmh := (compile in Jmh).dependsOn(compile in Test).value,
+    run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated,
+  )
+  .dependsOn(core.jvm % CompileAndTest, persistent.jvm)
 
 lazy val docs = project
   .settings(commonSettings, noPublishSettings, micrositeSettings)
