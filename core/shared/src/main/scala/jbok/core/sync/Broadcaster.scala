@@ -9,8 +9,8 @@ import scodec.bits.ByteVector
 import scala.concurrent.ExecutionContext
 import scala.util.Random
 
-class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F], EC: ExecutionContext) {
-  private[this] val log = org.log4s.getLogger(EC.toString)
+case class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F], EC: ExecutionContext) {
+  private[this] val log = org.log4s.getLogger
 
   def broadcastBlock(newBlock: NewBlock, peerHasBlocks: F[Map[PeerId, Set[ByteVector]]]): F[Unit] =
     for {
@@ -25,9 +25,9 @@ class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F], EC: 
       }
     } yield ()
 
-  def broadcastBlock(newBlock: NewBlock,
-                     peers: Map[PeerId, HandshakedPeer],
-                     peerHasBlocks: Map[PeerId, Set[ByteVector]]): F[Unit] = {
+  private def broadcastBlock(newBlock: NewBlock,
+                             peers: Map[PeerId, HandshakedPeer],
+                             peerHasBlocks: Map[PeerId, Set[ByteVector]]): F[Unit] = {
     val peersWithoutBlock = peers.collect {
       case (peerId, peer)
           if shouldSendNewBlock(newBlock, peer.peerInfo) && !alreadyHasBlock(newBlock, peerId, peerHasBlocks) =>
@@ -38,7 +38,7 @@ class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F], EC: 
       log.info(s"no worst peers, ignore broadcasting")
       F.unit
     } else {
-      log.info(s"broadcast ${newBlock.block.id} to ${peersWithoutBlock.size} peers")
+      log.info(s"broadcast ${newBlock.block.tag} to ${peersWithoutBlock.size} peers")
       broadcastNewBlock(newBlock, peersWithoutBlock) *> broadcastNewBlockHash(newBlock, peersWithoutBlock)
     }
   }
@@ -49,12 +49,11 @@ class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F], EC: 
     peerHasBlocks.contains(peerId) && peerHasBlocks(peerId).contains(newBlock.block.header.hash)
 
   private def shouldSendNewBlock(newBlock: NewBlock, peerInfo: PeerInfo): Boolean =
-    newBlock.block.header.number > peerInfo.maxBlockNumber
+    newBlock.block.header.number > peerInfo.status.bestNumber
 
-  private def broadcastNewBlock(newBlock: NewBlock, peers: Set[PeerId]): F[Unit] = {
-//    val selected = randomSelect(peers)
-    val selected = peers
-    log.info(s"random selected ${selected.size} peers to broadcast block")
+  private def broadcastNewBlock(newBlock: NewBlock, peers: Set[PeerId], random: Boolean = false): F[Unit] = {
+    val selected: Set[PeerId] = if (random) randomSelect(peers) else peers
+    log.info(s"selected ${selected.size} peers to broadcast block")
     selected.toList
       .map { peerId =>
         peerManager.sendMessage(peerId, newBlock)

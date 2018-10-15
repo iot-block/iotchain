@@ -28,7 +28,7 @@ class Clique[F[_]](
     val signer: Address,
     val sign: ByteVector => F[CryptoSignature]
 )(implicit F: Sync[F], EC: ExecutionContext) {
-  private[this] val log = org.log4s.getLogger(EC.toString)
+  private[this] val log = org.log4s.getLogger
 
   def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
     // try to read snapshot from cache or db

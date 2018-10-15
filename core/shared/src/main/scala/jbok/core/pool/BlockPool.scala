@@ -23,7 +23,7 @@ case class BlockPool[F[_]](
     blocks: Ref[F, Map[ByteVector, QueuedBlock]],
     parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]],
 )(implicit F: Sync[F], EC: ExecutionContext) {
-  private[this] val log = org.log4s.getLogger(EC.toString)
+  private[this] val log = org.log4s.getLogger
 
   def contains(blockHash: ByteVector): F[Boolean] =
     blocks.get.map(_.contains(blockHash))

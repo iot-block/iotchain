@@ -12,7 +12,7 @@ import jbok.network.execution._
 import scala.concurrent.duration._
 
 trait BroadcasterFixture extends PeerManageFixture {
-  val broadcaster = new Broadcaster[IO](pm1)
+  val broadcaster = Broadcaster[IO](pm1)
 }
 
 class BroadcasterSpec extends JbokSpec {

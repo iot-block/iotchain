@@ -29,15 +29,3 @@ case class GetNodeData(mptElementsHashes: List[ByteVector], id: String = UUID.ra
 case class NodeData(values: List[ByteVector], id: String) extends SyncMessage {
   def getMptNode(idx: Int): Node = ???
 }
-
-// wire
-case class Hello(
-    p2pVersion: Int,
-    clientId: String,
-    listenPort: Int,
-    nodeId: ByteVector,
-    id: String = UUID.randomUUID().toString
-) extends SyncMessage
-
-case class Status(version: Int, networkId: Int, bestHash: ByteVector, genesisHash: ByteVector, id: String)
-    extends SyncMessage

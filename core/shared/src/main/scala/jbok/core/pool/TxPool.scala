@@ -28,7 +28,7 @@ case class TxPool[F[_]](
     peerManager: PeerManager[F],
     config: TxPoolConfig
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext, T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger(EC.toString)
+  private[this] val log = org.log4s.getLogger
 
   def stream: Stream[F, Unit] =
     peerManager

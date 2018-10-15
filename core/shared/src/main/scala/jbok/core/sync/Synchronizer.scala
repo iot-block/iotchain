@@ -24,7 +24,7 @@ case class Synchronizer[F[_]](
     peerHasBlock: Ref[F, Map[PeerId, Set[ByteVector]]],
     stopWhenTrue: Signal[F, Boolean]
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
-  private[this] val log = org.log4s.getLogger(EC.toString)
+  private[this] val log = org.log4s.getLogger
 
   val history = executor.history
 
@@ -33,7 +33,7 @@ case class Synchronizer[F[_]](
       .subscribe()
       .evalMap {
         case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
-          log.info(s"received NewBlock(${block.header.number})#(${block.header.hash.toHex.take(7)}))")
+          log.info(s"received NewBlock(${block.tag}) from ${peerId}")
 
           for {
             peerHasBlockMap <- peerHasBlock.get
@@ -43,11 +43,11 @@ case class Synchronizer[F[_]](
             _ = log.info(s"${peerManager.localAddress}: import block result: ${importResult}")
             _ <- importResult match {
               case Succeed(newBlocks, _) =>
-                log.info(s"Added new block ${block.header.number} to the top of the chain received from $peerId")
+                log.info(s"Added new ${block.tag} to the top of the chain received from $peerId")
                 broadcastBlocks(newBlocks) *> updateTxAndOmmerPools(newBlocks, Nil)
 
               case Pooled =>
-                F.delay(log.info(s"queued block ${block.header.number}"))
+                F.delay(log.info(s"pooled ${block.tag}"))
 
               case Failed(error) =>
                 F.delay(log.info(s"importing block error: ${error}"))
@@ -60,19 +60,19 @@ case class Synchronizer[F[_]](
 
         case _ => F.unit
       }
-      .onFinalize(stopWhenTrue.set(true) *> F.delay(log.info(s"stop RegularSync")))
+      .onFinalize(stopWhenTrue.set(true) *> F.delay(log.info(s"Synchronizer stopped")))
 
   def handleMinedBlock(block: Block): F[Unit] =
     executor.importBlock(block).flatMap {
       case Succeed(newBlocks, _) =>
-        log.info(s"add mined block(${block.header.number})#(${block.header.hash.toHex.take(7)}) to the main chain")
+        log.info(s"add mined ${block.tag} to the main chain")
         broadcastBlocks(newBlocks) *> updateTxAndOmmerPools(newBlocks, Nil)
 
       case Pooled =>
-        F.delay(log.info(s"mined block added to the pool"))
+        F.delay(log.info(s"add mined ${block.tag} to the pool"))
 
       case Failed(e) =>
-        F.delay(log.error(e)("mined block execution error"))
+        F.delay(log.error(e)(s"add mined ${block.tag} execution error"))
     }
 
   def start: F[Unit] =
@@ -112,7 +112,4 @@ object Synchronizer {
       s     <- fs2.async.signalOf[F, Boolean](true)
       peers <- fs2.async.refOf[F, Map[PeerId, Set[ByteVector]]](Map.empty)
     } yield Synchronizer(peerManager, executor, txPool, ommerPool, broadcaster, peers, s)
-//  fs2.async
-//      .signalOf[F, Boolean](true)
-//      .map(s => Synchronizer(peerManager, executor, txPool, ommerPool, broadcaster, s))
 }

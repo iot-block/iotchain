@@ -66,8 +66,7 @@ class WSClientBuilderPlatform[F[_], A: Codec](implicit F: ConcurrentEffect[F]) e
 
     Stream
       .bracket[F, dom.WebSocket, Unit](open)(use, release)
-      .handleErrorWith(e => Stream.eval(F.delay(println(s"error ${e}"))))
-      .onFinalize(F.delay(println("stream finalized")))
+      .onFinalize(F.delay(println("websocket client stream finalized")))
   }
 }
 

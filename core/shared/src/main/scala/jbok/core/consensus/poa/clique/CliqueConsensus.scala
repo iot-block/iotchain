@@ -12,7 +12,7 @@ import scala.util.Random
 
 class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit F: Sync[F], EC: ExecutionContext)
     extends Consensus[F](clique.history) {
-  private[this] val log = org.log4s.getLogger(EC.toString)
+  private[this] val log = org.log4s.getLogger
 
   override def semanticValidate(parentHeader: BlockHeader, block: Block): F[Unit] =
     for {
@@ -74,7 +74,7 @@ class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit
       isDuplicate <- blockPool.isDuplicate(current.header.hash)
     } yield
       if (isDuplicate) {
-        ConsensusResult.BlockInvalid(new Exception(s"Duplicated Block: ${current.id}"))
+        ConsensusResult.BlockInvalid(new Exception(s"Duplicated Block: ${current.tag}"))
       } else if (number == parent.header.number + 1 &&
                  current.header.unixTimestamp == parent.header.unixTimestamp + clique.config.period.toMillis &&
                  current.header.difficulty == difficulty) {

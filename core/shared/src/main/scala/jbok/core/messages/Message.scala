@@ -11,22 +11,22 @@ trait Message {
 
 object Messages {
   val codecMap = Map(
-    "Hello" -> RlpCodec[Hello],
-    "Status" -> RlpCodec[Status],
+    "Handshake"          -> RlpCodec[Handshake],
+    "Status"             -> RlpCodec[Status],
     "SignedTransactions" -> RlpCodec[SignedTransactions],
-    "GetReceipts" -> RlpCodec[GetReceipts],
-    "Receipts" -> RlpCodec[Receipts],
-    "GetBlockBodies" -> RlpCodec[GetBlockBodies],
-    "BlockBodies" -> RlpCodec[BlockBodies],
-    "GetBlockHeaders" -> RlpCodec[GetBlockHeaders],
-    "BlockHeaders" -> RlpCodec[BlockHeaders],
-    "NewBlock" -> RlpCodec[NewBlock],
-    "NewBlockHashes" -> RlpCodec[NewBlockHashes]
+    "GetReceipts"        -> RlpCodec[GetReceipts],
+    "Receipts"           -> RlpCodec[Receipts],
+    "GetBlockBodies"     -> RlpCodec[GetBlockBodies],
+    "BlockBodies"        -> RlpCodec[BlockBodies],
+    "GetBlockHeaders"    -> RlpCodec[GetBlockHeaders],
+    "BlockHeaders"       -> RlpCodec[BlockHeaders],
+    "NewBlock"           -> RlpCodec[NewBlock],
+    "NewBlockHashes"     -> RlpCodec[NewBlockHashes]
   )
 
   def encode(msg: Message): ByteVector =
     rstring.encode(msg.name).require.bytes ++ (msg.name match {
-      case "Hello"              => RlpCodec[Hello].encode(msg.asInstanceOf[Hello])
+      case "Handshake"          => RlpCodec[Handshake].encode(msg.asInstanceOf[Handshake])
       case "Status"             => RlpCodec[Status].encode(msg.asInstanceOf[Status])
       case "SignedTransactions" => RlpCodec[SignedTransactions].encode(msg.asInstanceOf[SignedTransactions])
       case "GetReceipts"        => RlpCodec[GetReceipts].encode(msg.asInstanceOf[GetReceipts])
@@ -43,12 +43,4 @@ object Messages {
     val name = r.value
     codecMap(name).decode(r.remainder).require.value.asInstanceOf[Message]
   }
-//
-//  def main(args: Array[String]): Unit = {
-//    val status = Status(1, 1, ByteVector.empty, ByteVector.empty)
-//
-//    val bytes = encode(status)
-//    val msg = decode(bytes).require
-//    println(msg)
-//  }
 }

@@ -4,8 +4,8 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.core.HistoryFixture
-import jbok.core.config.Configs.PeerManagerConfig
-import jbok.core.messages.Hello
+import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
+import jbok.core.messages.Handshake
 import jbok.network.NetAddress
 import jbok.network.execution._
 import scodec.bits.ByteVector
@@ -16,9 +16,11 @@ trait PeerManageFixture extends HistoryFixture {
   val peerManagerConfigs = (1 to N).toList
     .map(i => PeerManagerConfig(NetAddress("localhost", 10000 + i)))
 
-  val pm1 = PeerManager[IO](peerManagerConfigs(0), history).unsafeRunSync()
-  val pm2 = PeerManager[IO](peerManagerConfigs(1), history2).unsafeRunSync()
-  val pm3 = PeerManager[IO](peerManagerConfigs(2), history3).unsafeRunSync()
+  val syncConfig = SyncConfig()
+
+  val pm1 = PeerManager[IO](peerManagerConfigs(0), syncConfig, history).unsafeRunSync()
+  val pm2 = PeerManager[IO](peerManagerConfigs(1), syncConfig, history2).unsafeRunSync()
+  val pm3 = PeerManager[IO](peerManagerConfigs(2), syncConfig, history3).unsafeRunSync()
 
   val peerManagers = List(pm1, pm2, pm3)
 
@@ -45,7 +47,7 @@ class PeerManagerSpec extends JbokSpec with PeerManageFixture {
     }
 
     "create connections and send messages" in {
-      val message = Hello(1, "", 0, ByteVector.empty)
+      val message = Handshake(1, 0, ByteVector.empty)
       val p = for {
         _ <- pm2.broadcast(message)
         _ <- pm3.broadcast(message)

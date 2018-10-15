@@ -23,7 +23,7 @@ class BlockMiner[F[_]](
     val synchronizer: Synchronizer[F],
     val stopWhenTrue: Signal[F, Boolean]
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
-  private[this] val log = org.log4s.getLogger(EC.toString)
+  private[this] val log = org.log4s.getLogger
 
   val history = synchronizer.history
 

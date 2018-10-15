@@ -68,11 +68,14 @@ class Client[F[_], A](
     signal.get.flatMap {
       case false => F.unit
       case true  =>
-        signal.set(false) *> F.start(stream.interruptWhen(signal).compile.drain).void
+        signal.set(false) *> F.start(stream.interruptWhen(signal).onFinalize(signal.set(true)).compile.drain).void
     }
 
   def stop: F[Unit] =
     signal.set(true)
+
+  def isUp: F[Boolean] =
+    signal.get.map(!_)
 }
 
 object Client {

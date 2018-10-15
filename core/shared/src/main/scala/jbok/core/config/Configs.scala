@@ -29,9 +29,9 @@ object Configs {
       maxOutgoingPeers: Int = 10,
       maxIncomingPeers: Int = 10,
       maxPendingPeers: Int = 10,
-      connectionTimeout: FiniteDuration = 5.seconds,
-      handshakeTimeout: FiniteDuration = 5.seconds,
-      timeout: FiniteDuration = 5.seconds
+      connectionTimeout: FiniteDuration = 10.seconds,
+      handshakeTimeout: FiniteDuration = 10.seconds,
+      timeout: FiniteDuration = 10.seconds
   )
 
   case class FullNodeConfig(
@@ -41,6 +41,7 @@ object Configs {
       peer: PeerManagerConfig,
       blockChainConfig: BlockChainConfig,
       daoForkConfig: DaoForkConfig,
+      sync: SyncConfig,
       miningConfig: MiningConfig,
       nodeId: String = UUID.randomUUID().toString
   )
@@ -107,17 +108,19 @@ object Configs {
   )
 
   case class SyncConfig(
-      blacklistDuration: FiniteDuration,
-      startRetryInterval: FiniteDuration,
-      printStatusInterval: FiniteDuration,
-      maxConcurrentRequests: Int,
-      blockHeadersPerRequest: Int,
-      blockBodiesPerRequest: Int,
-      receiptsPerRequest: Int,
-      nodesPerRequest: Int,
-      minPeersToChooseTargetBlock: Int,
-      targetBlockOffset: Int,
-      blockChainOnlyPeersPoolSize: Int
+      blacklistDuration: FiniteDuration = 200.seconds,
+      startRetryInterval: FiniteDuration = 5.seconds,
+      printStatusInterval: FiniteDuration = 30.seconds,
+      checkForNewBlockInterval: FiniteDuration = 5.seconds,
+      peerResponseTimeout: FiniteDuration = 60.seconds,
+      maxConcurrentRequests: Int = 50,
+      blockHeadersPerRequest: Int = 200,
+      blockBodiesPerRequest: Int = 128,
+      receiptsPerRequest: Int = 60,
+      nodesPerRequest: Int = 200,
+      minPeersToChooseTargetBlock: Int = 2,
+      targetBlockOffset: Int = 500,
+      blockChainOnlyPeersPoolSize: Int = 100
   )
 
   case class Timeouts(
@@ -135,6 +138,7 @@ object Configs {
       val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
       val blockChainConfig: BlockChainConfig = BlockChainConfig()
       val daoForkConfig: DaoForkConfig       = DaoForkConfig()
+      val syncConfig = SyncConfig()
       val miningConfig                       = MiningConfig()
       FullNodeConfig(
         rootDir,
@@ -143,6 +147,7 @@ object Configs {
         peerManagerConfig,
         blockChainConfig,
         daoForkConfig,
+        syncConfig,
         miningConfig
       )
     }

@@ -6,9 +6,9 @@ import jbok.core.consensus.ConsensusFixture
 import jbok.core.mining.TxGen
 import jbok.core.pool._
 import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.network.execution._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import jbok.network.execution._
 
 import scala.concurrent.duration._
 

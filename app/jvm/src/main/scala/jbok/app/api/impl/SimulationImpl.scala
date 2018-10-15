@@ -67,19 +67,17 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                           blockPool: BlockPool[IO])(implicit F: ConcurrentEffect[IO],
                                                     EC: ExecutionContext,
                                                     T: Timer[IO]): IO[FullNode[IO]] = {
-    val managerPipe: Pipe[IO, Message, Message] = _.flatMap(m => Stream.empty.covary[IO])
     for {
-      peerManager <- PeerManager[IO](config.peer, history, managerPipe)
+      peerManager <- PeerManager[IO](config.peer, config.sync, history)
       executor = BlockExecutor[IO](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[IO](peerManager)
       ommerPool <- OmmerPool[IO](history)
-      broadcaster = new Broadcaster[IO](peerManager)
+      broadcaster = Broadcaster[IO](peerManager)
       synchronizer <- Synchronizer[IO](peerManager, executor, txPool, ommerPool, broadcaster)
-      syncService  <- SyncService[IO](peerManager, history)
       random = new SecureRandom()
       keyStore      <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
       miner         <- BlockMiner[IO](synchronizer)
-      filterManager <- FilterManager[IO](miner, keyStore, new FilterConfig())
+      filterManager <- FilterManager[IO](miner, keyStore, FilterConfig())
       publicAPI <- PublicApiImpl(history,
                              config.blockChainConfig,
                              config.miningConfig,
@@ -100,7 +98,6 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
       new FullNode[IO](config,
                        peerManager,
                        synchronizer,
-                       syncService,
                        keyStore,
                        miner,
                        publicApiServer,

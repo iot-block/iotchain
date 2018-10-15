@@ -42,13 +42,29 @@ class BlockExecutor[F[_]](
     val txValidator: TransactionValidator[F],
     val vm: VM
 )(implicit F: Sync[F], EC: ExecutionContext) {
-  private[this] val log = org.log4s.getLogger(s"${this.getClass}@${EC.toString}")
+  private[this] val log = org.log4s.getLogger
 
   def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxResult[F]] =
     ???
 
   def binarySearchGasEstimation(stx: SignedTransaction, blockHeader: BlockHeader): F[BigInt] =
     ???
+
+  // FIXME
+  def importBlocks(blocks: List[Block], imported: List[Block] = Nil): F[List[Block]] =
+    blocks match {
+      case Nil =>
+        F.pure(imported)
+
+      case block :: tail =>
+        importBlock(block).flatMap {
+          case BlockImportResult.Succeed(_, _) =>
+            importBlocks(tail, block :: imported)
+
+          case _ =>
+            importBlocks(tail, imported)
+        }
+    }
 
   def importBlock(block: Block): F[BlockImportResult] =
     for {
@@ -72,7 +88,7 @@ class BlockExecutor[F[_]](
     for {
       topBlockHash <- blockPool.addBlock(block, bestBlockNumber).map(_.get.hash)
       topBlocks    <- blockPool.getBranch(topBlockHash, dequeue = true)
-      _ = log.info(s"execute top blocks: ${topBlocks.map(_.id)}")
+      _ = log.info(s"execute top blocks: ${topBlocks.map(_.tag)}")
       result <- executeBlocks(topBlocks, currentTd).attempt.map {
         case Left(e) =>
           BlockImportResult.Failed(e)
@@ -100,13 +116,13 @@ class BlockExecutor[F[_]](
       minerAccount <- getAccountToPay(minerAddress, world)
       minerReward  <- consensus.calcBlockMinerReward(block.header.number, block.body.uncleNodesList.size)
       afterMinerReward = world.putAccount(minerAddress, minerAccount.increaseBalance(UInt256(minerReward)))
-      _                = log.info(s"paying block${block.header.number} reward of $minerReward to miner $minerAddress")
+      _                = log.info(s"paying ${block.tag} reward of $minerReward to miner $minerAddress")
       world <- Foldable[List].foldLeftM(block.body.uncleNodesList, afterMinerReward) { (ws, ommer) =>
         val ommerAddress = Address(ommer.beneficiary)
         for {
           account     <- getAccountToPay(ommerAddress, ws)
           ommerReward <- consensus.calcOmmerMinerReward(block.header.number, ommer.number)
-          _ = log.info(s"paying block${block.header.number} reward of $ommerReward to ommer $ommerAddress")
+          _ = log.info(s"paying ${block.tag} reward of $ommerReward to ommer $ommerAddress")
         } yield ws.putAccount(ommerAddress, account.increaseBalance(UInt256(ommerReward)))
       }
     } yield world
@@ -151,16 +167,16 @@ class BlockExecutor[F[_]](
       case block :: tail =>
         executeBlock(block, alreadyValidated = true).attempt.flatMap {
           case Right(receipts) =>
-            log.info(s"execute block(${block.header.number}) ${block.header.hash.toHex.take(7)} succeed")
+            log.info(s"execute ${block.tag} succeed")
             val td = parentTd + block.header.difficulty
             for {
               _ <- history.save(block, receipts, td, saveAsBestBlock = true)
-              _ = log.info(s"saved block(${block.header.number}) as the best block")
+              _ = log.info(s"saved ${block.tag} as the best block")
               executedBlocks <- executeBlocks(tail, td)
             } yield block :: executedBlocks
 
           case Left(error) =>
-            log.error(error)(s"execute block(${block.header.hash.toHex.take(7)}) failed")
+            log.error(error)(s"execute ${block.tag} failed")
             F.raiseError(error)
         }
 

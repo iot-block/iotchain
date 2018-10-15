@@ -33,7 +33,7 @@ class FullNodeFixture {
     val blockPool = BlockPool(history).unsafeRunSync()
     val consensus = new CliqueConsensus[IO](blockPool, clique)
 
-    FullNode.inMemory[IO](config, history, consensus, blockPool).unsafeRunSync()
+    FullNode.apply[IO](config, history, consensus, blockPool).unsafeRunSync()
   }
 }
 

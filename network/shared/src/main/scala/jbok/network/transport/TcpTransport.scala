@@ -41,7 +41,7 @@ class TcpTransport[F[_], A](
     } yield ()
 
   private def onError(e: Throwable): Stream[F, Unit] =
-    Stream.eval(F.delay(log.warn(s"connection closed because ${e}")))
+    Stream.eval(F.delay(log.warn(e)("connection closed")))
 
   override def connect(remote: InetSocketAddress, onConnect: Connection[F, A] => F[Unit] = _ => F.unit): F[Unit] =
     connections.get.flatMap(_.get(remote) match {
@@ -69,7 +69,8 @@ class TcpTransport[F[_], A](
                           topic.publish1(Some(TransportEvent.Received(remote, a)))
                         case Some(id) =>
                           promises.get.flatMap(_.get((remote, id)) match {
-                            case Some(promise) => promise.complete(a)
+                            case Some(promise) =>
+                              promise.complete(a)
                             case None =>
                               topic.publish1(Some(TransportEvent.Received(remote, a)))
                           })
@@ -166,7 +167,7 @@ class TcpTransport[F[_], A](
     }
 
   override def stop: F[Unit] =
-    stopListen.set(true) *> getConnected.flatMap(_.values.toList.traverse(_.close).void)
+    stopListen.set(true)
 
   override def broadcast(a: A): F[Unit] =
     for {
@@ -194,7 +195,7 @@ class TcpTransport[F[_], A](
     connections.get.flatMap(_.get(remote) match {
       case None => F.pure(None)
       case Some(conn) =>
-        for {
+        val p = for {
           promise <- fs2.async.promise[F, A]
           id = I.id(a).getOrElse("")
           _    <- promises.modify(_ + ((remote, id) -> promise))
@@ -202,6 +203,10 @@ class TcpTransport[F[_], A](
           resp <- promise.timedGet(timeout, S)
           _    <- promises.modify(_ - (remote -> id))
         } yield resp
+        p.attempt.map {
+          case Left(_) => None
+          case Right(x) => x
+        }
     })
 
   override def read(remote: InetSocketAddress): F[Option[A]] =
