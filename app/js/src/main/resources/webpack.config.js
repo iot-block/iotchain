@@ -25,5 +25,6 @@ module.exports = merge(config, {
       inject: false,
       template: path.resolve(__dirname, "../../../../src/main/resources/template.html")
     })
-  ]
+  ],
+  target: "electron-main" // https://github.com/scalacenter/scalajs-bundler/issues/252
 });

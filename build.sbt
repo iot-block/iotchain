@@ -1,4 +1,5 @@
 import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
+import scalajsbundler.util.JSON
 
 organization in ThisBuild := "org.jbok"
 
@@ -122,23 +123,46 @@ lazy val examples = crossProject(JSPlatform, JVMPlatform)
 lazy val app = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
+  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin))
   .jsSettings(commonJsSettings)
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
   .settings(
     name := "jbok-app",
-    addCommandAlias("dev", ";fastOptJS::startWebpackDevServer;~fastOptJS"),
+    packageName in Docker := "jbok",
+    dockerBaseImage := "openjdk:8-jre-alpine"
+  )
+  .jsSettings(
+    useYarn := true,
+    additionalNpmConfig in Compile := Map(
+      "license" -> JSON.str("MIT"),
+      "name" -> JSON.str("JBOK"),
+      "description" -> JSON.str("JBOK"),
+      "version" -> JSON.str("0.0.1"),
+      "author" -> JSON.str("JBOK authors"),
+      "repository" -> JSON.obj(
+        "type" -> JSON.str("git"),
+        "url" -> JSON.str("https://github.com/c-block/jbok.git")
+      ),
+      "build" -> JSON.obj(
+        "appId" -> JSON.str("org.jbok.app")
+      ),
+      "scripts" -> JSON.obj(
+        "pack" -> JSON.str("electron-builder --dir"),
+        "dist" -> JSON.str("electron-builder")
+      )
+    ),
     npmDevDependencies in Compile ++= Seq(
       "file-loader"         -> "1.1.11",
       "style-loader"        -> "0.20.3",
       "css-loader"          -> "0.28.11",
       "html-webpack-plugin" -> "3.2.0",
       "copy-webpack-plugin" -> "4.5.1",
-      "webpack-merge"       -> "4.1.2"
+      "webpack-merge"       -> "4.1.2",
+      "electron-builder"    -> "20.28.4"
     ),
     version in webpack := "4.8.1",
     version in startWebpackDevServer := "3.1.4",
-    webpackResources := baseDirectory.value / "webpack" * "*",
-    webpackConfigFile := Some(baseDirectory.value / "webpack" / "webpack.config.js"),
+    webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
     webpackBundlingMode := BundlingMode.LibraryAndApplication()
   )
   .dependsOn(core % CompileAndTest)

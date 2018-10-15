@@ -2,16 +2,21 @@ package jbok.app
 
 import java.net.URI
 
-import com.thoughtworks.binding.Binding.{BindingSeq, Var, Vars}
-import com.thoughtworks.binding.{Binding, dom}
+import cats.effect.IO
+import com.thoughtworks.binding.Binding._
+import com.thoughtworks.binding.Binding.Var
+import com.thoughtworks.binding._
 import jbok.app.components.{SelectItem, SelectMenu, Spinner}
 import jbok.app.views.Nav.{Tab, TabList}
 import jbok.app.views._
 import jbok.network.execution._
 import org.scalajs.dom._
+import fs2._
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSImport
+import scala.util.{Failure, Success}
+import scala.concurrent.duration._
 
 @JSImport("css/normalize.css", JSImport.Namespace)
 @js.native
@@ -23,17 +28,21 @@ object AppCss extends js.Object
 
 object JbokApp {
   val normalizeCss = NormalizeCss
-  val appCss = AppCss
+  val appCss       = AppCss
 
-  val uri    = new URI(s"ws://localhost:8888")
+  val uri = new URI(s"ws://localhost:8888")
 
   val selectMenu =
     new SelectMenu("please select max").render(Vars(SelectItem("50", "50"), SelectItem("100", "100")))
 
   val config = AppConfig.default
-  val state = AppState(Var(config))
+  val state  = AppState(Var(config))
 
-  JbokClient(config.uri).unsafeToFuture().map(c => state.client.value = Some(c))
+  (for {
+    client <- JbokClient(config.uri)
+    _ = state.client.value = Some(client)
+    _ <- client.status.evalMap(x => IO(if (x) () else state.client.value = None)).compile.drain
+  } yield ()).unsafeToFuture()
 
   val statusView       = StatusView(state).render
   val accountsView     = AccountsView(state).render()
