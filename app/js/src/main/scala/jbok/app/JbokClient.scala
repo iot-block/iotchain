@@ -2,17 +2,18 @@ package jbok.app
 
 import java.net.URI
 
-import fs2._
-import jbok.network.execution._
 import cats.effect.IO
+import fs2._
 import jbok.app.api.{PrivateAPI, PublicAPI}
 import jbok.network.client.{Client, WSClientBuilderPlatform}
+import jbok.common.execution._
 import jbok.network.rpc.RpcClient
+
 import scala.concurrent.duration._
 
 case class JbokClient(uri: URI, client: Client[IO, String], admin: PrivateAPI, public: PublicAPI) {
   def status: Stream[IO, Boolean] = for {
-    _ <- Sch.awakeEvery[IO](5.seconds)
+    _ <- Stream.awakeEvery[IO](5.seconds)
     isUp <- Stream.eval(client.isUp)
   } yield isUp
 }

@@ -5,14 +5,14 @@ import java.util.Date
 
 import cats.data.OptionT
 import cats.effect.IO
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import fs2.async.Ref
 import jbok.app.api._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.core.History
 import jbok.core.config.Configs.{BlockChainConfig, MiningConfig}
-import jbok.core.keystore.{KeyStore, KeyStorePlatform}
+import jbok.core.keystore.KeyStore
 import jbok.core.mining.BlockMiner
 import jbok.core.models._
 import jbok.crypto.signature.CryptoSignature
@@ -103,7 +103,7 @@ class PublicApiImpl(
     for {
       _ <- reportActive
       now = new Date
-      _ <- hashRate.modify(m => removeObsoleteHashrates(now, m + (id -> (hr, now))))
+      _ <- hashRate.update(m => removeObsoleteHashrates(now, m + (id -> (hr, now))))
     } yield true
 
   override def getGasPrice: IO[BigInt] = {
@@ -123,13 +123,14 @@ class PublicApiImpl(
 
   override def getMining: IO[Boolean] =
     lastActive
-      .modify(e =>
+      .update(e =>
         e.filter(time =>
-          Duration.between(time.toInstant, (new Date).toInstant).toMillis < miningConfig.activeTimeout.toMillis))
+          Duration.between(time.toInstant, (new Date).toInstant).toMillis < miningConfig.activeTimeout.toMillis)
+      )
       .map(_.now.isDefined)
 
   override def getHashRate: IO[BigInt] =
-    hashRate.modify(m => removeObsoleteHashrates(new Date, m)).map(_.now.map(_._2._1).sum)
+    hashRate.update(m => removeObsoleteHashrates(new Date, m)).map(_.now.map(_._2._1).sum)
 
   override def getWork: IO[GetWorkResponse] = ???
 
@@ -297,7 +298,7 @@ class PublicApiImpl(
 
   private[jbok] def reportActive: IO[Unit] = {
     val now = new Date()
-    lastActive.modify(_ => Some(now)).void
+    lastActive.update(_ => Some(now))
   }
 
   private[jbok] def resolveAccount(address: Address, blockParam: BlockParam): IO[Account] =
@@ -333,8 +334,8 @@ object PublicApiImpl {
       version: Int,
   ): IO[PublicAPI] =
     for {
-      hashRate   <- fs2.async.refOf[IO, Map[ByteVector, (BigInt, Date)]](Map.empty)
-      lastActive <- fs2.async.refOf[IO, Option[Date]](None)
+      hashRate   <- Ref.of[IO, Map[ByteVector, (BigInt, Date)]](Map.empty)
+      lastActive <- Ref.of[IO, Option[Date]](None)
     } yield {
       new PublicApiImpl(
         blockChainConfig,

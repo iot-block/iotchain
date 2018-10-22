@@ -3,8 +3,8 @@ package jbok.network.server
 import java.net.InetSocketAddress
 
 import cats.effect.ConcurrentEffect
+import cats.effect.concurrent.Ref
 import fs2._
-import fs2.async.Ref
 import jbok.network.Connection
 import scodec.Codec
 

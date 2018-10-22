@@ -3,12 +3,12 @@ package jbok.network.server
 import java.net.InetSocketAddress
 
 import cats.effect.ConcurrentEffect
+import cats.effect.concurrent.Ref
 import fs2._
-import fs2.async.Ref
 import cats.implicits._
 import jbok.network.Connection
 import jbok.network.common.TcpUtil
-import jbok.network.execution._
+import jbok.common.execution._
 import scodec.Codec
 
 class TcpServerBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends ServerBuilder[F, A] {
@@ -28,16 +28,16 @@ class TcpServerBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends 
           log.info(s"server bound to ${bindAddr}")
           Stream.empty.covary[F]
         case Right(s) =>
-          s.flatMap(socket => {
+          Stream.resource(s).flatMap(socket => {
             val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket, true)
             for {
               remote <- Stream.eval(conn.remoteAddress)
-              _      <- Stream.eval(conns.modify(_ + (remote -> conn)))
-              _      <- conn.reads().through(pipe).to(conn.writes()).onFinalize(conns.modify(_ - remote).void)
+              _      <- Stream.eval(conns.update(_ + (remote -> conn)))
+              _      <- conn.reads().through(pipe).to(conn.writes()).onFinalize(conns.update(_ - remote).void)
             } yield ()
           })
       }
-      .join(maxConcurrent)
+      .parJoin(maxConcurrent)
       .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(e)(s"server error: ${e}"))))
 }
 

@@ -1,10 +1,10 @@
 package jbok.app.api
 
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Fiber, Timer}
 import cats.implicits._
-import fs2.async.Ref
 import jbok.core.config.Configs.FilterConfig
-import jbok.core.keystore.{KeyStore, KeyStorePlatform}
+import jbok.core.keystore.KeyStore
 import jbok.core.ledger.BloomFilter
 import jbok.core.mining.BlockMiner
 import jbok.core.models.{Address, Block, Receipt}
@@ -49,11 +49,11 @@ class FilterManager[F[_]](
 
   def uninstallFilter(id: BigInt): F[Unit] =
     for {
-      _ <- filters.modify(_ - id)
-      _ <- lastCheckBlocks.modify(_ - id)
-      _ <- lastCheckTimestamps.modify(_ - id)
+      _ <- filters.update(_ - id)
+      _ <- lastCheckBlocks.update(_ - id)
+      _ <- lastCheckTimestamps.update(_ - id)
       _ <- filterTimeouts.get.flatMap(_.get(id).map(_.cancel).getOrElse(F.unit))
-      _ <- filterTimeouts.modify(_ - id)
+      _ <- filterTimeouts.update(_ - id)
     } yield ()
 
   def getFilterLogs(filterId: BigInt): F[FilterLogs] =
@@ -61,8 +61,8 @@ class FilterManager[F[_]](
       filterOpt <- filters.get.map(_.get(filterId))
       bn        <- history.getBestBlockNumber
       _ <- if (filterOpt.isDefined) {
-        lastCheckBlocks.modify(_ + (filterId       -> bn)) *>
-          lastCheckTimestamps.modify(_ + (filterId -> System.currentTimeMillis()))
+        lastCheckBlocks.update(_ + (filterId       -> bn)) *>
+          lastCheckTimestamps.update(_ + (filterId -> System.currentTimeMillis()))
       } else {
         F.unit
       }
@@ -89,8 +89,8 @@ class FilterManager[F[_]](
       lastCheckTimestamp <- lastCheckTimestamps.get.map(_.getOrElse(id, System.currentTimeMillis()))
       filterOpt          <- filters.get.map(_.get(id))
       _ <- if (filterOpt.isDefined) {
-        lastCheckBlocks.modify(_ + (id       -> bestBlockNumber)) *>
-          lastCheckTimestamps.modify(_ + (id -> System.currentTimeMillis()))
+        lastCheckBlocks.update(_ + (id       -> bestBlockNumber)) *>
+          lastCheckTimestamps.update(_ + (id -> System.currentTimeMillis()))
       } else {
         F.unit
       }
@@ -170,10 +170,10 @@ class FilterManager[F[_]](
 
   private[jbok] def addFilterAndSendResponse(filter: Filter): F[BigInt] =
     for {
-      _  <- filters.modify(_ + (filter.id -> filter))
+      _  <- filters.update(_ + (filter.id -> filter))
       bn <- history.getBestBlockNumber
-      _  <- lastCheckBlocks.modify(_ + (filter.id -> bn))
-      _  <- lastCheckTimestamps.modify(_ + (filter.id -> System.currentTimeMillis()))
+      _  <- lastCheckBlocks.update(_ + (filter.id -> bn))
+      _  <- lastCheckTimestamps.update(_ + (filter.id -> System.currentTimeMillis()))
       _  <- resetTimeout(filter.id)
     } yield filter.id
 
@@ -182,7 +182,7 @@ class FilterManager[F[_]](
       fiber       <- filterTimeouts.get.map(_.get(id))
       _           <- fiber.map(_.cancel).getOrElse(F.unit)
       cancellable <- F.start(T.sleep(filterConfig.filterTimeout) *> uninstallFilter(id))
-      _           <- filterTimeouts.modify(_ + (id -> cancellable))
+      _           <- filterTimeouts.update(_ + (id -> cancellable))
     } yield ()
 
   private[jbok] def getLogsFromBlock(filter: LogFilter, block: Block, receipts: List[Receipt]): List[TxLog] = {
@@ -251,10 +251,10 @@ object FilterManager {
       filterConfig: FilterConfig
   )(implicit T: Timer[F]): F[FilterManager[F]] =
     for {
-      filters             <- fs2.async.refOf[F, Map[BigInt, Filter]](Map.empty)
-      lastCheckBlocks     <- fs2.async.refOf[F, Map[BigInt, BigInt]](Map.empty)
-      lastCheckTimestamps <- fs2.async.refOf[F, Map[BigInt, Long]](Map.empty)
-      filterTimeouts      <- fs2.async.refOf[F, Map[BigInt, Fiber[F, Unit]]](Map.empty)
+      filters             <- Ref.of[F, Map[BigInt, Filter]](Map.empty)
+      lastCheckBlocks     <- Ref.of[F, Map[BigInt, BigInt]](Map.empty)
+      lastCheckTimestamps <- Ref.of[F, Map[BigInt, Long]](Map.empty)
+      filterTimeouts      <- Ref.of[F, Map[BigInt, Fiber[F, Unit]]](Map.empty)
     } yield
       new FilterManager[F](
         miner,

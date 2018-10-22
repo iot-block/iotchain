@@ -1,10 +1,10 @@
 package jbok.core.peer.discovery
 import java.net.InetSocketAddress
 
-import cats.effect.Effect
+import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.{Concurrent, Effect, Timer}
 import cats.implicits._
-import fs2.async.{Promise, Ref}
-import fs2.{Pipe, Scheduler, Stream}
+import fs2._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.core.config.Configs.DiscoveryConfig
@@ -19,6 +19,7 @@ import scodec.bits.ByteVector
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Random
+import cats.effect.implicits._
 
 case class Discovery[F[_]](
     config: DiscoveryConfig,
@@ -26,8 +27,8 @@ case class Discovery[F[_]](
     store: PeerStore[F],
     transport: UdpTransport[F, UdpPacket],
     table: PeerTable[F],
-    promises: Ref[F, Map[ByteVector, Promise[F, KadPacket]]],
-)(implicit F: Effect[F], S: Scheduler, EC: ExecutionContext) {
+    promises: Ref[F, Map[ByteVector, Deferred[F, KadPacket]]],
+)(implicit F: Concurrent[F], T: Timer[F], EC: ExecutionContext) {
   import Discovery._
 
   private[this] val log = org.log4s.getLogger
@@ -41,15 +42,12 @@ case class Discovery[F[_]](
     val req = Ping(4, ourEndpoint, Endpoint.makeEndpoint(to, 0), System.currentTimeMillis() + ttl.toMillis)
     for {
       packet  <- encode(req)
-      promise <- Promise.empty[F, KadPacket]
-      _       <- promises.modify(_ + (packet.mdc -> promise))
+      promise <- Deferred[F, KadPacket]
+      _       <- promises.update(_ + (packet.mdc -> promise))
       _       <- transport.send(to, packet, Some(timeout))
-      pong <- promise.timedGet(timeout, S).flatMap {
-        case Some(kad) => F.pure(kad.asInstanceOf[Pong])
-        case None      => F.raiseError[Pong](ErrTimeout)
-      }
-      _ <- promises.modify(_ - id)
-    } yield pong
+      kad <- promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
+      _ <- promises.update(_ - id)
+    } yield kad.asInstanceOf[Pong]
   }
 
   /**
@@ -67,17 +65,14 @@ case class Discovery[F[_]](
         F.unit
       }
       req = FindNode(targetPK, System.currentTimeMillis() + ttl.toMillis)
-      p <- Promise.empty[F, KadPacket]
-      _ <- promises.modify(_ + (toId -> p))
+      p <- Deferred[F, KadPacket]
+      _ <- promises.update(_ + (toId -> p))
       _ = log.info(s"findnode from ${toId}")
       packet <- encode(req)
       _      <- transport.send(to, packet, Some(timeout))
-      neighbours <- p.timedGet(timeout, S).flatMap {
-        case Some(kad) => F.pure(kad.asInstanceOf[Neighbours])
-        case None      => F.raiseError[Neighbours](ErrTimeout)
-      }
-      _ <- promises.modify(_ - toId)
-    } yield neighbours
+      neighbours <- p.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
+      _ <- promises.update(_ - toId)
+    } yield neighbours.asInstanceOf[Neighbours]
 
   def findNode(node: PeerNode, targetPK: KeyPair.Public): F[Vector[PeerNode]] =
     for {
@@ -222,7 +217,7 @@ case class Discovery[F[_]](
         case (remote, packet) =>
           extract(packet).map(kad => (remote, kad, packet))
       }
-      .evalMap[List[(InetSocketAddress, KadPacket)]] {
+      .evalMap[F, List[(InetSocketAddress, KadPacket)]] {
         case (remote, Ping(_, from, to, expiration), packet) =>
           for {
             _ <- checkExpiration(expiration)
@@ -278,14 +273,14 @@ object Discovery {
   val bondExpiration      = 24.hours
   val maxFindNodeFailures = 5
 
-  def apply[F[_]: Effect](
+  def apply[F[_]: Concurrent](
       config: DiscoveryConfig,
       keyPair: KeyPair,
       transport: UdpTransport[F, UdpPacket],
       db: KeyValueDB[F]
-  )(implicit S: Scheduler, EC: ExecutionContext): F[Discovery[F]] =
+  )(implicit T: Timer[F], EC: ExecutionContext): F[Discovery[F]] =
     for {
-      promises <- fs2.async.refOf[F, Map[ByteVector, Promise[F, KadPacket]]](Map.empty)
+      promises <- Ref.of[F, Map[ByteVector, Deferred[F, KadPacket]]](Map.empty)
       store = new PeerStore[F](db)
       table <- PeerTable[F](PeerNode(keyPair.public, config.interface, config.port), store, Vector.empty)
     } yield Discovery[F](config, keyPair, store, transport, table, promises)

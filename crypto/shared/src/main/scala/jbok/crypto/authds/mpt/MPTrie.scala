@@ -3,8 +3,8 @@ package jbok.crypto.authds.mpt
 import cats.Traverse
 import cats.data.OptionT
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import fs2.async.Ref
 import jbok.crypto.authds.mpt.Node._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
@@ -43,7 +43,7 @@ object MPTrie {
 
   def apply[F[_]: Sync](db: KeyValueDB[F], root: Option[ByteVector] = None): F[MPTrie[F]] =
     for {
-      rootHash <- fs2.async.refOf[F, Option[ByteVector]](root)
+      rootHash <- Ref.of[F, Option[ByteVector]](root)
     } yield new MPTrie[F](db, rootHash)
 }
 
@@ -64,19 +64,19 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
     for {
       hashOpt <- rootHash.get
       nibbles = HexPrefix.bytesToNibbles(key)
-      _ = log.trace(s"put nibbles: ${nibbles}")
+      _       = log.trace(s"put nibbles: ${nibbles}")
       _ <- hashOpt match {
         case Some(hash) if hash != MPTrie.emptyRootHash =>
           for {
             root        <- getRootOpt
             newRootHash <- putNode(root.get, nibbles, newVal) >>= commitPut
-            _           <- rootHash.setSync(Some(newRootHash))
+            _           <- rootHash.set(Some(newRootHash))
           } yield ()
 
         case _ =>
           val newRoot = LeafNode(nibbles, newVal)
           commitPut(NodeInsertResult(newRoot, Nil, newRoot :: Nil)).flatMap(newRootHash =>
-            rootHash.setSync(Some(newRootHash)))
+            rootHash.set(Some(newRootHash)))
       }
     } yield ()
 
@@ -88,10 +88,10 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         case Some(hash) if hash != MPTrie.emptyRootHash =>
           val nibbles = HexPrefix.bytesToNibbles(key)
           for {
-            root        <- getRootOpt
+            root <- getRootOpt
             _ = log.trace(s"delNode: ${root.get}, ${nibbles}")
             newRootHash <- delNode(root.get, nibbles) >>= commitDel
-            _           <- rootHash.setSync(Some(newRootHash))
+            _           <- rootHash.set(Some(newRootHash))
           } yield ()
 
         case _ => F.unit
@@ -138,7 +138,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
       .sequence
       .void
 
-  override def clear(): F[Unit] = db.clear() *> rootHash.setSync(None)
+  override def clear(): F[Unit] = db.clear() *> rootHash.set(None)
 
   ////////////////////////
   ////////////////////////
@@ -442,7 +442,7 @@ class MPTrie[F[_]](db: KeyValueDB[F], rootHash: Ref[F, Option[ByteVector]])(impl
         for {
           next <- getNodeByEntry(node.child)
           _ = log.trace(s"del next: ${next.get}")
-          r    <- delNode(next.get, key.drop(l))
+          r <- delNode(next.get, key.drop(l))
           result <- r match {
             case NodeRemoveResult(true, newNodeOpt, toDel, toPut) =>
               // If we changed the child, we need to fix this extension node

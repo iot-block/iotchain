@@ -1,11 +1,10 @@
-package jbok.network
+package jbok.common
 
 import java.lang.Thread.UncaughtExceptionHandler
 import java.nio.channels.AsynchronousChannelGroup
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executors, ThreadFactory}
 
-import fs2.Scheduler
 import fs2.io.udp.AsynchronousSocketGroup
 
 import scala.concurrent.ExecutionContext
@@ -37,10 +36,6 @@ trait ExecutionPlatform extends execution {
 
   override def executionContext: ExecutionContext =
     ExecutionContext.Implicits.global
-
-  override def scheduler: Scheduler =
-    Scheduler.fromScheduledExecutorService(
-      Executors.newScheduledThreadPool(1, mkThreadFactory("fs2-scheduler", daemon = true)))
 
   override def asyncChannelGroup: AsynchronousChannelGroup =
     AsynchronousChannelGroup.withThreadPool(Executors.newCachedThreadPool(mkThreadFactory("AG", daemon = true)))

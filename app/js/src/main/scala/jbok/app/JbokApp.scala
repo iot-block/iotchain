@@ -9,7 +9,7 @@ import com.thoughtworks.binding._
 import jbok.app.components.{SelectItem, SelectMenu, Spinner}
 import jbok.app.views.Nav.{Tab, TabList}
 import jbok.app.views._
-import jbok.network.execution._
+import jbok.common.execution._
 import org.scalajs.dom._
 import fs2._
 

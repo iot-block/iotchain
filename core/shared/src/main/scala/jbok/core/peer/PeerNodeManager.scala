@@ -3,6 +3,7 @@ package jbok.core.peer
 import java.net.URI
 
 import cats.effect.Effect
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.core.store.PeerNodeStore
 import jbok.persistent.KeyValueDB
@@ -20,7 +21,7 @@ object PeerNodeManager {
     val store = new PeerNodeStore[F](db)
     for {
       init  <- store.get
-      known <- fs2.async.refOf[F, Set[PeerNode]](init)
+      known <- Ref.of[F, Set[PeerNode]](init)
     } yield new PeerNodeManager[F] {
         override def add(uris: URI*): F[Unit] =
           for {
@@ -29,7 +30,7 @@ object PeerNodeManager {
             _ <- if (cur == now) {
               F.unit
             } else {
-              known.setSync(now) *> store.put(now)
+              known.set(now) *> store.put(now)
             }
           } yield ()
 
@@ -40,7 +41,7 @@ object PeerNodeManager {
             _ <- if (cur == now) {
               F.unit
             } else {
-              known.setSync(now) *> store.put(now)
+              known.set(now) *> store.put(now)
             }
           } yield ()
 

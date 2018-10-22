@@ -2,13 +2,13 @@ package jbok.network.client
 
 import java.net.URI
 
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.implicits._
 import fs2._
-import fs2.async.mutable.{Queue, Signal}
-import fs2.async.{Promise, Ref}
+import fs2.concurrent.{Queue, SignallingRef}
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.execution._
+import jbok.common.execution._
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext
@@ -18,14 +18,14 @@ class Client[F[_], A](
     private val stream: Stream[F, Unit],
     private val in: Queue[F, A],
     private val out: Queue[F, A],
-    private val signal: Signal[F, Boolean],
-    val promises: Ref[F, Map[String, Promise[F, A]]],
+    private val signal: SignallingRef[F, Boolean],
+    val promises: Ref[F, Map[String, Deferred[F, A]]],
     val queues: Ref[F, Map[String, Queue[F, A]]]
 )(implicit F: ConcurrentEffect[F],
   C: Codec[A],
   I: RequestId[A],
   M: RequestMethod[A],
-  S: Scheduler,
+  T: Timer[F],
   EC: ExecutionContext) {
 
   def write(a: A): F[Unit] = {
@@ -37,8 +37,8 @@ class Client[F[_], A](
 
   def request(a: A, timeout: Option[FiniteDuration] = None): F[A] =
     for {
-      promise <- fs2.async.promise[F, A]
-      _       <- promises.modify(_ + (I.id(a).get -> promise))
+      promise <- Deferred[F, A]
+      _       <- promises.update(_ + (I.id(a).get -> promise))
       _       <- write(a)
       resp    <- promise.get
     } yield resp
@@ -58,8 +58,8 @@ class Client[F[_], A](
             F.pure(queue)
           case None =>
             for {
-              queue <- fs2.async.boundedQueue[F, A](32)
-              _     <- queues.modify(_ + (method -> queue))
+              queue <- Queue.bounded[F, A](32)
+              _     <- queues.update(_ + (method -> queue))
             } yield queue
         })
     }
@@ -83,13 +83,13 @@ object Client {
       builder: ClientBuilder[F, A],
       to: URI,
       maxQueued: Int = 32
-  )(implicit F: ConcurrentEffect[F], I: RequestId[A], M: RequestMethod[A]): F[Client[F, A]] =
+  )(implicit F: ConcurrentEffect[F], I: RequestId[A], M: RequestMethod[A], T: Timer[F]): F[Client[F, A]] =
     for {
-      in       <- fs2.async.boundedQueue[F, A](maxQueued)
-      out      <- fs2.async.boundedQueue[F, A](maxQueued)
-      signal   <- fs2.async.signalOf[F, Boolean](true)
-      promises <- fs2.async.refOf[F, Map[String, Promise[F, A]]](Map.empty)
-      queues   <- fs2.async.refOf[F, Map[String, Queue[F, A]]](Map.empty)
+      in       <- Queue.bounded[F, A](maxQueued)
+      out      <- Queue.bounded[F, A](maxQueued)
+      signal   <- SignallingRef[F, Boolean](true)
+      promises <- Ref.of[F, Map[String, Deferred[F, A]]](Map.empty)
+      queues   <- Ref.of[F, Map[String, Queue[F, A]]](Map.empty)
     } yield {
 
       def getOrCreateQueue(methodOpt: Option[String]): F[Queue[F, A]] =
@@ -101,8 +101,8 @@ object Client {
               case Some(queue) => F.pure(queue)
               case None =>
                 for {
-                  queue <- fs2.async.boundedQueue[F, A](32)
-                  _     <- queues.modify(_ + (method -> queue))
+                  queue <- Queue.bounded[F, A](32)
+                  _     <- queues.update(_ + (method -> queue))
                 } yield queue
             })
         }
@@ -115,7 +115,7 @@ object Client {
                 getOrCreateQueue(M.method(a)).flatMap(_.enqueue1(a))
               case Some(id) =>
                 promises.get.flatMap(_.get(id) match {
-                  case Some(promise) => promise.complete(a) *> promises.modify(_ - id).void
+                  case Some(promise) => promise.complete(a) *> promises.update(_ - id).void
                   case None          => getOrCreateQueue(M.method(a)).flatMap(_.enqueue1(a))
                 })
             }

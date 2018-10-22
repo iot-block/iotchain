@@ -3,19 +3,18 @@ package jbok.network.server
 import java.net.InetSocketAddress
 
 import cats.effect.ConcurrentEffect
+import cats.effect.concurrent.Ref
+import cats.implicits._
 import fs2._
-import fs2.async.Ref
+import fs2.concurrent.Queue
 import jbok.network.Connection
-import org.http4s.HttpService
+import org.http4s.HttpRoutes
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.blaze.BlazeBuilder
 import org.http4s.server.websocket._
-import org.http4s.websocket.WebsocketBits
-import org.http4s.websocket.WebsocketBits._
+import org.http4s.websocket.WebSocketFrame
 import scodec.Codec
-import cats.implicits._
 import scodec.bits.BitVector
-import jbok.network.execution._
 
 class WSServerBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends ServerBuilder[F, A] with Http4sDsl[F] {
 
@@ -31,20 +30,20 @@ class WSServerBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends S
       receiveBufferSize: Int
   ): fs2.Stream[F, Unit] = {
 
-    val service = HttpService[F] {
+    val service = HttpRoutes.of[F] {
       case GET -> Root =>
-        fs2.async.unboundedQueue[F, A].flatMap { queue =>
+        Queue.unbounded[F, A].flatMap { queue =>
           val toClient = queue.dequeue.map { x =>
-            val bytes = Codec[A].encode(x).require.toByteArray
-            WebsocketBits.Binary(bytes, true)
+            val bytes = Codec[A].encode(x).require.bytes
+            WebSocketFrame.Binary(bytes, true)
           }
 
           val fromClient: Sink[F, WebSocketFrame] = { s: Stream[F, WebSocketFrame] =>
             s.map {
-                case WebsocketBits.Binary(bytes, _) =>
-                  Codec[A].decode(BitVector(bytes)).require.value
+                case WebSocketFrame.Binary(bytes, _) =>
+                  Codec[A].decode(bytes.bits).require.value
 
-                case WebsocketBits.Text(text, _) =>
+                case WebSocketFrame.Text(text, _) =>
                   Codec[A].decode(BitVector.fromValidBase64(text)).require.value
               }
               .through(pipe)

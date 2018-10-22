@@ -2,10 +2,10 @@ package jbok.network.transport
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.implicits._
-import fs2.async.mutable.{Signal, Topic}
-import fs2.async.{Promise, Ref}
+import fs2.concurrent.{SignallingRef, Topic}
 import fs2.{Sink, _}
 import jbok.network.Connection
 import jbok.network.common.{RequestId, RequestMethod, TcpUtil}
@@ -18,9 +18,9 @@ import scala.concurrent.duration._
 class TcpTransport[F[_], A](
     val pipe: Pipe[F, A, A],
     val connections: Ref[F, Map[InetSocketAddress, Connection[F, A]]],
-    val promises: Ref[F, Map[(InetSocketAddress, String), Promise[F, A]]],
+    val promises: Ref[F, Map[(InetSocketAddress, String), Deferred[F, A]]],
     val topic: Topic[F, Option[TransportEvent[A]]],
-    val stopListen: Signal[F, Boolean],
+    val stopListen: SignallingRef[F, Boolean],
     val timeout: FiniteDuration
 )(implicit F: ConcurrentEffect[F],
   AG: AsynchronousChannelGroup,
@@ -28,13 +28,13 @@ class TcpTransport[F[_], A](
   C: Codec[A],
   I: RequestId[A],
   M: RequestMethod[A],
-  S: Scheduler)
+  T: Timer[F])
     extends Transport[F, A] {
   private[this] val log: Logger = org.log4s.getLogger
 
   private def onDisconnect(remote: InetSocketAddress, incoming: Boolean): F[Unit] =
     for {
-      _ <- connections.modify(_ - remote)
+      _ <- connections.update(_ - remote)
       _ <- topic.publish1(Some(TransportEvent.Drop(remote, incoming)))
       s = if (incoming) s"incoming from ${remote} disconnected" else s"outgoing to ${remote} disconnected"
       _ <- F.delay(log.info(s))
@@ -50,15 +50,15 @@ class TcpTransport[F[_], A](
         F.unit
       case None =>
         F.start(
-            fs2.io.tcp
-              .client[F](remote, keepAlive = true, noDelay = true)
+          Stream.resource(fs2.io.tcp
+              .client[F](remote, keepAlive = true, noDelay = true))
               .flatMap(socket => {
                 val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket, false)
                 for {
                   remote <- Stream.eval(conn.remoteAddress)
                   local  <- Stream.eval(conn.localAddress)
                   _ = log.info(s"connect from ${local} to ${remote}")
-                  _ <- Stream.eval(connections.modify(_ + (remote -> conn)))
+                  _ <- Stream.eval(connections.update(_ + (remote -> conn)))
                   _ <- Stream.eval(onConnect(conn))
                   _ <- Stream.eval(topic.publish1(Some(TransportEvent.Add(remote, incoming = false))))
                   _ <- conn
@@ -105,7 +105,7 @@ class TcpTransport[F[_], A](
     stopListen.get.flatMap {
       case false => F.unit
       case true =>
-        def stream(done: Promise[F, Unit]): Stream[F, Unit] =
+        def stream(done: Deferred[F, Unit]): Stream[F, Unit] =
           fs2.io.tcp
             .serverWithLocalAddress[F](bind, maxQueued = 0, reuseAddress = true, receiveBufferSize = receiveBufferSize)
             .map {
@@ -113,7 +113,7 @@ class TcpTransport[F[_], A](
                 log.info(s"start listening to ${bindAddr}")
                 Stream.eval(done.complete(()))
               case Right(s) =>
-                s.flatMap(socket => {
+                Stream.resource(s).flatMap(socket => {
                   val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket, true)
                   for {
                     remote <- Stream.eval(conn.remoteAddress)
@@ -126,7 +126,7 @@ class TcpTransport[F[_], A](
                         case None =>
                           log.info(s"accepted incoming ${remote}")
                           for {
-                            _ <- Stream.eval(connections.modify(_ + (remote -> conn)))
+                            _ <- Stream.eval(connections.update(_ + (remote -> conn)))
                             _ <- Stream.eval(onConnect(conn))
                             _ <- Stream.eval(topic.publish1(Some(TransportEvent.Add(remote, incoming = true))))
                             _ <- conn
@@ -154,13 +154,13 @@ class TcpTransport[F[_], A](
                   } yield ()
                 })
             }
-            .join(maxConcurrent)
+            .parJoin(maxConcurrent)
             .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(e)(s"server error"))))
             .onFinalize(stopListen.set(true) *> F.delay(log.info(s"stop listening to ${bind}")))
 
         for {
           _    <- stopListen.set(false)
-          done <- fs2.async.promise[F, Unit]
+          done <- Deferred[F, Unit]
           _    <- F.start(stream(done).interruptWhen(stopListen).compile.drain).void
           _    <- done.get
         } yield ()
@@ -196,16 +196,16 @@ class TcpTransport[F[_], A](
       case None => F.pure(None)
       case Some(conn) =>
         val p = for {
-          promise <- fs2.async.promise[F, A]
+          promise <- Deferred[F, A]
           id = I.id(a).getOrElse("")
-          _    <- promises.modify(_ + ((remote, id) -> promise))
+          _    <- promises.update(_ + ((remote, id) -> promise))
           _    <- conn.write(a, Some(timeout))
-          resp <- promise.timedGet(timeout, S)
-          _    <- promises.modify(_ - (remote -> id))
+          resp <- promise.get
+          _    <- promises.update(_ - (remote -> id))
         } yield resp
         p.attempt.map {
           case Left(_)  => None
-          case Right(x) => x
+          case Right(x) => Some(x)
         }
     })
 
@@ -232,12 +232,12 @@ object TcpTransport {
                                                                         timeout: FiniteDuration = 10.seconds)(
       implicit AG: AsynchronousChannelGroup,
       EC: ExecutionContext,
-      S: Scheduler): F[TcpTransport[F, A]] =
+      T: Timer[F]): F[TcpTransport[F, A]] =
     for {
-      connections <- fs2.async.refOf[F, Map[InetSocketAddress, Connection[F, A]]](Map.empty)
-      promises    <- fs2.async.refOf[F, Map[(InetSocketAddress, String), Promise[F, A]]](Map.empty)
-      topic       <- fs2.async.topic[F, Option[TransportEvent[A]]](None)
-      stopListen  <- fs2.async.signalOf[F, Boolean](true)
+      connections <- Ref.of[F, Map[InetSocketAddress, Connection[F, A]]](Map.empty)
+      promises    <- Ref.of[F, Map[(InetSocketAddress, String), Deferred[F, A]]](Map.empty)
+      topic       <- Topic[F, Option[TransportEvent[A]]](None)
+      stopListen  <- SignallingRef[F, Boolean](true)
     } yield
       new TcpTransport[F, A](
         pipe,

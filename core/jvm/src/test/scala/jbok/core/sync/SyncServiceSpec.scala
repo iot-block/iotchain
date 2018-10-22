@@ -7,6 +7,7 @@ import jbok.core.messages._
 import jbok.core.models.{BlockBody, BlockHeader}
 import jbok.core.peer.PeerManageFixture
 import scodec.bits._
+import jbok.common.execution._
 
 trait SyncServiceFixture extends PeerManageFixture {
   val syncService: SyncService[IO] = SyncService[IO](syncConfig, history)

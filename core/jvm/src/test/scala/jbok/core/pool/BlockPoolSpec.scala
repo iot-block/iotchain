@@ -7,7 +7,7 @@ import jbok.core.models.{Block, BlockBody, BlockHeader}
 import jbok.core.pool.BlockPool.Leaf
 import jbok.testkit.Gens
 import scodec.bits.ByteVector
-import jbok.network.execution._
+import jbok.common.execution._
 
 trait BlockPoolFixture extends HistoryFixture {
   val blockPool = BlockPool[IO](history).unsafeRunSync()

@@ -12,10 +12,11 @@ import scodec.codecs._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import jbok.common.execution._
 
 class JsClientSpec extends JbokAsyncSpec {
 
-  override implicit def executionContext: ExecutionContext = jbok.network.execution.EC
+  override implicit def executionContext: ExecutionContext = EC
 
   override def timeLimit: Span = 60.seconds
   implicit val codecString: Codec[String] = variableSizeBytes(uint16, string(StandardCharsets.US_ASCII))

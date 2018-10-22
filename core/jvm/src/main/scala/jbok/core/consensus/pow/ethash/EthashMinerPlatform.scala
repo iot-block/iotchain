@@ -1,11 +1,9 @@
 package jbok.core.consensus.pow.ethash
 
-import java.io.InputStream
-
 import better.files.File
-import cats.effect.{Bracket, Effect, IO}
+import cats.effect.Effect
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import fs2.async.Ref
 import jbok.codec._
 import jbok.core.config.Configs.MiningConfig
 import jbok.core.consensus.pow.ProofOfWork
@@ -26,7 +24,8 @@ class EthashMinerPlatform[F[_]](
     currentEpoch: Ref[F, Option[Long]],
     currentEpochDagSize: Ref[F, Option[Long]],
     currentEpochDag: Ref[F, Option[Array[Array[Int]]]]
-)(implicit F: Effect[F]) extends EthashMiner[F] {
+)(implicit F: Effect[F])
+    extends EthashMiner[F] {
   private[this] val log = org.log4s.getLogger
 
   override def mine(block: Block): F[Block] = {
@@ -52,9 +51,9 @@ class EthashMinerPlatform[F[_]](
               loadDagFromFile(seed, dagNumHashes).attemptT
                 .getOrElse(generateDagAndSaveToFile(epoch, dagNumHashes, seed))
             }
-            _ <- currentEpoch.setSync(Some(epoch))
-            _ <- currentEpochDagSize.setSync(Some(dagSize))
-            _ <- currentEpochDag.setSync(Some(dag))
+            _ <- currentEpoch.set(Some(epoch))
+            _ <- currentEpochDagSize.set(Some(dagSize))
+            _ <- currentEpochDag.set(Some(dag))
           } yield (dag, dagSize)
       }
     } yield {
@@ -157,9 +156,9 @@ object EthashMinerPlatform {
       miningConfig: MiningConfig
   ): F[EthashMiner[F]] =
     for {
-      currentEpoch        <- fs2.async.refOf[F, Option[Long]](None)
-      currentEpochDagSize <- fs2.async.refOf[F, Option[Long]](None)
-      currentEpochDag     <- fs2.async.refOf[F, Option[Array[Array[Int]]]](None)
+      currentEpoch        <- Ref.of[F, Option[Long]](None)
+      currentEpochDagSize <- Ref.of[F, Option[Long]](None)
+      currentEpochDag     <- Ref.of[F, Option[Array[Array[Int]]]](None)
     } yield
       new EthashMinerPlatform[F](
         miningConfig,

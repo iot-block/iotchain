@@ -1,10 +1,10 @@
 package jbok.core.peer.discovery
 
-import cats.effect.Effect
+import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Timer}
 import cats.implicits._
 import fs2._
-import fs2.async.Ref
-import fs2.async.mutable.Signal
+import fs2.concurrent.SignallingRef
 import jbok.core.peer.{PeerNode, PeerStore}
 import scodec.bits.ByteVector
 
@@ -46,8 +46,8 @@ case class PeerTable[F[_]](
     store: PeerStore[F],
     bootstrapNodes: Vector[PeerNode],
     buckets: Ref[F, Vector[Bucket]],
-    initDone: Signal[F, Boolean]
-)(implicit F: Effect[F], S: Scheduler, EC: ExecutionContext) {
+    initDone: SignallingRef[F, Boolean]
+)(implicit F: Concurrent[F], T: Timer[F], EC: ExecutionContext) {
 
   private[this] val log = org.log4s.getLogger
 
@@ -74,7 +74,7 @@ case class PeerTable[F[_]](
   def putBucket(id: ByteVector, bucket: Bucket): F[Unit] = {
     val d = logDist(selfNode.id, id)
     val i = if (d <= bucketMinDistance) 0 else d - bucketMinDistance - 1
-    buckets.modify(_.updated(i, bucket)).void
+    buckets.update(_.updated(i, bucket))
   }
 
   /**
@@ -197,7 +197,7 @@ case class PeerTable[F[_]](
   }
 
   def stream: Stream[F, Unit] =
-    S.awakeEvery[F](persistInterval).evalMap(_ => persistentNodes())
+    Stream.awakeEvery[F](persistInterval).evalMap(_ => persistentNodes())
 
   def loadSeedNodes(): F[Unit] =
     for {
@@ -217,7 +217,6 @@ case class PeerTable[F[_]](
     val now = System.currentTimeMillis()
     for {
       buckets <- buckets.get
-
     } yield ()
   }
 }
@@ -264,13 +263,13 @@ object PeerTable {
   val refreshInterval     = 30.minutes
   val revalidateInterval  = 10.seconds
 
-  def apply[F[_]: Effect](
+  def apply[F[_]: Concurrent](
       selfNode: PeerNode,
       store: PeerStore[F],
       bootstrapNodes: Vector[PeerNode]
-  )(implicit S: Scheduler, EC: ExecutionContext): F[PeerTable[F]] =
+  )(implicit T: Timer[F], EC: ExecutionContext): F[PeerTable[F]] =
     for {
-      buckets  <- fs2.async.refOf[F, Vector[Bucket]](Vector.fill(nBuckets)(Bucket.empty))
-      initDone <- fs2.async.signalOf[F, Boolean](false)
+      buckets  <- Ref.of[F, Vector[Bucket]](Vector.fill(nBuckets)(Bucket.empty))
+      initDone <- SignallingRef[F, Boolean](false)
     } yield PeerTable[F](selfNode, store, bootstrapNodes, buckets, initDone)
 }

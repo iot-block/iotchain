@@ -1,11 +1,12 @@
 package jbok.app.api.impl
 
 import cats.effect.IO
+import cats.effect.concurrent.Ref
 import jbok.app.api.{PrivateAPI, TransactionRequest}
-import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.History
+import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.keystore.{KeyStorePlatform, Wallet}
-import jbok.core.models.{Address, Transaction}
+import jbok.core.models.Address
 import jbok.core.pool.TxPool
 import jbok.crypto._
 import jbok.crypto.signature._
@@ -23,7 +24,7 @@ object PrivateApiImpl {
       txPool: TxPool[IO],
   ): IO[PrivateAPI] =
     for {
-      unlockedWallets <- fs2.async.refOf[IO, Map[Address, Wallet]](Map.empty)
+      unlockedWallets <- Ref.of[IO, Map[Address, Wallet]](Map.empty)
     } yield
       new PrivateAPI {
         override def importRawKey(privateKey: ByteVector, passphrase: String): IO[Address] =
@@ -41,11 +42,11 @@ object PrivateApiImpl {
         override def unlockAccount(address: Address, passphrase: String, duration: Option[Duration]): IO[Boolean] =
           for {
             wallet <- keyStore.unlockAccount(address, passphrase)
-            _      <- unlockedWallets.modify(_ + (address -> wallet))
+            _      <- unlockedWallets.update(_ + (address -> wallet))
           } yield true
 
         override def lockAccount(address: Address): IO[Boolean] =
-          unlockedWallets.modify(_ - address).map(_ => true)
+          unlockedWallets.update(_ - address).map(_ => true)
 
         override def sign(message: ByteVector, address: Address, passphrase: Option[String]): IO[CryptoSignature] =
           for {
@@ -84,7 +85,7 @@ object PrivateApiImpl {
 
         override def deleteWallet(address: Address): IO[Boolean] =
           for {
-            _ <- unlockedWallets.modify(_ - address)
+            _ <- unlockedWallets.update(_ - address)
             r <- keyStore.deleteWallet(address)
           } yield r
 

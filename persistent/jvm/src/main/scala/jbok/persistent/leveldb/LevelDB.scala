@@ -4,9 +4,9 @@ import java.io.File
 
 import cats.Traverse
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2._
-import fs2.async.Ref
 import jbok.persistent.KeyValueDB
 import org.iq80.leveldb._
 import org.iq80.leveldb.impl.Iq80DBFactory.factory
@@ -21,12 +21,12 @@ object LevelDB {
 
   val defaultWriteOptions = new WriteOptions
 
-  val pool: Ref[IO, Map[String, DB]] = fs2.async.refOf[IO, Map[String, DB]](Map.empty).unsafeRunSync()
+  val pool: Ref[IO, Map[String, DB]] = Ref.of[IO, Map[String, DB]](Map.empty).unsafeRunSync()
 
   def open[F[_]](config: LevelDBConfig)(implicit F: Effect[F]): F[DB] =
     for {
       db <- F.delay(factory.open(new File(config.path), config.options))
-      _ <- F.liftIO(pool.modify(_ + (config.path -> db)))
+      _ <- F.liftIO(pool.update(_ + (config.path -> db)))
     } yield db
 
   def apply[F[_]](config: LevelDBConfig)(implicit F: Effect[F]): F[LevelDB[F]] =
@@ -36,12 +36,12 @@ object LevelDB {
         case Some(db) => db.pure[F]
         case None => open[F](config)
       }
-      dbRef <- fs2.async.refOf[F, DB](db)
+      dbRef <- Ref.of[F, DB](db)
       leveldb = new LevelDB[F](
         dbRef,
-        F.delay(db.close()) *> F.liftIO(pool.modify(_ - config.path).void),
+        F.delay(db.close()) *> F.liftIO(pool.update(_ - config.path).void),
         F.delay(factory.destroy(new File(config.path), config.options)),
-        open[F](config).flatMap(db => dbRef.setSync(db))
+        open[F](config).flatMap(db => dbRef.set(db))
       )
     } yield leveldb
 }
@@ -96,18 +96,17 @@ case class LevelDB[F[_]](db: Ref[F, DB], close: F[Unit], destroy: F[Unit], reope
     db.get.map(_.iterator(options))
 
   def stream(options: ReadOptions = defaultReadOptions): Stream[F, (ByteVector, ByteVector)] =
-    Stream.bracket(iterator(options))(
-      iter =>
-        Stream.unfoldEval[F, DBIterator, (ByteVector, ByteVector)](iter)(
-          iter =>
-            for {
-              hn <- F.delay(iter.hasNext)
-              opt <- if (hn) F.delay((entry2tuple(iter.next()) -> iter).some)
-              else none.pure[F]
-            } yield opt
-      ),
-      iter => F.delay(iter.close())
-    )
+    Stream.bracket(iterator(options))(iter => F.delay(iter.close()))
+        .flatMap( iter =>
+          Stream.unfoldEval[F, DBIterator, (ByteVector, ByteVector)](iter)(
+            iter =>
+              for {
+                hn <- F.delay(iter.hasNext)
+                opt <- if (hn) F.delay((entry2tuple(iter.next()) -> iter).some)
+                else none.pure[F]
+              } yield opt
+          )
+        )
 
   @inline
   private def entry2tuple(entry: java.util.Map.Entry[Array[Byte], Array[Byte]]): (ByteVector, ByteVector) =

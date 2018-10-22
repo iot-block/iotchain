@@ -8,7 +8,7 @@ import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.execution._
+import jbok.common.execution._
 import scodec.Codec
 import scodec.codecs._
 

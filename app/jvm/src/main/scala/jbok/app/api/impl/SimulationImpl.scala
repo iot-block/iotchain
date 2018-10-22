@@ -3,11 +3,10 @@ import java.net.InetSocketAddress
 import java.security.SecureRandom
 import java.util.concurrent.Executors
 
+import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, IO, Timer}
 import cats.implicits._
-import fs2.async.Ref
-import fs2.async.mutable.Topic
-import fs2.{Pipe, _}
+import fs2.concurrent.Topic
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
 import jbok.app.api.{FilterManager, PrivateAPI, PublicAPI}
 import jbok.app.simulations.SimulationImpl.NodeId
@@ -15,14 +14,12 @@ import jbok.core.config.Configs.{FilterConfig, FullNodeConfig}
 import jbok.core.config.GenesisConfig
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
-import jbok.core.keystore.{KeyStore, KeyStorePlatform}
+import jbok.core.keystore.KeyStorePlatform
 import jbok.core.ledger.BlockExecutor
-import jbok.core.messages.Message
 import jbok.core.mining.BlockMiner
 import jbok.core.models.{Address, Block, SignedTransaction}
-import jbok.core.peer.PeerManager
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
-import jbok.core.sync.{Broadcaster, SyncService, Synchronizer}
+import jbok.core.sync.{Broadcaster, Synchronizer}
 import jbok.core.{FullNode, History}
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
@@ -66,7 +63,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                           consensus: Consensus[IO],
                           blockPool: BlockPool[IO])(implicit F: ConcurrentEffect[IO],
                                                     EC: ExecutionContext,
-                                                    T: Timer[IO]): IO[FullNode[IO]] = {
+                                                    T: Timer[IO]): IO[FullNode[IO]] =
     for {
       peerManager <- PeerManager[IO](config.peer, config.sync, history)
       executor = BlockExecutor[IO](config.blockChainConfig, history, blockPool, consensus)
@@ -79,12 +76,12 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
       miner         <- BlockMiner[IO](synchronizer)
       filterManager <- FilterManager[IO](miner, keyStore, FilterConfig())
       publicAPI <- PublicApiImpl(history,
-                             config.blockChainConfig,
-                             config.miningConfig,
-                             miner,
-                             keyStore,
-                             filterManager,
-                             config.rpc.publicApiVersion)
+                                 config.blockChainConfig,
+                                 config.miningConfig,
+                                 miner,
+                                 keyStore,
+                                 filterManager,
+                                 config.rpc.publicApiVersion)
       publicApiServer <- newAPIServer[PublicAPI](publicAPI,
                                                  config.rpc.publicApiEnable,
                                                  config.rpc.publicApiBindAddress.toString,
@@ -94,15 +91,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                                                    config.rpc.privateApiEnable,
                                                    config.rpc.privateApiBindAddress.toString,
                                                    config.rpc.privateApiBindAddress.port.get)
-    } yield
-      new FullNode[IO](config,
-                       peerManager,
-                       synchronizer,
-                       keyStore,
-                       miner,
-                       publicApiServer,
-                       privateApiServer)
-  }
+    } yield new FullNode[IO](config, peerManager, synchronizer, keyStore, miner, publicApiServer, privateApiServer)
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
     log.info("in createNodes")
@@ -123,9 +112,10 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     log.info(s"create ${n} node(s)")
 
     for {
-      newNodes <- configs.zipWithIndex.traverse { case (config, idx) =>
-        implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2))
-          val sign = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, signers(idx)) }
+      newNodes <- configs.zipWithIndex.traverse {
+        case (config, idx) =>
+          implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2))
+          val sign        = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, signers(idx)) }
           for {
             db      <- KeyValueDB.inMemory[IO]
             history <- History[IO](db)
@@ -136,8 +126,9 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
             fullNode <- newFullNode(config, history, consensus, blockPool)
           } yield fullNode
       }
-      _ <- nodes.modify(_ ++ newNodes.map(x => x.id                                                   -> x).toMap)
-      _ <- miners.modify(_ ++ newNodes.filter(n => n.config.miningConfig.miningEnabled).map(x => x.id -> x).toMap)
+      _ <- nodes.update(_ ++ newNodes.map(x => x.id -> x).toMap)
+
+      _ <- miners.update(_ ++ newNodes.filter(n => n.config.miningConfig.miningEnabled).map(x => x.id -> x).toMap)
     } yield newNodes.map(x => infoFromNode(x))
   }
 
@@ -147,8 +138,8 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     for {
       node <- getNode(id)
       _    <- node.stop
-      _    <- nodes.modify(_ - id)
-      _    <- miners.modify(_ - id)
+      _    <- nodes.update(_ - id)
+      _    <- miners.update(_ - id)
     } yield ()
 
   override def startNetwork: IO[Unit] = {
@@ -175,7 +166,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
 
   override def stopMiners(ids: List[String]): IO[Unit] = {
     val r = ids.map(id => miners.get.map(_(id).miner.stop.unsafeRunSync()).unsafeRunSync())
-    ids.map(id => miners.modify(_ - id).unsafeRunSync())
+    ids.map(id => miners.update(_ - id).unsafeRunSync())
     IO.pure(Unit)
   }
 
@@ -213,7 +204,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
   override def setMiner(ids: List[String]): IO[Unit] = {
     val newMiners = ids.map(id => nodes.get.map(_(id)).unsafeRunSync())
     newMiners.map(_.miner.start.unsafeRunSync())
-    miners.modify(_ ++ newMiners.map(x => x.id -> x).toMap)
+    miners.update(_ ++ newMiners.map(x => x.id -> x).toMap)
     IO.pure(Unit)
   }
 
@@ -287,8 +278,8 @@ object SimulationImpl {
   type NodeId = String
   def apply()(implicit ec: ExecutionContext): IO[SimulationImpl] =
     for {
-      topic  <- fs2.async.topic[IO, Option[SimulationEvent]](None)
-      nodes  <- fs2.async.refOf[IO, Map[NodeId, FullNode[IO]]](Map.empty)
-      miners <- fs2.async.refOf[IO, Map[NodeId, FullNode[IO]]](Map.empty)
+      topic  <- Topic[IO, Option[SimulationEvent]](None)
+      nodes  <- Ref.of[IO, Map[NodeId, FullNode[IO]]](Map.empty)
+      miners <- Ref.of[IO, Map[NodeId, FullNode[IO]]](Map.empty)
     } yield new SimulationImpl(topic, nodes, miners)
 }

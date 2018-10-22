@@ -7,7 +7,7 @@ import jbok.core.messages.NewBlock
 import jbok.core.models.{Block, BlockBody, BlockHeader}
 import jbok.core.peer.{PeerId, PeerManageFixture}
 import scodec.bits.ByteVector
-import jbok.network.execution._
+import jbok.common.execution._
 
 import scala.concurrent.duration._
 

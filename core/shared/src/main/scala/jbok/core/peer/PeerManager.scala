@@ -1,20 +1,19 @@
 package jbok.core.peer
 
-import java.net.{InetSocketAddress, URI}
+import java.net.InetSocketAddress
 
+import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, Fiber, Timer}
 import cats.implicits._
 import fs2._
-import fs2.async.Ref
+import jbok.common.execution._
+import jbok.core.History
 import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
 import jbok.core.messages.{Message, Messages, Status, SyncMessage}
 import jbok.core.peer.PeerEvent.PeerRecv
-import jbok.core.peer.discovery.Discovery
 import jbok.core.sync.SyncService
-import jbok.core.{History, NodeStatus}
 import jbok.network.Connection
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.execution._
 import jbok.network.transport.{TcpTransport, TransportEvent}
 import scodec.bits.BitVector
 import scodec.{Attempt, Codec, DecodeResult, Decoder, Encoder, SizeBound}
@@ -63,7 +62,6 @@ class PeerManagerImpl[F[_]](
     history: History[F],
     transport: TcpTransport[F, Message],
     known: PeerNodeManager[F],
-    discovery: Discovery[F],
     handshaked: Ref[F, Map[PeerId, HandshakedPeer]],
     banned: Ref[F, Map[PeerId, Fiber[F, Unit]]]
 )(implicit F: ConcurrentEffect[F], T: Timer[F], EC: ExecutionContext)
@@ -122,7 +120,7 @@ class PeerManagerImpl[F[_]](
           conn.close
         case Some(peer) =>
           log.info(s"${remote} with ${peer.peerInfo.status} handshake succeed")
-          handshaked.modify(_ + (peer.peerId -> peer))
+          handshaked.update(_ + (peer.peerId -> peer))
       }
     } yield ()
 
@@ -186,16 +184,16 @@ class PeerManagerImpl[F[_]](
   override def ban(peerId: PeerId, duration: FiniteDuration, reason: String): F[Unit] =
     for {
       m     <- banned.get
-      fiber <- F.start(T.sleep(duration) *> banned.modify(_ - peerId).void)
+      fiber <- F.start(T.sleep(duration) *> banned.update(_ - peerId))
       _ <- m.get(peerId) match {
         case Some(f) => f.cancel
         case None =>
-          banned.modify(_ + (peerId -> fiber))
+          banned.update(_ + (peerId -> fiber))
       }
     } yield ()
 
   override def unban(peerId: PeerId): F[Unit] =
-    banned.modify(_ - peerId).void
+    banned.update(_ - peerId)
 
   override def isBanned(peerId: PeerId): F[Boolean] =
     banned.get.map(_.contains(peerId))
@@ -238,10 +236,9 @@ object PeerManager {
     for {
       nodeManager <- PeerNodeManager[F](history.db)
 //      discovery <- Discovery[F](DiscoveryConfig(), nodeStatus)
-      discovery = null
       transport  <- TcpTransport(syncService.pipe, peerConfig.timeout)
-      handshaked <- fs2.async.refOf[F, Map[PeerId, HandshakedPeer]](Map.empty)
-      banned     <- fs2.async.refOf[F, Map[PeerId, Fiber[F, Unit]]](Map.empty)
-    } yield new PeerManagerImpl[F](peerConfig, history, transport, nodeManager, discovery, handshaked, banned)
+      handshaked <- Ref.of[F, Map[PeerId, HandshakedPeer]](Map.empty)
+      banned     <- Ref.of[F, Map[PeerId, Fiber[F, Unit]]](Map.empty)
+    } yield new PeerManagerImpl[F](peerConfig, history, transport, nodeManager, handshaked, banned)
   }
 }

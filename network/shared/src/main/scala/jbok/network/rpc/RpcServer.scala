@@ -6,9 +6,9 @@ import _root_.io.circe._
 import _root_.io.circe.generic.auto._
 import _root_.io.circe.parser._
 import _root_.io.circe.syntax._
-import cats.effect.IO
+import cats.effect.{Concurrent, IO}
 import fs2._
-import fs2.async.mutable.Queue
+import fs2.concurrent.Queue
 import jbok.network.common.{RequestId, RequestMethod}
 import jbok.network.json.{JsonRPCNotification, JsonRPCResponse}
 import jbok.network.rpc.RpcServer._
@@ -16,12 +16,11 @@ import scodec.Codec
 import scodec.codecs._
 
 import scala.language.experimental.macros
-import jbok.network.execution._
 
 class RpcServer(
     val handlers: Map[String, String => IO[String]],
     val queue: Queue[IO, String]
-) {
+)(implicit F: Concurrent[IO]) {
   private[this] val log = org.log4s.getLogger
 
   def mountAPI[API](api: API): RpcServer = macro RpcServerMacro.mountAPI[RpcServer, API]
@@ -52,7 +51,7 @@ class RpcServer(
       }
     }
 
-    Stream(queue.dequeue, s).joinUnbounded
+    queue.dequeue.merge(s)
   }
 
   def notify[A: Encoder](method: String, a: A): IO[Unit] = {
@@ -76,8 +75,8 @@ object RpcServer {
 
   def apply(
       handlers: Map[String, String => IO[String]] = Map.empty
-  ): IO[RpcServer] =
+  )(implicit F: Concurrent[IO]): IO[RpcServer] =
     for {
-      queue <- fs2.async.boundedQueue[IO, String](32)
+      queue <- Queue.bounded[IO, String](32)
     } yield new RpcServer(handlers, queue)
 }

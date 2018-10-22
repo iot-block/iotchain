@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 
 import cats.Functor
-import cats.effect.Effect
+import cats.effect.ConcurrentEffect
 import cats.implicits._
 import fs2._
 import fs2.io.tcp.Socket
@@ -20,7 +20,7 @@ package object tcp {
     _.chunks.map(chunks => ByteVector(chunks.toArray))
 
   def encodePipe[F[_]]: Pipe[F, ByteVector, Byte] =
-    _.flatMap[Byte](m => Stream.chunk(Chunk.array(m.toArray)).covary[F])
+    _.flatMap[F, Byte](m => Stream.chunk(Chunk.array(m.toArray)).covary[F])
 
   def bytesToChunk(bytes: ByteVector): Chunk[Byte] = Chunk.array(bytes.toArray)
 
@@ -45,7 +45,7 @@ package object tcp {
       host: String = "localhost",
       maxOpen: Int = Int.MaxValue
   )(f: Socket[F] => Stream[F, A])(
-      implicit F: Effect[F],
+      implicit F: ConcurrentEffect[F],
       AG: AsynchronousChannelGroup,
       EC: ExecutionContext
   ): Stream[F, Stream[F, A]] =
@@ -57,7 +57,9 @@ package object tcp {
           Stream.empty.covary[F]
 
         case Right(s) =>
-          s.flatMap(f)
+          Stream
+            .resource(s)
+            .flatMap(f)
             .onFinalize(F.delay(log.info(s"connection ${s} closed")))
       }
 
@@ -65,12 +67,14 @@ package object tcp {
       port: Int,
       host: String = "localhost"
   )(f: Socket[F] => Stream[F, A])(
-      implicit F: Effect[F],
+      implicit F: ConcurrentEffect[F],
       AG: AsynchronousChannelGroup,
       EC: ExecutionContext
   ): Stream[F, A] =
-    fs2.io.tcp
-      .client[F](new InetSocketAddress(host, port), keepAlive = true, noDelay = true)
+    Stream
+      .resource(
+        fs2.io.tcp.client[F](new InetSocketAddress(host, port), keepAlive = true, noDelay = true)
+      )
       .flatMap(f)
       .onFinalize(F.delay(log.info(s"connection to ${host}:${port} closed")))
 }

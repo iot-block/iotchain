@@ -9,7 +9,7 @@ import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import jbok.network.execution._
+import jbok.common.execution._
 
 import scala.collection.mutable
 

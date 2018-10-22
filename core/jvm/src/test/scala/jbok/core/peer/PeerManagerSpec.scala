@@ -7,7 +7,7 @@ import jbok.core.{HistoryFixture, NodeStatus}
 import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
 import jbok.core.messages.Handshake
 import jbok.network.NetAddress
-import jbok.network.execution._
+import jbok.common.execution._
 import scodec.bits.ByteVector
 
 trait PeerManageFixture extends HistoryFixture {

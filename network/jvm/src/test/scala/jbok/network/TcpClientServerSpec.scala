@@ -10,7 +10,7 @@ import jbok.JbokSpec
 import jbok.common.testkit.HexGen
 import jbok.network.client.{Client, TcpClientBuilder}
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.execution._
+import jbok.common.execution._
 import jbok.network.server.{Server, TcpServerBuilder}
 import scodec.Codec
 import scodec.codecs._

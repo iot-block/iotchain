@@ -6,7 +6,7 @@ import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
 import jbok.network.client.{Client, WSClientBuilderPlatform}
-import jbok.network.execution._
+import jbok.common.execution._
 import jbok.network.server.{Server, WSServerBuilder}
 
 class RpcSpec extends JbokSpec {

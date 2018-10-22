@@ -32,8 +32,8 @@ case class UdpTransport[F[_], A](
     F.delay(Chunk.array(Codec[A].encode(a).require.toByteArray))
 
   def serve(pipe: Pipe[F, (InetSocketAddress, A), (InetSocketAddress, A)]): Stream[F, Unit] =
-    udp
-      .open[F](bind, reuseAddress = true)
+    Stream.resource(udp
+      .open[F](bind, reuseAddress = true))
       .flatMap { socket =>
         log.info(s"udp transport bound at ${bind}")
         socket
@@ -56,7 +56,7 @@ case class UdpTransport[F[_], A](
   def send(remote: InetSocketAddress, a: A, timeout: Option[FiniteDuration] = None): F[Unit] = {
     log.info(s"sending msg to ${remote}")
     val s = for {
-      socket <- udp.open[F](bind, reuseAddress = true)
+      socket <- Stream.resource(udp.open[F](bind, reuseAddress = true))
       chunk  <- Stream.eval(encodeChunk(a))
       packet = Packet(remote, chunk)
       _ <- Stream.eval(socket.write(packet, timeout))

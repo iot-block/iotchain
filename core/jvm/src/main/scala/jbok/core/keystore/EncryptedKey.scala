@@ -32,7 +32,7 @@ case class EncryptedKey(
     crypto: CryptoSpec,
     version: Int
 ) {
-  implicit val encryptor = AES128CTR.genEncryptor[IO].unsafeRunSync()
+  implicit val encryptor = AES128CTR.genEncryptor[IO]
 
   def decrypt(passphrase: String): Either[String, KeyPair.Secret] = {
     val dk = deriveKey(passphrase, crypto.kdfparams)
@@ -56,7 +56,7 @@ case class EncryptedKey(
 }
 
 object EncryptedKey {
-  implicit val encryptor = AES128CTR.genEncryptor[IO].unsafeRunSync()
+  implicit val encryptor = AES128CTR.genEncryptor[IO]
 
   def apply(prvKey: KeyPair.Secret, passphrase: String, secureRandom: SecureRandom): EncryptedKey = {
     val version = 3

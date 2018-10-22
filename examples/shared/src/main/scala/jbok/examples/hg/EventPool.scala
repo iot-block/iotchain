@@ -1,8 +1,8 @@
 package jbok.examples.hg
 
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
 abstract class EventPool[F[_]: Sync] {
@@ -106,8 +106,8 @@ abstract class EventPool[F[_]: Sync] {
 object EventPool {
   def apply[F[_]](implicit F: Sync[F]): F[EventPool[F]] =
     for {
-      events <- fs2.async.refOf[F, Map[ByteVector, Event]](Map.empty)
-      rounds <- fs2.async.refOf[F, Map[Int, RoundInfo]](Map.empty)
+      events <- Ref.of[F, Map[ByteVector, Event]](Map.empty)
+      rounds <- Ref.of[F, Map[Int, RoundInfo]](Map.empty)
     } yield new EventPool[F] {
       private[this] val log = org.log4s.getLogger
 
@@ -121,7 +121,7 @@ object EventPool {
         for {
           _ <- putRoundInfo(event)
           _ = log.info(s"put round info")
-          _ <- events.modify(_ + (event.hash -> event))
+          _ <- events.update(_ + (event.hash -> event))
           _ = log.info(s"put event done")
         } yield ()
 
@@ -140,12 +140,12 @@ object EventPool {
       override def putRoundInfo(event: Event): F[Unit] = {
         val update = for {
           roundInfo <- rounds.get.map(_.get(event.round)).map(_.getOrElse(RoundInfo(event.round)))
-          _ <- rounds.modify(_ + (event.round -> roundInfo.+=(event)))
+          _ <- rounds.update(_ + (event.round -> roundInfo.+=(event)))
         } yield ()
 
         val invalidate = for {
           ri <- rounds.get.map(_.get(-1)).map(_.getOrElse(RoundInfo(-1)))
-          _ <- if (event.isDivided) rounds.modify(_ + (-1 -> ri.-=(event.hash))) else ().pure[F]
+          _ <- if (event.isDivided) rounds.update(_ + (-1 -> ri.-=(event.hash))) else ().pure[F]
         } yield ()
 
         invalidate *> update

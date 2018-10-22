@@ -5,7 +5,8 @@ import java.net.URI
 import cats.effect.{ConcurrentEffect, IO, Sync}
 import cats.implicits._
 import fs2._
-import jbok.network.execution._
+import fs2.concurrent.Queue
+import jbok.common.execution._
 import org.scalajs.dom
 import org.scalajs.dom._
 import scodec.Codec
@@ -46,7 +47,7 @@ class WSClientBuilderPlatform[F[_], A: Codec](implicit F: ConcurrentEffect[F]) e
 
     val use = (ws: dom.WebSocket) => {
       for {
-        queue <- Stream.eval(fs2.async.unboundedQueue[F, A])
+        queue <- Stream.eval(Queue.unbounded[F, A])
         _ = ws.onmessage = { event: MessageEvent =>
           val arr = event.data.asInstanceOf[ArrayBuffer]
           val bits = BitVector(TypedArrayBuffer.wrap(arr))
@@ -65,7 +66,7 @@ class WSClientBuilderPlatform[F[_], A: Codec](implicit F: ConcurrentEffect[F]) e
     }
 
     Stream
-      .bracket[F, dom.WebSocket, Unit](open)(use, release)
+      .bracket[F, dom.WebSocket](open)(release).flatMap(use)
       .onFinalize(F.delay(println("websocket client stream finalized")))
   }
 }

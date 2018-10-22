@@ -1,10 +1,10 @@
 package jbok.core.sync
 
 import cats.effect.ConcurrentEffect
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2._
-import fs2.async.Ref
-import fs2.async.mutable.Signal
+import fs2.concurrent.SignallingRef
 import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.BlockImportResult._
 import jbok.core.messages.{GetBlockHeaders, NewBlock, NewBlockHashes}
@@ -22,7 +22,7 @@ case class Synchronizer[F[_]](
     ommerPool: OmmerPool[F],
     broadcaster: Broadcaster[F],
     peerHasBlock: Ref[F, Map[PeerId, Set[ByteVector]]],
-    stopWhenTrue: Signal[F, Boolean]
+    stopWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
@@ -38,7 +38,7 @@ case class Synchronizer[F[_]](
           for {
             peerHasBlockMap <- peerHasBlock.get
             blockSet = peerHasBlockMap.getOrElse(peerId, Set.empty)
-            _            <- peerHasBlock.modify(_ + (peerId -> (blockSet + block.header.hash)))
+            _            <- peerHasBlock.update(_ + (peerId -> (blockSet + block.header.hash)))
             importResult <- executor.importBlock(block)
             _ = log.info(s"${peerManager.localAddress}: import block result: ${importResult}")
             _ <- importResult match {
@@ -109,7 +109,7 @@ object Synchronizer {
       broadcaster: Broadcaster[F],
   )(implicit F: ConcurrentEffect[F], EC: ExecutionContext): F[Synchronizer[F]] =
     for {
-      s     <- fs2.async.signalOf[F, Boolean](true)
-      peers <- fs2.async.refOf[F, Map[PeerId, Set[ByteVector]]](Map.empty)
+      s     <- SignallingRef[F, Boolean](true)
+      peers <- Ref.of[F, Map[PeerId, Set[ByteVector]]](Map.empty)
     } yield Synchronizer(peerManager, executor, txPool, ommerPool, broadcaster, peers, s)
 }

@@ -3,7 +3,7 @@ package jbok.core.mining
 import cats.effect.ConcurrentEffect
 import cats.implicits._
 import fs2._
-import fs2.async.mutable.Signal
+import fs2.concurrent.SignallingRef
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import jbok.core.ledger.{BlockResult, BloomFilter}
@@ -11,7 +11,7 @@ import jbok.core.models._
 import jbok.core.sync.Synchronizer
 import jbok.core.utils.ByteUtils
 import jbok.crypto.authds.mpt.MPTrieStore
-import jbok.network.execution._
+import jbok.common.execution._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
@@ -21,7 +21,7 @@ case class BlockPreparationResult[F[_]](block: Block, blockResult: BlockResult[F
 
 class BlockMiner[F[_]](
     val synchronizer: Synchronizer[F],
-    val stopWhenTrue: Signal[F, Boolean]
+    val stopWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
@@ -190,7 +190,7 @@ class BlockMiner[F[_]](
 object BlockMiner {
   def apply[F[_]: ConcurrentEffect](
       synchronizer: Synchronizer[F]
-  )(implicit EC: ExecutionContext): F[BlockMiner[F]] = fs2.async.signalOf[F, Boolean](true).map { stopWhenTrue =>
+  )(implicit EC: ExecutionContext): F[BlockMiner[F]] = SignallingRef[F, Boolean](true).map { stopWhenTrue =>
     new BlockMiner[F](
       synchronizer,
       stopWhenTrue

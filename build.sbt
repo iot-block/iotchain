@@ -16,11 +16,11 @@ lazy val contributors = Map(
 )
 
 lazy val V = new {
-  val circe  = "0.9.1"
-  val tsec   = "0.0.1-M11"
-  val http4s = "0.18.12"
-  val fs2    = "0.10.4"
-  val cats   = "1.0.0-RC"
+  val circe      = "0.9.1"
+  val tsec       = "0.0.1-RC1"
+  val http4s     = "0.19.0"
+  val fs2        = "1.0.0"
+  val catsEffect = "1.0.0"
 }
 
 lazy val jbok = project
@@ -29,15 +29,16 @@ lazy val jbok = project
   .settings(noPublishSettings)
 
 lazy val common = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
+  .crossType(CrossType.Full)
   .settings(commonSettings)
   .jsSettings(commonJsSettings)
   .settings(
     name := "jbok-common",
     libraryDependencies ++= Seq(
       // typelevel
-      "org.typelevel" %%% "cats-effect" % V.cats,
+      "org.typelevel" %%% "cats-effect" % V.catsEffect,
       "co.fs2"        %%% "fs2-core"    % V.fs2,
+      "co.fs2"        %% "fs2-io"       % V.fs2,
       // json
       "io.circe" %%% "circe-core"    % V.circe,
       "io.circe" %%% "circe-generic" % V.circe,
@@ -45,7 +46,7 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       // binary
       "org.scodec" %%% "scodec-bits"  % "1.1.5",
       "org.scodec" %%% "scodec-core"  % "1.10.3",
-      "org.scodec" %% "scodec-stream" % "1.1.0",
+      "org.scodec" %% "scodec-stream" % "1.2.0",
       // graph
       "org.scala-graph" %%% "graph-core" % "1.12.5",
       "org.scala-graph" %% "graph-dot"   % "1.12.1",
@@ -125,14 +126,14 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
   .jsSettings(
     useYarn := true,
     additionalNpmConfig in Compile := Map(
-      "license" -> JSON.str("MIT"),
-      "name" -> JSON.str("JBOK"),
+      "license"     -> JSON.str("MIT"),
+      "name"        -> JSON.str("JBOK"),
       "description" -> JSON.str("JBOK"),
-      "version" -> JSON.str("0.0.1"),
-      "author" -> JSON.str("JBOK authors"),
+      "version"     -> JSON.str("0.0.1"),
+      "author"      -> JSON.str("JBOK authors"),
       "repository" -> JSON.obj(
         "type" -> JSON.str("git"),
-        "url" -> JSON.str("https://github.com/c-block/jbok.git")
+        "url"  -> JSON.str("https://github.com/c-block/jbok.git")
       ),
       "build" -> JSON.obj(
         "appId" -> JSON.str("org.jbok.app")
@@ -173,7 +174,7 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
   .settings(
     name := "jbok-network",
     libraryDependencies ++= http4s ++ Seq(
-      "com.spinoco" %% "fs2-http" % "0.3.0"
+      "com.spinoco" %% "fs2-http" % "0.4.0"
     )
   )
   .jsSettings(commonJsSettings)
@@ -187,8 +188,7 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-persistent",
     libraryDependencies ++= Seq(
-      "org.iq80.leveldb" % "leveldb" % "0.10",
-      "io.monix"         %% "monix"  % "3.0.0-RC1"
+      "org.iq80.leveldb" % "leveldb" % "0.10"
     )
   )
   .dependsOn(common % CompileAndTest, codec)
@@ -215,13 +215,11 @@ lazy val docs = project
 
 // dependencies
 lazy val tsec = Seq(
-  "io.github.jmcardon" %% "tsec-common"        % V.tsec,
-  "io.github.jmcardon" %% "tsec-hash-jca"      % V.tsec,
-  "io.github.jmcardon" %% "tsec-hash-bouncy"   % V.tsec,
-  "io.github.jmcardon" %% "tsec-signatures"    % V.tsec,
-  "io.github.jmcardon" %% "tsec-cipher-jca"    % V.tsec,
-  "io.github.jmcardon" %% "tsec-cipher-bouncy" % V.tsec,
-  "io.github.jmcardon" %% "tsec-password"      % V.tsec
+  "io.github.jmcardon" %% "tsec-common"     % V.tsec,
+  "io.github.jmcardon" %% "tsec-hash-jca"   % V.tsec,
+  "io.github.jmcardon" %% "tsec-signatures" % V.tsec,
+  "io.github.jmcardon" %% "tsec-cipher-jca" % V.tsec,
+  "io.github.jmcardon" %% "tsec-password"   % V.tsec
 )
 
 lazy val http4s = Seq(

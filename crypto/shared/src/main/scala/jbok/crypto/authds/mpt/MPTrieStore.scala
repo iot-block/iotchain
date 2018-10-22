@@ -1,6 +1,7 @@
 package jbok.crypto.authds.mpt
 
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.persistent.{KeyValueDB, KeyValueStore}
@@ -23,7 +24,7 @@ class MPTrieStore[F[_], K, V](namespace: ByteVector, mpt: MPTrie[F])(implicit F:
 object MPTrieStore {
   def apply[F[_], K, V](db: KeyValueDB[F], rootHash: Option[ByteVector] = None)(implicit F: Sync[F], ck: RlpCodec[K], cv: RlpCodec[V]): F[MPTrieStore[F, K, V]] =
     for {
-      rootHashRef <- fs2.async.refOf[F, Option[ByteVector]](rootHash)
+      rootHashRef <- Ref.of[F, Option[ByteVector]](rootHash)
       trie = new MPTrie[F](db, rootHashRef)
     } yield new MPTrieStore[F, K, V](ByteVector.empty, trie)
 }

@@ -7,7 +7,7 @@ import jbok.JbokSpec
 import jbok.core.config.Configs.DiscoveryConfig
 import jbok.core.peer.discovery._
 import jbok.crypto.signature.{ECDSA, Signature}
-import jbok.network.execution._
+import jbok.common.execution._
 import jbok.network.transport.UdpTransport
 import jbok.persistent.KeyValueDB
 

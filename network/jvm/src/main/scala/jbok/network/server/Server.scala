@@ -3,21 +3,21 @@ package jbok.network.server
 import java.net.InetSocketAddress
 
 import cats.effect.ConcurrentEffect
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2._
-import fs2.async.Ref
-import fs2.async.mutable.{Queue, Signal}
+import fs2.concurrent.{Queue, SignallingRef}
 import jbok.network.Connection
+import jbok.common.execution._
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext
-import jbok.network.execution._
 
 class Server[F[_], A](
     val stream: Stream[F, Unit],
     val connections: Ref[F, Map[InetSocketAddress, Connection[F, A]]], // active connections
     val queue: Queue[F, (InetSocketAddress, A)], // outbound queue of (remote address -> connection)
-    val signal: Signal[F, Boolean]
+    val signal: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], C: Codec[A], EC: ExecutionContext) {
   def start: F[Unit] =
     signal.get.flatMap {
@@ -48,9 +48,9 @@ object Server {
       receiveBufferSize: Int = 256 * 1024
   )(implicit F: ConcurrentEffect[F], C: Codec[A]): F[Server[F, A]] =
     for {
-      conns  <- fs2.async.refOf[F, Map[InetSocketAddress, Connection[F, A]]](Map.empty)
-      queue  <- fs2.async.boundedQueue[F, (InetSocketAddress, A)](maxQueued)
-      signal <- fs2.async.signalOf[F, Boolean](true)
+      conns  <- Ref.of[F, Map[InetSocketAddress, Connection[F, A]]](Map.empty)
+      queue  <- Queue.bounded[F, (InetSocketAddress, A)](maxQueued)
+      signal <- SignallingRef[F, Boolean](true)
     } yield {
       val pipeWithPush: Pipe[F, A, A] = { input =>
         input

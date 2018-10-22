@@ -6,7 +6,7 @@ import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
 import jbok.crypto.signature.ecdsa.SecP256k1
-import jbok.network.execution._
+import jbok.common.execution._
 import jbok.network.tcp
 import scodec.bits._
 

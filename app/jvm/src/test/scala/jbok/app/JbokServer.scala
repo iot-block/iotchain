@@ -13,7 +13,7 @@ import jbok.core.keystore.KeyStoreFixture
 import jbok.core.mining.BlockMinerFixture
 import jbok.network.rpc.RpcServer
 import jbok.network.server.{Server, WSServerBuilder}
-import jbok.network.execution._
+import jbok.common.execution._
 
 import scala.io.StdIn
 

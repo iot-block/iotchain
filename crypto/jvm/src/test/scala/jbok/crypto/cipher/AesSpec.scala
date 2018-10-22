@@ -6,13 +6,13 @@ import cats.effect.IO
 import jbok.JbokSpec
 import scodec.bits._
 import tsec.cipher.symmetric.jca._
-import tsec.cipher.symmetric.{CipherText, Iv, PlainText}
+import tsec.cipher.symmetric.{Iv, PlainText}
 
 class AesSpec extends JbokSpec {
 
   "AES-CBC" should {
 
-    implicit val encryptor = AES128CBC.encryptor[IO].unsafeRunSync()
+    implicit val encryptor = AES128CBC.genEncryptor[IO]
 
     "correctly evaluate for the test vectors" in {
       // https://tools.ietf.org/html/rfc3602#section-4
@@ -73,7 +73,7 @@ class AesSpec extends JbokSpec {
 //          "601ec313775789a5b7a7f504bbf3d228f443e3ca4d62b59aca84e990cacaf5c52b0930daa23de94ce87017ba2d84988ddfc9c58db67aada613c2dd08457941a6")
       )
 
-      implicit val encryptor = AES128CTR.genEncryptor[IO].unsafeRunSync()
+      implicit val encryptor = AES128CTR.genEncryptor[IO]
 
       forAll(testVectors) { (k, i, p, c) =>
         val key = ByteVector.fromValidHex(k)

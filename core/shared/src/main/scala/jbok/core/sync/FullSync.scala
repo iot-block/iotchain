@@ -1,5 +1,5 @@
 package jbok.core.sync
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import jbok.core.config.Configs.SyncConfig
@@ -21,11 +21,11 @@ case class FullSync[F[_]](
     peerManager: PeerManager[F],
     executor: BlockExecutor[F],
     txPool: TxPool[F]
-)(implicit F: ConcurrentEffect[F], S: Scheduler, EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F], T: Timer[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
   def stream: Stream[F, Unit] =
-    S.awakeEvery[F](config.checkForNewBlockInterval).evalMap { _ =>
+    Stream.awakeEvery[F](config.checkForNewBlockInterval).evalMap { _ =>
       for {
         bestPeerOpt <- getBestPeer
         _ <- bestPeerOpt match {

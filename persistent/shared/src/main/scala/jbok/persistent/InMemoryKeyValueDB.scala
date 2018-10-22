@@ -2,8 +2,8 @@ package jbok.persistent
 
 import cats.Traverse
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import fs2.async.Ref
 import scodec.bits.ByteVector
 
 class InMemoryKeyValueDB[F[_]](ref: Ref[F, Map[ByteVector, ByteVector]])(implicit F: Sync[F]) extends KeyValueDB[F] {
@@ -14,10 +14,10 @@ class InMemoryKeyValueDB[F[_]](ref: Ref[F, Map[ByteVector, ByteVector]])(implici
     ref.get.map(_.get(key))
 
   override def put(key: ByteVector, newVal: ByteVector): F[Unit] =
-    ref.modify(_ + (key -> newVal)).void
+    ref.update(_ + (key -> newVal))
 
   override def del(key: ByteVector): F[Unit] =
-    ref.modify(_ - key).void
+    ref.update(_ - key)
 
   override def has(key: ByteVector): F[Boolean] =
     ref.get.map(_.contains(key))
@@ -41,12 +41,12 @@ class InMemoryKeyValueDB[F[_]](ref: Ref[F, Map[ByteVector, ByteVector]])(implici
       .void
 
   override def clear(): F[Unit] =
-    ref.setSync(Map.empty)
+    ref.set(Map.empty)
 }
 
 object InMemoryKeyValueDB {
   def apply[F[_]]()(implicit F: Sync[F]): F[KeyValueDB[F]] =
     for {
-      ref <- fs2.async.refOf[F, Map[ByteVector, ByteVector]](Map.empty)
+      ref <- Ref.of[F, Map[ByteVector, ByteVector]](Map.empty)
     } yield new InMemoryKeyValueDB[F](ref)
 }

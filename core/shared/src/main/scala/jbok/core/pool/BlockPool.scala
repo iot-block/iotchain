@@ -2,8 +2,8 @@ package jbok.core.pool
 
 import cats.data.OptionT
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import fs2.async.Ref
 import jbok.common._
 import jbok.core.History
 import jbok.core.pool.BlockPool._
@@ -88,10 +88,10 @@ case class BlockPool[F[_]](
                 for {
                   siblings <- parentToChildren.get.map(_.get(parentHash))
                   _ <- siblings match {
-                    case Some(sbls) => parentToChildren.modify(_ + (parentHash -> (sbls - hash)))
+                    case Some(sbls) => parentToChildren.update(_ + (parentHash -> (sbls - hash)))
                     case None       => F.unit
                   }
-                  _ <- blocks.modify(_ - hash)
+                  _ <- blocks.update(_ - hash)
                 } yield ()
               } else {
                 F.unit
@@ -147,8 +147,8 @@ case class BlockPool[F[_]](
           for {
             children <- parentToChildren.get.map(_.getOrElse(ancestor, Set.empty))
             _        <- children.toList.traverse(x => removeSubtree(x))
-            _        <- blocks.modify(_ - block.header.hash)
-            _        <- parentToChildren.modify(_ - block.header.hash)
+            _        <- blocks.update(_ - block.header.hash)
+            _        <- parentToChildren.update(_ - block.header.hash)
           } yield ()
         case _ => F.unit
       }
@@ -167,7 +167,7 @@ case class BlockPool[F[_]](
       }
       _ <- if (staleHashes.nonEmpty) {
         log.info(s"clean up ${staleHashes.length} staleHashes")
-        blocks.modify(_ -- staleHashes) *> parentToChildren.modify(_ -- staleHashes)
+        blocks.update(_ -- staleHashes) *> parentToChildren.update(_ -- staleHashes)
       } else {
         F.unit
       }
@@ -184,7 +184,7 @@ case class BlockPool[F[_]](
         val updatedChildren =
           children.flatMap(m.get).map(qb => qb.copy(totalDifficulty = Some(td + qb.block.header.difficulty)))
         val l = for {
-          _ <- blocks.modify(_ ++ updatedChildren.map(x => x.block.header.hash -> x).toMap)
+          _ <- blocks.update(_ ++ updatedChildren.map(x => x.block.header.hash -> x).toMap)
           l <- updatedChildren.toList
             .traverse(qb => updateTotalDifficulties(qb.block.header.hash))
             .map(_.flatten.maxBy(_.totalDifficulty))
@@ -222,9 +222,9 @@ case class BlockPool[F[_]](
     val td = parentTd.map(_ + difficulty)
 
     for {
-      _        <- blocks.modify(_ + (hash -> QueuedBlock(block, td)))
+      _        <- blocks.update(_ + (hash -> QueuedBlock(block, td)))
       siblings <- parentToChildren.get.map(_.getOrElse(parentHash, Set.empty))
-      _        <- parentToChildren.modify(_ + (parentHash -> (siblings + hash)))
+      _        <- parentToChildren.update(_ + (parentHash -> (siblings + hash)))
     } yield ()
   }
 
@@ -240,7 +240,7 @@ object BlockPool {
   def apply[F[_]: Sync](history: History[F], blockPoolConfig: BlockPoolConfig = BlockPoolConfig())(
       implicit EC: ExecutionContext): F[BlockPool[F]] =
     for {
-      blocks           <- fs2.async.refOf[F, Map[ByteVector, QueuedBlock]](Map.empty)
-      parentToChildren <- fs2.async.refOf[F, Map[ByteVector, Set[ByteVector]]](Map.empty)
+      blocks           <- Ref.of[F, Map[ByteVector, QueuedBlock]](Map.empty)
+      parentToChildren <- Ref.of[F, Map[ByteVector, Set[ByteVector]]](Map.empty)
     } yield BlockPool(history, blockPoolConfig, blocks, parentToChildren)
 }

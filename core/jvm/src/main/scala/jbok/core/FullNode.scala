@@ -5,7 +5,6 @@ import java.security.SecureRandom
 
 import cats.effect._
 import cats.implicits._
-import fs2.Scheduler
 import jbok.core.config.Configs.{FullNodeConfig, SyncConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
@@ -56,7 +55,6 @@ case class FullNode[F[_]](
 object FullNode {
   def apply[F[_]](config: FullNodeConfig, history: History[F], consensus: Consensus[F], blockPool: BlockPool[F])(
       implicit F: ConcurrentEffect[F],
-      S: Scheduler,
       EC: ExecutionContext,
       T: Timer[F]): F[FullNode[F]] = {
     val random = new SecureRandom()

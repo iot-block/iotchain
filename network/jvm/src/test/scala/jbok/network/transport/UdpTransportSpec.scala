@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import fs2._
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.network.execution._
+import jbok.common.execution._
 import scodec.Codec
 import scodec.codecs._
 

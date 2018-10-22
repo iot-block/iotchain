@@ -11,7 +11,7 @@ import jbok.core.config.Configs.{BlockChainConfig, FilterConfig, MiningConfig}
 import jbok.core.consensus.poa.clique.CliqueFixture
 import jbok.core.keystore.KeyStorePlatform
 import jbok.core.mining.BlockMinerFixture
-import jbok.network.execution._
+import jbok.common.execution._
 import jbok.network.rpc.RpcServer
 import jbok.network.server.{Server, WSServerBuilder}
 
