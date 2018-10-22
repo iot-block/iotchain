@@ -232,7 +232,6 @@ object PeerManager {
   def apply[F[_]](
       peerConfig: PeerManagerConfig,
       syncConfig: SyncConfig,
-      nodeStatus: NodeStatus[F],
       history: History[F]
   )(implicit F: ConcurrentEffect[F], T: Timer[F], EC: ExecutionContext): F[PeerManager[F]] = {
     val syncService = SyncService[F](syncConfig, history)

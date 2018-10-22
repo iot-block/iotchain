@@ -18,9 +18,9 @@ trait PeerManageFixture extends HistoryFixture {
 
   val syncConfig = SyncConfig()
 
-  val pm1 = PeerManager[IO](peerManagerConfigs(0), syncConfig, NodeStatus[IO].unsafeRunSync(), history).unsafeRunSync()
-  val pm2 = PeerManager[IO](peerManagerConfigs(1), syncConfig, NodeStatus[IO].unsafeRunSync(), history2).unsafeRunSync()
-  val pm3 = PeerManager[IO](peerManagerConfigs(2), syncConfig, NodeStatus[IO].unsafeRunSync(), history3).unsafeRunSync()
+  val pm1 = PeerManager[IO](peerManagerConfigs(0), syncConfig, history).unsafeRunSync()
+  val pm2 = PeerManager[IO](peerManagerConfigs(1), syncConfig, history2).unsafeRunSync()
+  val pm3 = PeerManager[IO](peerManagerConfigs(2), syncConfig, history3).unsafeRunSync()
 
   val peerManagers = List(pm1, pm2, pm3)
 

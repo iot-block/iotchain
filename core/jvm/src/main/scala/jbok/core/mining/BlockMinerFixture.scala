@@ -16,7 +16,6 @@ class BlockMinerFixture(consensusFixture: ConsensusFixture, bindAddr: NetAddress
   val consensus        = consensusFixture.consensus
   val blockChainConfig = BlockChainConfig()
   val history          = consensus.history
-  val nodeStatus       = NodeStatus[IO].unsafeRunSync()
   val blockPoolConfig = BlockPoolConfig()
   val blockPool       = BlockPool[IO](history, blockPoolConfig).unsafeRunSync()
   val executor        = BlockExecutor[IO](blockChainConfig, history, blockPool, consensus)
@@ -24,7 +23,7 @@ class BlockMinerFixture(consensusFixture: ConsensusFixture, bindAddr: NetAddress
   val syncConfig        = SyncConfig()
   val peerManagerConfig = PeerManagerConfig(bindAddr)
   val peerManager =
-    PeerManager[IO](peerManagerConfig, syncConfig, nodeStatus, history).unsafeRunSync()
+    PeerManager[IO](peerManagerConfig, syncConfig, history).unsafeRunSync()
   val txPool       = TxPool[IO](peerManager, TxPoolConfig()).unsafeRunSync()
   val ommerPool    = OmmerPool[IO](history).unsafeRunSync()
   val broadcaster  = Broadcaster[IO](peerManager)

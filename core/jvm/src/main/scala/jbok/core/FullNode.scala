@@ -61,8 +61,7 @@ object FullNode {
       T: Timer[F]): F[FullNode[F]] = {
     val random = new SecureRandom()
     for {
-      nodeStatus       <- NodeStatus[F]
-      peerManager      <- PeerManager[F](config.peer, SyncConfig(), nodeStatus, history)
+      peerManager      <- PeerManager[F](config.peer, SyncConfig(), history)
       executor = BlockExecutor[F](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[F](peerManager)
       ommerPool <- OmmerPool[F](history)
