@@ -71,7 +71,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
       "com.github.pathikrit" %% "better-files" % "3.5.0"
     )
   )
-  .dependsOn(common % CompileAndTest, codec, crypto, p2p, persistent)
+  .dependsOn(common % CompileAndTest, codec, crypto, network, persistent)
 
 lazy val crypto = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -92,15 +92,6 @@ lazy val crypto = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= tsec
   )
   .dependsOn(common % CompileAndTest, codec, persistent)
-
-lazy val p2p = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-p2p"
-  )
-  .dependsOn(common % CompileAndTest, network, persistent, codec)
 
 lazy val codec = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)

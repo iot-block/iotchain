@@ -1,6 +1,6 @@
 package jbok.network
 
-import java.net.SocketAddress
+import java.net.{InetSocketAddress, SocketAddress}
 
 import fs2._
 
@@ -15,13 +15,11 @@ trait Connection[F[_], A] {
 
   def reads(timeout: Option[FiniteDuration] = None, maxBytes: Int = 256 * 1024): Stream[F, A]
 
-  def endOfInput: F[Unit]
+  def remoteAddress: F[InetSocketAddress]
 
-  def endOfOutput: F[Unit]
-
-  def remoteAddress: F[SocketAddress]
-
-  def localAddress: F[SocketAddress]
+  def localAddress: F[InetSocketAddress]
 
   def close: F[Unit]
+
+  def isIncoming: Boolean
 }

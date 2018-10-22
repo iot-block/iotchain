@@ -1,12 +1,13 @@
 package jbok
 
+import fs2._
 import cats.effect.IO
 import org.scalatest.prop.PropertyChecks
 import org.scalatest._
 import org.scalatest.concurrent.{AsyncTimeLimitedTests, TimeLimitedTests}
 import org.scalatest.time.Span
 
-import scala.concurrent.Future
+import scala.concurrent.{Future, TimeoutException}
 import scala.concurrent.duration._
 
 trait JbokSpec
@@ -16,7 +17,13 @@ trait JbokSpec
     with BeforeAndAfterAll
     with BeforeAndAfterEach
     with TimeLimitedTests {
+
   override def timeLimit: Span = 60.seconds
+
+  def runLog[A](s: Stream[IO, A]): Vector[A] =
+    s.compile.toVector
+      .unsafeRunTimed(timeLimit)
+      .getOrElse(throw new TimeoutException("IO run timed out"))
 }
 
 trait JbokAsyncSpec extends AsyncWordSpec with Matchers with AsyncTimeLimitedTests {

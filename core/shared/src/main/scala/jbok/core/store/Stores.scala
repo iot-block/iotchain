@@ -1,10 +1,13 @@
 package jbok.core.store
 
+import java.net.URI
+
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.codecs._
 import jbok.core.models._
+import jbok.core.peer.PeerNode
 import jbok.core.sync.SyncState
 import jbok.crypto.authds.mpt.{MPTrie, Node}
 import jbok.persistent.{KeyValueDB, KeyValueStore}
@@ -39,11 +42,12 @@ class FastSyncStore[F[_]: Sync](db: KeyValueDB[F])
   def purge: F[Unit] = del(syncStateKey)
 }
 
-class AppStateStore[F[_]: Sync](db: KeyValueDB[F]) extends KeyValueStore[F, String, ByteVector](Namespaces.AppStateNamespace, db) {
-  private val BestBlockNumber = "BestBlockNumber"
-  private val FastSyncDone = "FastSyncDone"
+class AppStateStore[F[_]: Sync](db: KeyValueDB[F])
+    extends KeyValueStore[F, String, ByteVector](Namespaces.AppStateNamespace, db) {
+  private val BestBlockNumber       = "BestBlockNumber"
+  private val FastSyncDone          = "FastSyncDone"
   private val EstimatedHighestBlock = "EstimatedHighestBlock"
-  private val SyncStartingBlock = "SyncStartingBlock"
+  private val SyncStartingBlock     = "SyncStartingBlock"
 
   def getBestBlockNumber: F[BigInt] =
     for {
@@ -122,4 +126,14 @@ object ContractStorageStore {
     for {
       mpt <- MPTrie[F](db, rootHash)
     } yield new ContractStorageStore[F](mpt)
+}
+
+class PeerNodeStore[F[_]: Sync](db: KeyValueDB[F])
+    extends KeyValueStore[F, String, Set[PeerNode]](Namespaces.KnownNodesNamespace, db) {
+  private val key = "KnownAddrs"
+
+  def get: F[Set[PeerNode]] = getOpt(key).map(_.getOrElse(Set.empty))
+
+  def put(now: Set[PeerNode]): F[Unit] =
+    put(key, now)
 }

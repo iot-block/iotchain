@@ -1,28 +1,35 @@
-package jbok.network.discovery
+package jbok.core.peer
+import java.net._
 
-import java.net.{InetSocketAddress, _}
-
+import jbok.crypto.signature.KeyPair
 import scodec.bits.ByteVector
+import jbok.crypto._
 
 import scala.util.Try
 
-case class Node(id: ByteVector, addr: InetSocketAddress) {
-  def toUri: URI = {
+case class PeerNode(pk: KeyPair.Public, host: String, port: Int) {
+  lazy val id = pk.bytes.kec256
+
+  lazy val addr = new InetSocketAddress(host, port)
+  lazy val uri = {
     val host = addr.getAddress match {
       case _: Inet6Address => s"[${addr.getHostName}]"
       case _               => addr.getHostName
     }
     val port = addr.getPort
-    new URI(s"${Node.NodeScheme}://${id.toHex}@$host:$port")
+    new URI(s"${PeerNode.NodeScheme}://${pk.bytes.toHex}@$host:$port")
   }
 }
 
-object Node {
-  val NodeScheme = "node"
-  val NodeIdSize = 64
-  def fromUri(uri: URI): Node = {
-    val nodeId = ByteVector.fromValidHex(uri.getUserInfo)
-    Node(nodeId, new InetSocketAddress(uri.getHost, uri.getPort))
+object PeerNode {
+  def apply(pk: KeyPair.Public, addr: InetSocketAddress): PeerNode =
+    PeerNode(pk, addr.getHostName, addr.getPort)
+
+  val NodeScheme   = "jbok"
+  val PublicLength = 64
+  def fromUri(uri: URI): PeerNode = {
+    val pk = KeyPair.Public(uri.getUserInfo)
+    PeerNode(pk, uri.getHost, uri.getPort)
   }
 
   /**
@@ -32,20 +39,20 @@ object Node {
     * @param node to be parsed
     * @return the parsed node, or the error detected during parsing
     */
-  def parseNode(node: String): Either[Throwable, Node] = {
+  def parseStr(node: String): Either[Throwable, PeerNode] = {
     def checkURI(node: String) = Try(new URI(node)).toEither
 
     def checkScheme(uri: URI) =
       if (uri.getScheme == NodeScheme) Right(NodeScheme) else Left(new Exception("invalid scheme"))
 
-    def checkNodeId(uri: URI) =
+    def checkPk(uri: URI) =
       ByteVector
         .fromHex(uri.getUserInfo)
-        .map(nodeId => {
-          if (nodeId.length == NodeIdSize) Right(nodeId)
-          else Left(new Exception("invalid nodeId length"))
+        .map(hex => {
+          if (hex.length == PublicLength) Right(KeyPair.Public(hex))
+          else Left(new Exception("invalid pk length"))
         })
-        .getOrElse(Left(new Exception("invalid nodeId")))
+        .getOrElse(Left(new Exception("invalid pk")))
 
     def checkAddress(uri: URI) =
       for {
@@ -59,11 +66,11 @@ object Node {
       } yield addr
 
     for {
-      uri <- checkURI(node)
-      _ <- checkScheme(uri)
-      nodeId <- checkNodeId(uri)
+      uri     <- checkURI(node)
+      _       <- checkScheme(uri)
+      nodeId  <- checkPk(uri)
       address <- checkAddress(uri)
-    } yield Node(nodeId, address)
+    } yield PeerNode(nodeId, address.getHostName, address.getPort)
   }
 
   /**
@@ -72,9 +79,9 @@ object Node {
     * @param unParsedNodes, nodes to be parsed
     * @return set of parsed and valid nodes
     */
-  def parseNodes(unParsedNodes: Set[String]): Set[Node] = unParsedNodes.foldLeft[Set[Node]](Set.empty) {
+  def parseNodes(unParsedNodes: Set[String]): Set[PeerNode] = unParsedNodes.foldLeft[Set[PeerNode]](Set.empty) {
     case (parsedNodes, nodeString) =>
-      val maybeNode = parseNode(nodeString)
+      val maybeNode = parseStr(nodeString)
       maybeNode match {
         case Left(_)     => parsedNodes
         case Right(node) => parsedNodes + node

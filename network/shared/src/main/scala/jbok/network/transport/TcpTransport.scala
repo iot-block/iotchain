@@ -53,10 +53,10 @@ class TcpTransport[F[_], A](
             fs2.io.tcp
               .client[F](remote, keepAlive = true, noDelay = true)
               .flatMap(socket => {
-                val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket)
+                val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket, false)
                 for {
-                  remote <- Stream.eval(conn.remoteAddress.map(_.asInstanceOf[InetSocketAddress]))
-                  local  <- Stream.eval(conn.localAddress.map(_.asInstanceOf[InetSocketAddress]))
+                  remote <- Stream.eval(conn.remoteAddress)
+                  local  <- Stream.eval(conn.localAddress)
                   _ = log.info(s"connect from ${local} to ${remote}")
                   _ <- Stream.eval(connections.modify(_ + (remote -> conn)))
                   _ <- Stream.eval(onConnect(conn))
@@ -114,9 +114,9 @@ class TcpTransport[F[_], A](
                 Stream.eval(done.complete(()))
               case Right(s) =>
                 s.flatMap(socket => {
-                  val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket)
+                  val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket, true)
                   for {
-                    remote <- Stream.eval(conn.remoteAddress.map(_.asInstanceOf[InetSocketAddress]))
+                    remote <- Stream.eval(conn.remoteAddress)
                     _ <- Stream
                       .eval(connections.get)
                       .flatMap(_.get(remote) match {
@@ -204,7 +204,7 @@ class TcpTransport[F[_], A](
           _    <- promises.modify(_ - (remote -> id))
         } yield resp
         p.attempt.map {
-          case Left(_) => None
+          case Left(_)  => None
           case Right(x) => x
         }
     })

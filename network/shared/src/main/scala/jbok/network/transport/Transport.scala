@@ -19,10 +19,12 @@ trait Transport[F[_], A] {
 
   def getConnected: F[Map[InetSocketAddress, Connection[F, A]]]
 
-  def listen(bind: InetSocketAddress,
-             onConnect: Connection[F, A] => F[Unit],
-             maxConcurrent: Int = Int.MaxValue,
-             receiveBufferSize: Int = 256 * 1024): F[Unit]
+  def listen(
+      bind: InetSocketAddress,
+      onConnect: Connection[F, A] => F[Unit],
+      maxConcurrent: Int = Int.MaxValue,
+      receiveBufferSize: Int = 256 * 1024
+  ): F[Unit]
 
   def stop: F[Unit]
 

@@ -3,6 +3,7 @@ package jbok.core.config
 import java.util.UUID
 
 import jbok.core.models.{Address, UInt256}
+import jbok.core.peer.PeerNode
 import jbok.network.NetAddress
 import scodec.bits._
 
@@ -130,15 +131,26 @@ object Configs {
       veryLongTimeout: FiniteDuration = 30.seconds
   )
 
+  case class DiscoveryConfig(
+      enabled: Boolean = true,
+      interface: String = "localhost",
+      port: Int = 8889,
+      bootstrapNodes: Set[PeerNode] = Set.empty,
+      nodesLimit: Int = 10,
+      scanMaxNodes: Int = 10,
+      scanInterval: FiniteDuration = 10.seconds,
+      messageExpiration: FiniteDuration = 10.seconds
+  )
+
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
       val rootDir                            = s"${defaultRootDir}/${suffix}"
-      val rpcConfig = RpcConfig(false, NetAddress("localhost", port), 1, false, NetAddress("localhost", port))
+      val rpcConfig                          = RpcConfig(false, NetAddress("localhost", port), 1, false, NetAddress("localhost", port))
       val walletConfig                       = KeyStoreConfig(s"${rootDir}/keystore")
       val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
       val blockChainConfig: BlockChainConfig = BlockChainConfig()
       val daoForkConfig: DaoForkConfig       = DaoForkConfig()
-      val syncConfig = SyncConfig()
+      val syncConfig                         = SyncConfig()
       val miningConfig                       = MiningConfig()
       FullNodeConfig(
         rootDir,

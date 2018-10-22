@@ -1,6 +1,6 @@
 package jbok.network.common
 
-import java.net.SocketAddress
+import java.net.InetSocketAddress
 
 import cats.effect.{ConcurrentEffect, Effect, Sync}
 import cats.implicits._
@@ -32,7 +32,7 @@ private[jbok] object TcpUtil {
       s     <- Stream.chunk(chunk).covary[F]
     } yield s
 
-  def socketToConnection[F[_]: ConcurrentEffect, A: Codec](socket: Socket[F]): Connection[F, A] =
+  def socketToConnection[F[_]: ConcurrentEffect, A: Codec](socket: Socket[F], incoming: Boolean): Connection[F, A] =
     new Connection[F, A] {
       override def write(a: A, timeout: Option[FiniteDuration]): F[Unit] =
         encode[F, A](a).flatMap(chunk => socket.write(chunk, timeout))
@@ -52,19 +52,16 @@ private[jbok] object TcpUtil {
       override def reads(timeout: Option[FiniteDuration], maxBytes: Int): Stream[F, A] =
         decodeStream[F, A](socket.reads(maxBytes, timeout))
 
-      override def endOfInput: F[Unit] =
-        socket.endOfInput
+      override def remoteAddress: F[InetSocketAddress] =
+        socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
 
-      override def endOfOutput: F[Unit] =
-        socket.endOfOutput
-
-      override def remoteAddress: F[SocketAddress] =
-        socket.remoteAddress
-
-      override def localAddress: F[SocketAddress] =
-        socket.localAddress
+      override def localAddress: F[InetSocketAddress] =
+        socket.localAddress.map(_.asInstanceOf[InetSocketAddress])
 
       override def close: F[Unit] =
         socket.close
+
+      override def isIncoming: Boolean =
+        incoming
     }
 }

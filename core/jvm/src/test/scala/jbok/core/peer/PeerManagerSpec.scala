@@ -3,7 +3,7 @@ package jbok.core.peer
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
-import jbok.core.HistoryFixture
+import jbok.core.{HistoryFixture, NodeStatus}
 import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
 import jbok.core.messages.Handshake
 import jbok.network.NetAddress
@@ -18,22 +18,23 @@ trait PeerManageFixture extends HistoryFixture {
 
   val syncConfig = SyncConfig()
 
-  val pm1 = PeerManager[IO](peerManagerConfigs(0), syncConfig, history).unsafeRunSync()
-  val pm2 = PeerManager[IO](peerManagerConfigs(1), syncConfig, history2).unsafeRunSync()
-  val pm3 = PeerManager[IO](peerManagerConfigs(2), syncConfig, history3).unsafeRunSync()
+  val pm1 = PeerManager[IO](peerManagerConfigs(0), syncConfig, NodeStatus[IO].unsafeRunSync(), history).unsafeRunSync()
+  val pm2 = PeerManager[IO](peerManagerConfigs(1), syncConfig, NodeStatus[IO].unsafeRunSync(), history2).unsafeRunSync()
+  val pm3 = PeerManager[IO](peerManagerConfigs(2), syncConfig, NodeStatus[IO].unsafeRunSync(), history3).unsafeRunSync()
 
   val peerManagers = List(pm1, pm2, pm3)
 
   val listen = peerManagers.traverse(_.listen)
   val connect =
-    listen.flatMap(_ => peerManagers.tail.traverse(p => peerManagers.head.connect(p.localAddress.unsafeRunSync()))) *> IO (Thread.sleep(1000))
+    listen.flatMap(_ => peerManagers.tail.traverse(p => peerManagers.head.connect(p.localAddress.unsafeRunSync()))) *> IO(
+      Thread.sleep(1000))
   val stopAll = peerManagers.traverse(_.stop)
 }
 
 class PeerManagerSpec extends JbokSpec with PeerManageFixture {
   "peer manager" should {
     "get local status" in {
-      val status = pm1.status.unsafeRunSync()
+      val status = pm1.localStatus.unsafeRunSync()
       status.genesisHash shouldBe history.getBestBlock.unsafeRunSync().header.hash
     }
 

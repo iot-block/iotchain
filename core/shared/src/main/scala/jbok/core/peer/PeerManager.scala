@@ -1,16 +1,17 @@
 package jbok.core.peer
 
-import java.net.InetSocketAddress
+import java.net.{InetSocketAddress, URI}
 
 import cats.effect.{ConcurrentEffect, Fiber, Timer}
 import cats.implicits._
 import fs2._
 import fs2.async.Ref
-import jbok.core.History
 import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
 import jbok.core.messages.{Message, Messages, Status, SyncMessage}
 import jbok.core.peer.PeerEvent.PeerRecv
+import jbok.core.peer.discovery.Discovery
 import jbok.core.sync.SyncService
+import jbok.core.{History, NodeStatus}
 import jbok.network.Connection
 import jbok.network.common.{RequestId, RequestMethod}
 import jbok.network.execution._
@@ -24,7 +25,11 @@ import scala.concurrent.duration.FiniteDuration
 trait PeerManager[F[_]] {
   def localAddress: F[InetSocketAddress]
 
-  def status: F[Status]
+  def localStatus: F[Status]
+
+  def knownPeers: F[Set[PeerNode]]
+
+  def discoveredPeers: Stream[F, Set[PeerNode]]
 
   def handshakedPeers: F[Map[PeerId, HandshakedPeer]]
 
@@ -57,6 +62,8 @@ class PeerManagerImpl[F[_]](
     config: PeerManagerConfig,
     history: History[F],
     transport: TcpTransport[F, Message],
+    known: PeerNodeManager[F],
+    discovery: Discovery[F],
     handshaked: Ref[F, Map[PeerId, HandshakedPeer]],
     banned: Ref[F, Map[PeerId, Fiber[F, Unit]]]
 )(implicit F: ConcurrentEffect[F], T: Timer[F], EC: ExecutionContext)
@@ -69,7 +76,7 @@ class PeerManagerImpl[F[_]](
     F.pure(bind)
   }
 
-  override def status: F[Status] =
+  override def localStatus: F[Status] =
     for {
       genesis   <- history.genesisHeader
       number    <- history.getBestBlockNumber
@@ -79,13 +86,19 @@ class PeerManagerImpl[F[_]](
       td = tdOpt.getOrElse(BigInt(0))
     } yield Status(1, genesis.hash, header.hash, number, td)
 
+  override def knownPeers: F[Set[PeerNode]] =
+    known.getAll
+
+  override def discoveredPeers: Stream[F, Set[PeerNode]] =
+    ???
+
   override def handshakedPeers: F[Map[PeerId, HandshakedPeer]] =
     handshaked.get
 
   override def listen: F[Unit] =
     for {
       local <- localAddress
-      _     <- transport.listen(local, handshake)
+      _     <- transport.listen(local, handshake, config.maxIncomingPeers)
     } yield ()
 
   override def stop: F[Unit] =
@@ -96,11 +109,11 @@ class PeerManagerImpl[F[_]](
 
   override def handshake(conn: Connection[F, Message]): F[Unit] =
     for {
-      localStatus <- status
-      remote      <- conn.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
+      localStatus <- localStatus
+      remote      <- conn.remoteAddress
       _           <- conn.write(localStatus, Some(config.handshakeTimeout))
       peerOpt <- conn.read(timeout = Some(config.handshakeTimeout)).map {
-        case Some(status: Status) => Some(HandshakedPeer(remote, PeerInfo(status)))
+        case Some(status: Status) => Some(HandshakedPeer(remote, PeerInfo(status), conn.isIncoming))
         case _                    => None
       }
       _ <- peerOpt match {
@@ -219,13 +232,17 @@ object PeerManager {
   def apply[F[_]](
       peerConfig: PeerManagerConfig,
       syncConfig: SyncConfig,
+      nodeStatus: NodeStatus[F],
       history: History[F]
   )(implicit F: ConcurrentEffect[F], T: Timer[F], EC: ExecutionContext): F[PeerManager[F]] = {
     val syncService = SyncService[F](syncConfig, history)
     for {
+      nodeManager <- PeerNodeManager[F](history.db)
+//      discovery <- Discovery[F](DiscoveryConfig(), nodeStatus)
+      discovery = null
       transport  <- TcpTransport(syncService.pipe, peerConfig.timeout)
       handshaked <- fs2.async.refOf[F, Map[PeerId, HandshakedPeer]](Map.empty)
       banned     <- fs2.async.refOf[F, Map[PeerId, Fiber[F, Unit]]](Map.empty)
-    } yield new PeerManagerImpl[F](peerConfig, history, transport, handshaked, banned)
+    } yield new PeerManagerImpl[F](peerConfig, history, transport, nodeManager, discovery, handshaked, banned)
   }
 }

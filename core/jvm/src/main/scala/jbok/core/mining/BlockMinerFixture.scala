@@ -1,6 +1,7 @@
 package jbok.core.mining
 
 import cats.effect.IO
+import jbok.core.NodeStatus
 import jbok.core.config.Configs.{BlockChainConfig, PeerManagerConfig, SyncConfig}
 import jbok.core.consensus.ConsensusFixture
 import jbok.core.ledger.BlockExecutor
@@ -15,19 +16,20 @@ class BlockMinerFixture(consensusFixture: ConsensusFixture, bindAddr: NetAddress
   val consensus        = consensusFixture.consensus
   val blockChainConfig = BlockChainConfig()
   val history          = consensus.history
-
+  val nodeStatus       = NodeStatus[IO].unsafeRunSync()
   val blockPoolConfig = BlockPoolConfig()
   val blockPool       = BlockPool[IO](history, blockPoolConfig).unsafeRunSync()
   val executor        = BlockExecutor[IO](blockChainConfig, history, blockPool, consensus)
 
-  val syncConfig = SyncConfig()
+  val syncConfig        = SyncConfig()
   val peerManagerConfig = PeerManagerConfig(bindAddr)
-  val peerManager       = PeerManager[IO](peerManagerConfig, syncConfig, history).unsafeRunSync()
-  val txPool            = TxPool[IO](peerManager, TxPoolConfig()).unsafeRunSync()
-  val ommerPool         = OmmerPool[IO](history).unsafeRunSync()
-  val broadcaster       = Broadcaster[IO](peerManager)
-  val synchronizer      = Synchronizer[IO](peerManager, executor, txPool, ommerPool, broadcaster).unsafeRunSync()
+  val peerManager =
+    PeerManager[IO](peerManagerConfig, syncConfig, nodeStatus, history).unsafeRunSync()
+  val txPool       = TxPool[IO](peerManager, TxPoolConfig()).unsafeRunSync()
+  val ommerPool    = OmmerPool[IO](history).unsafeRunSync()
+  val broadcaster  = Broadcaster[IO](peerManager)
+  val synchronizer = Synchronizer[IO](peerManager, executor, txPool, ommerPool, broadcaster).unsafeRunSync()
 
   val fullSync = FullSync[IO](syncConfig, peerManager, executor, txPool)
-  val miner = BlockMiner[IO](synchronizer).unsafeRunSync()
+  val miner    = BlockMiner[IO](synchronizer).unsafeRunSync()
 }

@@ -29,9 +29,9 @@ class TcpServerBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends 
           Stream.empty.covary[F]
         case Right(s) =>
           s.flatMap(socket => {
-            val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket)
+            val conn: Connection[F, A] = TcpUtil.socketToConnection[F, A](socket, true)
             for {
-              remote <- Stream.eval(conn.remoteAddress.map(_.asInstanceOf[InetSocketAddress]))
+              remote <- Stream.eval(conn.remoteAddress)
               _      <- Stream.eval(conns.modify(_ + (remote -> conn)))
               _      <- conn.reads().through(pipe).to(conn.writes()).onFinalize(conns.modify(_ - remote).void)
             } yield ()
