@@ -5,9 +5,10 @@ import cats.implicits._
 import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.core.HistoryFixture
+import jbok.core.{History, HistoryFixture}
 import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
 import jbok.core.messages.{BlockBodies, GetBlockBodies, Handshake}
+import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
@@ -30,9 +31,9 @@ class PeerManagerFixture(port: Int) extends HistoryFixture {
 class PeerManagerSpec extends JbokSpec {
   "PeerManager" should {
     "keep incoming connections <= maxOpen" in {
-      val fix1 = new PeerManagerFixture(10001)
-      val fix2 = new PeerManagerFixture(10002)
-      val fix3 = new PeerManagerFixture(10003)
+      val fix1    = new PeerManagerFixture(10001)
+      val fix2    = new PeerManagerFixture(10002)
+      val fix3    = new PeerManagerFixture(10003)
       val maxOpen = 1
 
       val p = for {
@@ -52,9 +53,9 @@ class PeerManagerSpec extends JbokSpec {
     }
 
     "keep outgoing connections <= maxOpen" in {
-      val fix1 = new PeerManagerFixture(10001)
-      val fix2 = new PeerManagerFixture(10002)
-      val fix3 = new PeerManagerFixture(10003)
+      val fix1    = new PeerManagerFixture(10001)
+      val fix2    = new PeerManagerFixture(10002)
+      val fix3    = new PeerManagerFixture(10003)
       val maxOpen = 1
 
       val p = for {
@@ -72,9 +73,28 @@ class PeerManagerSpec extends JbokSpec {
     }
 
     "get local status" in {
-      val fix = new PeerManagerFixture(10001)
+      val fix    = new PeerManagerFixture(10001)
       val status = fix.pm.localStatus.unsafeRunSync()
       status.genesisHash shouldBe fix.history.getBestBlock.unsafeRunSync().header.hash
+    }
+
+    "handshake should fail if peers are incompatible" in {
+      val fix1 = new PeerManagerFixture(10001)
+      val pmConfig = PeerManagerConfig(10002)
+      val db = KeyValueDB.inMemory[IO].unsafeRunSync()
+      val history = History[IO](db, fix1.history.chainId + 1).unsafeRunSync()
+      history.loadGenesisConfig().unsafeRunSync()
+      val pm2       = PeerManager[IO](pmConfig, SyncConfig(), history).unsafeRunSync()
+
+      val p = for {
+        fiber <- fix1.pm.listen().compile.drain.start
+        _     <- T.sleep(1.seconds)
+        _     <- pm2.addKnown(fix1.addr)
+        r     <- pm2.connect().compile.drain.attempt
+        _     <- fiber.cancel
+      } yield r
+
+      p.unsafeRunSync().isLeft shouldBe true
     }
 
     "broadcast and subscribe" in new PeersFixture(3) {

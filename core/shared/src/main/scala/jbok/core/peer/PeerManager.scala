@@ -132,18 +132,21 @@ class PeerManager[F[_]](
     for {
       genesis   <- history.genesisHeader
       number    <- history.getBestBlockNumber
-      headerOpt <- history.getBlockHeaderByNumber(number)
-      header = headerOpt.getOrElse(genesis)
-      tdOpt <- history.getTotalDifficultyByHash(header.hash)
-      td = tdOpt.getOrElse(BigInt(0))
-    } yield Status(1, genesis.hash, header.hash, number, td)
+    } yield Status(history.chainId, genesis.hash, number)
 
   private[jbok] def handshake(conn: Connection[F, Message]): F[HandshakedPeer[F]] =
     for {
       localStatus  <- localStatus
       _            <- conn.write(localStatus, Some(config.handshakeTimeout))
       remoteStatus <- conn.read(Some(config.handshakeTimeout)).map(_.asInstanceOf[Status])
-      peer         <- HandshakedPeer[F](conn, remoteStatus)
+      _ <- if (!localStatus.isCompatible(remoteStatus)) {
+        log.info("incompatible peer")
+        F.raiseError(new Exception("incompatible peer"))
+      } else {
+        log.info("compatible peer")
+        F.unit
+      }
+      peer <- HandshakedPeer[F](conn, remoteStatus)
       _ <- if (conn.isIncoming) {
         incoming.update(_ + (conn.remoteAddress -> peer))
       } else {

@@ -28,7 +28,7 @@ trait SnapshotFixture {
     val block   = Genesis.block.copy(header = header)
     val db      = KeyValueDB.inMemory[IO].unsafeRunSync()
     val history = History[IO](db).unsafeRunSync()
-    history.loadGenesis(Some(block)).unsafeRunSync()
+    history.loadGenesisBlock(Some(block)).unsafeRunSync()
     history
   }
 

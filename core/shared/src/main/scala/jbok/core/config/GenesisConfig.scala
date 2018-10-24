@@ -13,6 +13,7 @@ case class GenesisConfig(
     coinbase: ByteVector,
     timestamp: Long,
     alloc: Map[String, BigInt],
+    chainId: Byte
 ) {
   lazy val header = BlockHeader(
     ByteVector.empty,
@@ -48,6 +49,7 @@ object GenesisConfig {
     timestamp = 0,
     alloc = Map(
       "d7a681378321f472adffb9fdded2712f677e0ba9" -> BigInt("1000000000000000000000000000000000000000000")
-    )
+    ),
+    chainId = 0.toByte
   )
 }

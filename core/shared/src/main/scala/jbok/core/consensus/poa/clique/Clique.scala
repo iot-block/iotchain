@@ -9,7 +9,7 @@ import jbok.core.History
 import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.models._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
+import jbok.crypto.signature.{CryptoSignature, ECDSA, Signature}
 import jbok.persistent.{KeyValueDB, KeyValueStore, LruMap}
 import scodec.bits._
 

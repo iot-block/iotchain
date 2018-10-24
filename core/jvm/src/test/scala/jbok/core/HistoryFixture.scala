@@ -6,5 +6,5 @@ import jbok.persistent.KeyValueDB
 trait HistoryFixture {
   val db      = KeyValueDB.inMemory[IO].unsafeRunSync()
   val history = History[IO](db).unsafeRunSync()
-  history.loadGenesis().unsafeRunSync()
+  history.loadGenesisBlock().unsafeRunSync()
 }

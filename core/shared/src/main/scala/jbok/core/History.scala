@@ -12,10 +12,10 @@ import jbok.evm.WorldStateProxy
 import jbok.persistent.{KeyValueDB, RefCountKeyValueDB, SnapshotKeyValueStore}
 import scodec.bits._
 
-abstract class History[F[_]](val db: KeyValueDB[F])(implicit F: Sync[F]) {
+abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int)(implicit F: Sync[F]) {
   protected val log = org.log4s.getLogger
 
-  def loadGenesis(genesis: Option[Block] = None): F[Unit] = {
+  def loadGenesisBlock(genesis: Option[Block] = None): F[Unit] = {
     log.info(s"loading genesis data")
     for {
       headerOpt <- getBlockHeaderByNumber(0)
@@ -256,7 +256,7 @@ object History {
       _       <- history.loadGenesisConfig(genesisConfig)
     } yield history
 
-  def apply[F[_]: Sync](db: KeyValueDB[F]): F[History[F]] = {
+  def apply[F[_]: Sync](db: KeyValueDB[F], chainId: Int = 1): F[History[F]] = {
     val headerStore          = new BlockHeaderStore[F](db)
     val bodyStore            = new BlockBodyStore[F](db)
     val receiptStore         = new ReceiptStore[F](db)
@@ -277,7 +277,8 @@ object History {
         totalDifficultyStore,
         fastSyncStore,
         appStateStore,
-        evmCodeStore
+        evmCodeStore,
+        chainId
       )
     }
   }
@@ -293,9 +294,9 @@ class HistoryImpl[F[_]](
     totalDifficultyStore: TotalDifficultyStore[F],
     fastSyncStore: FastSyncStore[F],
     appStateStore: AppStateStore[F],
-    evmCodeStore: EvmCodeStore[F]
-)(implicit F: Sync[F])
-    extends History[F](db) {
+    evmCodeStore: EvmCodeStore[F],
+    chainId: Int
+)(implicit F: Sync[F]) extends History[F](db, chainId) {
 
   /**
     * Allows to query a blockHeader by block hash
@@ -491,5 +492,4 @@ class HistoryImpl[F[_]](
 
   override def purgeSyncState: F[Unit] =
     fastSyncStore.purge
-
 }

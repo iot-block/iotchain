@@ -12,10 +12,11 @@ case class Handshake(
 case class Status(
     chainId: Int,
     genesisHash: ByteVector,
-    bestHash: ByteVector,
-    bestNumber: BigInt,
-    totalDifficulty: BigInt
-) extends Message
+    bestNumber: BigInt
+) extends Message {
+  def isCompatible(other: Status): Boolean =
+    chainId == other.chainId && genesisHash == other.genesisHash
+}
 
 case class BlockHash(hash: ByteVector, number: BigInt)
 case class NewBlockHashes(hashes: List[BlockHash])          extends Message
