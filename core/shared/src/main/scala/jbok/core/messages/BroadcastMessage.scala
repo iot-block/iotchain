@@ -10,7 +10,7 @@ case class Handshake(
 ) extends Message
 
 case class Status(
-    networkId: Int,
+    chainId: Int,
     genesisHash: ByteVector,
     bestHash: ByteVector,
     bestNumber: BigInt,

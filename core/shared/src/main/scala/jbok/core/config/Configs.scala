@@ -5,20 +5,21 @@ import java.util.UUID
 
 import jbok.core.models.{Address, UInt256}
 import jbok.core.peer.PeerNode
-import jbok.network.NetAddress
 import scodec.bits._
 
 import scala.concurrent.duration._
 
 object Configs {
-  val defaultRootDir: String = "~/.jbok"
+  val home = System.getProperty("user.home")
+
+  val defaultRootDir: String = s"${home}/.jbok"
 
   case class RpcConfig(
       publicApiEnable: Boolean = false,
-      publicApiBindAddress: NetAddress,
+      publicApiPort: Int,
       publicApiVersion: Int = 1,
       privateApiEnable: Boolean = false,
-      privateApiBindAddress: NetAddress,
+      privateApiBindPort: Int,
   )
 
   case class KeyStoreConfig(
@@ -149,7 +150,7 @@ object Configs {
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
       val rootDir                            = s"${defaultRootDir}/${suffix}"
-      val rpcConfig                          = RpcConfig(false, NetAddress("localhost", port), 1, false, NetAddress("localhost", port))
+      val rpcConfig                          = RpcConfig(false, port, 1, false, port)
       val walletConfig                       = KeyStoreConfig(s"${rootDir}/keystore")
       val peerManagerConfig                  = PeerManagerConfig(port)
       val blockChainConfig: BlockChainConfig = BlockChainConfig()

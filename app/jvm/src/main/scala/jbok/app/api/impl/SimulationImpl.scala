@@ -35,7 +35,6 @@ import scala.concurrent.duration._
 import scala.util.Random
 import jbok.common.execution._
 import jbok.core.peer.PeerManager
-import jbok.network.NetAddress
 
 class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                      val nodes: Ref[IO, Map[NodeId, FullNode[IO]]],
@@ -47,7 +46,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
   val txGraphGen   = new TxGraphGen(10)
 
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
-    NodeInfo(fullNode.id, NetAddress(fullNode.config.peer.interface, fullNode.config.peer.port))
+    NodeInfo(fullNode.id, fullNode.config.peer.interface, fullNode.config.peer.port)
 
   private def newAPIServer[API](api: API, enable: Boolean, address: String, port: Int): IO[Option[Server[IO, String]]] =
     if (enable) {
@@ -87,13 +86,13 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                                  config.rpc.publicApiVersion)
       publicApiServer <- newAPIServer[PublicAPI](publicAPI,
                                                  config.rpc.publicApiEnable,
-                                                 config.rpc.publicApiBindAddress.toString,
-                                                 config.rpc.publicApiBindAddress.port.get)
+                                                 "localhost",
+                                                 config.rpc.publicApiPort)
       privateAPI <- PrivateApiImpl(keyStore, history, config.blockChainConfig, txPool)
       privateApiServer <- newAPIServer[PrivateAPI](privateAPI,
                                                    config.rpc.privateApiEnable,
-                                                   config.rpc.privateApiBindAddress.toString,
-                                                   config.rpc.privateApiBindAddress.port.get)
+                                                   "localhost",
+                                                   config.rpc.privateApiBindPort)
     } yield new FullNode[IO](config, peerManager, synchronizer, keyStore, miner, publicApiServer, privateApiServer)
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {

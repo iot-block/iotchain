@@ -1,10 +1,11 @@
 package jbok.app.simulations
 
+import java.net.InetSocketAddress
+
 import _root_.io.circe.generic.JsonCodec
 import cats.effect.IO
 import fs2._
 import jbok.core.models.{Block, SignedTransaction}
-import jbok.network.NetAddress
 
 @JsonCodec
 case class SimulationEvent(source: String, target: String, message: String, time: Long = System.currentTimeMillis())
@@ -12,9 +13,11 @@ case class SimulationEvent(source: String, target: String, message: String, time
 @JsonCodec
 case class NodeInfo(
     id: String,
-    p2pAddress: NetAddress
+    interface: String,
+    port: Int
 ) {
-  override def toString: String = s"NodeInfo(id=${id}, p2p=${p2pAddress})"
+  val addr = new InetSocketAddress(interface, port)
+  override def toString: String = s"NodeInfo(id=${id}, addr=${addr})"
 }
 
 trait SimulationAPI {
