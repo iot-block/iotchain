@@ -11,7 +11,6 @@ import jbok.core.models._
 import jbok.core.sync.Synchronizer
 import jbok.core.utils.ByteUtils
 import jbok.crypto.authds.mpt.MPTrieStore
-import jbok.common.execution._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
@@ -139,15 +138,10 @@ class BlockMiner[F[_]](
       .onFinalize(stopWhenTrue.set(true))
 
   def start: F[Unit] =
-    for {
-      _ <- stopWhenTrue.set(false)
-      _ <- F.start(miningStream.interruptWhen(stopWhenTrue).compile.drain).void
-      _ <- F.delay(log.info(s"start mining"))
-    } yield ()
-//  stopWhenTrue.get.flatMap {
-//    case true  => stopWhenTrue.set(false) *> F.start(miningStream.interruptWhen(stopWhenTrue).compile.drain).void
-//    case false => F.unit
-//  }
+    stopWhenTrue.get.flatMap {
+      case true  => stopWhenTrue.set(false) *> F.start(miningStream.interruptWhen(stopWhenTrue).compile.drain).void
+      case false => F.unit
+    }
 
   def stop: F[Unit] =
     stopWhenTrue.set(true)

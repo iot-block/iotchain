@@ -1,7 +1,6 @@
 package jbok.core.sync
 
 import cats.effect.ConcurrentEffect
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
@@ -9,9 +8,8 @@ import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.BlockImportResult._
 import jbok.core.messages.{GetBlockHeaders, NewBlock, NewBlockHashes}
 import jbok.core.models.Block
-import jbok.core.peer.{PeerEvent, PeerId, PeerManager}
+import jbok.core.peer.PeerManager
 import jbok.core.pool.{OmmerPool, TxPool}
-import scodec.bits.ByteVector
 
 import scala.concurrent.ExecutionContext
 
@@ -21,7 +19,6 @@ case class Synchronizer[F[_]](
     txPool: TxPool[F],
     ommerPool: OmmerPool[F],
     broadcaster: Broadcaster[F],
-    peerHasBlock: Ref[F, Map[PeerId, Set[ByteVector]]],
     stopWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
@@ -30,20 +27,18 @@ case class Synchronizer[F[_]](
 
   def stream: Stream[F, Unit] =
     peerManager
-      .subscribe()
+      .subscribe
       .evalMap {
-        case PeerEvent.PeerRecv(peerId, NewBlock(block)) =>
-          log.info(s"received NewBlock(${block.tag}) from ${peerId}")
+        case (peer, NewBlock(block)) =>
+          log.info(s"received NewBlock(${block.tag}) from ${peer.conn.remoteAddress}")
 
           for {
-            peerHasBlockMap <- peerHasBlock.get
-            blockSet = peerHasBlockMap.getOrElse(peerId, Set.empty)
-            _            <- peerHasBlock.update(_ + (peerId -> (blockSet + block.header.hash)))
+            _ <- peer.knownBlock(block.header.hash)
             importResult <- executor.importBlock(block)
-            _ = log.info(s"${peerManager.localAddress}: import block result: ${importResult}")
+            _ = log.info(s"${peerManager.config.bindAddr}: import block result: ${importResult}")
             _ <- importResult match {
               case Succeed(newBlocks, _) =>
-                log.info(s"Added new ${block.tag} to the top of the chain received from $peerId")
+                log.info(s"Added new ${block.tag} to the top of the chain received from ${peer.id}")
                 broadcastBlocks(newBlocks) *> updateTxAndOmmerPools(newBlocks, Nil)
 
               case Pooled =>
@@ -54,9 +49,9 @@ case class Synchronizer[F[_]](
             }
           } yield ()
 
-        case PeerEvent.PeerRecv(peerId, NewBlockHashes(hashes)) =>
+        case (peer, NewBlockHashes(hashes)) =>
           val request = GetBlockHeaders(Right(hashes.head.hash), hashes.length, 0, reverse = false)
-          peerManager.sendMessage(peerId, request)
+          peer.conn.write(request)
 
         case _ => F.unit
       }
@@ -97,7 +92,7 @@ case class Synchronizer[F[_]](
   }
 
   private def broadcastBlocks(blocks: List[Block]): F[Unit] =
-    blocks.traverse(block => broadcaster.broadcastBlock(NewBlock(block), peerHasBlock.get)).void
+    blocks.traverse(block => broadcaster.broadcastBlock(NewBlock(block))).void
 }
 
 object Synchronizer {
@@ -110,6 +105,5 @@ object Synchronizer {
   )(implicit F: ConcurrentEffect[F], EC: ExecutionContext): F[Synchronizer[F]] =
     for {
       s     <- SignallingRef[F, Boolean](true)
-      peers <- Ref.of[F, Map[PeerId, Set[ByteVector]]](Map.empty)
-    } yield Synchronizer(peerManager, executor, txPool, ommerPool, broadcaster, peers, s)
+    } yield Synchronizer(peerManager, executor, txPool, ommerPool, broadcaster, s)
 }

@@ -3,7 +3,7 @@ package jbok.core
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
-import jbok.core.config.{Configs, GenesisConfig}
+import jbok.core.config.GenesisConfig
 import jbok.core.models._
 import jbok.core.store._
 import jbok.core.sync.SyncState

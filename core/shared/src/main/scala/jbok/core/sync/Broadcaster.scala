@@ -1,78 +1,57 @@
 package jbok.core.sync
 
-import cats.effect.Effect
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
+import jbok.common._
 import jbok.core.messages.{BlockHash, NewBlock, NewBlockHashes}
-import jbok.core.peer.{HandshakedPeer, PeerId, PeerInfo, PeerManager}
-import scodec.bits.ByteVector
+import jbok.core.peer.{HandshakedPeer, PeerManager}
 
-import scala.concurrent.ExecutionContext
 import scala.util.Random
 
-case class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Effect[F], EC: ExecutionContext) {
+case class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger
 
-  def broadcastBlock(newBlock: NewBlock, peerHasBlocks: F[Map[PeerId, Set[ByteVector]]]): F[Unit] =
+  def broadcastBlock(newBlock: NewBlock): F[Unit] =
     for {
-      peers       <- peerManager.handshakedPeers
-      peersBlocks <- peerHasBlocks
+      peers <- peerManager.connected
       _ <- if (peers.isEmpty) {
-        log.info(s"no handshaked peers, ignore broadcasting")
+        log.info(s"no peers, ignore broadcasting")
         F.unit
       } else {
-        log.info(s"peersBlocks: ${peersBlocks}")
-        broadcastBlock(newBlock, peers, peersBlocks)
+        for {
+          peersWithoutBlock <- peers
+            .traverse { peer =>
+              (higherThanPeer(newBlock, peer) && !peer.hasBlock(newBlock.block.header.hash)).map {
+                case true  => Some(peer)
+                case false => None
+              }
+            }
+            .map(_.flatten)
+          _ <- broadcastNewBlock(newBlock, peersWithoutBlock)
+          _ <- broadcastNewBlockHash(newBlock, peersWithoutBlock)
+        } yield ()
       }
     } yield ()
 
-  private def broadcastBlock(newBlock: NewBlock,
-                             peers: Map[PeerId, HandshakedPeer],
-                             peerHasBlocks: Map[PeerId, Set[ByteVector]]): F[Unit] = {
-    val peersWithoutBlock = peers.collect {
-      case (peerId, peer)
-          if shouldSendNewBlock(newBlock, peer.peerInfo) && !alreadyHasBlock(newBlock, peerId, peerHasBlocks) =>
-        peerId
-    }.toSet
+  private def higherThanPeer(newBlock: NewBlock, peer: HandshakedPeer[F]): F[Boolean] =
+    peer.status.get.map(_.bestNumber < newBlock.block.header.number)
 
-    if (peersWithoutBlock.isEmpty) {
-      log.info(s"no worst peers, ignore broadcasting")
-      F.unit
-    } else {
-      log.info(s"broadcast ${newBlock.block.tag} to ${peersWithoutBlock.size} peers")
-      broadcastNewBlock(newBlock, peersWithoutBlock) *> broadcastNewBlockHash(newBlock, peersWithoutBlock)
-    }
-  }
-
-  private def alreadyHasBlock(newBlock: NewBlock,
-                              peerId: PeerId,
-                              peerHasBlocks: Map[PeerId, Set[ByteVector]]): Boolean =
-    peerHasBlocks.contains(peerId) && peerHasBlocks(peerId).contains(newBlock.block.header.hash)
-
-  private def shouldSendNewBlock(newBlock: NewBlock, peerInfo: PeerInfo): Boolean =
-    newBlock.block.header.number > peerInfo.status.bestNumber
-
-  private def broadcastNewBlock(newBlock: NewBlock, peers: Set[PeerId], random: Boolean = false): F[Unit] = {
-    val selected: Set[PeerId] = if (random) randomSelect(peers) else peers
+  private def broadcastNewBlock(newBlock: NewBlock,
+                                peers: List[HandshakedPeer[F]],
+                                random: Boolean = false): F[Unit] = {
+    val selected: List[HandshakedPeer[F]] = if (random) randomSelect(peers) else peers
     log.info(s"selected ${selected.size} peers to broadcast block")
-    selected.toList
-      .map { peerId =>
-        peerManager.sendMessage(peerId, newBlock)
-      }
-      .sequence
-      .void
+    selected.traverse(_.conn.write(newBlock)).void
   }
 
-  private def broadcastNewBlockHash(newBlock: NewBlock, peers: Set[PeerId]): F[Unit] =
-    peers.toList
-      .map { peerId =>
-        val newBlockHeader = newBlock.block.header
-        val newBlockHashes = NewBlockHashes(BlockHash(newBlockHeader.hash, newBlockHeader.number) :: Nil)
-        peerManager.sendMessage(peerId, newBlockHashes)
-      }
-      .sequence
-      .void
+  private def broadcastNewBlockHash(newBlock: NewBlock, peers: List[HandshakedPeer[F]]): F[Unit] =
+    peers.traverse { peer =>
+      val newBlockHeader = newBlock.block.header
+      val newBlockHashes = NewBlockHashes(BlockHash(newBlockHeader.hash, newBlockHeader.number) :: Nil)
+      peer.conn.write(newBlockHashes)
+    }.void
 
-  private def randomSelect(peers: Set[PeerId]): Set[PeerId] = {
+  private def randomSelect(peers: List[HandshakedPeer[F]]): List[HandshakedPeer[F]] = {
     val numberOfPeersToSend = Math.sqrt(peers.size).toInt
     Random.shuffle(peers).take(numberOfPeersToSend)
   }

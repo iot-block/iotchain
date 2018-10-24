@@ -7,14 +7,13 @@ import java.util.UUID
 import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
+import jbok.common.execution._
 import jbok.common.testkit.HexGen
 import jbok.network.client.{Client, TcpClientBuilder}
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.common.execution._
 import jbok.network.server.{Server, TcpServerBuilder}
 import scodec.Codec
 import scodec.codecs._
-import cats.implicits._
 
 class TcpClientServerSpec extends JbokSpec {
   case class Data(id: String, data: String)

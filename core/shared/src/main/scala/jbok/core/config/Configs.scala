@@ -1,5 +1,6 @@
 package jbok.core.config
 
+import java.net.InetSocketAddress
 import java.util.UUID
 
 import jbok.core.models.{Address, UInt256}
@@ -25,7 +26,8 @@ object Configs {
   )
 
   case class PeerManagerConfig(
-      bindAddr: NetAddress,
+      port: Int = 10000,
+      interface: String = "localhost",
       updatePeersInterval: FiniteDuration = 10.seconds,
       maxOutgoingPeers: Int = 10,
       maxIncomingPeers: Int = 10,
@@ -33,7 +35,9 @@ object Configs {
       connectionTimeout: FiniteDuration = 10.seconds,
       handshakeTimeout: FiniteDuration = 10.seconds,
       timeout: FiniteDuration = 10.seconds
-  )
+  ) {
+    val bindAddr: InetSocketAddress = new InetSocketAddress(interface, port)
+  }
 
   case class FullNodeConfig(
       rootDir: String = defaultRootDir,
@@ -147,7 +151,7 @@ object Configs {
       val rootDir                            = s"${defaultRootDir}/${suffix}"
       val rpcConfig                          = RpcConfig(false, NetAddress("localhost", port), 1, false, NetAddress("localhost", port))
       val walletConfig                       = KeyStoreConfig(s"${rootDir}/keystore")
-      val peerManagerConfig                  = PeerManagerConfig(NetAddress("localhost", port))
+      val peerManagerConfig                  = PeerManagerConfig(port)
       val blockChainConfig: BlockChainConfig = BlockChainConfig()
       val daoForkConfig: DaoForkConfig       = DaoForkConfig()
       val syncConfig                         = SyncConfig()

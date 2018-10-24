@@ -13,6 +13,7 @@ import jbok.network.common.{RequestId, RequestMethod}
 import jbok.network.server.{Server, WSServerBuilder}
 import scodec.Codec
 import scodec.codecs._
+import jbok.common.execution._
 
 class WsClientServerSpec extends JbokSpec {
   case class Data(id: String, data: String)

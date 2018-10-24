@@ -34,7 +34,7 @@ class AuthConnectionSpec extends JbokSpec {
           _ <- Stream.eval(conn.write(hex"deadbeef"))
         } yield ()
 
-      val bytes = server.concurrently(Sch.sleep[IO](1.second) ++ client)
+      val bytes = server.concurrently(Stream.sleep(1.second) ++ client)
       bytes.take(1).compile.toList.unsafeRunSync() shouldBe List(Some(hex"deadbeef"))
     }
   }

@@ -2,7 +2,9 @@ package jbok.network.common
 
 import java.net.InetSocketAddress
 
-import cats.effect.{ConcurrentEffect, Effect, Sync}
+import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.implicits._
+import cats.effect.{ConcurrentEffect, Effect, Sync, Timer}
 import cats.implicits._
 import fs2._
 import fs2.io.tcp.Socket
@@ -32,36 +34,71 @@ private[jbok] object TcpUtil {
       s     <- Stream.chunk(chunk).covary[F]
     } yield s
 
-  def socketToConnection[F[_]: ConcurrentEffect, A: Codec](socket: Socket[F], incoming: Boolean): Connection[F, A] =
-    new Connection[F, A] {
-      override def write(a: A, timeout: Option[FiniteDuration]): F[Unit] =
-        encode[F, A](a).flatMap(chunk => socket.write(chunk, timeout))
+  def socketToConnection[F[_]: ConcurrentEffect, A: Codec: RequestId](
+      socket: Socket[F],
+      incoming: Boolean
+  )(implicit T: Timer[F]): F[Connection[F, A]] =
+    for {
+      local    <- socket.localAddress.map(_.asInstanceOf[InetSocketAddress])
+      remote   <- socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
+      promises <- Ref.of[F, Map[String, Deferred[F, A]]](Map.empty)
+    } yield
+      new Connection[F, A] {
+        override def write(a: A, timeout: Option[FiniteDuration]): F[Unit] =
+          encode[F, A](a).flatMap(chunk => socket.write(chunk, timeout))
 
-      override def writes(timeout: Option[FiniteDuration]): Sink[F, A] =
-        _.flatMap(encodeStream[F, A]).to(socket.writes(timeout))
+        override def writes(timeout: Option[FiniteDuration]): Sink[F, A] =
+          _.flatMap(encodeStream[F, A]).to(socket.writes(timeout))
 
-      override def read(timeout: Option[FiniteDuration], maxBytes: Int): F[Option[A]] =
-        for {
-          chunkOpt <- socket.read(maxBytes, timeout)
-          aOpt <- chunkOpt match {
-            case Some(chunk) => decodeChunk[F, A](chunk).map(_.some)
-            case None        => none[A].pure[F]
+        override def read(timeout: Option[FiniteDuration], maxBytes: Int): F[A] =
+          for {
+            chunk <- socket.read(maxBytes, timeout).map(_.get)
+            a     <- decodeChunk[F, A](chunk)
+          } yield a
+
+        override def reads(timeout: Option[FiniteDuration], maxBytes: Int): Stream[F, A] =
+          decodeStream[F, A](socket.reads(maxBytes, timeout))
+            .evalMap { a =>
+              for {
+                idOpt <- Sync[F].delay(RequestId[A].id(a))
+                _ <- idOpt match {
+                  case None => Sync[F].unit
+                  case Some(id) =>
+                    promises.get.map(_.get(id)).flatMap {
+                      case Some(p) => p.complete(a)
+                      case None    => Sync[F].unit
+                    }
+                }
+              } yield a
+            }
+
+        override def request(a: A, timeout: Option[FiniteDuration] = None): F[A] =
+          for {
+            id      <- Sync[F].delay(RequestId[A].id(a).getOrElse(""))
+            promise <- Deferred[F, A]
+            _       <- promises.update(_ + (id -> promise))
+            _       <- write(a, timeout)
+            resp    <- timeout.fold(promise.get)(t => promise.get.timeout(t))
+            _       <- promises.update(_ - id)
+          } yield resp
+
+        override def close: F[Unit] =
+          socket.close
+
+        override def isIncoming: Boolean =
+          incoming
+
+        override val localAddress: InetSocketAddress =
+          local
+
+        override val remoteAddress: InetSocketAddress =
+          remote
+
+        override def toString: String =
+          if (incoming) {
+            s"tcp incoming ${localAddress} <- ${remoteAddress}"
+          } else {
+            s"tcp outgoing ${localAddress} -> ${remoteAddress}"
           }
-        } yield aOpt
-
-      override def reads(timeout: Option[FiniteDuration], maxBytes: Int): Stream[F, A] =
-        decodeStream[F, A](socket.reads(maxBytes, timeout))
-
-      override def remoteAddress: F[InetSocketAddress] =
-        socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
-
-      override def localAddress: F[InetSocketAddress] =
-        socket.localAddress.map(_.asInstanceOf[InetSocketAddress])
-
-      override def close: F[Unit] =
-        socket.close
-
-      override def isIncoming: Boolean =
-        incoming
-    }
+      }
 }

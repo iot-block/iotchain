@@ -33,6 +33,9 @@ import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Random
+import jbok.common.execution._
+import jbok.core.peer.PeerManager
+import jbok.network.NetAddress
 
 class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                      val nodes: Ref[IO, Map[NodeId, FullNode[IO]]],
@@ -44,7 +47,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
   val txGraphGen   = new TxGraphGen(10)
 
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
-    NodeInfo(fullNode.id, fullNode.config.peer.bindAddr)
+    NodeInfo(fullNode.id, NetAddress(fullNode.config.peer.interface, fullNode.config.peer.port))
 
   private def newAPIServer[API](api: API, enable: Boolean, address: String, port: Int): IO[Option[Server[IO, String]]] =
     if (enable) {
@@ -146,7 +149,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     log.info(s"network start all nodes")
     for {
       xs <- nodes.get
-      _  <- xs.values.toList.map(x => startNode(x.id)).sequence
+      _  <- xs.values.toList.traverse(x => startNode(x.id))
     } yield ()
   }
 
@@ -154,7 +157,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     log.info(s"network stop all nodes")
     for {
       xs <- nodes.get
-      _  <- xs.values.toList.map(x => stopNode(x.id)).sequence
+      _  <- xs.values.toList.traverse(x => stopNode(x.id))
     } yield ()
   }
 
@@ -228,14 +231,16 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
       IO {
         (xs :+ xs.head).sliding(2).foreach {
           case a :: b :: Nil =>
-            a.peerManager.connect(b.peerBindAddress).unsafeRunSync()
+            a.peerManager.addKnown(b.peerBindAddress).unsafeRunSync()
           case _ =>
             ()
         }
       }
+
     case "star" =>
       val xs = nodes.get.unsafeRunSync().values.toList
-      IO { xs.tail.foreach(node => node.peerManager.connect(xs.head.peerBindAddress).unsafeRunSync()) }
+      xs.tail.traverse(_.peerManager.addKnown(xs.head.peerBindAddress)).void
+
     case _ => IO.raiseError(new RuntimeException(s"${topology} not supportted"))
   }
 
@@ -267,7 +272,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     for {
       nodesMap <- nodes.get
       peerIds = nodesMap.values.toList
-        .map(_.peerManager.handshakedPeers.unsafeRunSync().values.toList.map(_.peerId.value))
+        .map(_.peerManager.connected.unsafeRunSync().map(_.id))
     } yield peerIds
 
   override def getBlocksByNumber(number: BigInt): IO[List[Block]] =

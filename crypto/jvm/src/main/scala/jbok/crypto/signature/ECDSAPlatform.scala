@@ -4,7 +4,7 @@ import java.math.BigInteger
 import java.security.SecureRandom
 import java.util.Random
 
-import cats.effect.{IO, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import org.bouncycastle.asn1.x9.X9IntegerConverter
 import org.bouncycastle.crypto.digests.SHA256Digest

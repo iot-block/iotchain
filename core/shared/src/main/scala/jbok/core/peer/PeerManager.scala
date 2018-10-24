@@ -1,80 +1,132 @@
 package jbok.core.peer
-
 import java.net.InetSocketAddress
+import java.nio.channels.{AsynchronousChannelGroup, AsynchronousCloseException, ClosedChannelException}
 
+import cats.data.OptionT
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, Fiber, Timer}
+import cats.effect.implicits._
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
-import jbok.common.execution._
+import fs2.concurrent.{Queue, SignallingRef, Topic}
 import jbok.core.History
 import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
 import jbok.core.messages.{Message, Messages, Status, SyncMessage}
-import jbok.core.peer.PeerEvent.PeerRecv
 import jbok.core.sync.SyncService
 import jbok.network.Connection
-import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.transport.{TcpTransport, TransportEvent}
+import jbok.network.common.{RequestId, RequestMethod, TcpUtil}
+import scodec._
 import scodec.bits.BitVector
-import scodec.{Attempt, Codec, DecodeResult, Decoder, Encoder, SizeBound}
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
-trait PeerManager[F[_]] {
-  def localAddress: F[InetSocketAddress]
-
-  def localStatus: F[Status]
-
-  def knownPeers: F[Set[PeerNode]]
-
-  def discoveredPeers: Stream[F, Set[PeerNode]]
-
-  def handshakedPeers: F[Map[PeerId, HandshakedPeer]]
-
-  def listen: F[Unit]
-
-  def stop: F[Unit]
-
-  def connect(to: InetSocketAddress): F[Unit]
-
-  def handshake(conn: Connection[F, Message]): F[Unit]
-
-  def broadcast(msg: Message): F[Unit]
-
-  def sendMessage(peerId: PeerId, msg: Message): F[Unit]
-
-  def sendRequest(peerId: PeerId, msg: Message, timeout: Option[FiniteDuration] = None): F[Option[Message]]
-
-  def subscribe(): Stream[F, PeerEvent]
-
-  def subscribeMessages(): Stream[F, PeerRecv]
-
-  def ban(peerId: PeerId, duration: FiniteDuration, reason: String): F[Unit]
-
-  def unban(peerId: PeerId): F[Unit]
-
-  def isBanned(peerId: PeerId): F[Boolean]
-}
-
-class PeerManagerImpl[F[_]](
-    config: PeerManagerConfig,
-    history: History[F],
-    transport: TcpTransport[F, Message],
-    known: PeerNodeManager[F],
-    handshaked: Ref[F, Map[PeerId, HandshakedPeer]],
-    banned: Ref[F, Map[PeerId, Fiber[F, Unit]]]
-)(implicit F: ConcurrentEffect[F], T: Timer[F], EC: ExecutionContext)
-    extends PeerManager[F] {
-
+class PeerManager[F[_]](
+    val config: PeerManagerConfig,
+    val history: History[F],
+    val incoming: Ref[F, Map[InetSocketAddress, HandshakedPeer[F]]],
+    val outgoing: Ref[F, Map[InetSocketAddress, HandshakedPeer[F]]],
+    val dialQueue: Queue[F, InetSocketAddress],
+    val messages: Topic[F, Option[(HandshakedPeer[F], Message)]],
+    val pipe: Pipe[F, Message, Message],
+    val haltWhenTrue: SignallingRef[F, Boolean]
+)(implicit F: ConcurrentEffect[F],
+  C: Codec[Message],
+  I: RequestId[Message],
+  T: Timer[F],
+  AG: AsynchronousChannelGroup) {
   private[this] val log = org.log4s.getLogger
 
-  override def localAddress: F[InetSocketAddress] = {
-    val bind = new InetSocketAddress(config.bindAddr.host, config.bindAddr.port.get)
-    F.pure(bind)
+  def handleError(e: Throwable): Stream[F, Unit] = e match {
+    case _: AsynchronousCloseException | _: ClosedChannelException =>
+      Stream.empty.covary[F]
+    case _ =>
+      Stream.eval(F.delay(log.error(e)("connection error")))
   }
 
-  override def localStatus: F[Status] =
+  def listen(
+      bind: InetSocketAddress = config.bindAddr,
+      maxQueued: Int = config.maxPendingPeers,
+      maxOpen: Int = config.maxIncomingPeers
+  ): Stream[F, Unit] =
+    fs2.io.tcp
+      .serverWithLocalAddress[F](bind, maxQueued)
+      .map {
+        case Left(bound) =>
+          Stream.eval(F.delay(log.info(s"successfully bound to ${bound}")))
+
+        case Right(res) =>
+          for {
+            socket <- Stream.resource(res)
+            conn   <- Stream.eval(TcpUtil.socketToConnection[F, Message](socket, true))
+            _ = log.info(s"${conn} established")
+            peer <- Stream.eval(handshake(conn))
+            _ <- conn
+              .reads()
+              .evalMap(a => messages.publish1(Some(peer -> a)).map(_ => a))
+              .through(pipe)
+              .to(conn.writes())
+              .onFinalize(incoming.update(_ - conn.remoteAddress) *> F.delay(log.info(s"${conn} disconnected")))
+              .handleErrorWith(handleError)
+          } yield ()
+      }
+      .parJoin(maxOpen)
+
+  def connect(maxOpen: Int = config.maxOutgoingPeers): Stream[F, Unit] =
+    dialQueue.dequeue
+      .map(addr => connect(addr))
+      .parJoin(maxOpen)
+
+  private def connect(
+      to: InetSocketAddress
+  ): Stream[F, Unit] = {
+    val connect0 = for {
+      socket <- Stream.resource(fs2.io.tcp.client[F](to, keepAlive = true, noDelay = true))
+      conn <- Stream.eval(TcpUtil.socketToConnection[F, Message](socket, false))
+      _ = log.info(s"${conn} established")
+      peer <- Stream.eval(handshake(conn))
+      _ <- conn
+        .reads()
+        .evalMap(a => messages.publish1(Some(peer -> a)).map(_ => a))
+        .through(pipe)
+        .to(conn.writes())
+        .onFinalize(outgoing.update(_ - conn.remoteAddress) *> F.delay(log.info(s"${conn} disconnected")))
+        .handleErrorWith(handleError)
+    } yield ()
+
+    Stream.eval(outgoing.get.map(_.contains(to))).flatMap {
+      case true =>
+        log.info(s"already connected, ignore")
+        Stream.empty.covary[F]
+
+      case false => connect0
+    }
+  }
+
+  def start: F[Unit] =
+    haltWhenTrue.get.flatMap {
+      case false => F.unit
+      case true =>
+        haltWhenTrue.set(false) *>
+          listen().concurrently(connect()).interruptWhen(haltWhenTrue).compile.drain.start.void
+    }
+
+  def stop: F[Unit] =
+    haltWhenTrue.set(true)
+
+  def addKnown(addrs: InetSocketAddress*): F[Unit] =
+    addrs.toList
+      .filterNot(_ == config.bindAddr)
+      .distinct
+      .traverse(addr => dialQueue.enqueue1(addr))
+      .void
+
+  def connected: F[List[HandshakedPeer[F]]] =
+    for {
+      in  <- incoming.get
+      out <- outgoing.get
+    } yield (in ++ out).values.toList
+
+  private[jbok] def localStatus: F[Status] =
     for {
       genesis   <- history.genesisHeader
       number    <- history.getBestBlockNumber
@@ -84,119 +136,38 @@ class PeerManagerImpl[F[_]](
       td = tdOpt.getOrElse(BigInt(0))
     } yield Status(1, genesis.hash, header.hash, number, td)
 
-  override def knownPeers: F[Set[PeerNode]] =
-    known.getAll
-
-  override def discoveredPeers: Stream[F, Set[PeerNode]] =
-    ???
-
-  override def handshakedPeers: F[Map[PeerId, HandshakedPeer]] =
-    handshaked.get
-
-  override def listen: F[Unit] =
+  private[jbok] def handshake(conn: Connection[F, Message]): F[HandshakedPeer[F]] =
     for {
-      local <- localAddress
-      _     <- transport.listen(local, handshake, config.maxIncomingPeers)
+      localStatus  <- localStatus
+      _            <- conn.write(localStatus, Some(config.handshakeTimeout))
+      remoteStatus <- conn.read(Some(config.handshakeTimeout)).map(_.asInstanceOf[Status])
+      peer         <- HandshakedPeer[F](conn, remoteStatus)
+      _ <- if (conn.isIncoming) {
+        incoming.update(_ + (conn.remoteAddress -> peer))
+      } else {
+        outgoing.update(_ + (peer.conn.remoteAddress -> peer))
+      }
+    } yield peer
+
+  private[jbok] def getPeer(remote: InetSocketAddress): OptionT[F, HandshakedPeer[F]] =
+    OptionT(incoming.get.map(_.get(remote)))
+      .orElseF(outgoing.get.map(_.get(remote)))
+
+  def close(remote: InetSocketAddress): F[Unit] =
+    getPeer(remote).semiflatMap(_.conn.close).getOrElseF(F.unit)
+
+  def write(remote: InetSocketAddress, msg: Message, timeout: Option[FiniteDuration] = None): F[Unit] =
+    getPeer(remote).semiflatMap(_.conn.write(msg, timeout)).getOrElseF(F.unit)
+
+  def broadcast(msg: Message, timeout: Option[FiniteDuration] = None): F[Unit] =
+    for {
+      in  <- incoming.get
+      out <- outgoing.get
+      _   <- (in ++ out).values.toList.traverse(_.conn.write(msg, timeout))
     } yield ()
 
-  override def stop: F[Unit] =
-    transport.stop
-
-  override def connect(to: InetSocketAddress): F[Unit] =
-    transport.connect(to, handshake)
-
-  override def handshake(conn: Connection[F, Message]): F[Unit] =
-    for {
-      localStatus <- localStatus
-      remote      <- conn.remoteAddress
-      _           <- conn.write(localStatus, Some(config.handshakeTimeout))
-      peerOpt <- conn.read(timeout = Some(config.handshakeTimeout)).map {
-        case Some(status: Status) => Some(HandshakedPeer(remote, PeerInfo(status), conn.isIncoming))
-        case _                    => None
-      }
-      _ <- peerOpt match {
-        case None =>
-          log.info(s"${remote} handshake failed, close")
-          conn.close
-        case Some(peer) =>
-          log.info(s"${remote} with ${peer.peerInfo.status} handshake succeed")
-          handshaked.update(_ + (peer.peerId -> peer))
-      }
-    } yield ()
-
-  override def broadcast(msg: Message): F[Unit] =
-    for {
-      peers <- handshakedPeers.map(_.values.toList)
-      _ = log.info(s"broadcast ${msg.name} to ${peers.length} peers")
-      _ <- peers.traverse(peer => transport.write(peer.remote, msg))
-    } yield ()
-
-  override def sendMessage(peerId: PeerId, msg: Message): F[Unit] =
-    for {
-      peers <- handshakedPeers
-      _ <- peers.get(peerId) match {
-        case Some(peer) =>
-          log.info(s"sending ${msg.name} to ${peerId}")
-          transport.write(peer.remote, msg).attempt.map {
-            case Left(e)  => log.error(e)("sendMessage error")
-            case Right(_) => ()
-          }
-        case None =>
-          log.info(s"${peerId} already dropped")
-          F.unit
-      }
-    } yield ()
-
-  override def sendRequest(
-      peerId: PeerId,
-      msg: Message,
-      timeout: Option[FiniteDuration]
-  ): F[Option[Message]] =
-    for {
-      peers <- handshakedPeers
-      msg <- peers.get(peerId) match {
-        case Some(peer) =>
-          log.info(s"sending request to ${peerId}")
-          transport.request(peer.remote, msg)
-        case None =>
-          log.info(s"${peerId} has already disconnected")
-          F.pure(None)
-      }
-    } yield msg
-
-  override def subscribe(): Stream[F, PeerEvent] =
-    transport.subscribe().map {
-      case TransportEvent.Received(remote, msg) =>
-        PeerEvent.PeerRecv(PeerId(remote.toString), msg)
-
-      case TransportEvent.Add(remote, _) =>
-        PeerEvent.PeerAdd(PeerId(remote.toString))
-
-      case TransportEvent.Drop(remote, _) =>
-        PeerEvent.PeerDrop(PeerId(remote.toString))
-    }
-
-  override def subscribeMessages(): Stream[F, PeerRecv] =
-    subscribe().collect {
-      case x: PeerEvent.PeerRecv => x
-    }
-
-  override def ban(peerId: PeerId, duration: FiniteDuration, reason: String): F[Unit] =
-    for {
-      m     <- banned.get
-      fiber <- F.start(T.sleep(duration) *> banned.update(_ - peerId))
-      _ <- m.get(peerId) match {
-        case Some(f) => f.cancel
-        case None =>
-          banned.update(_ + (peerId -> fiber))
-      }
-    } yield ()
-
-  override def unban(peerId: PeerId): F[Unit] =
-    banned.update(_ - peerId)
-
-  override def isBanned(peerId: PeerId): F[Boolean] =
-    banned.get.map(_.contains(peerId))
+  def subscribe: Stream[F, (HandshakedPeer[F], Message)] =
+    messages.subscribe(64).unNone
 }
 
 object PeerManager {
@@ -225,20 +196,22 @@ object PeerManager {
 
   implicit val codec: Codec[Message] = Codec(encoder, decoder)
 
-  def emptyPipe[F[_]]: Pipe[F, Message, Message] = _.flatMap(_ => Stream.empty.covary[F])
-
   def apply[F[_]](
-      peerConfig: PeerManagerConfig,
-      syncConfig: SyncConfig,
-      history: History[F]
-  )(implicit F: ConcurrentEffect[F], T: Timer[F], EC: ExecutionContext): F[PeerManager[F]] = {
-    val syncService = SyncService[F](syncConfig, history)
+      config: PeerManagerConfig,
+      sync: SyncConfig,
+      history: History[F],
+      maxQueueSize: Int = 64
+  )(
+      implicit F: ConcurrentEffect[F],
+      T: Timer[F],
+      AG: AsynchronousChannelGroup
+  ): F[PeerManager[F]] =
     for {
-      nodeManager <- PeerNodeManager[F](history.db)
-//      discovery <- Discovery[F](DiscoveryConfig(), nodeStatus)
-      transport  <- TcpTransport(syncService.pipe, peerConfig.timeout)
-      handshaked <- Ref.of[F, Map[PeerId, HandshakedPeer]](Map.empty)
-      banned     <- Ref.of[F, Map[PeerId, Fiber[F, Unit]]](Map.empty)
-    } yield new PeerManagerImpl[F](peerConfig, history, transport, nodeManager, handshaked, banned)
-  }
+      incoming  <- Ref.of[F, Map[InetSocketAddress, HandshakedPeer[F]]](Map.empty)
+      outgoing  <- Ref.of[F, Map[InetSocketAddress, HandshakedPeer[F]]](Map.empty)
+      dialQueue <- Queue.bounded[F, InetSocketAddress](maxQueueSize)
+      messages  <- Topic[F, Option[(HandshakedPeer[F], Message)]](None)
+      pipe = SyncService[F](sync, history).pipe
+      haltWhenTrue <- SignallingRef[F, Boolean](true)
+    } yield new PeerManager[F](config, history, incoming, outgoing, dialQueue, messages, pipe, haltWhenTrue)
 }

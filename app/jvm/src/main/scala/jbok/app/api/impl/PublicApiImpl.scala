@@ -122,15 +122,17 @@ class PublicApiImpl(
   }
 
   override def getMining: IO[Boolean] =
-    lastActive
-      .update(e =>
-        e.filter(time =>
-          Duration.between(time.toInstant, (new Date).toInstant).toMillis < miningConfig.activeTimeout.toMillis)
-      )
-      .map(_.now.isDefined)
+    ???
+//    lastActive
+//      .update(e =>
+//        e.filter(time =>
+//          Duration.between(time.toInstant, (new Date).toInstant).toMillis < miningConfig.activeTimeout.toMillis)
+//      )
+//      .map(_.now.isDefined)
 
   override def getHashRate: IO[BigInt] =
-    hashRate.update(m => removeObsoleteHashrates(new Date, m)).map(_.now.map(_._2._1).sum)
+    ???
+//    hashRate.update(m => removeObsoleteHashrates(new Date, m)).map(_.now.map(_._2._1).sum)
 
   override def getWork: IO[GetWorkResponse] = ???
 

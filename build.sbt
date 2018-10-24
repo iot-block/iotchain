@@ -234,6 +234,7 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.2.4"),
   addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
+  addCompilerPlugin(scalafixSemanticdb),
   fork in test := false,
   fork in run := true,
   parallelExecution in test := false,
@@ -265,7 +266,9 @@ lazy val scalacOpts = scalacOptions := Seq(
   "-Ypartial-unification",
   "-language:higherKinds",
   "-language:implicitConversions",
-  "-language:postfixOps"
+  "-language:postfixOps",
+  "-Yrangepos", // required by SemanticDB compiler plugin
+  "-Ywarn-unused-import" // required by `RemoveUnused` rule
 )
 
 lazy val micrositeSettings = Seq(

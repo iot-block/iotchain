@@ -3,14 +3,15 @@ package jbok.core.sync
 import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
+import jbok.common.execution._
+import jbok.core.HistoryFixture
+import jbok.core.config.Configs.SyncConfig
 import jbok.core.messages._
 import jbok.core.models.{BlockBody, BlockHeader}
-import jbok.core.peer.PeerManageFixture
 import scodec.bits._
-import jbok.common.execution._
 
-trait SyncServiceFixture extends PeerManageFixture {
-  val syncService: SyncService[IO] = SyncService[IO](syncConfig, history)
+class SyncServiceFixture extends HistoryFixture {
+  val syncService: SyncService[IO] = SyncService[IO](SyncConfig(), history)
   val pipe                         = syncService.pipe
 }
 

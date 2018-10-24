@@ -2,13 +2,14 @@ package jbok.network.client
 
 import java.net.{InetSocketAddress, URI}
 
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, Timer}
 import fs2._
-import jbok.network.common.TcpUtil
+import jbok.network.common.{RequestId, TcpUtil}
 import jbok.common.execution._
 import scodec.Codec
 
-class TcpClientBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends ClientBuilder[F, A] {
+class TcpClientBuilder[F[_], A: Codec: RequestId](implicit F: ConcurrentEffect[F], T: Timer[F])
+    extends ClientBuilder[F, A] {
   private[this] val log = org.log4s.getLogger
 
   override def connect(
@@ -21,17 +22,21 @@ class TcpClientBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends 
       noDelay: Boolean
   ): Stream[F, Unit] = {
     val isa = new InetSocketAddress(to.getHost, to.getPort)
-    Stream.resource(fs2.io.tcp
-      .client[F](isa, reuseAddress, sendBufferSize, receiveBufferSize, keepAlive, noDelay))
+    Stream
+      .resource(
+        fs2.io.tcp
+          .client[F](isa, reuseAddress, sendBufferSize, receiveBufferSize, keepAlive, noDelay))
       .flatMap(socket => {
         log.debug(s"connected to ${socket}")
-        val conn = TcpUtil.socketToConnection(socket, false)
-        conn.reads().through(pipe).to(conn.writes())
+        for {
+          conn <- Stream.eval(TcpUtil.socketToConnection(socket, false))
+          _    <- conn.reads().through(pipe).to(conn.writes())
+        } yield ()
       })
       .handleErrorWith(e => Stream.eval(F.delay(log.error(s"client error: ${e.printStackTrace()}"))))
   }
 }
 
 object TcpClientBuilder {
-  def apply[F[_]: ConcurrentEffect, A: Codec] = new TcpClientBuilder[F, A]
+  def apply[F[_]: ConcurrentEffect, A: Codec: RequestId](implicit T: Timer[F]) = new TcpClientBuilder[F, A]
 }

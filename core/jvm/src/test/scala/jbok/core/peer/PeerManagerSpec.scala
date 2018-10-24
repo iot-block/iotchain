@@ -2,79 +2,125 @@ package jbok.core.peer
 
 import cats.effect.IO
 import cats.implicits._
+import fs2._
 import jbok.JbokSpec
-import jbok.core.{HistoryFixture, NodeStatus}
-import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
-import jbok.core.messages.Handshake
-import jbok.network.NetAddress
 import jbok.common.execution._
+import jbok.core.HistoryFixture
+import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
+import jbok.core.messages.{BlockBodies, GetBlockBodies, Handshake}
 import scodec.bits.ByteVector
 
-trait PeerManageFixture extends HistoryFixture {
-  val N = 3
+import scala.concurrent.duration._
 
-  val peerManagerConfigs = (1 to N).toList
-    .map(i => PeerManagerConfig(NetAddress("localhost", 10000 + i)))
+class PeersFixture(n: Int = 3) {
+  val pms = (1 to n).toList.map(i => new PeerManagerFixture(10000 + i))
 
-  val syncConfig = SyncConfig()
+  def startAll =
+    pms.traverse(_.pm.start) *> T.sleep(1.seconds) *> pms.traverse(_.pm.addKnown(pms.head.addr)) *> T.sleep(1.seconds)
 
-  val pm1 = PeerManager[IO](peerManagerConfigs(0), syncConfig, history).unsafeRunSync()
-  val pm2 = PeerManager[IO](peerManagerConfigs(1), syncConfig, history2).unsafeRunSync()
-  val pm3 = PeerManager[IO](peerManagerConfigs(2), syncConfig, history3).unsafeRunSync()
-
-  val peerManagers = List(pm1, pm2, pm3)
-
-  val listen = peerManagers.traverse(_.listen)
-  val connect =
-    listen.flatMap(_ => peerManagers.tail.traverse(p => peerManagers.head.connect(p.localAddress.unsafeRunSync()))) *> IO(
-      Thread.sleep(1000))
-  val stopAll = peerManagers.traverse(_.stop)
+  def stopAll = pms.traverse(_.pm.stop).void
 }
 
-class PeerManagerSpec extends JbokSpec with PeerManageFixture {
-  "peer manager" should {
-    "get local status" in {
-      val status = pm1.localStatus.unsafeRunSync()
-      status.genesisHash shouldBe history.getBestBlock.unsafeRunSync().header.hash
-    }
+class PeerManagerFixture(port: Int) extends HistoryFixture {
+  val pmConfig = PeerManagerConfig(port)
+  val addr     = pmConfig.bindAddr
+  val pm       = PeerManager[IO](pmConfig, SyncConfig(), history).unsafeRunSync()
+}
 
-    "handshake" in {
+class PeerManagerSpec extends JbokSpec {
+  "PeerManager" should {
+    "keep incoming connections <= maxOpen" in {
+      val fix1 = new PeerManagerFixture(10001)
+      val fix2 = new PeerManagerFixture(10002)
+      val fix3 = new PeerManagerFixture(10003)
+      val maxOpen = 1
+
       val p = for {
-        peers <- peerManagers.traverse(_.handshakedPeers)
-        _ = peers.map(_.size).sum shouldBe 4
+        fiber    <- fix1.pm.listen(maxOpen = maxOpen).compile.drain.start
+        _        <- T.sleep(1.seconds)
+        _        <- fix2.pm.addKnown(fix1.addr)
+        _        <- fix3.pm.addKnown(fix1.addr)
+        _        <- fix2.pm.connect().compile.drain.start
+        _        <- fix3.pm.connect().compile.drain.start
+        _        <- T.sleep(1.seconds)
+        incoming <- fix1.pm.incoming.get
+        _ = incoming.size shouldBe maxOpen
+        _ <- fiber.cancel
       } yield ()
 
       p.unsafeRunSync()
     }
 
-    "create connections and send messages" in {
+    "keep outgoing connections <= maxOpen" in {
+      val fix1 = new PeerManagerFixture(10001)
+      val fix2 = new PeerManagerFixture(10002)
+      val fix3 = new PeerManagerFixture(10003)
+      val maxOpen = 1
+
+      val p = for {
+        fiber    <- Stream(fix1.pm, fix2.pm, fix3.pm).map(_.listen()).parJoinUnbounded.compile.drain.start
+        _        <- T.sleep(1.seconds)
+        _        <- fix1.pm.addKnown(fix2.addr, fix3.addr)
+        _        <- fix1.pm.connect(maxOpen).compile.drain.start
+        _        <- T.sleep(1.seconds)
+        outgoing <- fix1.pm.outgoing.get
+        _ = outgoing.size shouldBe maxOpen
+        _ <- fiber.cancel
+      } yield ()
+
+      p.unsafeRunSync()
+    }
+
+    "get local status" in {
+      val fix = new PeerManagerFixture(10001)
+      val status = fix.pm.localStatus.unsafeRunSync()
+      status.genesisHash shouldBe fix.history.getBestBlock.unsafeRunSync().header.hash
+    }
+
+    "broadcast and subscribe" in new PeersFixture(3) {
       val message = Handshake(1, 0, ByteVector.empty)
       val p = for {
-        _ <- pm2.broadcast(message)
-        _ <- pm3.broadcast(message)
-        e <- pm1.subscribeMessages().take(2).compile.toList
-        _ = e.map(_.message) shouldBe List.fill(2)(message)
+        _        <- startAll
+        _        <- pms.tail.traverse(_.pm.broadcast(message, None))
+        messages <- pms.head.pm.subscribe.take(2).compile.toList
+        _ = messages.map(_._2) shouldBe List.fill(2)(message)
+        _ <- stopAll
       } yield ()
 
       p.unsafeRunSync()
     }
 
-    "retry connections to remaining bootstrap nodes" ignore {}
+    "request and response" in new PeersFixture(2) {
+      val message = GetBlockBodies(Nil)
+      val p = for {
+        _    <- startAll
+        resp <- pms.head.pm.incoming.get.map(_.head._2).unsafeRunSync().conn.request(message)
+        _ = resp shouldBe a[BlockBodies]
+        _ <- stopAll
+      } yield ()
 
-    "publish disconnect messages from peer" ignore {}
+      p.unsafeRunSync()
+    }
 
-    "ignore established connections" ignore {}
-  }
+    "close connection explicitly" in new PeersFixture(2) {
+      val p = for {
+        _ <- startAll
 
-  override protected def beforeAll(): Unit = {
-    listen.unsafeRunSync()
-    Thread.sleep(2000)
-    connect.unsafeRunSync()
-    Thread.sleep(2000)
-  }
+        incoming <- pms.head.pm.incoming.get
+        outgoing <- pms.last.pm.outgoing.get
+        _ = incoming.size shouldBe 1
+        _ = outgoing.size shouldBe 1
 
-  override protected def afterAll(): Unit = {
-    Thread.sleep(2000)
-    stopAll.unsafeRunSync()
+        _        <- pms.last.pm.close(pms.head.addr)
+        _        <- T.sleep(1.seconds)
+        incoming <- pms.head.pm.incoming.get
+        outgoing <- pms.last.pm.outgoing.get
+        _ = incoming.size shouldBe 0
+        _ = outgoing.size shouldBe 0
+        _ <- stopAll
+      } yield ()
+
+      p.unsafeRunSync()
+    }
   }
 }

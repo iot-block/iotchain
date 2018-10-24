@@ -1,9 +1,10 @@
 package jbok.core
 
 import java.net.InetSocketAddress
+import java.nio.channels.AsynchronousChannelGroup
 import java.security.SecureRandom
 
-import cats.effect._
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import jbok.core.config.Configs.{FullNodeConfig, SyncConfig}
 import jbok.core.consensus.Consensus
@@ -25,15 +26,15 @@ case class FullNode[F[_]](
     miner: BlockMiner[F],
     publicRpcServer: Option[Server[F, String]],
     privateRpcServer: Option[Server[F, String]]
-)(implicit F: ConcurrentEffect[F]) {
+)(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   val id = config.nodeId
 
   val peerBindAddress: InetSocketAddress =
-    new InetSocketAddress(config.peer.bindAddr.host, config.peer.bindAddr.port.get)
+    config.peer.bindAddr
 
   def start: F[Unit] =
     for {
-      _ <- peerManager.listen
+      _ <- peerManager.start
       _ <- synchronizer.txPool.start
       _ <- synchronizer.start
       _ <- publicRpcServer.map(_.start).sequence
@@ -55,11 +56,12 @@ case class FullNode[F[_]](
 object FullNode {
   def apply[F[_]](config: FullNodeConfig, history: History[F], consensus: Consensus[F], blockPool: BlockPool[F])(
       implicit F: ConcurrentEffect[F],
+      AG: AsynchronousChannelGroup,
       EC: ExecutionContext,
       T: Timer[F]): F[FullNode[F]] = {
     val random = new SecureRandom()
     for {
-      peerManager      <- PeerManager[F](config.peer, SyncConfig(), history)
+      peerManager <- PeerManager[F](config.peer, SyncConfig(), history)
       executor = BlockExecutor[F](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[F](peerManager)
       ommerPool <- OmmerPool[F](history)

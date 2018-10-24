@@ -3,19 +3,18 @@ package jbok.core.pool
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
+import jbok.common.execution._
 import jbok.core.messages.{Messages, SignedTransactions}
 import jbok.core.models.{Address, SignedTransaction, Transaction}
-import jbok.core.peer.PeerManageFixture
+import jbok.core.peer.PeersFixture
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
-import jbok.common.execution._
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
 
-trait TxPoolFixture extends PeerManageFixture {
-  val txPoolConfig = TxPoolConfig()
-  val txPool       = TxPool[IO](pm1, txPoolConfig).unsafeRunSync()
+class TxPoolFixture(n: Int = 3, txPoolConfig: TxPoolConfig = TxPoolConfig()) extends PeersFixture(n) {
+  val txPool = TxPool[IO](pms.head.pm, txPoolConfig).unsafeRunSync()
 }
 
 class TxPoolSpec extends JbokSpec {
@@ -26,64 +25,63 @@ class TxPoolSpec extends JbokSpec {
       tx: Transaction,
       keyPair: KeyPair = SecP256k1.generateKeyPair().unsafeRunSync()
   ): SignedTransaction =
-    SignedTransaction.sign(tx, keyPair, Some(0x31))
+    SignedTransaction.sign(tx, keyPair, Some(0x3d.toByte))
 
-  "tx pool" should {
+  "TxPool" should {
     "codec SignedTransactions" in {
       val stxs  = SignedTransactions((1 to 10).toList.map(i => newStx(i, tx)))
       val bytes = Messages.encode(stxs)
       Messages.decode(bytes).require shouldBe stxs
     }
 
-    "store pending transactions received from peers" in new TxPoolFixture {
+    "store pending transactions received from peers" in new TxPoolFixture() {
       val msg = SignedTransactions((1 to 10).toList.map(i => newStx(i, tx)))
 
       val p = for {
-        _ <- connect
+        _ <- startAll
         _ <- txPool.start
-        _ <- pm2.broadcast(msg)
-        _ <- IO(Thread.sleep(1000))
+        _ <- pms.last.pm.broadcast(msg)
+        _ <- T.sleep(1.second)
         x <- txPool.getPendingTransactions
         _ = x.length shouldBe 10
+        _ <- stopAll
       } yield ()
 
-      p.attempt.unsafeRunSync
-      stopAll.unsafeRunSync()
+      p.unsafeRunSync()
     }
 
-    "ignore known transactions" in new TxPoolFixture {
+    "ignore known transactions" in new TxPoolFixture() {
       val msg = SignedTransactions(List(newStx(1, tx)))
 
       val p = for {
-        _ <- connect
+        _ <- startAll
         _ <- txPool.start
-        _ <- pm2.broadcast(msg)
-        _ <- pm3.broadcast(msg)
-        _ <- IO(Thread.sleep(1000))
+        _ <- pms.tail.traverse(_.pm.broadcast(msg))
+        _ <- T.sleep(1.second)
         p <- txPool.getPendingTransactions
         _ = p.length shouldBe 1
+        _ <- stopAll
       } yield ()
 
-      p.attempt.unsafeRunSync()
-      stopAll.unsafeRunSync()
+      p.unsafeRunSync()
     }
 
-    "broadcast received pending transactions to other peers" in new TxPoolFixture {
+    "broadcast received pending transactions to other peers" in new TxPoolFixture() {
       val stxs = SignedTransactions(newStx(1, tx) :: Nil)
 
       val p = for {
-        _ <- connect
+        _ <- startAll
         _ <- txPool.start
         _ <- txPool.addTransactions(stxs.txs)
-        x <- peerManagers.tail.traverse(_.subscribe().take(1).compile.toList)
-//        _ = x.flatten.head.message shouldBe stxs
+        x <- pms.tail.traverse(_.pm.subscribe.take(1).compile.toList)
+        _ = x.flatten.head._2 shouldBe stxs
+        _ <- stopAll
       } yield ()
 
-      p.attempt.unsafeRunTimed(5.seconds)
-      stopAll.unsafeRunSync()
+      p.unsafeRunSync()
     }
 
-    "override transactions with the same sender and nonce" in new TxPoolFixture {
+    "override transactions with the same sender and nonce" in new TxPoolFixture() {
       val keyPair1 = SecP256k1.generateKeyPair().unsafeRunSync()
       val keyPair2 = SecP256k1.generateKeyPair().unsafeRunSync()
       val first    = newStx(1, tx, keyPair1)
@@ -91,24 +89,23 @@ class TxPoolSpec extends JbokSpec {
       val other    = newStx(1, tx, keyPair2)
 
       val p = for {
-        _ <- connect
+        _ <- startAll
         _ <- txPool.start
         _ <- txPool.addOrUpdateTransaction(first)
         _ <- txPool.addOrUpdateTransaction(other)
         _ <- txPool.addOrUpdateTransaction(second)
-        _ <- IO(Thread.sleep(200))
+        _ <- T.sleep(1.seconds)
         x <- txPool.getPendingTransactions
         _ = x.map(_.stx) shouldBe List(second, other)
+        _ <- stopAll
       } yield ()
 
-      p.attempt.unsafeRunSync()
-      stopAll.unsafeRunSync()
+      p.unsafeRunSync()
     }
 
-    "remove transaction on timeout" in new TxPoolFixture {
-      val config          = TxPoolConfig().copy(transactionTimeout = 100.millis)
-      override val txPool = TxPool[IO](pm1, config).unsafeRunSync()
-
+    "remove transaction on timeout" in new TxPoolFixture(
+      txPoolConfig = TxPoolConfig().copy(transactionTimeout = 100.millis)
+    ) {
       val stx = newStx(0, tx)
       val p = for {
         _  <- txPool.start

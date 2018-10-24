@@ -1,20 +1,15 @@
 package jbok.core.mining
 
-import cats.effect.{IO, Timer}
-import jbok.core.NodeStatus
+import cats.effect.IO
+import jbok.common.execution._
 import jbok.core.config.Configs.{BlockChainConfig, PeerManagerConfig, SyncConfig}
 import jbok.core.consensus.ConsensusFixture
 import jbok.core.ledger.BlockExecutor
 import jbok.core.peer.PeerManager
 import jbok.core.pool._
 import jbok.core.sync.{Broadcaster, FullSync, Synchronizer}
-import jbok.network.NetAddress
-import jbok.common.execution._
-import cats.implicits._
-import cats.effect.implicits._
 
-class BlockMinerFixture(consensusFixture: ConsensusFixture, bindAddr: NetAddress = NetAddress("localhost", 9999)) {
-
+class BlockMinerFixture(consensusFixture: ConsensusFixture, port: Int = 9999) {
   val txGen            = consensusFixture.txGen
   val consensus        = consensusFixture.consensus
   val blockChainConfig = BlockChainConfig()
@@ -24,7 +19,7 @@ class BlockMinerFixture(consensusFixture: ConsensusFixture, bindAddr: NetAddress
   val executor        = BlockExecutor[IO](blockChainConfig, history, blockPool, consensus)
 
   val syncConfig        = SyncConfig()
-  val peerManagerConfig = PeerManagerConfig(bindAddr)
+  val peerManagerConfig = PeerManagerConfig(port)
   val peerManager =
     PeerManager[IO](peerManagerConfig, syncConfig, history).unsafeRunSync()
   val txPool       = TxPool[IO](peerManager, TxPoolConfig()).unsafeRunSync()

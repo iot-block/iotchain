@@ -3,20 +3,19 @@ package jbok.core.sync
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
+import jbok.common.execution._
 import jbok.core.messages.NewBlock
 import jbok.core.models.{Block, BlockBody, BlockHeader}
-import jbok.core.peer.{PeerId, PeerManageFixture}
-import scodec.bits.ByteVector
-import jbok.common.execution._
+import jbok.core.peer.PeersFixture
 
 import scala.concurrent.duration._
 
-trait BroadcasterFixture extends PeerManageFixture {
-  val broadcaster = Broadcaster[IO](pm1)
+class BroadcasterFixture extends PeersFixture(3) {
+  val broadcaster = Broadcaster[IO](pms.head.pm)
 }
 
 class BroadcasterSpec extends JbokSpec {
-  "broadcast" should {
+  "Broadcaster" should {
     "send a block when it is not known by the peer" in new BroadcasterFixture {
       val baseHeader: BlockHeader = BlockHeader.empty
       val header =
@@ -24,17 +23,16 @@ class BroadcasterSpec extends JbokSpec {
       val body          = BlockBody(Nil, Nil)
       val block         = Block(header, body)
       val newBlock      = NewBlock(block)
-      val peerHasBlocks = IO { Map.empty[PeerId, Set[ByteVector]] }
 
       val p = for {
-        _ <- connect
-        _ <- broadcaster.broadcastBlock(newBlock, peerHasBlocks)
-        x <- peerManagers.tail.traverse(_.subscribeMessages().take(1).compile.toList)
-        _ = x.flatten.length shouldBe peerManagers.length - 1
+        _ <- startAll
+        _ <- broadcaster.broadcastBlock(newBlock)
+        x <- pms.tail.traverse(_.pm.subscribe.take(1).compile.toList)
+        _ = x.flatten.length shouldBe pms.length - 1
+        _ <- stopAll
       } yield ()
 
-      p.attempt.unsafeRunTimed(5.seconds)
-      stopAll.unsafeRunSync()
+      p.unsafeRunSync()
     }
 
     "not send a block only when it is known by the peer" in new BroadcasterFixture {
@@ -44,18 +42,16 @@ class BroadcasterSpec extends JbokSpec {
       val body          = BlockBody(Nil, Nil)
       val block         = Block(header, body)
       val newBlock      = NewBlock(block)
-      val peerHasBlocks = IO { Map.empty[PeerId, Set[ByteVector]] }
 
       val p = for {
-        _ <- connect
-        _ <- broadcaster.broadcastBlock(newBlock, peerHasBlocks)
-        x = peerManagers.tail.traverse(_.subscribeMessages().take(1).compile.toList.unsafeRunTimed(5.seconds))
+        _ <- startAll
+        _ <- broadcaster.broadcastBlock(newBlock)
+        x = pms.tail.traverse(_.pm.subscribe.take(1).compile.toList.unsafeRunTimed(2.seconds))
         _ = x shouldBe None
         _ <- stopAll
       } yield ()
 
-      p.attempt.unsafeRunSync()
-      stopAll.unsafeRunSync()
+      p.unsafeRunSync()
     }
 
     "send block hashes to all peers while the blocks only to sqrt of them" ignore {}

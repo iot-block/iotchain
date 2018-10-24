@@ -1,7 +1,5 @@
 package jbok.core.store
 
-import java.net.URI
-
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
