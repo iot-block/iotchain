@@ -26,5 +26,8 @@ module.exports = merge(config, {
       template: path.resolve(__dirname, "../../../../src/main/resources/template.html")
     })
   ],
+  devServer: {
+      disableHostCheck: true,
+  }
   // target: "electron-main" // https://github.com/scalacenter/scalajs-bundler/issues/252
 });
