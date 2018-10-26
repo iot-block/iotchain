@@ -5,7 +5,6 @@ import jbok.JbokSpec
 import jbok.codec.rlp.codecs._
 import jbok.common.testkit.HexGen
 import jbok.persistent.KeyValueDB
-import org.log4s.Logger
 import org.scalacheck.Gen
 
 import scala.util.Random

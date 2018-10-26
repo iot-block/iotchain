@@ -16,11 +16,12 @@ lazy val contributors = Map(
 )
 
 lazy val V = new {
-  val circe      = "0.9.1"
-  val tsec       = "0.0.1-RC1"
-  val http4s     = "0.19.0"
-  val fs2        = "1.0.0"
-  val catsEffect = "1.0.0"
+  val circe           = "0.9.1"
+  val tsec            = "0.0.1-RC1"
+  val http4s          = "0.19.0"
+  val fs2             = "1.0.0"
+  val catsEffect      = "1.0.0"
+  val catsCollections = "0.7.0"
 }
 
 lazy val jbok = project
@@ -36,9 +37,10 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
     name := "jbok-common",
     libraryDependencies ++= Seq(
       // typelevel
-      "org.typelevel" %%% "cats-effect" % V.catsEffect,
-      "co.fs2"        %%% "fs2-core"    % V.fs2,
-      "co.fs2"        %% "fs2-io"       % V.fs2,
+      "org.typelevel" %%% "cats-effect"          % V.catsEffect,
+      "org.typelevel" %% "cats-collections-core" % V.catsCollections,
+      "co.fs2"        %%% "fs2-core"             % V.fs2,
+      "co.fs2"        %% "fs2-io"                % V.fs2,
       // json
       "io.circe" %%% "circe-core"    % V.circe,
       "io.circe" %%% "circe-generic" % V.circe,

@@ -1,7 +1,5 @@
-package jbok.core
-
+package jbok.core.models
 import cats.Show
-import jbok.core.models.{Block, BlockBody, BlockHeader}
 import scodec.bits.ByteVector
 
 object PrettyPrinter {

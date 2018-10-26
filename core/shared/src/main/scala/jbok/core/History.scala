@@ -136,13 +136,6 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int)(implicit F
     */
   def getEvmCodeByHash(hash: ByteVector): F[Option[ByteVector]]
 
-  /**
-    * Returns MPT node searched by it's hash
-    * @param hash Node Hash
-    * @return MPT node
-    */
-  def getMptNodeByHash(hash: ByteVector): F[Option[Node]]
-
   def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]]
 
   def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]] = {
@@ -450,14 +443,6 @@ class HistoryImpl[F[_]](
     */
   override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
     numberHashStore.getOpt(number)
-
-  /**
-    * Returns MPT node searched by it's hash
-    *
-    * @param hash Node Hash
-    * @return MPT node
-    */
-  override def getMptNodeByHash(hash: ByteVector): F[Option[Node]] = ???
 
   override def getWorldStateProxy(
       blockNumber: BigInt,
