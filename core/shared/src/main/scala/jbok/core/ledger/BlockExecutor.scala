@@ -44,8 +44,31 @@ class BlockExecutor[F[_]](
 )(implicit F: Sync[F], EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
-  def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxResult[F]] =
-    ???
+  def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxResult[F]] = {
+    val stateRoot = blockHeader.stateRoot
+
+    val gasPrice      = UInt256(stx.gasPrice)
+    val gasLimit      = stx.gasLimit
+    val vmConfig      = EvmConfig.forBlock(blockHeader.number, config)
+    val senderAddress = getSenderAddress(stx, blockHeader.number)
+
+    for {
+      _       <- txValidator.validateSimulateTx(stx)
+      world1  <- history.getWorldStateProxy(blockHeader.number, config.accountStartNonce, Some(stateRoot))
+      world2  <- updateSenderAccountBeforeExecution(senderAddress, stx, world1)
+      context <- prepareProgramContext(stx, blockHeader, world2, vmConfig)
+      result  <- runVM(stx, context, vmConfig)
+      totalGasToRefund = calcTotalGasToRefund(stx, result)
+    } yield {
+      log.info(
+        s"""SimulateTransaction(${stx.hash.toHex.take(7)}) execution end with ${result.error} error.
+           |result.returnData: ${result.returnData.toHex}
+           |gas refund: ${totalGasToRefund}""".stripMargin
+      )
+
+      TxResult(result.world, gasLimit - totalGasToRefund, result.logs, result.returnData, result.error)
+    }
+  }
 
   def binarySearchGasEstimation(stx: SignedTransaction, blockHeader: BlockHeader): F[BigInt] =
     ???
@@ -206,6 +229,8 @@ class BlockExecutor[F[_]](
           .getOrElse((Account.empty(UInt256.Zero), world.putAccount(senderAddress, Account.empty(UInt256.Zero))))
 
         upfrontCost = calculateUpfrontCost(stx)
+        _ = log.info(
+          s"stx: ${stx}, senderAccount: ${senderAccount}, header: ${header}, upfrontCost: ${upfrontCost}, accGas ${accGas}")
         _ <- txValidator.validate(stx, senderAccount, header, upfrontCost, accGas)
         result <- executeTransaction(stx, header, worldForTx).attempt.flatMap {
           case Left(e) =>
@@ -281,6 +306,7 @@ class BlockExecutor[F[_]](
     } yield {
       log.info(
         s"""Transaction(${stx.hash.toHex.take(7)}) execution end with ${result.error} error.
+           |returndata: ${result.returnData.toHex}
            |gas refund: ${totalGasToRefund}, gas paid to miner: ${executionGasToPayToMiner}""".stripMargin
       )
 
@@ -309,7 +335,8 @@ class BlockExecutor[F[_]](
     val senderAddress = getSenderAddress(stx, blockHeader.number)
     if (stx.isContractInit) {
       for {
-        address  <- world.createAddress(senderAddress)
+        address <- world.createAddress(senderAddress)
+        _ = log.debug(s"contract address: ${address}")
         conflict <- world.nonEmptyCodeOrNonceAccount(address)
         code = if (conflict) ByteVector(INVALID.code) else stx.payload
         world1 <- world
@@ -341,14 +368,19 @@ class BlockExecutor[F[_]](
     val maxCodeSizeExceeded = config.maxCodeSize.exists(codeSizeLimit => contractCode.size > codeSizeLimit)
     val codeStoreOutOfGas   = result.gasRemaining < codeDepositCost
 
+    log.debug(
+      s"codeDepositCost: ${codeDepositCost}, maxCodeSizeExceeded: ${maxCodeSizeExceeded}, codeStoreOutOfGas: ${codeStoreOutOfGas}")
     if (maxCodeSizeExceeded || (codeStoreOutOfGas && config.exceptionalFailedCodeDeposit)) {
       // Code size too big or code storage causes out-of-gas with exceptionalFailedCodeDeposit enabled
+      log.debug("putcode outofgas")
       result.copy(error = Some(OutOfGas))
     } else if (codeStoreOutOfGas && !config.exceptionalFailedCodeDeposit) {
       // Code storage causes out-of-gas with exceptionalFailedCodeDeposit disabled
+      log.debug("putcode outofgas or exceptionalFailedCodeDeposite")
       result
     } else {
       // Code storage succeeded
+      log.debug(s"address putcode: ${address}")
       result.copy(gasRemaining = result.gasRemaining - codeDepositCost,
                   world = result.world.putCode(address, result.returnData))
     }
@@ -378,12 +410,12 @@ class BlockExecutor[F[_]](
     UInt256(stx.gasLimit * stx.gasPrice)
 
   private def calcTotalGasToRefund(stx: SignedTransaction, result: ProgramResult[F]): BigInt =
-    if (result.error.isDefined) {
-      0
-    } else {
+    if (result.error.isEmpty || result.error.contains(RevertOp)) {
       val gasUsed = stx.gasLimit - result.gasRemaining
       // remaining gas plus some allowance
       result.gasRemaining + (gasUsed / 2).min(result.gasRefund)
+    } else {
+      0
     }
 
   private def deleteAccounts(addressesToDelete: Set[Address])(

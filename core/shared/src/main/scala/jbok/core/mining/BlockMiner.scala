@@ -120,7 +120,7 @@ class BlockMiner[F[_]](
   def mine: F[Option[Block]] =
     for {
       parent <- executor.history.getBestBlock
-      _ = log.info("begin mine")
+      _ = log.info(s"begin mine ${parent.header.number + 1}")
       block    <- generateBlock(parent)
       minedOpt <- mine(block)
       _        <- minedOpt.fold(F.unit)(block => submitNewBlock(block))
@@ -146,6 +146,8 @@ class BlockMiner[F[_]](
   def stop: F[Unit] =
     stopWhenTrue.set(true)
 
+  def isMining: F[Boolean] = stopWhenTrue.get.map(!_)
+
   //////////////////////////////
   //////////////////////////////
 
@@ -157,8 +159,9 @@ class BlockMiner[F[_]](
 
   def generateBlock(parent: Block): F[Block] =
     for {
-      tx     <- synchronizer.txPool.getPendingTransactions
-      stxs   <- synchronizer.txPool.getPendingTransactions.map(_.map(_.stx))
+      tx   <- synchronizer.txPool.getPendingTransactions
+      stxs <- synchronizer.txPool.getPendingTransactions.map(_.map(_.stx))
+      _ = log.debug(s"generate block number: ${parent.header.number}, stx")
       ommers <- synchronizer.ommerPool.getOmmers(parent.header.number + 1)
       block  <- generateBlock(parent, stxs, ommers)
     } yield block

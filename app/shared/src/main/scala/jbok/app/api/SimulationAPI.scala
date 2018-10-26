@@ -1,11 +1,10 @@
 package jbok.app.simulations
 
-import java.net.InetSocketAddress
-
 import _root_.io.circe.generic.JsonCodec
 import cats.effect.IO
 import fs2._
 import jbok.core.models.{Block, SignedTransaction}
+import jbok.core.models.{Account, Address, Block, SignedTransaction}
 
 @JsonCodec
 case class SimulationEvent(source: String, target: String, message: String, time: Long = System.currentTimeMillis())
@@ -14,14 +13,18 @@ case class SimulationEvent(source: String, target: String, message: String, time
 case class NodeInfo(
     id: String,
     interface: String,
-    port: Int
+    port: Int,
+    rpcPort: Int
 ) {
-  val addr = new InetSocketAddress(interface, port)
-  override def toString: String = s"NodeInfo(id=${id}, addr=${addr})"
+  val addr                      = s"$interface:$port"
+  val rpcAddr                   = s"ws://$interface:$rpcPort"
+  override def toString: String = s"NodeInfo(id=${id}, addr=${addr}, rpcAddr=${rpcAddr})"
 }
 
 trait SimulationAPI {
   // simulation network
+  def getAccounts(): IO[List[(Address, Account)]]
+
   def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]]
 
   def createNodes(n: Int): IO[List[NodeInfo]]
@@ -63,4 +66,6 @@ trait SimulationAPI {
   def getShakedPeerID: IO[List[List[String]]]
 
   def getPendingTx: IO[List[List[SignedTransaction]]]
+
+  def getCoin(address: Address, value: BigInt): IO[Unit]
 }

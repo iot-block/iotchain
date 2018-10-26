@@ -5,9 +5,11 @@ import java.util.UUID
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import org.scalajs.dom.raw.HTMLElement
-import org.scalajs.dom.{Element, Event, document}
+import org.scalajs.dom.{document, Element, Event}
 
-case class Modal(title: String, body: Binding[Element], idOpt: Option[String] = None) {
+case class Modal(title: String, body: Binding[Element], onConfirm: () => Unit = { () =>
+  }, onCancel: () => Unit = { () =>
+  }, idOpt: Option[String] = None) {
   val id = idOpt getOrElse UUID.randomUUID().toString
 
   val onOpen = (_: Event) => {
@@ -18,15 +20,13 @@ case class Modal(title: String, body: Binding[Element], idOpt: Option[String] = 
     document.getElementById(id).asInstanceOf[HTMLElement].style.display = "none"
   }
 
-  val onConfirm = (_: Event) => {
-//    val data = form.data
-//    form.submit(data)
-//    form.clear()
+  val onConfirmHandler = (_: Event) => {
+    onConfirm()
     document.getElementById(id).asInstanceOf[HTMLElement].style.display = "none"
   }
 
-  val onCancel = (_: Event) => {
-//    form.clear()
+  val onCancelHandler = (_: Event) => {
+    onCancel()
     document.getElementById(id).asInstanceOf[HTMLElement].style.display = "none"
   }
 
@@ -41,21 +41,20 @@ case class Modal(title: String, body: Binding[Element], idOpt: Option[String] = 
 
         <div class="modal-body">
           {body.bind}
-          <button id={s"confirm-${id}"} class="modal-confirm" onclick={onConfirm}>OK</button>
+          <button id={s"confirm-${id}"} class="modal-confirm" onclick={onConfirmHandler}>OK</button>
         </div>
 
         <div class="modal-footer">
-          <button id={s"cancel-${id}"} class="modal-cancel" onclick={onCancel}>Cancel</button>
+          <button id={s"cancel-${id}"} class="modal-cancel" onclick={onCancelHandler}>Cancel</button>
         </div>
       </div>
     </div>
   }
 
   @binding.dom
-  def render(): Binding[Element] = {
+  def render(): Binding[Element] =
     <div>
       <button id={s"open-${id}"} class="modal-open" onclick={onOpen}>{title}</button>
       {content.bind}
     </div>
-  }
 }

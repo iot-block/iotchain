@@ -117,6 +117,7 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
                                                     blockHeaderNumber: BigInt): F[SignedTransaction] = {
     val config         = EvmConfig.forBlock(blockHeaderNumber, blockChainConfig)
     val txIntrinsicGas = config.calcTransactionIntrinsicGas(stx.payload, stx.isContractInit)
+    println(s"txIntrinsicGas: ${txIntrinsicGas}")
     if (stx.gasLimit >= txIntrinsicGas) F.pure(stx)
     else F.raiseError(TransactionNotEnoughGasForIntrinsicInvalid(stx.gasLimit, txIntrinsicGas))
   }
@@ -149,5 +150,12 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
       _ <- validateGasLimitEnoughForIntrinsicGas(stx, blockHeader.number)
       _ <- validateAccountHasEnoughGasToPayUpfrontCost(senderAccount.balance, upfrontGasCost)
       _ <- validateBlockHasEnoughGasLimitForTx(stx.gasLimit, accGasUsed, blockHeader.gasLimit)
+    } yield ()
+
+  def validateSimulateTx(
+      stx: SignedTransaction,
+  ): F[Unit] =
+    for {
+      _ <- checkSyntacticValidity(stx)
     } yield ()
 }

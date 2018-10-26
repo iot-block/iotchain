@@ -11,7 +11,19 @@ import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
 
 trait ExecutionPlatform extends execution {
-  private def mkThreadFactory(name: String, daemon: Boolean, exitJvmOnFatalError: Boolean = true): ThreadFactory =
+  override def executionContext: ExecutionContext =
+    ExecutionContext.Implicits.global
+
+  override def asyncChannelGroup: AsynchronousChannelGroup =
+    AsynchronousChannelGroup.withThreadPool(
+      Executors.newCachedThreadPool(ExecutionPlatform.mkThreadFactory("AG", daemon = true)))
+
+  override def asyncSocketGroup: AsynchronousSocketGroup =
+    AsynchronousSocketGroup.apply()
+}
+
+object ExecutionPlatform {
+  def mkThreadFactory(name: String, daemon: Boolean, exitJvmOnFatalError: Boolean = true): ThreadFactory =
     new ThreadFactory {
       val idx            = new AtomicInteger(0)
       val defaultFactory = Executors.defaultThreadFactory()
@@ -33,13 +45,4 @@ trait ExecutionPlatform extends execution {
         t
       }
     }
-
-  override def executionContext: ExecutionContext =
-    ExecutionContext.Implicits.global
-
-  override def asyncChannelGroup: AsynchronousChannelGroup =
-    AsynchronousChannelGroup.withThreadPool(Executors.newCachedThreadPool(mkThreadFactory("AG", daemon = true)))
-
-  override def asyncSocketGroup: AsynchronousSocketGroup =
-    AsynchronousSocketGroup.apply()
 }

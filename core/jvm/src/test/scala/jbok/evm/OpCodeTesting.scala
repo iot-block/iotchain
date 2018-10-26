@@ -8,14 +8,14 @@ trait OpCodeTesting extends FunSuiteLike {
 
   val config: EvmConfig
 
-  lazy val unaryOps = config.opCodes.collect { case op: UnaryOp                      => op }
-  lazy val binaryOps = config.opCodes.collect { case op: BinaryOp                    => op }
-  lazy val ternaryOps = config.opCodes.collect { case op: TernaryOp                  => op }
-  lazy val constOps = config.opCodes.collect { case op: ConstOp                      => op }
-  lazy val pushOps = config.opCodes.collect { case op: PushOp                        => op }
-  lazy val dupOps = config.opCodes.collect { case op: DupOp                          => op }
-  lazy val swapOps = config.opCodes.collect { case op: SwapOp                        => op }
-  lazy val logOps = config.opCodes.collect { case op: LogOp                          => op }
+  lazy val unaryOps    = config.opCodes.collect { case op: UnaryOp                   => op }
+  lazy val binaryOps   = config.opCodes.collect { case op: BinaryOp                  => op }
+  lazy val ternaryOps  = config.opCodes.collect { case op: TernaryOp                 => op }
+  lazy val constOps    = config.opCodes.collect { case op: ConstOp                   => op }
+  lazy val pushOps     = config.opCodes.collect { case op: PushOp                    => op }
+  lazy val dupOps      = config.opCodes.collect { case op: DupOp                     => op }
+  lazy val swapOps     = config.opCodes.collect { case op: SwapOp                    => op }
+  lazy val logOps      = config.opCodes.collect { case op: LogOp                     => op }
   lazy val constGasOps = config.opCodes.collect { case op: ConstGas if op != INVALID => op }
 
   def test[T <: OpCode](ops: T*)(f: T => Any): Unit =
@@ -45,7 +45,10 @@ trait OpCodeTesting extends FunSuiteLike {
       stateIn.gas should be < expectedGas
     else if (stateOut.error.contains(OutOfGas) && !allowOOG)
       fail(s"Unexpected $OutOfGas error")
-    else if (stateOut.error.isDefined && stateOut.error.collect { case InvalidJump(dest) => dest }.isEmpty)
+    else if (stateOut.error.isDefined && stateOut.error.collect {
+               case InvalidJump(dest) => dest
+               case RevertOp          =>
+             }.isEmpty)
       //Found error that is not an InvalidJump
       fail(s"Unexpected ${stateOut.error.get} error")
     else {

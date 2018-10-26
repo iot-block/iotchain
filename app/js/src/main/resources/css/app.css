@@ -76,6 +76,15 @@ i {
     cursor: pointer;
 }
 
+.tab-small {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
 .searchbar-input {
     border: 2px solid #aaa;
     border-radius: 20px;
@@ -83,11 +92,11 @@ i {
     padding: 8px 16px;
 }
 
-.tab:hover {
+.tab:hover, .tab-small:hover {
     background-color: #ddd;
 }
 
-.tab.selected {
+.tab.selected, .tab-small.selected {
     background-color: #2196F3;
     color: white;
 }
@@ -244,7 +253,15 @@ input[type=text], input[type=password] {
     padding: 12px 20px;
     margin: 8px 0;
     display: inline-block;
-    border: 1px solid #ccc;
+}
+input.invalid, input.invalid:focus
+{
+  border: 1px solid red;
+}
+
+input.valid, input.valid:focus
+{
+  border: 1px solid #ccc;
 }
 
 textarea {
@@ -356,4 +373,56 @@ button:hover {
     background-color: #ABFF00;
     border-radius: 50%;
     box-shadow: rgba(0, 0, 0, 0.2) 0 -1px 1px 1px, inset #304701 0 -1px 9px, #89FF00 0 1px 1px;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  align-items: center;
+  width: 60px;
+  height: 34px;
+}
+
+.switch input {display:none;}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
+}
+
+.flex {
+  display:flex
 }

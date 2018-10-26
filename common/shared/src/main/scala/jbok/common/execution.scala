@@ -3,7 +3,7 @@ package jbok.common
 import java.nio.channels.AsynchronousChannelGroup
 
 import cats.effect.{ContextShift, IO, Timer}
-import cats.effect.IO.{timer, contextShift}
+import cats.effect.IO.{contextShift, timer}
 import fs2.io.udp.AsynchronousSocketGroup
 
 import scala.concurrent.ExecutionContext

@@ -18,6 +18,7 @@ import jbok.network.common.{RequestId, RequestMethod, TcpUtil}
 import scodec._
 import scodec.bits.BitVector
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 class PeerManager[F[_]](
@@ -33,7 +34,8 @@ class PeerManager[F[_]](
   C: Codec[Message],
   I: RequestId[Message],
   T: Timer[F],
-  AG: AsynchronousChannelGroup) {
+  AG: AsynchronousChannelGroup,
+  EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
   def handleError(e: Throwable): Stream[F, Unit] = e match {
@@ -81,7 +83,7 @@ class PeerManager[F[_]](
   ): Stream[F, Unit] = {
     val connect0 = for {
       socket <- Stream.resource(fs2.io.tcp.client[F](to, keepAlive = true, noDelay = true))
-      conn <- Stream.eval(TcpUtil.socketToConnection[F, Message](socket, false))
+      conn   <- Stream.eval(TcpUtil.socketToConnection[F, Message](socket, false))
       _ = log.info(s"${conn} established")
       peer <- Stream.eval(handshake(conn))
       _ <- conn
@@ -106,7 +108,7 @@ class PeerManager[F[_]](
     haltWhenTrue.get.flatMap {
       case false => F.unit
       case true =>
-        haltWhenTrue.set(false) *>
+        haltWhenTrue.set(false) *> F.delay(log.info("start manager")) *>
           listen().concurrently(connect()).interruptWhen(haltWhenTrue).compile.drain.start.void
     }
 
@@ -204,7 +206,8 @@ object PeerManager {
   )(
       implicit F: ConcurrentEffect[F],
       T: Timer[F],
-      AG: AsynchronousChannelGroup
+      AG: AsynchronousChannelGroup,
+      EC: ExecutionContext
   ): F[PeerManager[F]] =
     for {
       incoming  <- Ref.of[F, Map[InetSocketAddress, HandshakedPeer[F]]](Map.empty)

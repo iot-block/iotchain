@@ -19,11 +19,14 @@ class Server[F[_], A](
     val queue: Queue[F, (InetSocketAddress, A)], // outbound queue of (remote address -> connection)
     val signal: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], C: Codec[A], EC: ExecutionContext) {
+  private[this] val log = org.log4s.getLogger
+
   def start: F[Unit] =
-    signal.get.flatMap {
-      case false => F.unit
-      case true  => signal.set(false) *> F.start(stream.interruptWhen(signal).compile.drain).void
-    }
+    for {
+      _ <- signal.set(false)
+      _ <- F.start(stream.interruptWhen(signal).compile.drain).void
+      _ <- F.delay(log.info(s"start server"))
+    } yield ()
 
   def stop: F[Unit] =
     signal.set(true)

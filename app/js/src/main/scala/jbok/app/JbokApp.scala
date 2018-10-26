@@ -37,18 +37,22 @@ object JbokApp {
 
   val config = AppConfig.default
   val state  = AppState(Var(config))
+  state.init()
+//  (for {
+//    client <- JbokClient(config.uri)
+//    _ = state.client.value = Some(client)
+//    _ <- client.status.evalMap(x => IO(if (x) () else state.client.value = None)).compile.drain
+//  } yield ()).unsafeToFuture()
 
-  (for {
-    client <- JbokClient(config.uri)
-    _ = state.client.value = Some(client)
-    _ <- client.status.evalMap(x => IO(if (x) () else state.client.value = None)).compile.drain
-  } yield ()).unsafeToFuture()
-
+  val nodeSelect       = new NodeSelect(state).render
   val statusView       = StatusView(state).render
-  val accountsView     = AccountsView(state).render()
-  val blocksView       = BlocksView(state).render()
-  val transactionsView = TxsView.render()
+  val accountsView     = AccountsView(state).render
+  val blocksView       = BlocksView(state).render
+  val transactionsView = TxsView(state).render
   val simulationsView  = SimulationsView.render()
+  val accountView      = AccountView().render
+  val blockView        = BlockView2().render
+  val contractView     = ContractView(state).render
   val configView       = ConfigView.render()
 
   val tabs = Vars(
@@ -56,6 +60,9 @@ object JbokApp {
     Tab("Blocks", blocksView, "fa-th-large"),
     Tab("Transactions", transactionsView, "fa-arrow-circle-right"),
     Tab("Simulations", simulationsView, "fa-stethoscope"),
+    Tab("Account", accountView, "fa-user-circle"),
+    Tab("Block", blockView, "fa-square"),
+    Tab("Contract", contractView, "fa-file-contract"),
     Tab("", configView, "fa-cogs")
   )
 
@@ -80,6 +87,7 @@ object JbokApp {
 
   @dom val right: Binding[Node] =
     <div class="nav-right">
+      <div class ="tab searchbar">{nodeSelect.bind}</div>
       <div class="tab searchbar">{searchBar.bind}</div>
     </div>
 
@@ -105,6 +113,10 @@ object JbokApp {
     <footer>
       {Copyright.render.bind}
     </footer>
+
+  def task() =
+    if (state.update.value) { state.updateTask() }
+  org.scalajs.dom.window.setInterval(() => task(), 5000)
 
   def main(args: Array[String]): Unit =
     dom.render(document.body, render)

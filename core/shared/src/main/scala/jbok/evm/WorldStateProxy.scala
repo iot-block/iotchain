@@ -136,6 +136,7 @@ case class WorldStateProxy[F[_]](
   def createAddress(creatorAddr: Address): F[Address] =
     for {
       creatorAccount <- getAccount(creatorAddr)
+      _ = println(s"nonce: ${creatorAccount.nonce}")
     } yield {
       val hash = RlpCodec.encode(creatorAddr :: (creatorAccount.nonce - 1) :: HNil).require.bytes.kec256
       Address.apply(hash)
