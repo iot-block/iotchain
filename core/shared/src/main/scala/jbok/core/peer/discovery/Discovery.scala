@@ -2,7 +2,8 @@ package jbok.core.peer.discovery
 import java.net.InetSocketAddress
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Effect, Timer}
+import cats.effect.implicits._
+import cats.effect.{Concurrent, Timer}
 import cats.implicits._
 import fs2._
 import jbok.codec.rlp.RlpCodec
@@ -19,7 +20,6 @@ import scodec.bits.ByteVector
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Random
-import cats.effect.implicits._
 
 case class Discovery[F[_]](
     config: DiscoveryConfig,
@@ -91,7 +91,7 @@ case class Discovery[F[_]](
           } yield Vector.empty[PeerNode]
 
         case Right(neighbours) =>
-          neighbours.nodes.map(x => PeerNode(x.pk, x.endpoint.addr)).toVector.pure[F]
+          neighbours.nodes.map(x => PeerNode.fromAddr(x.pk, x.endpoint.addr)).toVector.pure[F]
       }
     } yield neighbours
 

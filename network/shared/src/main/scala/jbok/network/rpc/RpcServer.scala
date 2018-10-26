@@ -29,7 +29,7 @@ class RpcServer(
     new RpcServer(this.handlers ++ handlers.toMap, queue)
 
   val pipe: Pipe[IO, String, String] = { input =>
-    val s = input.evalMap { s =>
+    val s = input.evalMap[IO, String] { s =>
       log.debug(s"received: ${s}")
       RequestMethod[String].method(s) match {
         case Some(m) =>

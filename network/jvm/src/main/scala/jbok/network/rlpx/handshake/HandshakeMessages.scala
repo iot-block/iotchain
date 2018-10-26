@@ -1,15 +1,15 @@
 package jbok.network.rlpx.handshake
 
-import jbok.crypto.signature.{KeyPair, CryptoSignature}
+import jbok.crypto.signature.{CryptoSignature, KeyPair}
 import jbok.network.rlpx.handshake.AuthInitiateEcdsaCodec._
 import scodec.bits.ByteVector
 
 case class AuthInitiateMessage(
-                                signature: CryptoSignature,
-                                ephemeralPublicHash: ByteVector,
-                                publicKey: ByteVector,
-                                nonce: ByteVector,
-                                knownPeer: Boolean
+    signature: CryptoSignature,
+    ephemeralPublicHash: ByteVector,
+    publicKey: ByteVector,
+    nonce: ByteVector,
+    knownPeer: Boolean
 )
 
 object AuthInitiateMessage {

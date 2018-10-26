@@ -21,7 +21,7 @@ class FullSyncSpec extends JbokSpec {
         miner1.miner.miningStream.take(N).compile.toList.unsafeRunSync()
         miner1.history.getBestBlockNumber.unsafeRunSync() shouldBe N
 
-        miner2.peerManager.addKnown(miner1.peerManager.config.bindAddr).unsafeRunSync()
+        miner2.peerManager.addPeerNode(miner1.peerManager.peerNode).unsafeRunSync()
         Thread.sleep(2000)
 
         // miner2 sync to miner1

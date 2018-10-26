@@ -7,7 +7,7 @@ class PeerNodeSpec extends JbokSpec {
   "PeerNode" should {
     val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
     val uri     = s"jbok://${keyPair.public.bytes.toHex}@localhost:10000"
-    val node    = PeerNode.parseStr(uri)
+    val node    = PeerNode.fromStr(uri)
 
     "parse node from URI" in {
       node.isRight shouldBe true
@@ -22,7 +22,7 @@ class PeerNodeSpec extends JbokSpec {
 
     "handle invalid str" in {
       val uri     = s"wrong://${keyPair.public.bytes.toHex}@localhost:10000"
-      PeerNode.parseStr(uri).isLeft shouldBe true
+      PeerNode.fromStr(uri).isLeft shouldBe true
     }
   }
 }

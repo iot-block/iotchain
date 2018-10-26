@@ -3,17 +3,20 @@ package jbok.core.peer
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import jbok.core.messages.{Message, Status}
+import jbok.core.messages.Status
+import jbok.crypto._
+import jbok.crypto.signature.KeyPair
 import jbok.network.Connection
 import scodec.bits.ByteVector
 
-case class HandshakedPeer[F[_]](
-    conn: Connection[F, Message],
+case class Peer[F[_]](
+    pk: KeyPair.Public,
+    conn: Connection[F],
     status: Ref[F, Status],
     knownBlocks: Ref[F, Set[ByteVector]],
     knownTxs: Ref[F, Set[ByteVector]]
 )(implicit F: Sync[F]) {
-  val id: String = conn.remoteAddress.toString
+  val id: String = pk.bytes.kec256.toHex
 
   def hasBlock(blockHash: ByteVector): F[Boolean] =
     knownBlocks.get.map(_.contains(blockHash))
@@ -28,11 +31,11 @@ case class HandshakedPeer[F[_]](
     knownTxs.update(_ + txHash)
 }
 
-object HandshakedPeer {
-  def apply[F[_]: Sync](conn: Connection[F, Message], status: Status): F[HandshakedPeer[F]] =
+object Peer {
+  def apply[F[_]: Sync](pk: KeyPair.Public, conn: Connection[F], status: Status): F[Peer[F]] =
     for {
       status      <- Ref.of[F, Status](status)
       knownBlocks <- Ref.of[F, Set[ByteVector]](Set.empty)
       knownTxs    <- Ref.of[F, Set[ByteVector]](Set.empty)
-    } yield HandshakedPeer[F](conn, status, knownBlocks, knownTxs)
+    } yield Peer[F](pk, conn, status, knownBlocks, knownTxs)
 }

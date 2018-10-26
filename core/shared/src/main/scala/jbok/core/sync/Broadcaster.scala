@@ -3,8 +3,8 @@ package jbok.core.sync
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import jbok.common._
-import jbok.core.messages.{BlockHash, NewBlock, NewBlockHashes}
-import jbok.core.peer.{HandshakedPeer, PeerManager}
+import jbok.core.messages.{BlockHash, Message, NewBlock, NewBlockHashes}
+import jbok.core.peer.{Peer, PeerManager}
 
 import scala.concurrent.ExecutionContext
 import scala.util.Random
@@ -36,25 +36,25 @@ case class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Concurrent
       }
     } yield ()
 
-  private def higherThanPeer(newBlock: NewBlock, peer: HandshakedPeer[F]): F[Boolean] =
+  private def higherThanPeer(newBlock: NewBlock, peer: Peer[F]): F[Boolean] =
     peer.status.get.map(_.bestNumber < newBlock.block.header.number)
 
   private def broadcastNewBlock(newBlock: NewBlock,
-                                peers: List[HandshakedPeer[F]],
+                                peers: List[Peer[F]],
                                 random: Boolean = false): F[Unit] = {
-    val selected: List[HandshakedPeer[F]] = if (random) randomSelect(peers) else peers
+    val selected: List[Peer[F]] = if (random) randomSelect(peers) else peers
     log.info(s"selected ${selected.size} peers to broadcast block")
-    selected.traverse(_.conn.write(newBlock)).void
+    selected.traverse(_.conn.write[Message](newBlock)).void
   }
 
-  private def broadcastNewBlockHash(newBlock: NewBlock, peers: List[HandshakedPeer[F]]): F[Unit] =
+  private def broadcastNewBlockHash(newBlock: NewBlock, peers: List[Peer[F]]): F[Unit] =
     peers.traverse { peer =>
       val newBlockHeader = newBlock.block.header
       val newBlockHashes = NewBlockHashes(BlockHash(newBlockHeader.hash, newBlockHeader.number) :: Nil)
-      peer.conn.write(newBlockHashes)
+      peer.conn.write[Message](newBlockHashes)
     }.void
 
-  private def randomSelect(peers: List[HandshakedPeer[F]]): List[HandshakedPeer[F]] = {
+  private def randomSelect(peers: List[Peer[F]]): List[Peer[F]] = {
     val numberOfPeersToSend = Math.sqrt(peers.size).toInt
     Random.shuffle(peers).take(numberOfPeersToSend)
   }

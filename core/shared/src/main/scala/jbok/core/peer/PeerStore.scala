@@ -1,11 +1,11 @@
 package jbok.core.peer
 import cats.data.OptionT
 import cats.effect.Sync
+import cats.implicits._
+import jbok.codec.rlp.codecs._
 import jbok.core.store.Namespaces
 import jbok.persistent.{KeyValueDB, KeyValueStore}
 import scodec.bits.ByteVector
-import jbok.codec.rlp.codecs._
-import cats.implicits._
 
 import scala.concurrent.duration.FiniteDuration
 

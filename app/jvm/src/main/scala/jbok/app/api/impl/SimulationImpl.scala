@@ -22,7 +22,7 @@ import jbok.core.peer.PeerManager
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.sync.{Broadcaster, Synchronizer}
 import jbok.core.{FullNode, History}
-import jbok.crypto.signature.KeyPair
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
@@ -69,7 +69,8 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                                                     EC: ExecutionContext,
                                                     T: Timer[IO]): IO[FullNode[IO]] =
     for {
-      peerManager <- PeerManager[IO](config.peer, config.sync, history)
+      keyPair     <- F.liftIO(Signature[ECDSA].generateKeyPair())
+      peerManager <- PeerManager[IO](config.peer, keyPair, config.sync, history)
       executor = BlockExecutor[IO](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[IO](peerManager)
       ommerPool <- OmmerPool[IO](history)
@@ -235,7 +236,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
       IO {
         (xs :+ xs.head).sliding(2).foreach {
           case a :: b :: Nil =>
-            a.peerManager.addKnown(b.peerBindAddress).unsafeRunSync()
+            a.peerManager.addPeerNode(b.peerNode).unsafeRunSync()
           case _ =>
             ()
         }
@@ -243,7 +244,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
 
     case "star" =>
       val xs = nodes.get.unsafeRunSync().values.toList
-      xs.tail.traverse(_.peerManager.addKnown(xs.head.peerBindAddress)).void
+      xs.tail.traverse(_.peerManager.addPeerNode(xs.head.peerNode)).void
 
     case _ => IO.raiseError(new RuntimeException(s"${topology} not supportted"))
   }

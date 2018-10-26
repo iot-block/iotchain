@@ -6,7 +6,7 @@ import jbok.core.config.Configs.SyncConfig
 import jbok.core.ledger.BlockExecutor
 import jbok.core.messages._
 import jbok.core.models._
-import jbok.core.peer.{HandshakedPeer, PeerManager}
+import jbok.core.peer.{Peer, PeerManager}
 import jbok.core.pool.TxPool
 
 import scala.concurrent.ExecutionContext
@@ -42,7 +42,7 @@ case class FullSync[F[_]](
   def start: F[Unit] =
     F.start(stream.compile.drain).void
 
-  private def getBestPeer: F[Option[HandshakedPeer[F]]] =
+  private def getBestPeer: F[Option[Peer[F]]] =
     for {
       incoming <- peerManager.incoming.get
       outgoing <- peerManager.outgoing.get
@@ -50,13 +50,13 @@ case class FullSync[F[_]](
       best = Try(peers.maxBy(_._1)._2).toOption
     } yield best
 
-  private def requestPeer(peer: HandshakedPeer[F]): F[Unit] =
+  private def requestPeer(peer: Peer[F]): F[Unit] =
     for {
       current <- executor.history.getBestBlockNumber
       requestNumber = current + 1
       _             = log.info(s"request ${config.blockHeadersPerRequest} headers at most, starting from ${requestNumber}")
       _ <- peer.conn
-        .request(
+        .request[Message](
           GetBlockHeaders(Left(requestNumber), config.blockHeadersPerRequest, 0, false),
           Some(config.peerResponseTimeout)
         )
@@ -75,7 +75,7 @@ case class FullSync[F[_]](
         }
     } yield ()
 
-  private def handleBlockHeaders(peer: HandshakedPeer[F], currentNumber: BigInt, headers: List[BlockHeader]): F[Unit] =
+  private def handleBlockHeaders(peer: Peer[F], currentNumber: BigInt, headers: List[BlockHeader]): F[Unit] =
     if (!checkHeaders(headers) || headers.last.number < currentNumber) {
       log.warn(s"got invalid block headers from ${peer.id}")
       F.unit
@@ -118,15 +118,13 @@ case class FullSync[F[_]](
       )
     }
 
-  private def handleBetterBranch(peer: HandshakedPeer[F],
-                                 oldBranch: List[Block],
-                                 headers: List[BlockHeader]): F[Unit] = {
+  private def handleBetterBranch(peer: Peer[F], oldBranch: List[Block], headers: List[BlockHeader]): F[Unit] = {
     val transactionsToAdd = oldBranch.flatMap(_.body.transactionList)
     for {
       _ <- txPool.addTransactions(transactionsToAdd)
       hashes = headers.take(config.blockBodiesPerRequest).map(_.hash)
       _      = log.info(s"request ${hashes.length} bodies, starting from ${headers.head.number}")
-      _ <- peer.conn.request(GetBlockBodies(hashes), Some(config.peerResponseTimeout)).attempt.flatMap {
+      _ <- peer.conn.request[Message](GetBlockBodies(hashes), Some(config.peerResponseTimeout)).attempt.flatMap {
         case Right(BlockBodies(bodies, _)) =>
           if (bodies.isEmpty) {
             F.delay(log.info(s"got empty bodies from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
@@ -149,9 +147,7 @@ case class FullSync[F[_]](
       } else
       headers.nonEmpty
 
-  private def handleBlockBodies(peer: HandshakedPeer[F],
-                                headers: List[BlockHeader],
-                                bodies: List[BlockBody]): F[Unit] = {
+  private def handleBlockBodies(peer: Peer[F], headers: List[BlockHeader], bodies: List[BlockBody]): F[Unit] = {
     val blocks = headers.zip(bodies).map { case (header, body) => Block(header, body) }
     for {
       imported <- executor.importBlocks(blocks)

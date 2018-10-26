@@ -18,7 +18,7 @@ import scodec.Codec
 abstract class ServerBuilder[F[_]: ConcurrentEffect, A: Codec] {
   def listen(bind: InetSocketAddress,
              pipe: Pipe[F, A, A],
-             conns: Ref[F, Map[InetSocketAddress, Connection[F, A]]],
+             conns: Ref[F, Map[InetSocketAddress, Connection[F]]],
              maxConcurrent: Int = Int.MaxValue,
              maxQueued: Int = 0,
              reuseAddress: Boolean = true,

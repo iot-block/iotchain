@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.core.messages.{Messages, SignedTransactions}
+import jbok.core.messages.{Message, SignedTransactions}
 import jbok.core.models.{Address, SignedTransaction, Transaction}
 import jbok.core.peer.PeersFixture
 import jbok.crypto.signature.KeyPair
@@ -30,8 +30,8 @@ class TxPoolSpec extends JbokSpec {
   "TxPool" should {
     "codec SignedTransactions" in {
       val stxs  = SignedTransactions((1 to 10).toList.map(i => newStx(i, tx)))
-      val bytes = Messages.encode(stxs)
-      Messages.decode(bytes).require shouldBe stxs
+      val bytes = Message.encode(stxs)
+      Message.decode(bytes).require shouldBe stxs
     }
 
     "store pending transactions received from peers" in new TxPoolFixture() {

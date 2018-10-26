@@ -2,9 +2,9 @@ package jbok.core.mining
 
 import jbok.JbokSpec
 import jbok.core.consensus.ConsensusFixture
-import jbok.core.consensus.poa.clique.{Clique, CliqueFixture}
+import jbok.core.consensus.poa.clique.CliqueFixture
+import jbok.core.models.PrettyPrinter._
 import jbok.core.models.{Address, SignedTransaction, UInt256}
-import jbok.core.PrettyPrinter._
 
 class BlockMinerSpec extends JbokSpec {
   def check(newConsensus: () => ConsensusFixture): Unit =

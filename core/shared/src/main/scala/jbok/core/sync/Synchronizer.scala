@@ -6,7 +6,7 @@ import fs2._
 import fs2.concurrent.SignallingRef
 import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.BlockImportResult._
-import jbok.core.messages.{GetBlockHeaders, NewBlock, NewBlockHashes}
+import jbok.core.messages.{GetBlockHeaders, Message, NewBlock, NewBlockHashes}
 import jbok.core.models.Block
 import jbok.core.peer.PeerManager
 import jbok.core.pool.{OmmerPool, TxPool}
@@ -51,7 +51,7 @@ case class Synchronizer[F[_]](
 
         case (peer, NewBlockHashes(hashes)) =>
           val request = GetBlockHeaders(Right(hashes.head.hash), hashes.length, 0, reverse = false)
-          peer.conn.write(request)
+          peer.conn.write[Message](request)
 
         case _ => F.unit
       }

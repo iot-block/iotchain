@@ -5,9 +5,9 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
-import jbok.core.messages.SignedTransactions
+import jbok.core.messages.{Message, SignedTransactions}
 import jbok.core.models.SignedTransaction
-import jbok.core.peer.{HandshakedPeer, PeerManager}
+import jbok.core.peer.{Peer, PeerManager}
 import scodec.bits.ByteVector
 
 import scala.concurrent.ExecutionContext
@@ -60,7 +60,7 @@ case class TxPool[F[_]](
 
   def stop: F[Unit] = stopWhenTrue.set(true)
 
-  def handleReceived(peer: HandshakedPeer[F], stxs: List[SignedTransaction]): F[Unit] =
+  def handleReceived(peer: Peer[F], stxs: List[SignedTransaction]): F[Unit] =
     for {
       _ <- addTransactions(stxs)
       _ <- stxs.traverse(stx => peer.knownTx(stx.hash))
@@ -111,7 +111,7 @@ case class TxPool[F[_]](
   def getPendingTransactions: F[List[PendingTransaction]] =
     pending.get
 
-  def notifyPeer(peer: HandshakedPeer[F], stxs: List[SignedTransaction]): F[Unit] =
+  def notifyPeer(peer: Peer[F], stxs: List[SignedTransaction]): F[Unit] =
     for {
       p <- pending.get
       toNotify <- stxs
@@ -125,7 +125,7 @@ case class TxPool[F[_]](
       _ <- if (toNotify.isEmpty) {
         F.unit
       } else {
-        peer.conn.write(SignedTransactions(toNotify)) *> toNotify.traverse(stx => peer.knownTx(stx.hash))
+        peer.conn.write[Message](SignedTransactions(toNotify)) *> toNotify.traverse(stx => peer.knownTx(stx.hash))
       }
     } yield ()
 

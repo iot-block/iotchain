@@ -7,7 +7,8 @@ import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.core.{History, HistoryFixture}
 import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
-import jbok.core.messages.{BlockBodies, GetBlockBodies, Handshake}
+import jbok.core.messages.{BlockBodies, GetBlockBodies, Handshake, Message}
+import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
@@ -17,7 +18,8 @@ class PeersFixture(n: Int = 3) {
   val pms = (1 to n).toList.map(i => new PeerManagerFixture(10000 + i))
 
   def startAll =
-    pms.traverse(_.pm.start) *> T.sleep(1.seconds) *> pms.traverse(_.pm.addKnown(pms.head.addr)) *> T.sleep(1.seconds)
+    pms.traverse(_.pm.start) *> T.sleep(1.seconds) *> pms.traverse(_.pm.addPeerNode(pms.head.node)) *> T.sleep(
+      1.seconds)
 
   def stopAll = pms.traverse(_.pm.stop).void
 }
@@ -25,7 +27,9 @@ class PeersFixture(n: Int = 3) {
 class PeerManagerFixture(port: Int) extends HistoryFixture {
   val pmConfig = PeerManagerConfig(port)
   val addr     = pmConfig.bindAddr
-  val pm       = PeerManager[IO](pmConfig, SyncConfig(), history).unsafeRunSync()
+  val keyPair  = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+  val pm: PeerManager[IO]       = PeerManager[IO](pmConfig, keyPair, SyncConfig(), history).unsafeRunSync()
+  val node = pm.peerNode
 }
 
 class PeerManagerSpec extends JbokSpec {
@@ -39,8 +43,8 @@ class PeerManagerSpec extends JbokSpec {
       val p = for {
         fiber    <- fix1.pm.listen(maxOpen = maxOpen).compile.drain.start
         _        <- T.sleep(1.seconds)
-        _        <- fix2.pm.addKnown(fix1.addr)
-        _        <- fix3.pm.addKnown(fix1.addr)
+        _        <- fix2.pm.addPeerNode(fix1.node)
+        _        <- fix3.pm.addPeerNode(fix1.node)
         _        <- fix2.pm.connect().compile.drain.start
         _        <- fix3.pm.connect().compile.drain.start
         _        <- T.sleep(1.seconds)
@@ -61,9 +65,9 @@ class PeerManagerSpec extends JbokSpec {
       val p = for {
         fiber    <- Stream(fix1.pm, fix2.pm, fix3.pm).map(_.listen()).parJoinUnbounded.compile.drain.start
         _        <- T.sleep(1.seconds)
-        _        <- fix1.pm.addKnown(fix2.addr, fix3.addr)
+        _        <- fix1.pm.addPeerNode(fix2.node, fix3.node)
         _        <- fix1.pm.connect(maxOpen).compile.drain.start
-        _        <- T.sleep(1.seconds)
+        _        <- T.sleep(3.seconds)
         outgoing <- fix1.pm.outgoing.get
         _ = outgoing.size shouldBe maxOpen
         _ <- fiber.cancel
@@ -79,17 +83,18 @@ class PeerManagerSpec extends JbokSpec {
     }
 
     "handshake should fail if peers are incompatible" in {
-      val fix1 = new PeerManagerFixture(10001)
+      val fix1     = new PeerManagerFixture(10001)
       val pmConfig = PeerManagerConfig(10002)
-      val db = KeyValueDB.inMemory[IO].unsafeRunSync()
-      val history = History[IO](db, fix1.history.chainId + 1).unsafeRunSync()
+      val db       = KeyValueDB.inMemory[IO].unsafeRunSync()
+      val history  = History[IO](db, fix1.history.chainId + 1).unsafeRunSync()
       history.loadGenesisConfig().unsafeRunSync()
-      val pm2       = PeerManager[IO](pmConfig, SyncConfig(), history).unsafeRunSync()
+      val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+      val pm2     = PeerManager[IO](pmConfig, keyPair, SyncConfig(), history).unsafeRunSync()
 
       val p = for {
         fiber <- fix1.pm.listen().compile.drain.start
         _     <- T.sleep(1.seconds)
-        _     <- pm2.addKnown(fix1.addr)
+        _     <- pm2.addPeerNode(fix1.node)
         r     <- pm2.connect().compile.drain.attempt
         _     <- fiber.cancel
       } yield r
@@ -114,7 +119,7 @@ class PeerManagerSpec extends JbokSpec {
       val message = GetBlockBodies(Nil)
       val p = for {
         _    <- startAll
-        resp <- pms.head.pm.incoming.get.map(_.head._2).unsafeRunSync().conn.request(message)
+        resp <- pms.head.pm.incoming.get.map(_.head._2).unsafeRunSync().conn.request[Message](message)
         _ = resp shouldBe a[BlockBodies]
         _ <- stopAll
       } yield ()

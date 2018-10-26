@@ -2,14 +2,15 @@ package jbok.core.messages
 
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
-import scodec.Attempt
-import scodec.bits.ByteVector
+import jbok.network.common.{RequestId, RequestMethod}
+import scodec.bits.{BitVector, ByteVector}
+import scodec.{Attempt, Codec, DecodeResult, Decoder, Encoder, SizeBound}
 
 trait Message {
   def name = getClass.getSimpleName
 }
 
-object Messages {
+object Message {
   val codecMap = Map(
     "Handshake"          -> RlpCodec[Handshake],
     "Status"             -> RlpCodec[Status],
@@ -42,5 +43,30 @@ object Messages {
   def decode(bytes: ByteVector): Attempt[Message] = rstring.decode(bytes.bits).map { r =>
     val name = r.value
     codecMap(name).decode(r.remainder).require.value.asInstanceOf[Message]
+  }
+
+  implicit val encoder: Encoder[Message] = new Encoder[Message] {
+    override def encode(value: Message): Attempt[BitVector] =
+      Attempt.successful(Message.encode(value).bits)
+
+    override def sizeBound: SizeBound = SizeBound.unknown
+  }
+
+  implicit val decoder: Decoder[Message] = new Decoder[Message] {
+    override def decode(bits: BitVector): Attempt[DecodeResult[Message]] =
+      Message.decode(bits.bytes).map(message => DecodeResult(message, BitVector.empty))
+  }
+
+  implicit val codec: Codec[Message] = Codec(encoder, decoder)
+
+  implicit val I: RequestId[Message] = new RequestId[Message] {
+    override def id(a: Message): Option[String] = a match {
+      case x: SyncMessage => Some(x.id)
+      case _              => None
+    }
+  }
+
+  implicit val M: RequestMethod[Message] = new RequestMethod[Message] {
+    override def method(a: Message): Option[String] = Some(a.name)
   }
 }

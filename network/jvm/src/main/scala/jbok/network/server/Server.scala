@@ -15,7 +15,7 @@ import scala.concurrent.ExecutionContext
 
 class Server[F[_], A](
     val stream: Stream[F, Unit],
-    val connections: Ref[F, Map[InetSocketAddress, Connection[F, A]]], // active connections
+    val connections: Ref[F, Map[InetSocketAddress, Connection[F]]], // active connections
     val queue: Queue[F, (InetSocketAddress, A)], // outbound queue of (remote address -> connection)
     val signal: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], C: Codec[A], EC: ExecutionContext) {
@@ -51,7 +51,7 @@ object Server {
       receiveBufferSize: Int = 256 * 1024
   )(implicit F: ConcurrentEffect[F], C: Codec[A]): F[Server[F, A]] =
     for {
-      conns  <- Ref.of[F, Map[InetSocketAddress, Connection[F, A]]](Map.empty)
+      conns  <- Ref.of[F, Map[InetSocketAddress, Connection[F]]](Map.empty)
       queue  <- Queue.bounded[F, (InetSocketAddress, A)](maxQueued)
       signal <- SignallingRef[F, Boolean](true)
     } yield {

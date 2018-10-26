@@ -2,14 +2,13 @@ package jbok.network.server
 
 import java.net.InetSocketAddress
 
-import cats.effect.{ConcurrentEffect, Timer}
 import cats.effect.concurrent.Ref
-import fs2._
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
+import fs2._
+import jbok.common.execution._
 import jbok.network.Connection
 import jbok.network.common.{RequestId, TcpUtil}
-import jbok.common.execution._
-import org.http4s.Request
 import scodec.Codec
 
 class TcpServerBuilder[F[_], A: Codec: RequestId](implicit F: ConcurrentEffect[F], T: Timer[F])
@@ -18,7 +17,7 @@ class TcpServerBuilder[F[_], A: Codec: RequestId](implicit F: ConcurrentEffect[F
 
   override def listen(bind: InetSocketAddress,
                       pipe: Pipe[F, A, A],
-                      conns: Ref[F, Map[InetSocketAddress, Connection[F, A]]],
+                      conns: Ref[F, Map[InetSocketAddress, Connection[F]]],
                       maxConcurrent: Int,
                       maxQueued: Int,
                       reuseAddress: Boolean,
@@ -34,7 +33,7 @@ class TcpServerBuilder[F[_], A: Codec: RequestId](implicit F: ConcurrentEffect[F
             .resource(s)
             .flatMap(socket => {
               for {
-                conn <- Stream.eval(TcpUtil.socketToConnection[F, A](socket, true))
+                conn <- Stream.eval(TcpUtil.socketToConnection[F](socket, true))
                 _    <- Stream.eval(conns.update(_ + (conn.remoteAddress -> conn)))
                 _    <- conn.reads().through(pipe).to(conn.writes()).onFinalize(conns.update(_ - conn.remoteAddress).void)
               } yield ()

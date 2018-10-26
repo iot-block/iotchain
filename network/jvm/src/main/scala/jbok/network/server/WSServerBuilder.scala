@@ -23,7 +23,7 @@ class WSServerBuilder[F[_], A: Codec](implicit F: ConcurrentEffect[F]) extends S
   override def listen(
       bind: InetSocketAddress,
       pipe: Pipe[F, A, A],
-      conns: Ref[F, Map[InetSocketAddress, Connection[F, A]]],
+      conns: Ref[F, Map[InetSocketAddress, Connection[F]]],
       maxConcurrent: Int,
       maxQueued: Int,
       reuseAddress: Boolean,

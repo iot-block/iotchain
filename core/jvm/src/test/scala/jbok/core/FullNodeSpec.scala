@@ -54,7 +54,7 @@ class FullNodeSpec extends JbokSpec {
       Thread.sleep(1000)
       (nodes :+ nodes.head).sliding(2).foreach {
         case a :: b :: Nil =>
-          a.peerManager.addKnown(b.peerBindAddress).unsafeRunSync()
+          a.peerManager.addPeerNode(b.peerNode).unsafeRunSync()
         case _ =>
           ()
       }
@@ -71,7 +71,7 @@ class FullNodeSpec extends JbokSpec {
 
       nodes.traverse(_.start).unsafeRunSync()
       Thread.sleep(1000)
-      nodes.traverse(_.peerManager.addKnown(nodes.head.peerBindAddress)).unsafeRunSync()
+      nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode)).unsafeRunSync()
       Thread.sleep(1000)
       nodes.head.peerManager.connected.unsafeRunSync().size shouldBe N - 1
       nodes.tail.foreach(_.peerManager.connected.unsafeRunSync().size shouldBe 1)
@@ -86,7 +86,7 @@ class FullNodeSpec extends JbokSpec {
       val miner = nodes.head.miner
       nodes.traverse(_.start).unsafeRunSync()
       Thread.sleep(1000)
-      nodes.traverse(_.peerManager.addKnown(nodes.head.peerBindAddress)).unsafeRunSync()
+      nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode)).unsafeRunSync()
       Thread.sleep(1000)
       nodes.head.peerManager.connected.unsafeRunSync().size shouldBe N - 1
       nodes.tail.foreach(_.peerManager.connected.unsafeRunSync().size shouldBe 1)

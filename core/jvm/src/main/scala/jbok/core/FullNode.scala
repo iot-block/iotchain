@@ -11,9 +11,10 @@ import jbok.core.consensus.Consensus
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.BlockExecutor
 import jbok.core.mining.BlockMiner
-import jbok.core.peer.PeerManager
+import jbok.core.peer.{PeerManager, PeerNode}
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.sync.{Broadcaster, Synchronizer}
+import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.server.Server
 
 import scala.concurrent.ExecutionContext
@@ -30,6 +31,8 @@ case class FullNode[F[_]](
 
   val peerBindAddress: InetSocketAddress =
     config.peer.bindAddr
+
+  val peerNode = PeerNode.fromAddr(peerManager.keyPair.public, peerBindAddress)
 
   def start: F[Unit] =
     for {
@@ -58,7 +61,8 @@ object FullNode {
       T: Timer[F]): F[FullNode[F]] = {
     val random = new SecureRandom()
     for {
-      peerManager <- PeerManager[F](config.peer, SyncConfig(), history)
+      keyPair <- F.liftIO(Signature[ECDSA].generateKeyPair())
+      peerManager <- PeerManager[F](config.peer, keyPair, SyncConfig(), history)
       executor = BlockExecutor[F](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[F](peerManager)
       ommerPool <- OmmerPool[F](history)

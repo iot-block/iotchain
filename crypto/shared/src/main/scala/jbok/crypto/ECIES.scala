@@ -22,10 +22,10 @@ import scodec.bits.ByteVector
   *  Elliptic Curve Integrated Encryption Scheme
   */
 object ECIES {
-  val KeySize = 128
-  val PublicKeyOverheadSize = 65
-  val MacOverheadSize = 32
-  val OverheadSize = PublicKeyOverheadSize + KeySize / 8 + MacOverheadSize
+  val KeySize                     = 128
+  val PublicKeyOverheadSize       = 65
+  val MacOverheadSize             = 32
+  val OverheadSize                = PublicKeyOverheadSize + KeySize / 8 + MacOverheadSize
   val curveParams: X9ECParameters = SECNamedCurves.getByName("secp256k1")
   val curve: ECDomainParameters =
     new ECDomainParameters(curveParams.getCurve, curveParams.getG, curveParams.getN, curveParams.getH)
@@ -37,11 +37,11 @@ object ECIES {
   ): F[ByteVector] =
     for {
       (q, iv, cipherBody) <- Sync[F].delay {
-        val is = new ByteArrayInputStream(ciphertext)
+        val is         = new ByteArrayInputStream(ciphertext)
         val ephemBytes = new Array[Byte](2 * ((curve.getCurve.getFieldSize + 7) / 8) + 1)
         is.read(ephemBytes)
         val ephemQ: ECPoint = curve.getCurve.decodePoint(ephemBytes)
-        val iv = new Array[Byte](KeySize / 8)
+        val iv              = new Array[Byte](KeySize / 8)
         is.read(iv)
         val cipherBody = new Array[Byte](is.available)
         is.read(cipherBody)
@@ -71,10 +71,10 @@ object ECIES {
       IV: Option[Array[Byte]],
       ciphertext: Array[Byte],
       macData: Option[Array[Byte]]
-  ): F[ByteVector] = Sync[F].delay {
+  ): F[ByteVector] = {
     val aesEngine = new AESEngine
 
-    val iesEngine = new EthereumIESEngine(
+    val iesEngine = new EthereumIESEngine[F](
       kdf = new ConcatKDFBytesGenerator(new SHA256Digest),
       mac = new HMac(new SHA256Digest),
       hash = new SHA256Digest,
@@ -84,7 +84,9 @@ object ECIES {
       pubSrc = Left(new ECPublicKeyParameters(ephemQ, curve))
     )
 
-    ByteVector(iesEngine.processBlock(ciphertext, 0, ciphertext.length, forEncryption = false, macData))
+    iesEngine
+      .processBlock(ciphertext, 0, ciphertext.length, forEncryption = false, macData)
+      .map(bytes => ByteVector(bytes))
   }
 
   /**
@@ -98,31 +100,33 @@ object ECIES {
       secureRandom: SecureRandom,
       plaintext: Array[Byte],
       macData: Option[Array[Byte]] = None
-  ): F[ByteVector] = Sync[F].delay {
+  ): F[ByteVector] = {
     val gParam = new ECKeyGenerationParameters(curve, secureRandom)
-    val IV = randomByteArray(secureRandom, KeySize / 8)
-    val eGen = new ECKeyPairGenerator
+    val IV     = randomByteArray(secureRandom, KeySize / 8)
+    val eGen   = new ECKeyPairGenerator
     eGen.init(gParam)
     val ephemPair = eGen.generateKeyPair
-    val prv = ephemPair.getPrivate.asInstanceOf[ECPrivateKeyParameters].getD
-    val pub = ephemPair.getPublic.asInstanceOf[ECPublicKeyParameters].getQ
-    val iesEngine = makeIESEngine(Q, prv, Some(IV))
+    val prv       = ephemPair.getPrivate.asInstanceOf[ECPrivateKeyParameters].getD
+    val pub       = ephemPair.getPublic.asInstanceOf[ECPublicKeyParameters].getQ
+    val iesEngine = makeIESEngine[F](Q, prv, Some(IV))
 
     val keygenParams = new ECKeyGenerationParameters(curve, secureRandom)
-    val generator = new ECKeyPairGenerator
+    val generator    = new ECKeyPairGenerator
     generator.init(keygenParams)
     val gen = new ECKeyPairGenerator
     gen.init(new ECKeyGenerationParameters(curve, secureRandom))
 
-    ByteVector(
-      pub.getEncoded(false) ++ IV ++ iesEngine
-        .processBlock(plaintext, 0, plaintext.length, forEncryption = true, macData))
+    iesEngine.processBlock(plaintext, 0, plaintext.length, forEncryption = true, macData).map { result =>
+      ByteVector(pub.getEncoded(false) ++ IV ++ result)
+    }
   }
 
-  private def makeIESEngine(pub: ECPoint, prv: BigInteger, IV: Option[Array[Byte]]): EthereumIESEngine = {
+  private def makeIESEngine[F[_]: Sync](pub: ECPoint,
+                                        prv: BigInteger,
+                                        IV: Option[Array[Byte]]): EthereumIESEngine[F] = {
     val aesEngine = new AESEngine
 
-    val iesEngine = new EthereumIESEngine(
+    val iesEngine = new EthereumIESEngine[F](
       kdf = new ConcatKDFBytesGenerator(new SHA256Digest),
       mac = new HMac(new SHA256Digest),
       hash = new SHA256Digest,
