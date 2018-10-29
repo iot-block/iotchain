@@ -28,6 +28,7 @@ case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Un
   val onInputHandler = { event: Event =>
     event.currentTarget match {
       case input: HTMLInputElement => {
+        println(data)
         entryMap.get(input.name).foreach(x => x.value.value = input.value.trim)
       }
       case _ =>
@@ -46,14 +47,20 @@ case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Un
                 {entry.name}
               </b>
             </label>
-            <input type={entry.`type`} placeholder="" name={entry.name} oninput={onInputHandler} value={entry.value.bind} />
+            {
+              if (entry.`type`=="text") {
+                <input placeholder="" name={entry.name} oninput={onInputHandler} value={entry.value.bind} type="text" />
+              } else {
+                <input placeholder="" name={entry.name} oninput={onInputHandler} value={entry.value.bind} type={entry.`type`} />
+              }
+            }
           </div>
 
         case "textarea" =>
           <div id={id}>
             <label for={entry.name}>
               <b>
-                {entry.name}
+                {s"${entry.name} ${entry.`type`}"}
               </b>
             </label>
             <textarea name={entry.name} oninput={onInputHandler} value={entry.value.bind}/>

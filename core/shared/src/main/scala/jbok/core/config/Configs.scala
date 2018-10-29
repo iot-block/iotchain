@@ -39,7 +39,7 @@ object Configs {
       timeout: FiniteDuration = 10.seconds
   ) {
     val bindAddr: InetSocketAddress = new InetSocketAddress(host, port)
-    val bootNodes = bootUris.flatMap(s => PeerNode.fromStr(s).toOption)
+    val bootNodes                   = bootUris.flatMap(s => PeerNode.fromStr(s).toOption)
   }
 
   case class FullNodeConfig(
