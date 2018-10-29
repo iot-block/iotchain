@@ -15,7 +15,7 @@ class DiscoveryFixture(port: Int) {
   val keyPair            = Signature[ECDSA].generateKeyPair().unsafeRunSync()
   val addr               = new InetSocketAddress("localhost", port)
   val db                 = KeyValueDB.inMemory[IO].unsafeRunSync()
-  val transport = UdpTransport[IO, UdpPacket](addr)
+  val transport = UdpTransport[IO](addr)
   val config = DiscoveryConfig().copy(port = port)
   val discovery = Discovery[IO](config, keyPair, transport, db).unsafeRunSync()
   val table = discovery.table

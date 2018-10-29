@@ -14,14 +14,12 @@ import jbok.crypto.authds.mpt.MPTrieStore
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
-import scala.concurrent.ExecutionContext
-
 case class BlockPreparationResult[F[_]](block: Block, blockResult: BlockResult[F], stateRootHash: ByteVector)
 
 class BlockMiner[F[_]](
     val synchronizer: Synchronizer[F],
     val stopWhenTrue: SignallingRef[F, Boolean]
-)(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger
 
   val history = synchronizer.history
@@ -187,7 +185,7 @@ class BlockMiner[F[_]](
 object BlockMiner {
   def apply[F[_]: ConcurrentEffect](
       synchronizer: Synchronizer[F]
-  )(implicit EC: ExecutionContext): F[BlockMiner[F]] = SignallingRef[F, Boolean](true).map { stopWhenTrue =>
+  ): F[BlockMiner[F]] = SignallingRef[F, Boolean](true).map { stopWhenTrue =>
     new BlockMiner[F](
       synchronizer,
       stopWhenTrue

@@ -73,7 +73,10 @@ private[jbok] object TcpUtil {
             a <- decodeChunk[F, A](chunk)
           } yield a
 
-        override def reads[A: Codec: RequestId](timeout: Option[FiniteDuration], maxBytes: Int): Stream[F, A] =
+        override def reads[A: Codec](timeout: Option[FiniteDuration], maxBytes: Int): Stream[F, A] =
+          decodeStream[F, A](socket.reads(maxBytes, timeout))
+
+        override def readsAndResolve[A: Codec: RequestId](timeout: Option[FiniteDuration], maxBytes: Int): Stream[F, A] =
           decodeStream[F, A](socket.reads(maxBytes, timeout))
             .evalMap { a =>
               for {

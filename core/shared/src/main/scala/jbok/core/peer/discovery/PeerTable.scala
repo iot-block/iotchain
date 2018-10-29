@@ -1,14 +1,13 @@
 package jbok.core.peer.discovery
 
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
 import jbok.core.peer.{PeerNode, PeerStore}
 import scodec.bits.ByteVector
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -47,7 +46,7 @@ case class PeerTable[F[_]](
     bootstrapNodes: Vector[PeerNode],
     buckets: Ref[F, Vector[Bucket]],
     initDone: SignallingRef[F, Boolean]
-)(implicit F: Concurrent[F], T: Timer[F], EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F], T: Timer[F]) {
 
   private[this] val log = org.log4s.getLogger
 
@@ -263,11 +262,11 @@ object PeerTable {
   val refreshInterval     = 30.minutes
   val revalidateInterval  = 10.seconds
 
-  def apply[F[_]: Concurrent](
+  def apply[F[_]: ConcurrentEffect](
       selfNode: PeerNode,
       store: PeerStore[F],
       bootstrapNodes: Vector[PeerNode]
-  )(implicit T: Timer[F], EC: ExecutionContext): F[PeerTable[F]] =
+  )(implicit T: Timer[F]): F[PeerTable[F]] =
     for {
       buckets  <- Ref.of[F, Vector[Bucket]](Vector.fill(nBuckets)(Bucket.empty))
       initDone <- SignallingRef[F, Boolean](false)

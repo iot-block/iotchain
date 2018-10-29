@@ -1,16 +1,15 @@
 package jbok.core.consensus.poa.clique
 
-import cats.effect.Sync
+import cats.effect.ConcurrentEffect
 import cats.implicits._
 import jbok.core.consensus.{Consensus, ConsensusResult}
 import jbok.core.models.{Address, Block, BlockHeader}
 import jbok.core.pool.BlockPool
 import scodec.bits.ByteVector
 
-import scala.concurrent.ExecutionContext
 import scala.util.Random
 
-class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit F: Sync[F], EC: ExecutionContext)
+class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit F: ConcurrentEffect[F])
     extends Consensus[F](clique.history) {
   private[this] val log = org.log4s.getLogger
 

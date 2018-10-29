@@ -11,6 +11,4 @@ trait ExecutionPlatform extends execution {
     ExecutionContext.Implicits.global
 
   override def asyncChannelGroup: AsynchronousChannelGroup = null
-
-  override def asyncSocketGroup: AsynchronousSocketGroup = null
 }

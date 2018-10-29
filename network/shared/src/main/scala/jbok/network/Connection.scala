@@ -19,7 +19,9 @@ trait Connection[F[_]] {
 
   def read[A: Codec](timeout: Option[FiniteDuration] = None, maxBytes: Int = 256 * 1024): F[A]
 
-  def reads[A: Codec: RequestId](timeout: Option[FiniteDuration] = None, maxBytes: Int = 256 * 1024): Stream[F, A]
+  def reads[A: Codec](timeout: Option[FiniteDuration] = None, maxBytes: Int = 256 * 1024): Stream[F, A]
+
+  def readsAndResolve[A: Codec: RequestId](timeout: Option[FiniteDuration] = None, maxBytes: Int = 256 * 1024): Stream[F, A]
 
   def request[A: Codec: RequestId](a: A, timeout: Option[FiniteDuration] = None): F[A]
 

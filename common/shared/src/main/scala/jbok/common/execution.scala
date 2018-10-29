@@ -2,9 +2,8 @@ package jbok.common
 
 import java.nio.channels.AsynchronousChannelGroup
 
-import cats.effect.{ContextShift, IO, Timer}
 import cats.effect.IO.{contextShift, timer}
-import fs2.io.udp.AsynchronousSocketGroup
+import cats.effect.{ContextShift, IO, Timer}
 
 import scala.concurrent.ExecutionContext
 
@@ -12,8 +11,6 @@ trait execution {
   def executionContext: ExecutionContext
 
   def asyncChannelGroup: AsynchronousChannelGroup
-
-  def asyncSocketGroup: AsynchronousSocketGroup
 }
 
 object execution extends ExecutionPlatform {
@@ -24,6 +21,4 @@ object execution extends ExecutionPlatform {
   implicit val T: Timer[IO] = timer(EC)
 
   implicit val CS: ContextShift[IO] = contextShift(EC)
-
-  implicit val AsyncSocketGroup: AsynchronousSocketGroup = asyncSocketGroup
 }

@@ -5,15 +5,15 @@ import java.net.InetSocketAddress
 import cats.effect.IO
 import fs2.Pipe
 import jbok.JbokSpec
-import jbok.app.api.{FilterManager, PrivateAPI, PublicAPI}
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
+import jbok.app.api.{FilterManager, PrivateAPI, PublicAPI}
+import jbok.common.execution._
 import jbok.core.config.Configs.{BlockChainConfig, FilterConfig, MiningConfig}
 import jbok.core.consensus.poa.clique.CliqueFixture
 import jbok.core.keystore.KeyStoreFixture
 import jbok.core.mining.BlockMinerFixture
 import jbok.network.rpc.RpcServer
-import jbok.network.server.{Server, WSServerBuilder}
-import jbok.common.execution._
+import jbok.network.server.Server
 
 import scala.io.StdIn
 
@@ -46,10 +46,13 @@ class JbokServer extends BlockMinerFixture(new CliqueFixture {}) with KeyStoreFi
       .mountAPI[PrivateAPI](privateApiImpl)
 
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
-  val server: Server[IO, String]           = Server(WSServerBuilder[IO, String], bind, serverPipe).unsafeRunSync()
+  val server = Server.websocket[IO].unsafeRunSync()
+  val p = for {
+    fiber <- server.listen[String](bind, serverPipe).compile.drain.start
+    _ = println(s"server listen on ${bind}, press any key to quit")
+    _ = StdIn.readLine()
+    _ <- fiber.cancel
+  } yield ()
 
-  server.start.unsafeRunSync()
-  println(s"server listen on ${bind}, press any key to quit")
-  StdIn.readLine()
-  server.stop.unsafeRunSync()
+  p.unsafeRunSync()
 }

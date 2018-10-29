@@ -10,7 +10,6 @@ import jbok.core.models.SignedTransaction
 import jbok.core.peer.{Peer, PeerManager}
 import scodec.bits.ByteVector
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{FiniteDuration, _}
 
 case class PendingTransaction(stx: SignedTransaction, addTimestamp: Long)
@@ -26,7 +25,7 @@ case class TxPool[F[_]](
     timeouts: Ref[F, Map[ByteVector, Fiber[F, Unit]]],
     peerManager: PeerManager[F],
     config: TxPoolConfig
-)(implicit F: ConcurrentEffect[F], EC: ExecutionContext, T: Timer[F]) {
+)(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger
 
   def stream: Stream[F, Unit] =
@@ -149,7 +148,6 @@ case class TxPool[F[_]](
 object TxPool {
   def apply[F[_]](peerManager: PeerManager[F], config: TxPoolConfig = TxPoolConfig())(
       implicit F: ConcurrentEffect[F],
-      EC: ExecutionContext,
       T: Timer[F]
   ): F[TxPool[F]] =
     for {

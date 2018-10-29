@@ -11,8 +11,6 @@ import jbok.core.models.Block
 import jbok.core.peer.PeerManager
 import jbok.core.pool.{OmmerPool, TxPool}
 
-import scala.concurrent.ExecutionContext
-
 case class Synchronizer[F[_]](
     peerManager: PeerManager[F],
     executor: BlockExecutor[F],
@@ -20,20 +18,19 @@ case class Synchronizer[F[_]](
     ommerPool: OmmerPool[F],
     broadcaster: Broadcaster[F],
     stopWhenTrue: SignallingRef[F, Boolean]
-)(implicit F: ConcurrentEffect[F], EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger
 
   val history = executor.history
 
   def stream: Stream[F, Unit] =
-    peerManager
-      .subscribe
+    peerManager.subscribe
       .evalMap {
         case (peer, NewBlock(block)) =>
           log.info(s"received NewBlock(${block.tag}) from ${peer.conn.remoteAddress}")
 
           for {
-            _ <- peer.knownBlock(block.header.hash)
+            _            <- peer.knownBlock(block.header.hash)
             importResult <- executor.importBlock(block)
             _ = log.info(s"${peerManager.config.bindAddr}: import block result: ${importResult}")
             _ <- importResult match {
@@ -102,8 +99,8 @@ object Synchronizer {
       txPool: TxPool[F],
       ommerPool: OmmerPool[F],
       broadcaster: Broadcaster[F],
-  )(implicit F: ConcurrentEffect[F], EC: ExecutionContext): F[Synchronizer[F]] =
+  )(implicit F: ConcurrentEffect[F]): F[Synchronizer[F]] =
     for {
-      s     <- SignallingRef[F, Boolean](true)
+      s <- SignallingRef[F, Boolean](true)
     } yield Synchronizer(peerManager, executor, txPool, ommerPool, broadcaster, s)
 }

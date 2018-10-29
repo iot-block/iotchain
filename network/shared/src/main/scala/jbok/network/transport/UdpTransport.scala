@@ -10,30 +10,26 @@ import fs2.{Pipe, _}
 import scodec.Codec
 import scodec.bits.BitVector
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
-case class UdpTransport[F[_], A](
+case class UdpTransport[F[_]](
     bind: InetSocketAddress,
     timeout: Option[FiniteDuration] = None
-)(
-    implicit F: ConcurrentEffect[F],
-    C: Codec[A],
-    EC: ExecutionContext
-) {
+)(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger
 
   implicit val AG = AsynchronousSocketGroup()
 
-  private def decodeChunk(chunk: Chunk[Byte]): F[A] =
+  private def decodeChunk[A: Codec](chunk: Chunk[Byte]): F[A] =
     F.delay(Codec[A].decode(BitVector(chunk.toArray)).require.value)
 
-  private def encodeChunk(a: A): F[Chunk[Byte]] =
+  private def encodeChunk[A: Codec](a: A): F[Chunk[Byte]] =
     F.delay(Chunk.array(Codec[A].encode(a).require.toByteArray))
 
-  def serve(pipe: Pipe[F, (InetSocketAddress, A), (InetSocketAddress, A)]): Stream[F, Unit] =
-    Stream.resource(udp
-      .open[F](bind, reuseAddress = true))
+  def serve[A: Codec](pipe: Pipe[F, (InetSocketAddress, A), (InetSocketAddress, A)]): Stream[F, Unit] =
+    Stream
+      .resource(udp
+        .open[F](bind, reuseAddress = true))
       .flatMap { socket =>
         log.info(s"udp transport bound at ${bind}")
         socket
@@ -53,7 +49,7 @@ case class UdpTransport[F[_], A](
       .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)(s"udp transport error"))))
       .onFinalize(F.delay(log.info(s"udp transport serving terminated")))
 
-  def send(remote: InetSocketAddress, a: A, timeout: Option[FiniteDuration] = None): F[Unit] = {
+  def send[A: Codec](remote: InetSocketAddress, a: A, timeout: Option[FiniteDuration] = None): F[Unit] = {
     log.info(s"sending msg to ${remote}")
     val s = for {
       socket <- Stream.resource(udp.open[F](bind, reuseAddress = true))

@@ -62,7 +62,7 @@ class PeerManager[F[_]](
             peer <- Stream.eval(handshakeIncoming(conn))
             _    <- Stream.eval(incoming.update(_ + (conn.remoteAddress -> peer)))
             _ <- conn
-              .reads[Message]()
+              .readsAndResolve[Message]()
               .evalMap(a => messages.publish1(Some(peer -> a)).map(_ => a))
               .through(pipe)
               .to(conn.writes())
@@ -85,7 +85,7 @@ class PeerManager[F[_]](
       conn   <- Stream.eval(TcpUtil.socketToConnection[F](socket, false))
       _ = log.info(s"${conn} established")
       peer <- Stream.eval(handshakeOutgoing(conn, to.pk))
-      _ <- Stream.eval(outgoing.update(_ + (peer.conn.remoteAddress -> peer)))
+      _    <- Stream.eval(outgoing.update(_ + (peer.conn.remoteAddress -> peer)))
       _ <- conn
         .reads[Message]()
         .evalMap(a => messages.publish1(Some(peer -> a)).map(_ => a))
@@ -136,9 +136,8 @@ class PeerManager[F[_]](
 
   private[jbok] def handshakeIncoming(conn: Connection[F]): F[Peer[F]] =
     for {
-      handshaker <- AuthHandshaker[F](keyPair)
-      result     <- handshaker.accept(conn)
-      _ = log.info(s"incoming handshake result ${result}")
+      handshaker   <- AuthHandshaker[F](keyPair)
+      result       <- handshaker.accept(conn)
       localStatus  <- localStatus
       _            <- conn.write[Message](localStatus, Some(config.handshakeTimeout))
       remoteStatus <- conn.read[Message](Some(config.handshakeTimeout)).map(_.asInstanceOf[Status])
@@ -152,9 +151,8 @@ class PeerManager[F[_]](
 
   private[jbok] def handshakeOutgoing(conn: Connection[F], remotePk: KeyPair.Public): F[Peer[F]] =
     for {
-      handshaker <- AuthHandshaker[F](keyPair)
-      result     <- handshaker.connect(conn, remotePk)
-      _ = log.info(s"outgoing handshake result ${result}")
+      handshaker   <- AuthHandshaker[F](keyPair)
+      result       <- handshaker.connect(conn, remotePk)
       localStatus  <- localStatus
       _            <- conn.write[Message](localStatus, Some(config.handshakeTimeout))
       remoteStatus <- conn.read[Message](Some(config.handshakeTimeout)).map(_.asInstanceOf[Status])

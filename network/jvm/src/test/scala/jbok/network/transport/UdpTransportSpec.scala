@@ -8,6 +8,7 @@ import jbok.JbokSpec
 import jbok.common.execution._
 import scodec.Codec
 import scodec.codecs._
+import scala.concurrent.duration._
 
 class UdpTransportSpec extends JbokSpec {
   "UdpTransport" should {
@@ -22,16 +23,19 @@ class UdpTransportSpec extends JbokSpec {
           x
         })
 
-      val transport1 = UdpTransport[IO, String](bind1)
-      val transport2 = UdpTransport[IO, String](bind2)
-      val fiber1     = transport1.serve(pipe).compile.drain.start.unsafeRunSync()
-      val fiber2     = transport2.serve(pipe).compile.drain.start.unsafeRunSync()
-      Thread.sleep(2000)
-      transport1.send(bind2, "oho").unsafeRunSync()
-      Thread.sleep(2000)
+      val transport1 = UdpTransport[IO](bind1)
+      val transport2 = UdpTransport[IO](bind2)
+      val p = for {
+        fiber1 <- transport1.serve(pipe).compile.drain.start
+        fiber2 <- transport2.serve(pipe).compile.drain.start
+        _      <- T.sleep(2.seconds)
+        _      <- transport1.send(bind2, "oho")
+        _      <- T.sleep(2.seconds)
+        _      <- fiber1.cancel
+        _      <- fiber2.cancel
+      } yield ()
 
-      fiber1.cancel.unsafeRunSync()
-      fiber2.cancel.unsafeRunSync()
+      p.unsafeRunSync()
     }
   }
 }

@@ -1,75 +1,124 @@
 package jbok.network.server
-
 import java.net.InetSocketAddress
+import java.nio.channels.AsynchronousChannelGroup
 
-import cats.effect.ConcurrentEffect
-import cats.effect.concurrent.Ref
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
-import jbok.network.Connection
-import jbok.common.execution._
+import jbok.network.common.TcpUtil
+import org.http4s.HttpRoutes
+import org.http4s.dsl.Http4sDsl
+import org.http4s.server.blaze.BlazeBuilder
+import org.http4s.server.websocket.WebSocketBuilder
+import org.http4s.websocket.WebSocketFrame
 import scodec.Codec
+import scodec.bits.BitVector
 
-import scala.concurrent.ExecutionContext
+trait Server[F[_]] {
+  def listen[A: Codec](
+      bind: InetSocketAddress,
+      pipe: Pipe[F, A, A],
+      maxOpen: Int = Int.MaxValue
+  ): Stream[F, Unit]
 
-class Server[F[_], A](
-    val stream: Stream[F, Unit],
-    val connections: Ref[F, Map[InetSocketAddress, Connection[F]]], // active connections
-    val queue: Queue[F, (InetSocketAddress, A)], // outbound queue of (remote address -> connection)
-    val signal: SignallingRef[F, Boolean]
-)(implicit F: ConcurrentEffect[F], C: Codec[A], EC: ExecutionContext) {
-  private[this] val log = org.log4s.getLogger
+  def start: F[Unit]
 
-  def start: F[Unit] =
-    for {
-      _ <- signal.set(false)
-      _ <- F.start(stream.interruptWhen(signal).compile.drain).void
-      _ <- F.delay(log.info(s"start server"))
-    } yield ()
-
-  def stop: F[Unit] =
-    signal.set(true)
-
-  def write(remote: InetSocketAddress, a: A): F[Unit] =
-    queue.enqueue1(remote -> a)
-
-  def writes: Sink[F, (InetSocketAddress, A)] =
-    queue.enqueue
+  def stop: F[Unit]
 }
 
 object Server {
-  private[this] val log = org.log4s.getLogger
-
-  def apply[F[_], A](
-      builder: ServerBuilder[F, A],
-      bind: InetSocketAddress,
-      pipe: Pipe[F, A, A],
-      maxConcurrent: Int = Int.MaxValue,
-      maxQueued: Int = 32,
-      reuseAddress: Boolean = true,
-      receiveBufferSize: Int = 256 * 1024
-  )(implicit F: ConcurrentEffect[F], C: Codec[A]): F[Server[F, A]] =
+  def tcp[F[_]](implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup): F[Server[F]] =
     for {
-      conns  <- Ref.of[F, Map[InetSocketAddress, Connection[F]]](Map.empty)
-      queue  <- Queue.bounded[F, (InetSocketAddress, A)](maxQueued)
-      signal <- SignallingRef[F, Boolean](true)
-    } yield {
-      val pipeWithPush: Pipe[F, A, A] = { input =>
-        input
-          .through(pipe)
-          .concurrently(queue.dequeue.evalMap {
-            case (remote, a) =>
-              conns.get.flatMap(_.get(remote) match {
-                case Some(conn) => conn.write(a)
-                case None       => F.unit
-              })
-          })
-      }
-      val stream: Stream[F, Unit] = builder
-        .listen(bind, pipeWithPush, conns, maxConcurrent, maxQueued, reuseAddress, receiveBufferSize)
-        .onFinalize(signal.set(true) *> F.delay(log.info(s"on finalize")))
+      haltWhenTrue <- SignallingRef[F, Boolean](true)
+    } yield
+      new Server[F] {
+        private[this] val log = org.log4s.getLogger
 
-      new Server[F, A](stream, conns, queue, signal)
-    }
+        def listen[A: Codec](
+            bind: InetSocketAddress,
+            pipe: Pipe[F, A, A],
+            maxOpen: Int = Int.MaxValue
+        ): Stream[F, Unit] =
+          fs2.io.tcp
+            .serverWithLocalAddress[F](bind)
+            .map {
+              case Left(bindAddr) =>
+                log.info(s"server bound to ${bindAddr}")
+                Stream.empty.covary[F]
+
+              case Right(s) =>
+                Stream
+                  .resource(s)
+                  .flatMap(socket => {
+                    for {
+                      conn <- Stream.eval(TcpUtil.socketToConnection[F](socket, true))
+                      _ <- conn
+                        .reads[A]()
+                        .through(pipe)
+                        .to(conn.writes[A]())
+                    } yield ()
+                  })
+            }
+            .parJoin(maxOpen)
+            .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(e)(s"server error: ${e}"))))
+
+        override def start: F[Unit] = ???
+
+        override def stop: F[Unit] = ???
+      }
+
+  def websocket[F[_]](implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup): F[Server[F]] =
+    for {
+      haltWhenTrue <- SignallingRef[F, Boolean](true)
+    } yield
+      new Server[F] {
+        private[this] val log = org.log4s.getLogger
+
+        def listen[A: Codec](
+            bind: InetSocketAddress,
+            pipe: Pipe[F, A, A],
+            maxOpen: Int = Int.MaxValue
+        ): Stream[F, Unit] = {
+          val dsl = Http4sDsl[F]
+          import dsl._
+          val service = HttpRoutes.of[F] {
+            case GET -> Root =>
+              Queue.unbounded[F, A].flatMap { queue =>
+                val toClient = queue.dequeue.map { x =>
+                  val bytes = Codec[A].encode(x).require.bytes
+                  WebSocketFrame.Binary(bytes, true)
+                }
+
+                val fromClient: Sink[F, WebSocketFrame] = { s: Stream[F, WebSocketFrame] =>
+                  s.map {
+                      case WebSocketFrame.Binary(bytes, _) =>
+                        Codec[A].decode(bytes.bits).require.value
+
+                      case WebSocketFrame.Text(text, _) =>
+                        Codec[A].decode(BitVector.fromValidBase64(text)).require.value
+                    }
+                    .through(pipe)
+                    .to(queue.enqueue)
+                }
+
+                WebSocketBuilder[F].build(toClient, fromClient)
+              }
+          }
+
+          val builder = BlazeBuilder[F]
+            .bindSocketAddress(bind)
+            .mountService(service, "/")
+            .withWebSockets(true)
+            .withoutBanner
+            .withNio2(true)
+
+          log.info(s"binding on ${bind}")
+          builder.serve.handleErrorWith(e => Stream.eval(F.delay(log.error(e)("onError")))).drain
+        }
+
+        override def start: F[Unit] = ???
+
+        override def stop: F[Unit] = ???
+      }
 }

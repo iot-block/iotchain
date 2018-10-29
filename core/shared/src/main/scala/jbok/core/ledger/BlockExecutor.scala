@@ -2,10 +2,10 @@ package jbok.core.ledger
 
 import cats.Foldable
 import cats.data.Kleisli
-import cats.effect.Sync
+import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
-import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.History
+import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.consensus.{Consensus, ConsensusResult}
 import jbok.core.models.UInt256._
 import jbok.core.models._
@@ -13,8 +13,6 @@ import jbok.core.pool.BlockPool
 import jbok.core.validators.{BlockValidator, CommonHeaderValidator, TransactionValidator}
 import jbok.evm._
 import scodec.bits.ByteVector
-
-import scala.concurrent.ExecutionContext
 
 case class BlockResult[F[_]](worldState: WorldStateProxy[F], gasUsed: BigInt = 0, receipts: List[Receipt] = Nil)
 case class TxResult[F[_]](
@@ -41,7 +39,7 @@ class BlockExecutor[F[_]](
     val commonBlockValidator: BlockValidator[F],
     val txValidator: TransactionValidator[F],
     val vm: VM
-)(implicit F: Sync[F], EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger
 
   def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxResult[F]] = {
@@ -436,12 +434,12 @@ class BlockExecutor[F[_]](
 }
 
 object BlockExecutor {
-  def apply[F[_]: Sync](
+  def apply[F[_]: ConcurrentEffect](
       config: BlockChainConfig,
       history: History[F],
       blockPool: BlockPool[F],
       consensus: Consensus[F]
-  )(implicit EC: ExecutionContext): BlockExecutor[F] =
+  ): BlockExecutor[F] =
     new BlockExecutor[F](
       config,
       history,

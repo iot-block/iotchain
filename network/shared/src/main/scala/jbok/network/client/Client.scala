@@ -2,16 +2,14 @@ package jbok.network.client
 
 import java.net.URI
 
-import cats.effect.{ConcurrentEffect, Timer}
 import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.common.execution._
 import scodec.Codec
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 class Client[F[_], A](
@@ -25,8 +23,7 @@ class Client[F[_], A](
   C: Codec[A],
   I: RequestId[A],
   M: RequestMethod[A],
-  T: Timer[F],
-  EC: ExecutionContext) {
+  T: Timer[F]) {
 
   def write(a: A): F[Unit] = {
     out.enqueue1(a)

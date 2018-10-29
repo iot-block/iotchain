@@ -7,13 +7,13 @@ import java.util.UUID
 import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
+import jbok.common.execution._
 import jbok.common.testkit.HexGen
 import jbok.network.client.{Client, WSClientBuilderPlatform}
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.server.{Server, WSServerBuilder}
+import jbok.network.server.Server
 import scodec.Codec
 import scodec.codecs._
-import jbok.common.execution._
 
 class WsClientServerSpec extends JbokSpec {
   case class Data(id: String, data: String)
@@ -35,7 +35,8 @@ class WsClientServerSpec extends JbokSpec {
   val bind                                = new InetSocketAddress("localhost", 9001)
   val uri = new URI("ws://localhost:9001")
   val serverPipe: Pipe[IO, Data, Data]    = _.map { case Data(id, s) => Data(id, s"hello, $s") }
-  val server: Server[IO, Data]            = Server(WSServerBuilder[IO, Data], bind, serverPipe).unsafeRunSync()
+  val server = Server.websocket[IO].unsafeRunSync()
+  val fiber  = server.listen[Data](bind, serverPipe).compile.drain.start.unsafeRunSync()
   val client: Client[IO, Data]            = Client(WSClientBuilderPlatform[IO, Data], uri).unsafeRunSync()
 
   "WebSocket Client" should {
@@ -54,25 +55,13 @@ class WsClientServerSpec extends JbokSpec {
     }
   }
 
-  "WebSocket Server" should {
-    "push" ignore {
-      val conns = server.connections.get.unsafeRunSync()
-      conns.size shouldBe 1
-      forAll(HexGen.genHex(0, 2048)) { str =>
-        server.write(conns.keys.head, Data(str)).unsafeRunSync()
-        client.read.unsafeRunSync().data shouldBe str
-      }
-    }
-  }
-
   override protected def beforeAll(): Unit = {
-    server.start.unsafeRunSync()
     Thread.sleep(3000)
     client.start.unsafeRunSync()
   }
 
   override protected def afterAll(): Unit = {
-    server.stop.unsafeRunSync()
     client.stop.unsafeRunSync()
+    fiber.cancel.unsafeRunSync()
   }
 }

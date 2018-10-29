@@ -9,7 +9,6 @@ import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager}
 import jbok.core.pool.TxPool
 
-import scala.concurrent.ExecutionContext
 import scala.util.Try
 
 /**
@@ -21,7 +20,7 @@ case class FullSync[F[_]](
     peerManager: PeerManager[F],
     executor: BlockExecutor[F],
     txPool: TxPool[F]
-)(implicit F: ConcurrentEffect[F], T: Timer[F], EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger
 
   def stream: Stream[F, Unit] =

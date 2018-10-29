@@ -5,9 +5,9 @@ import java.net.{InetSocketAddress, URI}
 import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
-import jbok.network.client.{Client, WSClientBuilderPlatform}
 import jbok.common.execution._
-import jbok.network.server.{Server, WSServerBuilder}
+import jbok.network.client.{Client, WSClientBuilderPlatform}
+import jbok.network.server.Server
 
 class RpcSpec extends JbokSpec {
   trait API2 {
@@ -25,7 +25,8 @@ class RpcSpec extends JbokSpec {
   val bind                                 = new InetSocketAddress("localhost", 9002)
   val uri = new URI("ws://localhost:9002")
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
-  val server: Server[IO, String]           = Server(WSServerBuilder[IO, String], bind, serverPipe).unsafeRunSync()
+  val server: Server[IO]           = Server.websocket[IO].unsafeRunSync()
+  val fiber = server.listen(bind, serverPipe).compile.drain.start.unsafeRunSync()
   val client: Client[IO, String]           = Client(WSClientBuilderPlatform[IO, String], uri).unsafeRunSync()
   val api: TestAPI                         = RpcClient[IO](client).useAPI[TestAPI]
 
@@ -39,19 +40,18 @@ class RpcSpec extends JbokSpec {
     }
 
     "client subscribe" in {
-      val push = Stream(0 until 10: _*).covary[IO].evalMap(i => rpcServer.notify("events", i))
+      val push = Stream(0 until 10: _*).covary[IO].evalMap[IO, Unit](i => rpcServer.notify("events", i))
       api.events.take(10).concurrently(push).compile.toList.unsafeRunSync() shouldBe (0 until 10).toList
     }
   }
 
   override protected def beforeAll(): Unit = {
-    server.start.unsafeRunSync()
     Thread.sleep(3000)
     client.start.unsafeRunSync()
   }
 
   override protected def afterAll(): Unit = {
-    server.stop.unsafeRunSync()
     client.stop.unsafeRunSync()
+    fiber.cancel.unsafeRunSync()
   }
 }

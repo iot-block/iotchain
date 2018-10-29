@@ -1,7 +1,7 @@
 package jbok.core.consensus.poa.clique
 
 import cats.data.OptionT
-import cats.effect.Sync
+import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
@@ -13,7 +13,6 @@ import jbok.crypto.signature.{CryptoSignature, ECDSA, Signature}
 import jbok.persistent.{KeyValueDB, KeyValueStore, LruMap}
 import scodec.bits._
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class SnapshotStore[F[_]: Sync](db: KeyValueDB[F])
@@ -27,7 +26,7 @@ class Clique[F[_]](
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
     val signer: Address,
     val sign: ByteVector => F[CryptoSignature]
-)(implicit F: Sync[F], EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger
 
   def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
@@ -111,12 +110,12 @@ object Clique {
   val nonceAuthVote = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
   val nonceDropVote = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
 
-  def apply[F[_]: Sync](
+  def apply[F[_]: ConcurrentEffect](
       config: CliqueConfig,
       history: History[F],
       signer: Address,
       sign: ByteVector => F[CryptoSignature]
-  )(implicit EC: ExecutionContext): Clique[F] =
+  ): Clique[F] =
     new Clique[F](
       config,
       history,

@@ -3,7 +3,7 @@ import java.net.InetSocketAddress
 
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.implicits._
-import cats.effect.{Concurrent, Timer}
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import jbok.codec.rlp.RlpCodec
@@ -17,7 +17,6 @@ import jbok.persistent.KeyValueDB
 import org.bouncycastle.util.BigIntegers
 import scodec.bits.ByteVector
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -25,10 +24,10 @@ case class Discovery[F[_]](
     config: DiscoveryConfig,
     keyPair: KeyPair,
     store: PeerStore[F],
-    transport: UdpTransport[F, UdpPacket],
+    transport: UdpTransport[F],
     table: PeerTable[F],
     promises: Ref[F, Map[ByteVector, Deferred[F, KadPacket]]],
-)(implicit F: Concurrent[F], T: Timer[F], EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   import Discovery._
 
   private[this] val log = org.log4s.getLogger
@@ -273,12 +272,12 @@ object Discovery {
   val bondExpiration      = 24.hours
   val maxFindNodeFailures = 5
 
-  def apply[F[_]: Concurrent](
+  def apply[F[_]: ConcurrentEffect](
       config: DiscoveryConfig,
       keyPair: KeyPair,
-      transport: UdpTransport[F, UdpPacket],
+      transport: UdpTransport[F],
       db: KeyValueDB[F]
-  )(implicit T: Timer[F], EC: ExecutionContext): F[Discovery[F]] =
+  )(implicit T: Timer[F]): F[Discovery[F]] =
     for {
       promises <- Ref.of[F, Map[ByteVector, Deferred[F, KadPacket]]](Map.empty)
       store = new PeerStore[F](db)

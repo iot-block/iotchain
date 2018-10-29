@@ -11,7 +11,7 @@ import jbok.common.execution._
 import jbok.common.testkit.HexGen
 import jbok.network.client.{Client, TcpClientBuilder}
 import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.server.{Server, TcpServerBuilder}
+import jbok.network.server.Server
 import scodec.Codec
 import scodec.codecs._
 
@@ -35,7 +35,8 @@ class TcpClientServerSpec extends JbokSpec {
   val bind                                = new InetSocketAddress("localhost", 9000)
   val uri = new URI("ws://localhost:9000")
   val serverPipe: Pipe[IO, Data, Data]    = _.map { case Data(id, s) => Data(id, s"hello, $s") }
-  val server: Server[IO, Data]            = Server(TcpServerBuilder[IO, Data], bind, serverPipe).unsafeRunSync()
+  val server = Server.tcp[IO].unsafeRunSync()
+  val fiber = server.listen[Data](bind, serverPipe).compile.drain.start.unsafeRunSync()
   val client: Client[IO, Data]            = Client(TcpClientBuilder[IO, Data], uri).unsafeRunSync()
 
   "TCP Client" should {
@@ -54,25 +55,13 @@ class TcpClientServerSpec extends JbokSpec {
     }
   }
 
-  "TCP Server" should {
-    "push" in {
-      val conns = server.connections.get.unsafeRunSync()
-      conns.size shouldBe 1
-      forAll(HexGen.genHex(0, 2048)) { str =>
-        server.write(conns.keys.head, Data(str)).unsafeRunSync()
-        client.read.unsafeRunSync().data shouldBe str
-      }
-    }
-  }
-
   override protected def beforeAll(): Unit = {
-    server.start.unsafeRunSync()
     Thread.sleep(3000)
     client.start.unsafeRunSync()
   }
 
   override protected def afterAll(): Unit = {
     client.stop.unsafeRunSync()
-    server.stop.unsafeRunSync()
+    fiber.cancel.unsafeRunSync()
   }
 }

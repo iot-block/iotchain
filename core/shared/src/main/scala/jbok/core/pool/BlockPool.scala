@@ -1,16 +1,14 @@
 package jbok.core.pool
 
 import cats.data.OptionT
-import cats.effect.Sync
+import cats.effect.ConcurrentEffect
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common._
 import jbok.core.History
-import jbok.core.pool.BlockPool._
 import jbok.core.models.{Block, BlockHeader}
+import jbok.core.pool.BlockPool._
 import scodec.bits.ByteVector
-
-import scala.concurrent.ExecutionContext
 
 case class BlockPoolConfig(
     maxBlockAhead: Int = 10,
@@ -22,7 +20,7 @@ case class BlockPool[F[_]](
     blockPoolConfig: BlockPoolConfig,
     blocks: Ref[F, Map[ByteVector, QueuedBlock]],
     parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]],
-)(implicit F: Sync[F], EC: ExecutionContext) {
+)(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger
 
   def contains(blockHash: ByteVector): F[Boolean] =
@@ -237,8 +235,8 @@ object BlockPool {
   case class QueuedBlock(block: Block, totalDifficulty: Option[BigInt])
   case class Leaf(hash: ByteVector, totalDifficulty: BigInt)
 
-  def apply[F[_]: Sync](history: History[F], blockPoolConfig: BlockPoolConfig = BlockPoolConfig())(
-      implicit EC: ExecutionContext): F[BlockPool[F]] =
+  def apply[F[_]: ConcurrentEffect](history: History[F],
+                                    blockPoolConfig: BlockPoolConfig = BlockPoolConfig()): F[BlockPool[F]] =
     for {
       blocks           <- Ref.of[F, Map[ByteVector, QueuedBlock]](Map.empty)
       parentToChildren <- Ref.of[F, Map[ByteVector, Set[ByteVector]]](Map.empty)
