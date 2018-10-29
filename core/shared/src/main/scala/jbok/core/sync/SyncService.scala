@@ -7,10 +7,7 @@ import jbok.core.History
 import jbok.core.config.Configs.SyncConfig
 import jbok.core.messages._
 
-import scala.concurrent.ExecutionContext
-
-case class SyncService[F[_]](config: SyncConfig, history: History[F])(implicit F: ConcurrentEffect[F],
-                                                                      EC: ExecutionContext) {
+case class SyncService[F[_]](config: SyncConfig, history: History[F])(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger
 
   val pipe: Pipe[F, Message, Message] = input => {

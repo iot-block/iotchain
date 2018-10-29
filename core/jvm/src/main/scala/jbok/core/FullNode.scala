@@ -25,7 +25,7 @@ case class FullNode[F[_]](
     synchronizer: Synchronizer[F],
     keyStore: KeyStore[F],
     miner: BlockMiner[F],
-    rpcServer: Option[Server[F, String]]
+    rpcServer: Option[Server[F]]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   val id = config.nodeId
 

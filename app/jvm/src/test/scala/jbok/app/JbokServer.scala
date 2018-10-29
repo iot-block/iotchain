@@ -46,12 +46,12 @@ class JbokServer extends BlockMinerFixture(new CliqueFixture {}) with KeyStoreFi
       .mountAPI[PrivateAPI](privateApiImpl)
 
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
-  val server = Server.websocket[IO].unsafeRunSync()
   val p = for {
-    fiber <- server.listen[String](bind, serverPipe).compile.drain.start
+    server <- Server.websocket(bind, serverPipe)
+    _      <- server.start
     _ = println(s"server listen on ${bind}, press any key to quit")
     _ = StdIn.readLine()
-    _ <- fiber.cancel
+    _ <- server.stop
   } yield ()
 
   p.unsafeRunSync()

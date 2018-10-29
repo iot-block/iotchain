@@ -5,8 +5,6 @@ import java.nio.channels.AsynchronousChannelGroup
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executors, ThreadFactory}
 
-import fs2.io.udp.AsynchronousSocketGroup
-
 import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
 
@@ -17,9 +15,6 @@ trait ExecutionPlatform extends execution {
   override def asyncChannelGroup: AsynchronousChannelGroup =
     AsynchronousChannelGroup.withThreadPool(
       Executors.newCachedThreadPool(ExecutionPlatform.mkThreadFactory("AG", daemon = true)))
-
-  override def asyncSocketGroup: AsynchronousSocketGroup =
-    AsynchronousSocketGroup.apply()
 }
 
 object ExecutionPlatform {

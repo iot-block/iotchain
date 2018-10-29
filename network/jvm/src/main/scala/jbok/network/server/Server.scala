@@ -14,13 +14,12 @@ import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import scodec.Codec
 import scodec.bits.BitVector
+import cats.effect.implicits._
 
 trait Server[F[_]] {
-  def listen[A: Codec](
-      bind: InetSocketAddress,
-      pipe: Pipe[F, A, A],
-      maxOpen: Int = Int.MaxValue
-  ): Stream[F, Unit]
+  def localAddress: InetSocketAddress
+
+  def stream: Stream[F, Unit]
 
   def start: F[Unit]
 
@@ -28,18 +27,19 @@ trait Server[F[_]] {
 }
 
 object Server {
-  def tcp[F[_]](implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup): F[Server[F]] =
+  def tcp[F[_], A: Codec](bind: InetSocketAddress, pipe: Pipe[F, A, A], maxOpen: Int = Int.MaxValue)(
+      implicit F: ConcurrentEffect[F],
+      T: Timer[F],
+      AG: AsynchronousChannelGroup): F[Server[F]] =
     for {
       haltWhenTrue <- SignallingRef[F, Boolean](true)
     } yield
       new Server[F] {
         private[this] val log = org.log4s.getLogger
 
-        def listen[A: Codec](
-            bind: InetSocketAddress,
-            pipe: Pipe[F, A, A],
-            maxOpen: Int = Int.MaxValue
-        ): Stream[F, Unit] =
+        override val localAddress: InetSocketAddress = bind
+
+        override val stream: Stream[F, Unit] =
           fs2.io.tcp
             .serverWithLocalAddress[F](bind)
             .map {
@@ -63,23 +63,29 @@ object Server {
             .parJoin(maxOpen)
             .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(e)(s"server error: ${e}"))))
 
-        override def start: F[Unit] = ???
+        override def start: F[Unit] =
+          haltWhenTrue.get.flatMap {
+            case false => F.unit
+            case true  => haltWhenTrue.set(false) *> stream.interruptWhen(haltWhenTrue).compile.drain.start.void
+          }
 
-        override def stop: F[Unit] = ???
+        override def stop: F[Unit] =
+          haltWhenTrue.set(true)
       }
 
-  def websocket[F[_]](implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup): F[Server[F]] =
+  def websocket[F[_], A: Codec](bind: InetSocketAddress, pipe: Pipe[F, A, A], maxOpen: Int = Int.MaxValue)(
+      implicit F: ConcurrentEffect[F],
+      T: Timer[F],
+      AG: AsynchronousChannelGroup): F[Server[F]] =
     for {
       haltWhenTrue <- SignallingRef[F, Boolean](true)
     } yield
       new Server[F] {
         private[this] val log = org.log4s.getLogger
 
-        def listen[A: Codec](
-            bind: InetSocketAddress,
-            pipe: Pipe[F, A, A],
-            maxOpen: Int = Int.MaxValue
-        ): Stream[F, Unit] = {
+        override val localAddress: InetSocketAddress = bind
+
+        override val stream: Stream[F, Unit] = {
           val dsl = Http4sDsl[F]
           import dsl._
           val service = HttpRoutes.of[F] {
@@ -117,8 +123,13 @@ object Server {
           builder.serve.handleErrorWith(e => Stream.eval(F.delay(log.error(e)("onError")))).drain
         }
 
-        override def start: F[Unit] = ???
+        override def start: F[Unit] =
+          haltWhenTrue.get.flatMap {
+            case false => F.unit
+            case true  => haltWhenTrue.set(false) *> stream.interruptWhen(haltWhenTrue).compile.drain.start.void
+          }
 
-        override def stop: F[Unit] = ???
+        override def stop: F[Unit] =
+          haltWhenTrue.set(true)
       }
 }

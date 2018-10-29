@@ -18,7 +18,7 @@ lazy val contributors = Map(
 lazy val V = new {
   val circe           = "0.9.1"
   val tsec            = "0.0.1-RC1"
-  val http4s          = "0.19.0"
+  val http4s          = "0.20.0-M1"
   val fs2             = "1.0.0"
   val catsEffect      = "1.0.0"
   val catsCollections = "0.7.0"
@@ -236,7 +236,7 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.2.4"),
   addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
-  addCompilerPlugin(scalafixSemanticdb),
+//  addCompilerPlugin(scalafixSemanticdb),
   fork in test := false,
   fork in run := true,
   parallelExecution in test := false,
@@ -268,9 +268,9 @@ lazy val scalacOpts = scalacOptions := Seq(
   "-Ypartial-unification",
   "-language:higherKinds",
   "-language:implicitConversions",
-  "-language:postfixOps",
-  "-Yrangepos", // required by SemanticDB compiler plugin
-  "-Ywarn-unused-import" // required by `RemoveUnused` rule
+  "-language:postfixOps"
+//  "-Yrangepos", // required by SemanticDB compiler plugin
+//  "-Ywarn-unused-import" // required by `RemoveUnused` rule
 )
 
 lazy val micrositeSettings = Seq(

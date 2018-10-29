@@ -7,9 +7,11 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, IO, Timer}
 import cats.implicits._
 import fs2.concurrent.Topic
+import jbok.app.api.FilterManager
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
-import jbok.app.api.{FilterManager, PrivateAPI, PublicAPI}
 import jbok.app.simulations.SimulationImpl.NodeId
+import jbok.common.ExecutionPlatform.mkThreadFactory
+import jbok.common.execution._
 import jbok.core.config.Configs.{FilterConfig, FullNodeConfig}
 import jbok.core.config.GenesisConfig
 import jbok.core.consensus.Consensus
@@ -22,21 +24,18 @@ import jbok.core.peer.PeerManager
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.sync.{Broadcaster, Synchronizer}
 import jbok.core.{FullNode, History}
-import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
-import jbok.network.server.{Server, TcpServerBuilder, WSServerBuilder}
+import jbok.network.server.Server
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import jbok.common.ExecutionPlatform.mkThreadFactory
 
 import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Random
-import jbok.common.execution._
-import jbok.core.peer.PeerManager
 
 class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                      val nodes: Ref[IO, Map[NodeId, FullNode[IO]]],
@@ -50,7 +49,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
     NodeInfo(fullNode.id, fullNode.config.peer.interface, fullNode.config.peer.port, fullNode.config.rpc.publicApiPort)
 
-  private def newAPIServer[API](api: API, enable: Boolean, address: String, port: Int): IO[Option[Server[IO, String]]] =
+  private def newAPIServer[API](api: API, enable: Boolean, address: String, port: Int): IO[Option[Server[IO]]] =
     if (enable) {
       for {
         rpcServer <- RpcServer()
@@ -58,7 +57,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
         _    = log.info("api rpc server binding...")
         bind = new InetSocketAddress(address, port)
         _    = log.info("api rpc server bind done")
-        server <- Server(WSServerBuilder[IO, String], bind, rpcServer.pipe)
+        server <- Server.websocket(bind, rpcServer.pipe)
       } yield Some(server)
     } else { IO(None) }
 
@@ -94,7 +93,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
         log.info("api rpc server binding...")
         val bind = new InetSocketAddress("localhost", config.rpc.publicApiPort)
         log.info("api rpc server bind done")
-        val server = Server(WSServerBuilder[IO, String], bind, rpcServer.pipe).unsafeRunSync()
+        val server = Server.websocket(bind, rpcServer.pipe).unsafeRunSync()
         Some(server)
       } else { None }
     } yield new FullNode[IO](config, peerManager, synchronizer, keyStore, miner, rpcServer)
@@ -118,7 +117,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     log.info(s"create ${n} node(s)")
 
     for {
-      newNodes <- configs.zipWithIndex.traverse {
+      newNodes <- configs.zipWithIndex.traverse[IO, FullNode[IO]] {
         case (config, idx) =>
           implicit val ec =
             ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2, mkThreadFactory(s"EC${idx}", true)))
@@ -153,7 +152,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     log.info(s"network start all nodes")
     for {
       xs <- nodes.get
-      _  <- xs.values.toList.traverse(x => startNode(x.id))
+      _  <- xs.values.toList.traverse[IO, Unit](x => startNode(x.id))
     } yield ()
   }
 
@@ -161,7 +160,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     log.info(s"network stop all nodes")
     for {
       xs <- nodes.get
-      _  <- xs.values.toList.traverse(x => stopNode(x.id))
+      _  <- xs.values.toList.traverse[IO, Unit](x => stopNode(x.id))
     } yield ()
   }
 

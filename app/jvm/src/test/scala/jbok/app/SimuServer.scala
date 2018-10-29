@@ -1,30 +1,35 @@
 package jbok.app
 
 import java.net.InetSocketAddress
+import java.security.SecureRandom
 
+import better.files.File
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.app.api.{FilterManager, PublicAPI}
-import jbok.app.api.impl.PublicApiImpl
 import jbok.app.simulations.{SimulationAPI, SimulationImpl}
+import jbok.common.execution._
 import jbok.core.consensus.poa.clique.CliqueFixture
-import jbok.core.keystore.KeyStoreFixture
+import jbok.core.keystore.KeyStorePlatform
 import jbok.core.mining.BlockMinerFixture
 import jbok.network.rpc.RpcServer
-import jbok.network.server.{Server, WSServerBuilder}
-import jbok.common.execution._
+import jbok.network.rpc.RpcServer._
+import jbok.network.server.Server
 
 import scala.io.StdIn
 
-class SimuServer extends BlockMinerFixture(new CliqueFixture {}) with KeyStoreFixture with JbokSpec {
+class SimuServer extends BlockMinerFixture(new CliqueFixture {}) with JbokSpec {
   val bind = new InetSocketAddress("localhost", 8888)
 
+  // keystore
+  val secureRandom = new SecureRandom()
+  val dir          = File.newTemporaryDirectory().deleteOnExit()
+  val keyStore     = KeyStorePlatform[IO](dir.pathAsString, secureRandom).unsafeRunSync()
+
   val impl: SimulationAPI = SimulationImpl().unsafeRunSync()
-  import jbok.network.rpc.RpcServer._
-  val rpcServer                  = RpcServer().unsafeRunSync().mountAPI[SimulationAPI](impl)
-  val server: Server[IO, String] = Server(WSServerBuilder[IO, String], bind, rpcServer.pipe).unsafeRunSync()
-  val peerCount                  = 10
-  val minerCount                 = 1
+  val rpcServer           = RpcServer().unsafeRunSync().mountAPI[SimulationAPI](impl)
+  val server              = Server.websocket(bind, rpcServer.pipe).unsafeRunSync()
+  val peerCount           = 10
+  val minerCount          = 1
 
   val init = for {
     _ <- impl.createNodesWithMiner(peerCount, minerCount)

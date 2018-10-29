@@ -49,8 +49,8 @@ object Main extends App {
 
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
   val p = for {
-    server <- Server.websocket[IO]
-    fiber  <- server.listen(bind, serverPipe).compile.drain.start
+    server <- Server.websocket(bind, serverPipe)
+    fiber <- server.stream.compile.drain.start
     _ = println(s"server listen on ${bind}, press any key to quit")
     _ = StdIn.readLine()
     _ <- fiber.cancel

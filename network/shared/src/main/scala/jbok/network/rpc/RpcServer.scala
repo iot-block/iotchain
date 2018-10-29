@@ -37,19 +37,17 @@ class RpcServer(
           handlers.get(m) match {
             case Some(f) =>
               f(s).attempt.map {
-                case Left(e) => {
+                case Left(e) =>
                   log.debug(s"internal error: ${e.toString}")
                   JsonRPCResponse.internalError(e.toString).asJson.noSpaces
-                }
-                case Right(resp) => {
+
+                case Right(resp) =>
                   log.debug(s"response: ${resp}")
                   resp
-                }
               }
-            case None => {
+            case None =>
               log.debug(s"method not found: ${m}")
               IO.pure(JsonRPCResponse.methodNotFound(m, RequestId[String].id(s)).asJson.noSpaces)
-            }
           }
         case None =>
           IO.pure(JsonRPCResponse.invalidRequest("no method specified").asJson.noSpaces)

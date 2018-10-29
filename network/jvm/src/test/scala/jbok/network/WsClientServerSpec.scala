@@ -35,8 +35,7 @@ class WsClientServerSpec extends JbokSpec {
   val bind                                = new InetSocketAddress("localhost", 9001)
   val uri = new URI("ws://localhost:9001")
   val serverPipe: Pipe[IO, Data, Data]    = _.map { case Data(id, s) => Data(id, s"hello, $s") }
-  val server = Server.websocket[IO].unsafeRunSync()
-  val fiber  = server.listen[Data](bind, serverPipe).compile.drain.start.unsafeRunSync()
+  val server = Server.websocket(bind, serverPipe).unsafeRunSync()
   val client: Client[IO, Data]            = Client(WSClientBuilderPlatform[IO, Data], uri).unsafeRunSync()
 
   "WebSocket Client" should {
@@ -56,12 +55,13 @@ class WsClientServerSpec extends JbokSpec {
   }
 
   override protected def beforeAll(): Unit = {
+    server.start.unsafeRunSync()
     Thread.sleep(3000)
     client.start.unsafeRunSync()
   }
 
   override protected def afterAll(): Unit = {
     client.stop.unsafeRunSync()
-    fiber.cancel.unsafeRunSync()
+    server.stop.unsafeRunSync()
   }
 }

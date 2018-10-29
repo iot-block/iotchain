@@ -7,7 +7,7 @@ import jbok.core.config.GenesisConfig
 import jbok.core.models._
 import jbok.core.store._
 import jbok.core.sync.SyncState
-import jbok.crypto.authds.mpt.{MPTrie, Node}
+import jbok.crypto.authds.mpt.MPTrie
 import jbok.evm.WorldStateProxy
 import jbok.persistent.{KeyValueDB, RefCountKeyValueDB, SnapshotKeyValueStore}
 import scodec.bits._
