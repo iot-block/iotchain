@@ -18,8 +18,8 @@ class PeersFixture(n: Int = 3) {
   val pms = (1 to n).toList.map(i => new PeerManagerFixture(10000 + i))
 
   def startAll =
-    pms.traverse(_.pm.start) *> T.sleep(1.seconds) *> pms.traverse(_.pm.addPeerNode(pms.head.node)) *> T.sleep(
-      1.seconds)
+    pms.traverse(_.pm.start) *> T.sleep(2.seconds) *> pms.traverse(_.pm.addPeerNode(pms.head.node)) *> T.sleep(
+      2.seconds)
 
   def stopAll = pms.traverse(_.pm.stop).void
 }
@@ -42,12 +42,12 @@ class PeerManagerSpec extends JbokSpec {
 
       val p = for {
         fiber    <- fix1.pm.listen(maxOpen = maxOpen).compile.drain.start
-        _        <- T.sleep(1.seconds)
+        _        <- T.sleep(2.seconds)
         _        <- fix2.pm.addPeerNode(fix1.node)
         _        <- fix3.pm.addPeerNode(fix1.node)
         _        <- fix2.pm.connect().compile.drain.start
         _        <- fix3.pm.connect().compile.drain.start
-        _        <- T.sleep(1.seconds)
+        _        <- T.sleep(2.seconds)
         incoming <- fix1.pm.incoming.get
         _ = incoming.size shouldBe maxOpen
         _ <- fiber.cancel
@@ -64,10 +64,10 @@ class PeerManagerSpec extends JbokSpec {
 
       val p = for {
         fiber    <- Stream(fix1.pm, fix2.pm, fix3.pm).map(_.listen()).parJoinUnbounded.compile.drain.start
-        _        <- T.sleep(1.seconds)
+        _        <- T.sleep(2.seconds)
         _        <- fix1.pm.addPeerNode(fix2.node, fix3.node)
         _        <- fix1.pm.connect(maxOpen).compile.drain.start
-        _        <- T.sleep(3.seconds)
+        _        <- T.sleep(2.seconds)
         outgoing <- fix1.pm.outgoing.get
         _ = outgoing.size shouldBe maxOpen
         _ <- fiber.cancel
@@ -93,7 +93,7 @@ class PeerManagerSpec extends JbokSpec {
 
       val p = for {
         fiber <- fix1.pm.listen().compile.drain.start
-        _     <- T.sleep(1.seconds)
+        _     <- T.sleep(2.seconds)
         _     <- pm2.addPeerNode(fix1.node)
         r     <- pm2.connect().compile.drain.attempt
         _     <- fiber.cancel
@@ -137,7 +137,7 @@ class PeerManagerSpec extends JbokSpec {
         _ = outgoing.size shouldBe 1
 
         _        <- pms.last.pm.close(pms.head.addr)
-        _        <- T.sleep(1.seconds)
+        _        <- T.sleep(2.seconds)
         incoming <- pms.head.pm.incoming.get
         outgoing <- pms.last.pm.outgoing.get
         _ = incoming.size shouldBe 0
