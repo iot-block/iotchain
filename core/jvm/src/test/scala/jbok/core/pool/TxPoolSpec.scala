@@ -41,7 +41,7 @@ class TxPoolSpec extends JbokSpec {
         _ <- startAll
         _ <- txPool.start
         _ <- pms.last.pm.broadcast(msg)
-        _ <- T.sleep(1.second)
+        _ <- T.sleep(2.second)
         x <- txPool.getPendingTransactions
         _ = x.length shouldBe 10
         _ <- stopAll
@@ -94,7 +94,7 @@ class TxPoolSpec extends JbokSpec {
         _ <- txPool.addOrUpdateTransaction(first)
         _ <- txPool.addOrUpdateTransaction(other)
         _ <- txPool.addOrUpdateTransaction(second)
-        _ <- T.sleep(1.seconds)
+        _ <- T.sleep(2.seconds)
         x <- txPool.getPendingTransactions
         _ = x.map(_.stx) shouldBe List(second, other)
         _ <- stopAll
@@ -112,7 +112,7 @@ class TxPoolSpec extends JbokSpec {
         _  <- txPool.addTransactions(stx :: Nil)
         p1 <- txPool.getPendingTransactions
         _ = p1.length shouldBe 1
-        p2 <- IO(Thread.sleep(2000)) *> txPool.getPendingTransactions
+        p2 <- T.sleep(2.seconds) *> txPool.getPendingTransactions
         _ = p2.length shouldBe 0
       } yield ()
 

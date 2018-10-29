@@ -25,11 +25,11 @@ class PeersFixture(n: Int = 3) {
 }
 
 class PeerManagerFixture(port: Int) extends HistoryFixture {
-  val pmConfig = PeerManagerConfig(port)
-  val addr     = pmConfig.bindAddr
-  val keyPair  = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-  val pm: PeerManager[IO]       = PeerManagerPlatform[IO](pmConfig, keyPair, SyncConfig(), history).unsafeRunSync()
-  val node = pm.peerNode
+  val pmConfig            = PeerManagerConfig(port)
+  val addr                = pmConfig.bindAddr
+  val keyPair             = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+  val pm: PeerManager[IO] = PeerManagerPlatform[IO](pmConfig, keyPair, SyncConfig(), history).unsafeRunSync()
+  val node                = pm.peerNode
 }
 
 class PeerManagerSpec extends JbokSpec {
@@ -130,12 +130,10 @@ class PeerManagerSpec extends JbokSpec {
     "close connection explicitly" in new PeersFixture(2) {
       val p = for {
         _ <- startAll
-
         incoming <- pms.head.pm.incoming.get
         outgoing <- pms.last.pm.outgoing.get
         _ = incoming.size shouldBe 1
         _ = outgoing.size shouldBe 1
-
         _        <- pms.last.pm.close(pms.head.addr)
         _        <- T.sleep(2.seconds)
         incoming <- pms.head.pm.incoming.get
