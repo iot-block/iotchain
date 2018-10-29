@@ -5,7 +5,7 @@ import jbok.common.execution._
 import jbok.core.config.Configs.{BlockChainConfig, PeerManagerConfig, SyncConfig}
 import jbok.core.consensus.ConsensusFixture
 import jbok.core.ledger.BlockExecutor
-import jbok.core.peer.PeerManager
+import jbok.core.peer.PeerManagerPlatform
 import jbok.core.pool._
 import jbok.core.sync.{Broadcaster, FullSync, Synchronizer}
 import jbok.crypto.signature.{ECDSA, Signature}
@@ -23,7 +23,7 @@ class BlockMinerFixture(consensusFixture: ConsensusFixture, port: Int = 9999) {
   val peerManagerConfig = PeerManagerConfig(port)
   val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
   val peerManager =
-    PeerManager[IO](peerManagerConfig, keyPair, syncConfig, history).unsafeRunSync()
+    PeerManagerPlatform[IO](peerManagerConfig, keyPair, syncConfig, history).unsafeRunSync()
   val txPool       = TxPool[IO](peerManager, TxPoolConfig()).unsafeRunSync()
   val ommerPool    = OmmerPool[IO](history).unsafeRunSync()
   val broadcaster  = Broadcaster[IO](peerManager)

@@ -11,7 +11,7 @@ import jbok.core.consensus.Consensus
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.BlockExecutor
 import jbok.core.mining.BlockMiner
-import jbok.core.peer.{PeerManager, PeerNode}
+import jbok.core.peer.{PeerManager, PeerManagerPlatform, PeerNode}
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.sync.{Broadcaster, Synchronizer}
 import jbok.crypto.signature.{ECDSA, Signature}
@@ -62,7 +62,7 @@ object FullNode {
     val random = new SecureRandom()
     for {
       keyPair <- F.liftIO(Signature[ECDSA].generateKeyPair())
-      peerManager <- PeerManager[F](config.peer, keyPair, SyncConfig(), history)
+      peerManager <- PeerManagerPlatform[F](config.peer, keyPair, SyncConfig(), history)
       executor = BlockExecutor[F](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[F](peerManager)
       ommerPool <- OmmerPool[F](history)

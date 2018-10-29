@@ -20,7 +20,7 @@ import jbok.core.keystore.KeyStorePlatform
 import jbok.core.ledger.BlockExecutor
 import jbok.core.mining.BlockMiner
 import jbok.core.models.{Account, Address, Block, SignedTransaction}
-import jbok.core.peer.PeerManager
+import jbok.core.peer.PeerManagerPlatform
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.sync.{Broadcaster, Synchronizer}
 import jbok.core.{FullNode, History}
@@ -69,7 +69,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                                                     T: Timer[IO]): IO[FullNode[IO]] =
     for {
       keyPair     <- F.liftIO(Signature[ECDSA].generateKeyPair())
-      peerManager <- PeerManager[IO](config.peer, keyPair, config.sync, history)
+      peerManager <- PeerManagerPlatform[IO](config.peer, keyPair, config.sync, history)
       executor = BlockExecutor[IO](config.blockChainConfig, history, blockPool, consensus)
       txPool    <- TxPool[IO](peerManager)
       ommerPool <- OmmerPool[IO](history)
