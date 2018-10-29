@@ -92,7 +92,7 @@ class PeerManagerSpec extends JbokSpec {
       val pm2     = PeerManagerPlatform[IO](pmConfig, keyPair, SyncConfig(), history).unsafeRunSync()
 
       val p = for {
-        fiber <- fix1.pm.listen().compile.drain.start
+        fiber <- fix1.pm.listen().compile.drain.attempt.start
         _     <- T.sleep(2.seconds)
         _     <- pm2.addPeerNode(fix1.node)
         r     <- pm2.connect().compile.drain.attempt
