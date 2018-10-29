@@ -7,11 +7,14 @@ import jbok.core.History
 import jbok.core.config.Configs.SyncConfig
 import jbok.core.messages._
 
-case class SyncService[F[_]](config: SyncConfig, history: History[F])(implicit F: ConcurrentEffect[F]) {
+import scala.concurrent.ExecutionContext
+
+case class SyncService[F[_]](config: SyncConfig, history: History[F])(implicit F: ConcurrentEffect[F],
+                                                                      EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
   val pipe: Pipe[F, Message, Message] = input => {
-    val output = input.collect { case x: SyncMessage => x}.evalMap[F, Option[Message]] {
+    val output = input.collect { case x: SyncMessage => x }.evalMap[F, Option[Message]] {
       case GetReceipts(hashes, id) =>
         for {
           receipts <- hashes.traverse(history.getReceiptsByHash).map(_.flatten)

@@ -10,8 +10,8 @@ import scodec.bits.ByteVector
 
 class CallOpcodesSpec extends JbokSpec {
 
-  val config = EvmConfig.PostEIP160ConfigBuilder(None)
-  val db = KeyValueDB.inMemory[IO].unsafeRunSync()
+  val config     = EvmConfig.PostEIP160ConfigBuilder(None)
+  val db         = KeyValueDB.inMemory[IO].unsafeRunSync()
   val startState = WorldStateProxy.inMemory[IO](db).unsafeRunSync()
   import config.feeSchedule._
 
@@ -47,11 +47,11 @@ class CallOpcodesSpec extends JbokSpec {
         //here the passed data size is equal to the contract's return data size (half of the input data)
 
         val expectedData = fxt.inputData.take(fxt.inputData.size / 2)
-        val actualData = call.stateOut.memory.load(call.outOffset, call.outSize)._1
+        val actualData   = call.stateOut.memory.load(call.outOffset, call.outSize)._1
         actualData shouldBe expectedData
 
         val expectedSize = (call.outOffset + call.outSize).toInt
-        val actualSize = call.stateOut.memory.size
+        val actualSize   = call.stateOut.memory.size
         expectedSize shouldBe actualSize
       }
 
@@ -64,7 +64,7 @@ class CallOpcodesSpec extends JbokSpec {
     "call depth limit is reached" should {
 
       val context = fxt.context.copy(env = fxt.env.copy(callDepth = EvmConfig.MaxCallDepth))
-      val call = fxt.CallResult(op = CALL, context = context)
+      val call    = fxt.CallResult(op = CALL, context = context)
 
       "not modify world state" in {
         call.world shouldBe fxt.worldWithExtAccount
@@ -110,7 +110,7 @@ class CallOpcodesSpec extends JbokSpec {
     "external contract terminates abnormally" should {
 
       val context = fxt.context.copy(world = fxt.worldWithInvalidProgram)
-      val call = fxt.CallResult(op = CALL, context)
+      val call    = fxt.CallResult(op = CALL, context)
 
       "should not modify world state" in {
         call.world shouldBe fxt.worldWithInvalidProgram
@@ -152,10 +152,10 @@ class CallOpcodesSpec extends JbokSpec {
     }
 
     "calling a precompiled contract" should {
-      val contractAddress = Address(1) // ECDSA recovery
+      val contractAddress  = Address(1) // ECDSA recovery
       val invalidSignature = ByteVector(Array.fill(128)(0.toByte))
-      val world = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
-      val context = fxt.context.copy(world = world)
+      val world            = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
+      val context          = fxt.context.copy(world = world)
       val call = fxt.CallResult(
         op = CALL,
         context = context,
@@ -171,7 +171,7 @@ class CallOpcodesSpec extends JbokSpec {
         // For invalid signature the return data should be empty, so the memory should not be modified.
         // This is more interesting than checking valid signatures which are tested elsewhere
         val (result, _) = call.stateOut.memory.load(call.outOffset, call.outSize)
-        val expected = invalidSignature
+        val expected    = invalidSignature
 
         result shouldBe expected
       }
@@ -196,7 +196,7 @@ class CallOpcodesSpec extends JbokSpec {
 
       "refund the correct amount of gas" in {
         val context = fxt.context.copy(world = fxt.worldWithSelfDestructProgram)
-        val call = fxt.CallResult(op = CALL, context)
+        val call    = fxt.CallResult(op = CALL, context)
         call.stateOut.gasRefund shouldBe call.stateOut.config.feeSchedule.R_selfdestruct
       }
 
@@ -209,7 +209,7 @@ class CallOpcodesSpec extends JbokSpec {
 
       "destruct ether if own address equals refund address" in {
         val context = fxt.context.copy(world = fxt.worldWithSelfDestructSelfProgram)
-        val call = fxt.CallResult(op = CALL, context)
+        val call    = fxt.CallResult(op = CALL, context)
         call.stateOut.world.getAccount(fxt.extAddr).unsafeRunSync().balance shouldBe UInt256.Zero
         call.stateOut.addressesToDelete.contains(fxt.extAddr) shouldBe true
       }
@@ -218,7 +218,7 @@ class CallOpcodesSpec extends JbokSpec {
     "calling a program that executes a SSTORE that clears the storage" should {
 
       val context = fxt.context.copy(world = fxt.worldWithSstoreWithClearProgram)
-      val call = fxt.CallResult(op = CALL, context)
+      val call    = fxt.CallResult(op = CALL, context)
 
       "refund the correct amount of gas" in {
         call.stateOut.gasRefund shouldBe call.stateOut.config.feeSchedule.R_sclear
@@ -298,17 +298,17 @@ class CallOpcodesSpec extends JbokSpec {
         //here the passed data size is greater than the contract's return data size
 
         val expectedData = fxt.inputData.take(fxt.inputData.size / 2).padTo(call.outSize.toInt)
-        val actualData = call.stateOut.memory.load(call.outOffset, call.outSize)._1
+        val actualData   = call.stateOut.memory.load(call.outOffset, call.outSize)._1
         actualData shouldBe expectedData
 
         val expectedSize = (call.outOffset + call.outSize).toInt
-        val actualSize = call.stateOut.memory.size
+        val actualSize   = call.stateOut.memory.size
         expectedSize shouldBe actualSize
       }
 
       "consume correct gas (refund unused gas)" in {
         val expectedMemCost = config.calcMemCost(fxt.inputData.size, fxt.inputData.size, call.outSize)
-        val expectedGas = fxt.requiredGas - G_callstipend + G_call + G_callvalue + expectedMemCost
+        val expectedGas     = fxt.requiredGas - G_callstipend + G_call + G_callvalue + expectedMemCost
         call.stateOut.gasUsed shouldBe expectedGas
       }
     }
@@ -316,7 +316,7 @@ class CallOpcodesSpec extends JbokSpec {
     "call depth limit is reached" should {
 
       val context = fxt.context.copy(env = fxt.env.copy(callDepth = EvmConfig.MaxCallDepth))
-      val call = fxt.CallResult(op = CALLCODE, context = context)
+      val call    = fxt.CallResult(op = CALLCODE, context = context)
 
       "not modify world state" in {
         call.world shouldBe fxt.worldWithExtAccount
@@ -361,7 +361,7 @@ class CallOpcodesSpec extends JbokSpec {
 
     "external code terminates abnormally" should {
       val context = fxt.context.copy(world = fxt.worldWithInvalidProgram)
-      val call = fxt.CallResult(op = CALLCODE, context)
+      val call    = fxt.CallResult(op = CALLCODE, context)
 
       "not modify world state" in {
         call.world shouldBe fxt.worldWithInvalidProgram
@@ -383,7 +383,7 @@ class CallOpcodesSpec extends JbokSpec {
 
     "external account does not exist" should {
       val context = fxt.context.copy(world = fxt.worldWithoutExtAccount)
-      val call = fxt.CallResult(op = CALLCODE, context)
+      val call    = fxt.CallResult(op = CALLCODE, context)
 
       "not modify world state" in {
         call.world shouldBe fxt.worldWithoutExtAccount
@@ -401,9 +401,9 @@ class CallOpcodesSpec extends JbokSpec {
 
     "calling a precompiled contract" should {
       val contractAddress = Address(2) // SHA256
-      val inputData = ByteVector(Array.fill(128)(1.toByte))
-      val world = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
-      val context = fxt.context.copy(world = world)
+      val inputData       = ByteVector(Array.fill(128)(1.toByte))
+      val world           = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
+      val context         = fxt.context.copy(world = world)
       val call = fxt.CallResult(op = CALLCODE,
                                 context = context,
                                 to = contractAddress,
@@ -414,9 +414,9 @@ class CallOpcodesSpec extends JbokSpec {
                                 outSize = 32)
 
       "compute a correct result" in {
-        val memory = call.stateOut.memory
+        val memory      = call.stateOut.memory
         val (result, _) = memory.load(call.outOffset, call.outSize)
-        val expected = inputData.sha256
+        val expected    = inputData.sha256
 
         result shouldBe expected
       }
@@ -432,7 +432,7 @@ class CallOpcodesSpec extends JbokSpec {
 
       "consume correct gas" in {
         val contractCost = 60 + 12 * wordsForBytes(inputData.size)
-        val expectedGas = contractCost - G_callstipend + G_call + G_callvalue + config.calcMemCost(128, 128, 32)
+        val expectedGas  = contractCost - G_callstipend + G_call + G_callvalue + config.calcMemCost(128, 128, 32)
         call.stateOut.gasUsed shouldBe expectedGas
       }
     }
@@ -440,7 +440,7 @@ class CallOpcodesSpec extends JbokSpec {
     "calling a program that executes a SELFDESTRUCT" should {
 
       val context = fxt.context.copy(world = fxt.worldWithSelfDestructProgram)
-      val call = fxt.CallResult(op = CALL, context)
+      val call    = fxt.CallResult(op = CALL, context)
 
       "refund the correct amount of gas" in {
         call.stateOut.gasRefund shouldBe call.stateOut.config.feeSchedule.R_selfdestruct
@@ -451,7 +451,7 @@ class CallOpcodesSpec extends JbokSpec {
     "calling a program that executes a SSTORE that clears the storage" should {
 
       val context = fxt.context.copy(world = fxt.worldWithSstoreWithClearProgram)
-      val call = fxt.CallResult(op = CALL, context)
+      val call    = fxt.CallResult(op = CALL, context)
 
       "refund the correct amount of gas" in {
         call.stateOut.gasRefund shouldBe call.stateOut.config.feeSchedule.R_sclear
@@ -502,17 +502,17 @@ class CallOpcodesSpec extends JbokSpec {
         //here the passed data size is less than the contract's return data size
 
         val expectedData = fxt.inputData.take(call.outSize.toInt)
-        val actualData = call.stateOut.memory.load(call.outOffset, call.outSize)._1
+        val actualData   = call.stateOut.memory.load(call.outOffset, call.outSize)._1
         actualData shouldBe expectedData
 
         val expectedSize = (call.outOffset + call.outSize).toInt
-        val actualSize = call.stateOut.memory.size
+        val actualSize   = call.stateOut.memory.size
         expectedSize shouldBe actualSize
       }
 
       "consume correct gas (refund unused gas)" in {
         val expectedMemCost = config.calcMemCost(fxt.inputData.size, fxt.inputData.size, call.outSize)
-        val expectedGas = fxt.requiredGas + G_call + expectedMemCost
+        val expectedGas     = fxt.requiredGas + G_call + expectedMemCost
         call.stateOut.gasUsed shouldBe expectedGas
       }
     }
@@ -520,7 +520,7 @@ class CallOpcodesSpec extends JbokSpec {
     "call depth limit is reached" should {
 
       val context = fxt.context.copy(env = fxt.env.copy(callDepth = EvmConfig.MaxCallDepth))
-      val call = fxt.CallResult(op = DELEGATECALL, context = context)
+      val call    = fxt.CallResult(op = DELEGATECALL, context = context)
 
       "not modify world state" in {
         call.world shouldBe fxt.worldWithExtAccount
@@ -538,7 +538,7 @@ class CallOpcodesSpec extends JbokSpec {
 
     "external code terminates abnormally" should {
       val context = fxt.context.copy(world = fxt.worldWithInvalidProgram)
-      val call = fxt.CallResult(op = DELEGATECALL, context)
+      val call    = fxt.CallResult(op = DELEGATECALL, context)
 
       "not modify world state" in {
         call.world shouldBe fxt.worldWithInvalidProgram
@@ -560,7 +560,7 @@ class CallOpcodesSpec extends JbokSpec {
 
     "external account does not exist" should {
       val context = fxt.context.copy(world = fxt.worldWithoutExtAccount)
-      val call = fxt.CallResult(op = DELEGATECALL, context)
+      val call    = fxt.CallResult(op = DELEGATECALL, context)
 
       "not modify world state" in {
         call.world shouldBe fxt.worldWithoutExtAccount
@@ -578,9 +578,9 @@ class CallOpcodesSpec extends JbokSpec {
 
     "calling a precompiled contract" should {
       val contractAddress = Address(3) // RIPEMD160
-      val inputData = ByteVector(Array.fill(128)(1.toByte))
-      val world = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
-      val context = fxt.context.copy(world = world)
+      val inputData       = ByteVector(Array.fill(128)(1.toByte))
+      val world           = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
+      val context         = fxt.context.copy(world = world)
       val call = fxt.CallResult(op = DELEGATECALL,
                                 context = context,
                                 to = contractAddress,
@@ -592,7 +592,7 @@ class CallOpcodesSpec extends JbokSpec {
 
       "compute a correct result" in {
         val (result, _) = call.stateOut.memory.load(call.outOffset, call.outSize)
-        val expected = inputData.ripemd160.padRight(32)
+        val expected    = inputData.ripemd160.padRight(32)
 
         result shouldBe expected
       }
@@ -608,7 +608,7 @@ class CallOpcodesSpec extends JbokSpec {
 
       "consume correct gas" in {
         val contractCost = 600 + 120 * wordsForBytes(inputData.size)
-        val expectedGas = contractCost + G_call + config.calcMemCost(128, 128, 20)
+        val expectedGas  = contractCost + G_call + config.calcMemCost(128, 128, 20)
         call.stateOut.gasUsed shouldBe expectedGas
       }
     }
@@ -616,7 +616,7 @@ class CallOpcodesSpec extends JbokSpec {
     "calling a program that executes a SELFDESTRUCT" should {
 
       val context = fxt.context.copy(world = fxt.worldWithSelfDestructProgram)
-      val call = fxt.CallResult(op = CALL, context)
+      val call    = fxt.CallResult(op = CALL, context)
 
       "refund the correct amount of gas" in {
         call.stateOut.gasRefund shouldBe call.stateOut.config.feeSchedule.R_selfdestruct
@@ -627,7 +627,7 @@ class CallOpcodesSpec extends JbokSpec {
     "calling a program that executes a SSTORE that clears the storage" should {
 
       val context = fxt.context.copy(world = fxt.worldWithSstoreWithClearProgram)
-      val call = fxt.CallResult(op = CALL, context)
+      val call    = fxt.CallResult(op = CALL, context)
 
       "refund the correct amount of gas" in {
         call.stateOut.gasRefund shouldBe call.stateOut.config.feeSchedule.R_sclear
@@ -662,11 +662,11 @@ class CallOpcodesSpec extends JbokSpec {
     */
   "gas cost bigger than available gas DELEGATECALL" should {
 
-    val memCost = 0
-    val c_extra = config.feeSchedule.G_call
+    val memCost  = 0
+    val c_extra  = config.feeSchedule.G_call
     val startGas = c_extra - 1
-    val gas = UInt256.MaxValue - c_extra + 1 //u_s[0]
-    val context = fxt.context.copy(startGas = startGas)
+    val gas      = UInt256.MaxValue - c_extra + 1 //u_s[0]
+    val context  = fxt.context.copy(startGas = startGas)
     val call = fxt.CallResult(
       op = DELEGATECALL,
       gas = gas,
@@ -686,7 +686,7 @@ class CallOpcodesSpec extends JbokSpec {
         "handle memory expansion properly" in {
 
           val inputData = ByteVector(Array[Byte](1).padTo(32, 1.toByte))
-          val context = fxt.context.copy(world = fxt.worldWithReturnSingleByteCode)
+          val context   = fxt.context.copy(world = fxt.worldWithReturnSingleByteCode)
 
           val table = Table[Int](
             "Out Offset",

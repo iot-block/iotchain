@@ -1,11 +1,15 @@
 package jbok.core.models
 
+import jbok.codec.json.{bigIntDecoder, bigIntEncoder}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.codecs._
 import scodec.bits.ByteVector
 
 object UInt256 {
   implicit val codec: RlpCodec[UInt256] = rbytes.xmap[UInt256](UInt256.apply, _.unpaddedBytes)
+
+  implicit val decodeUInt256: io.circe.Decoder[UInt256] = bigIntDecoder.map(UInt256.apply)
+  implicit val encodeUInt256: io.circe.Encoder[UInt256] = bigIntEncoder.contramap(_.toBigInt)
 
   /** Size of UInt256 byte representation */
   val Size: Int = 32
@@ -147,25 +151,23 @@ class UInt256 private (private val n: BigInt) extends Ordered[UInt256] {
 
   def sgt(that: UInt256): Boolean = this.signedN > that.signedN
 
-  def signExtend(that: UInt256): UInt256 = {
+  def signExtend(that: UInt256): UInt256 =
     if (that.n < 0 || that.n > 31) {
       this
     } else {
-      val idx = that.n.toByte
+      val idx      = that.n.toByte
       val negative = n.testBit(idx * 8 + 7)
-      val mask = (BigInt(1) << ((idx + 1) * 8)) - 1
-      val newN = if (negative) n | (MaxValue ^ mask) else n & mask
+      val mask     = (BigInt(1) << ((idx + 1) * 8)) - 1
+      val newN     = if (negative) n | (MaxValue ^ mask) else n & mask
       new UInt256(newN)
     }
-  }
 
   //standard methods
-  override def equals(that: Any): Boolean = {
+  override def equals(that: Any): Boolean =
     that match {
       case that: UInt256 => this.n.equals(that.n)
-      case other => other == n
+      case other         => other == n
     }
-  }
 
   override def hashCode: Int = n.hashCode()
 

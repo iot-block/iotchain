@@ -59,6 +59,7 @@ class FullNodeSpec extends JbokSpec {
           ()
       }
       Thread.sleep(1000)
+      nodes.foreach(n => println(n.peerManager.connected.unsafeRunSync().size.toString))
       nodes.foreach(_.peerManager.connected.unsafeRunSync().size shouldBe 2)
       nodes.traverse(_.stop).unsafeRunSync()
     }

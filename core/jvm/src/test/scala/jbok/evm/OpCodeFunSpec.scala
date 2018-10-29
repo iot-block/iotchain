@@ -53,7 +53,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
-        val (a, _) = stateIn.stack.pop
+        val (a, _)      = stateIn.stack.pop
         val (result, _) = stateOut.stack.pop
         result shouldBe op.f(a)
 
@@ -69,7 +69,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(a, b), _) = stateIn.stack.pop(2)
-        val (result, _) = stateOut.stack.pop
+        val (result, _)    = stateOut.stack.pop
         result shouldBe op.f(a, b)
 
         val expectedState = stateIn.withStack(stateOut.stack).step()
@@ -84,7 +84,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(a, b, c), _) = stateIn.stack.pop(3)
-        val (result, _) = stateOut.stack.pop
+        val (result, _)       = stateOut.stack.pop
         result shouldBe op.f(a, b, c)
 
         val expectedState = stateIn.withStack(stateOut.stack).step()
@@ -116,7 +116,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
-        val expectedSize = wordsForBytes(stateIn.memory.size) * 32
+        val expectedSize  = wordsForBytes(stateIn.memory.size) * 32
         val expectedState = stateIn.withStack(stateIn.stack.push(expectedSize.toUInt256)).step()
 
         stateOut shouldBe expectedState
@@ -135,8 +135,8 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(offset, size), _) = stateIn.stack.pop(2)
-        val (data, mem1) = stateIn.memory.load(offset, size)
-        val (result, _) = stateOut.stack.pop
+        val (data, mem1)           = stateIn.memory.load(offset, size)
+        val (result, _)            = stateOut.stack.pop
         result shouldBe UInt256(data.kec256)
 
         val expectedState = stateIn.withStack(stateOut.stack).withMemory(mem1).step()
@@ -156,9 +156,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val (addr, stack1) = stateIn.stack.pop
 
       val account = Account(balance = accountBalance)
-      val world1 = stateIn.world.putAccount(Address(addr mod UInt256(BigInt(2).pow(160))), account)
+      val world1  = stateIn.world.putAccount(Address(addr mod UInt256(BigInt(2).pow(160))), account)
 
-      val stateInWithAccount = stateIn.withWorld(world1)
+      val stateInWithAccount  = stateIn.withWorld(world1)
       val stateOutWithAccount = executeOp(op, stateInWithAccount)
 
       withStackVerification(op, stateInWithAccount, stateOutWithAccount) {
@@ -179,7 +179,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (offset, _) = stateIn.stack.pop
-        val (data, _) = stateOut.stack.pop
+        val (data, _)   = stateOut.stack.pop
         data shouldBe UInt256(OpCode.sliceBytes(stateIn.inputData, offset, 32))
 
         val expectedState = stateIn.withStack(stateOut.stack).step()
@@ -200,8 +200,8 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(memOffset, dataOffset, size), _) = stateIn.stack.pop(3)
-        val data = OpCode.sliceBytes(stateIn.inputData, dataOffset, size)
-        val (storedInMem, _) = stateOut.memory.load(memOffset, size)
+        val data                                  = OpCode.sliceBytes(stateIn.inputData, dataOffset, size)
+        val (storedInMem, _)                      = stateOut.memory.load(memOffset, size)
         data shouldBe storedInMem
 
         val expectedState = stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
@@ -222,8 +222,8 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(memOffset, codeOffset, size), _) = stateIn.stack.pop(3)
-        val code = OpCode.sliceBytes(stateIn.program.code, codeOffset, size)
-        val (storedInMem, _) = stateOut.memory.load(memOffset, size)
+        val code                                  = OpCode.sliceBytes(stateIn.program.code, codeOffset, size)
+        val (storedInMem, _)                      = stateOut.memory.load(memOffset, size)
         code shouldBe storedInMem
 
         val expectedState = stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
@@ -246,10 +246,10 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       }
 
       val (addr, stack1) = stateIn.stack.pop
-      val program = Program(extCode)
-      val world1 = stateIn.world.putCode(Address(addr), program.code)
+      val program        = Program(extCode)
+      val world1         = stateIn.world.putCode(Address(addr), program.code)
 
-      val stateInWithExtCode = stateIn.withWorld(world1)
+      val stateInWithExtCode  = stateIn.withWorld(world1)
       val stateOutWithExtCode = executeOp(op, stateInWithExtCode)
 
       withStackVerification(op, stateInWithExtCode, stateOutWithExtCode) {
@@ -271,8 +271,8 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       doSave <- Gen.oneOf(false, true, true)
 
-      addr = Address(stateIn.stack.pop._1)
-      hash = extCode.kec256
+      addr  = Address(stateIn.stack.pop._1)
+      hash  = extCode.kec256
       world = if (doSave) stateIn.world.putAccount(addr, Account.empty().copy(codeHash = hash)) else stateIn.world
     } yield stateIn.withWorld(world)
 
@@ -281,8 +281,8 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(addr, memOffset, codeOffset, size), _) = stateIn.stack.pop(4)
-        val code = OpCode.sliceBytes(stateIn.world.getCode(Address(addr)).unsafeRunSync(), codeOffset, size)
-        val (storedInMem, _) = stateOut.memory.load(memOffset, size)
+        val code                                        = OpCode.sliceBytes(stateIn.world.getCode(Address(addr)).unsafeRunSync(), codeOffset, size)
+        val (storedInMem, _)                            = stateOut.memory.load(memOffset, size)
         code shouldBe storedInMem
 
         val expectedState = stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
@@ -343,7 +343,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       withStackVerification(op, stateIn, stateOut) {
         val (offset, _) = stateIn.stack.pop
         val (result, _) = stateOut.stack.pop
-        val (data, _) = stateIn.memory.load(offset)
+        val (data, _)   = stateIn.memory.load(offset)
         result shouldBe data
 
         stateOut shouldBe stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
@@ -362,7 +362,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(offset, value), _) = stateIn.stack.pop(2)
-        val (data, _) = stateOut.memory.load(offset)
+        val (data, _)               = stateOut.memory.load(offset)
         value shouldBe data
 
         stateOut shouldBe stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
@@ -381,7 +381,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(offset, value), _) = stateIn.stack.pop(2)
-        val (data, _) = stateOut.memory.load(offset, 1)
+        val (data, _)               = stateOut.memory.load(offset, 1)
         ByteVector((value mod 256).toByte) shouldBe data
 
         stateOut shouldBe stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
@@ -400,7 +400,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (offset, _) = stateIn.stack.pop
-        val data = stateIn.storage.unsafeRunSync().load(offset).unsafeRunSync()
+        val data        = stateIn.storage.unsafeRunSync().load(offset).unsafeRunSync()
         val (result, _) = stateOut.stack.pop
         result shouldBe data
 
@@ -420,7 +420,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(offset, value), _) = stateIn.stack.pop(2)
-        val data = stateOut.storage.unsafeRunSync().load(offset).unsafeRunSync()
+        val data                    = stateOut.storage.unsafeRunSync().load(offset).unsafeRunSync()
         data shouldBe value
 
         stateOut shouldBe stateIn.withStack(stateOut.stack).withStorage(stateOut.storage.unsafeRunSync()).step()
@@ -430,7 +430,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
   test(JUMP) { op =>
     // have about 1 in 2 opcodes be a JUMPDEST
-    val opcodes = config.opCodes ++ List.fill(config.opCodes.size)(JUMPDEST)
+    val opcodes   = config.opCodes ++ List.fill(config.opCodes.size)(JUMPDEST)
     val opcodeGen = Gen.oneOf(opcodes).map(_.code.toByte)
 
     // 80% of jump destinations arguments will be within codesize bound
@@ -472,9 +472,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     ).code
 
     val List(validDest, insidePush) = code.toIndexedSeq.indices.toList.filter(i => code(i) == JUMPDEST.code)
-    val overflownDest = UInt256(Int.MaxValue) + 1 + validDest
-    val invalidDest = validDest + 1
-    val offLimitDest = code.size
+    val overflownDest               = UInt256(Int.MaxValue) + 1 + validDest
+    val invalidDest                 = validDest + 1
+    val offLimitDest                = code.size
 
     assert(overflownDest.toInt == validDest)
     assert(code(invalidDest) != JUMPDEST.code)
@@ -489,10 +489,10 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     )
 
     forAll(table) { (destination, isValid) =>
-      val stackIn = Stack.empty().push(destination)
+      val stackIn     = Stack.empty().push(destination)
       val stateSample = getProgramStateGen().sample.get
-      val stateIn = stateWithCode(stateSample.copy(stack = stackIn), code)
-      val stateOut = executeOp(op, stateIn)
+      val stateIn     = stateWithCode(stateSample.copy(stack = stackIn), code)
+      val stateOut    = executeOp(op, stateIn)
 
       val expectedState =
         if (isValid)
@@ -506,7 +506,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
   test(JUMPI) { op =>
     // have about 1 in 2 opcodes be a JUMPDEST
-    val opcodes = config.opCodes ++ List.fill(config.opCodes.size)(JUMPDEST)
+    val opcodes   = config.opCodes ++ List.fill(config.opCodes.size)(JUMPDEST)
     val opcodeGen = Gen.oneOf(opcodes).map(_.code.toByte)
 
     // 40% of conditionals arguments will be false (zero)
@@ -555,9 +555,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     ).code
 
     val List(validDest, insidePush) = code.toIndexedSeq.indices.toList.filter(i => code(i) == JUMPDEST.code)
-    val overflownDest = UInt256(Int.MaxValue) + 1 + validDest
-    val invalidDest = validDest + 1
-    val offLimitDest = code.size
+    val overflownDest               = UInt256(Int.MaxValue) + 1 + validDest
+    val invalidDest                 = validDest + 1
+    val offLimitDest                = code.size
 
     assert(overflownDest.toInt == validDest)
     assert(code(invalidDest) != JUMPDEST.code)
@@ -574,10 +574,10 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     )
 
     forAll(table) { (destination, cond, isValid) =>
-      val stackIn = Stack.empty().push(List(cond, destination))
+      val stackIn     = Stack.empty().push(List(cond, destination))
       val stateSample = getProgramStateGen().sample.get
-      val stateIn = stateWithCode(stateSample.copy(stack = stackIn), code)
-      val stateOut = executeOp(op, stateIn)
+      val stateIn     = stateWithCode(stateSample.copy(stack = stackIn), code)
+      val stateOut    = executeOp(op, stateIn)
 
       val expectedState =
         if (cond.isZero)
@@ -608,7 +608,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
-        val bytes = stateIn.program.getBytes(stateIn.pc + 1, op.i + 1)
+        val bytes         = stateIn.program.getBytes(stateIn.pc + 1, op.i + 1)
         val expectedStack = stateIn.stack.push(UInt256(bytes))
         val expectedState = stateIn.withStack(expectedStack).step(op.i + 2)
         stateOut shouldBe expectedState
@@ -651,9 +651,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(offset, size, topics @ _*), stack1) = stateIn.stack.pop(op.delta)
-        val (data, mem1) = stateIn.memory.load(offset, size)
-        val logEntry = TxLogEntry(stateIn.env.ownerAddr, topics.map(_.bytes).toList, data)
-        val expectedState = stateIn.withStack(stack1).withMemory(mem1).withLog(logEntry).step()
+        val (data, mem1)                             = stateIn.memory.load(offset, size)
+        val logEntry                                 = TxLogEntry(stateIn.env.ownerAddr, topics.map(_.bytes).toList, data)
+        val expectedState                            = stateIn.withStack(stack1).withMemory(mem1).withLog(logEntry).step()
 
         logEntry.logTopics.size shouldBe op.i
         stateOut shouldBe expectedState
@@ -672,7 +672,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
       withStackVerification(op, stateIn, stateOut) {
         val (Seq(offset, size), _) = stateIn.stack.pop(2)
-        val (data, mem1) = stateIn.memory.load(offset, size)
+        val (data, mem1)           = stateIn.memory.load(offset, size)
 
         if (size.isZero) {
           mem1.size shouldBe stateIn.memory.size
@@ -681,6 +681,32 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
         }
 
         val expectedState = stateIn.withStack(stateOut.stack).withMemory(mem1).withReturnData(data).halt
+        stateOut shouldBe expectedState
+      }
+    }
+  }
+
+  test(REVERT) { op =>
+    val stateGen = getProgramStateGen(
+      stackGen = getStackGen(maxWord = UInt256(256)),
+      memGen = getMemoryGen(maxSize = 256)
+    )
+
+    forAll(stateGen) { stateIn =>
+      val stateOut = executeOp(op, stateIn)
+
+      withStackVerification(op, stateIn, stateOut) {
+        val (Seq(offset, size), _) = stateIn.stack.pop(2)
+        val (data, mem1)           = stateIn.memory.load(offset, size)
+
+        if (size.isZero) {
+          mem1.size shouldBe stateIn.memory.size
+        } else {
+          mem1.size should be >= (offset + size).toInt
+        }
+
+        val expectedState =
+          stateIn.withStack(stateOut.stack).withMemory(mem1).withReturnData(data).withError(RevertOp).halt
         stateOut shouldBe expectedState
       }
     }
@@ -726,7 +752,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
     forAll(table) {
       case (refundAddr, initialEther, transferredEther) =>
-        val stackIn = Stack.empty().push(refundAddr.toUInt256)
+        val stackIn     = Stack.empty().push(refundAddr.toUInt256)
         val stateSample = getProgramStateGen().sample.get
         val initialWorld = stateSample.world
           .putAccount(refundAddr, Account.empty())

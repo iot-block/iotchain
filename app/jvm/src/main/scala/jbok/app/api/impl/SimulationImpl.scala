@@ -17,7 +17,8 @@ import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.keystore.KeyStorePlatform
 import jbok.core.ledger.BlockExecutor
 import jbok.core.mining.BlockMiner
-import jbok.core.models.{Address, Block, SignedTransaction}
+import jbok.core.models.{Account, Address, Block, SignedTransaction}
+import jbok.core.peer.PeerManager
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.sync.{Broadcaster, Synchronizer}
 import jbok.core.{FullNode, History}
@@ -25,9 +26,10 @@ import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
-import jbok.network.server.{Server, TcpServerBuilder}
+import jbok.network.server.{Server, TcpServerBuilder, WSServerBuilder}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
+import jbok.common.ExecutionPlatform.mkThreadFactory
 
 import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.ExecutionContext
@@ -46,7 +48,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
   val txGraphGen   = new TxGraphGen(10)
 
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
-    NodeInfo(fullNode.id, fullNode.config.peer.interface, fullNode.config.peer.port)
+    NodeInfo(fullNode.id, fullNode.config.peer.interface, fullNode.config.peer.port, fullNode.config.rpc.publicApiPort)
 
   private def newAPIServer[API](api: API, enable: Boolean, address: String, port: Int): IO[Option[Server[IO, String]]] =
     if (enable) {
@@ -56,7 +58,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
         _    = log.info("api rpc server binding...")
         bind = new InetSocketAddress(address, port)
         _    = log.info("api rpc server bind done")
-        server <- Server(TcpServerBuilder[IO, String], bind, rpcServer.pipe)
+        server <- Server(WSServerBuilder[IO, String], bind, rpcServer.pipe)
       } yield Some(server)
     } else { IO(None) }
 
@@ -74,6 +76,7 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
       broadcaster = Broadcaster[IO](peerManager)
       synchronizer <- Synchronizer[IO](peerManager, executor, txPool, ommerPool, broadcaster)
       random = new SecureRandom()
+      _      = log.info(s"keystore: ${config.keystore.keystoreDir}")
       keyStore      <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
       miner         <- BlockMiner[IO](synchronizer)
       filterManager <- FilterManager[IO](miner, keyStore, FilterConfig())
@@ -84,16 +87,16 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
                                  keyStore,
                                  filterManager,
                                  config.rpc.publicApiVersion)
-      publicApiServer <- newAPIServer[PublicAPI](publicAPI,
-                                                 config.rpc.publicApiEnable,
-                                                 "localhost",
-                                                 config.rpc.publicApiPort)
       privateAPI <- PrivateApiImpl(keyStore, history, config.blockChainConfig, txPool)
-      privateApiServer <- newAPIServer[PrivateAPI](privateAPI,
-                                                   config.rpc.privateApiEnable,
-                                                   "localhost",
-                                                   config.rpc.privateApiBindPort)
-    } yield new FullNode[IO](config, peerManager, synchronizer, keyStore, miner, publicApiServer, privateApiServer)
+      rpcServer = if (config.rpc.publicApiEnable) {
+        val rpcServer = RpcServer().unsafeRunSync().mountAPI(publicAPI).mountAPI(privateAPI)
+        log.info("api rpc server binding...")
+        val bind = new InetSocketAddress("localhost", config.rpc.publicApiPort)
+        log.info("api rpc server bind done")
+        val server = Server(WSServerBuilder[IO, String], bind, rpcServer.pipe).unsafeRunSync()
+        Some(server)
+      } else { None }
+    } yield new FullNode[IO](config, peerManager, synchronizer, keyStore, miner, rpcServer)
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
     log.info("in createNodes")
@@ -116,8 +119,9 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     for {
       newNodes <- configs.zipWithIndex.traverse {
         case (config, idx) =>
-          implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2))
-          val sign        = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, signers(idx)) }
+          implicit val ec =
+            ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2, mkThreadFactory(s"EC${idx}", true)))
+          val sign = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, signers(idx)) }
           for {
             db      <- KeyValueDB.inMemory[IO]
             history <- History[IO](db)
@@ -197,7 +201,8 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
         case ((config, signer), index) =>
           if (index % gap == 0) {
             miners += signer
-            config.copy(miningConfig = config.miningConfig.copy(miningEnabled = true))
+            config.copy(miningConfig = config.miningConfig.copy(miningEnabled = true),
+                        rpc = config.rpc.copy(publicApiEnable = true))
           } else config
       }
       (configs, miners.toList)
@@ -253,12 +258,12 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     } yield ()
 
   override def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit] = {
-    val minerTxPool = nodes.get.unsafeRunSync()(id).synchronizer.txPool
+    val minerTxPool = nodes.get.unsafeRunSync().get(id).map(_.synchronizer.txPool)
     val stxs = t match {
       case "DoubleSpend" => txGraphGen.nextDoubleSpendTxs2(nStx)
       case _             => txGraphGen.nextValidTxs(nStx)
     }
-    minerTxPool.addTransactions(stxs)
+    minerTxPool.map(_.addTransactions(stxs)).getOrElse(IO.pure(Unit))
   }
 
   override def getBestBlock: IO[List[Block]] =
@@ -276,6 +281,16 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
 
   override def getBlocksByNumber(number: BigInt): IO[List[Block]] =
     nodes.get.map(_.values.toList.map(_.synchronizer.history.getBlockByNumber(number).unsafeRunSync().get))
+
+  override def getAccounts(): IO[List[(Address, Account)]] = IO { txGraphGen.accountMap.toList }
+
+  override def getCoin(address: Address, value: BigInt): IO[Unit] =
+    for {
+      nodeIdList <- nodes.get.map(_.keys.toList)
+      nodeId = Random.shuffle(nodeIdList).take(1).head
+      ns <- nodes.get
+      _  <- ns(nodeId).synchronizer.txPool.addTransactions(List(txGraphGen.getCoin(address, value)))
+    } yield ()
 }
 
 object SimulationImpl {

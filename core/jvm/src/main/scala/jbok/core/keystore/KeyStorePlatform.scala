@@ -24,6 +24,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
   override def newAccount(passphrase: String): F[Address] =
     for {
       keyPair <- F.liftIO(Signature[ECDSA].generateKeyPair())
+      _      = log.debug(s"passphrase: ${passphrase}")
       encKey = EncryptedKey(keyPair.secret, passphrase, secureRandom)
       _ <- save(encKey)
     } yield encKey.address
@@ -46,6 +47,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
   override def unlockAccount(address: Address, passphrase: String): F[Wallet] =
     for {
       key <- load(address)
+      _ = log.debug(s"passphrase: ${passphrase}")
       wallet <- key
         .decrypt(passphrase) match {
         case Left(e)       => F.raiseError(KeyStoreError.DecryptionFailed)
@@ -155,6 +157,7 @@ object KeyStorePlatform {
     val dir = File(keyStoreDir)
     for {
       _ <- if (!dir.isDirectory) {
+        Sync[F].delay(println(dir.pathAsString))
         Sync[F].delay(dir.createIfNotExists(asDirectory = true, createParents = true)).attempt
       } else {
         Sync[F].unit

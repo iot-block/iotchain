@@ -6,9 +6,12 @@ import jbok.common._
 import jbok.core.messages.{BlockHash, NewBlock, NewBlockHashes}
 import jbok.core.peer.{HandshakedPeer, PeerManager}
 
+import scala.concurrent.ExecutionContext
 import scala.util.Random
 
-case class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: ConcurrentEffect[F], T: Timer[F]) {
+case class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: ConcurrentEffect[F],
+                                                          T: Timer[F],
+                                                          EC: ExecutionContext) {
   private[this] val log = org.log4s.getLogger
 
   def broadcastBlock(newBlock: NewBlock): F[Unit] =

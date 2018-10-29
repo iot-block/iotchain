@@ -157,7 +157,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
     webpackBundlingMode := BundlingMode.LibraryAndApplication()
   )
-  .dependsOn(core % CompileAndTest)
+  .dependsOn(core % CompileAndTest, common % CompileAndTest)
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)

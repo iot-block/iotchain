@@ -8,13 +8,14 @@ import cats.implicits._
   * Entry point to executing a program.
   */
 class VM {
-  private[this] val log= org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger
+
   /**
     * Executes a program
     * @param context context to be executed
     * @return result of the execution
     */
-  def run[F[_]: Sync](context: ProgramContext[F]): F[ProgramResult[F]] = {
+  def run[F[_]: Sync](context: ProgramContext[F]): F[ProgramResult[F]] =
     OptionT.fromOption[F](PrecompiledContracts.runOptionally(context)).getOrElseF {
       run(ProgramState[F](context)).map { finalState =>
         ProgramResult[F](
@@ -29,7 +30,6 @@ class VM {
         )
       }
     }
-  }
 
   private def run[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val byte = state.program.getByte(state.pc)
@@ -37,7 +37,8 @@ class VM {
       case Some(opCode) =>
         for {
           newState <- opCode.execute(state)
-          _ = log.trace(s"$opCode | pc: ${newState.pc} | depth: ${newState.env.callDepth} | gas: ${newState.gas} | stack: ${newState.stack}")
+          _ = log.trace(
+            s"$opCode | pc: ${newState.pc} | depth: ${newState.env.callDepth} | gas: ${newState.gas} | stack: ${newState.stack}")
           s <- if (newState.halted) newState.pure[F] else run(newState)
         } yield s
 
@@ -48,5 +49,3 @@ class VM {
 }
 
 object VM extends VM
-
-

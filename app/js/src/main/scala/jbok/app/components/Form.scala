@@ -6,7 +6,7 @@ import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var}
 import org.scalajs.dom.raw.HTMLInputElement
-import org.scalajs.dom.{Element, KeyboardEvent}
+import org.scalajs.dom.{Element, Event, KeyboardEvent}
 
 case class FormEntry(name: String, `type`: String = "text", value: Var[String] = Var("")) {
   val initValue = value.value
@@ -25,16 +25,17 @@ case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Un
         entry.value.value = entry.initValue
     }
 
-  val keyDownHandler = { event: KeyboardEvent =>
-    (event.currentTarget, event.keyCode) match {
-      case (input: HTMLInputElement, _) =>
+  val onInputHandler = { event: Event =>
+    event.currentTarget match {
+      case input: HTMLInputElement => {
         entryMap.get(input.name).foreach(x => x.value.value = input.value.trim)
+      }
       case _ =>
     }
   }
 
   @binding.dom
-  def render(): Binding[Element] = {
+  def render(): Binding[Element] =
     <div>
       {entries.map { entry =>
       entry.`type` match {
@@ -45,7 +46,7 @@ case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Un
                 {entry.name}
               </b>
             </label>
-            <input type={entry.`type`} placeholder="" name={entry.name} onkeydown={keyDownHandler} value={entry.value.bind}/>
+            <input type={entry.`type`} placeholder="" name={entry.name} oninput={onInputHandler} value={entry.value.bind} />
           </div>
 
         case "textarea" =>
@@ -55,10 +56,9 @@ case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Un
                 {entry.name}
               </b>
             </label>
-            <textarea name={entry.name} onkeydown={keyDownHandler} value={entry.value.bind}/>
+            <textarea name={entry.name} oninput={onInputHandler} value={entry.value.bind}/>
           </div>
       }
     }}
     </div>
-  }
 }

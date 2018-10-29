@@ -77,6 +77,8 @@ trait PublicAPI {
 
   def getTransactionByBlockNumberAndIndexRequest(blockParam: BlockParam, txIndex: Int): IO[Option[SignedTransaction]]
 
+  def getAccount(address: Address, blockParam: BlockParam): IO[Account]
+
   def getBalance(address: Address, blockParam: BlockParam): IO[BigInt]
 
   def getStorageAt(address: Address, position: BigInt, blockParam: BlockParam): IO[ByteVector]
@@ -107,6 +109,5 @@ trait PublicAPI {
       topics: List[List[ByteVector]]
   ): IO[LogFilterLogs]
 
-  def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): IO[List[Transaction]]
+  def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): IO[List[SignedTransaction]]
 }
-

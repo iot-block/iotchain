@@ -32,6 +32,7 @@ class PublicApiImpl(
   val history   = miner.history
   val txPool    = miner.synchronizer.txPool
   val ommerPool = miner.synchronizer.ommerPool
+  val blockPool = miner.synchronizer.executor.blockPool
 
   override def protocolVersion: IO[String] =
     IO.pure(f"0x${version}%x")
@@ -121,14 +122,7 @@ class PublicApiImpl(
     } yield gasPrice
   }
 
-  override def getMining: IO[Boolean] =
-    ???
-//    lastActive
-//      .update(e =>
-//        e.filter(time =>
-//          Duration.between(time.toInstant, (new Date).toInstant).toMillis < miningConfig.activeTimeout.toMillis)
-//      )
-//      .map(_.now.isDefined)
+  override def getMining: IO[Boolean] = miner.isMining
 
   override def getHashRate: IO[BigInt] =
     ???
@@ -210,6 +204,11 @@ class PublicApiImpl(
       tx = block.body.transactionList.lift(txIndex)
     } yield tx
 
+  override def getAccount(address: Address, blockParam: BlockParam): IO[Account] =
+    for {
+      account <- resolveAccount(address, blockParam)
+    } yield account
+
   override def getBalance(address: Address, blockParam: BlockParam): IO[BigInt] =
     for {
       account <- resolveAccount(address, blockParam)
@@ -259,9 +258,22 @@ class PublicApiImpl(
       .getLogs(LogFilter(0, fromBlock, toBlock, address, topics))
       .map(LogFilterLogs)
 
-  override def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): IO[List[Transaction]] = {
+  override def getAccountTransactions(address: Address,
+                                      fromBlock: BigInt,
+                                      toBlock: BigInt): IO[List[SignedTransaction]] = {
     val numBlocksToSearch = toBlock - fromBlock
-    ???
+    def collectTxs: PartialFunction[SignedTransaction, SignedTransaction] = {
+      case stx if SignedTransaction.getSender(stx).nonEmpty && SignedTransaction.getSender(stx).get == address => stx
+      case stx if stx.receivingAddress == address                                                              => stx
+    }
+    for {
+      blocks <- (fromBlock to toBlock).toList.traverse(history.getBlockByNumber)
+      stxsFromBlock = blocks.collect {
+        case Some(block) => block.body.transactionList.collect(collectTxs)
+      }.flatten
+      pendingStxs <- txPool.getPendingTransactions
+      stxsFromPool = pendingStxs.map(_.stx).collect(collectTxs)
+    } yield stxsFromBlock ++ stxsFromPool
   }
 
   /////////////////////
