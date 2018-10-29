@@ -72,7 +72,7 @@ class FullNodeSpec extends JbokSpec {
       nodes.traverse(_.start).unsafeRunSync()
       Thread.sleep(3000)
       nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode)).unsafeRunSync()
-      Thread.sleep(3000)
+      Thread.sleep(10000)
       nodes.head.peerManager.connected.unsafeRunSync().size shouldBe N - 1
       nodes.tail.foreach(_.peerManager.connected.unsafeRunSync().size shouldBe 1)
       nodes.traverse(_.stop).unsafeRunSync()
@@ -87,7 +87,7 @@ class FullNodeSpec extends JbokSpec {
       nodes.traverse(_.start).unsafeRunSync()
       Thread.sleep(3000)
       nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode)).unsafeRunSync()
-      Thread.sleep(3000)
+      Thread.sleep(10000)
       nodes.head.peerManager.connected.unsafeRunSync().size shouldBe N - 1
       nodes.tail.foreach(_.peerManager.connected.unsafeRunSync().size shouldBe 1)
 
