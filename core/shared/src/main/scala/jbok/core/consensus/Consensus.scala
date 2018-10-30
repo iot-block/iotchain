@@ -2,6 +2,7 @@ package jbok.core.consensus
 
 import jbok.core.History
 import jbok.core.models._
+import jbok.core.pool.BlockPool
 
 sealed trait ConsensusResult
 object ConsensusResult {
@@ -10,7 +11,7 @@ object ConsensusResult {
   case class BlockInvalid(e: Throwable) extends ConsensusResult
 }
 
-abstract class Consensus[F[_]](val history: History[F]) {
+abstract class Consensus[F[_]](val history: History[F], val blockPool: BlockPool[F]) {
 
   /**
     * 1. common header validate

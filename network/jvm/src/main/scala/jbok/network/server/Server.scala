@@ -124,9 +124,8 @@ object Server {
             .mountService(service, "/")
             .withWebSockets(true)
             .withoutBanner
-            .withNio2(true)
 
-          log.info(s"binding on ${bind}")
+          log.info(s"start websocket server at ${bind}")
           builder.serve.drain
         }
       }
@@ -188,7 +187,6 @@ object Server {
           BlazeServerBuilder[F]
             .bindSocketAddress(bind)
             .withHttpApp(httpApp)
-            .withNio2(true)
             .serve
             .drain
         }

@@ -20,7 +20,7 @@ class EthashConsensus[F[_]](
     miner: EthashMiner[F],
     ommersValidator: EthashOmmersValidator[F],
     headerValidator: EthashHeaderValidator[F]
-)(implicit F: Sync[F]) extends Consensus[F](history) {
+)(implicit F: Sync[F]) extends Consensus[F](history, blockPool) {
   val difficultyCalculator = new EthDifficultyCalculator(blockChainConfig)
   val rewardCalculator     = new EthRewardCalculator(MonetaryPolicyConfig())
 

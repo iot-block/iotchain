@@ -32,8 +32,6 @@ object BlockImportResult {
 
 class BlockExecutor[F[_]](
     val config: BlockChainConfig,
-    val history: History[F],
-    val blockPool: BlockPool[F],
     val consensus: Consensus[F],
     val commonHeaderValidator: CommonHeaderValidator[F],
     val commonBlockValidator: BlockValidator[F],
@@ -41,6 +39,9 @@ class BlockExecutor[F[_]](
     val vm: VM
 )(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger
+
+  val history = consensus.history
+  val blockPool = consensus.blockPool
 
   def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxResult[F]] = {
     val stateRoot = blockHeader.stateRoot
@@ -436,16 +437,12 @@ class BlockExecutor[F[_]](
 object BlockExecutor {
   def apply[F[_]: ConcurrentEffect](
       config: BlockChainConfig,
-      history: History[F],
-      blockPool: BlockPool[F],
       consensus: Consensus[F]
   ): BlockExecutor[F] =
     new BlockExecutor[F](
       config,
-      history,
-      blockPool,
       consensus,
-      new CommonHeaderValidator[F](history),
+      new CommonHeaderValidator[F](consensus.history),
       new BlockValidator[F](),
       new TransactionValidator[F](config),
       new VM

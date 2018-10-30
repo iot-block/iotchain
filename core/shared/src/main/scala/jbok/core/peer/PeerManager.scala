@@ -36,6 +36,7 @@ abstract class PeerManager[F[_]](
 
   def handleError(e: Throwable): Stream[F, Unit] = e match {
     case _: AsynchronousCloseException | _: ClosedChannelException =>
+      log.error(e)("peer manager error")
       Stream.empty.covary[F]
     case _ =>
       Stream.raiseError[F](e)
@@ -58,17 +59,18 @@ abstract class PeerManager[F[_]](
             conn   <- Stream.eval(TcpUtil.socketToConnection[F](socket, true))
             _ = log.info(s"${conn} established")
             peer <- Stream.eval(handshakeIncoming(conn))
-            _    <- Stream.eval(incoming.update(_ + (conn.remoteAddress -> peer)))
+            _ = log.info(s"${conn} handshaked")
+            _ <- Stream.eval(incoming.update(_ + (conn.remoteAddress -> peer)))
             _ <- conn
               .readsAndResolve[Message]()
               .evalMap(a => messages.publish1(Some(peer -> a)).map(_ => a))
               .through(pipe)
               .to(conn.writes())
               .onFinalize(incoming.update(_ - conn.remoteAddress) *> F.delay(log.info(s"${conn} disconnected")))
-              .handleErrorWith(handleError)
           } yield ()
       }
       .parJoin(maxOpen)
+      .handleErrorWith(handleError)
 
   def connect(maxOpen: Int = config.maxOutgoingPeers): Stream[F, Unit] =
     nodeQueue.dequeue
@@ -83,14 +85,14 @@ abstract class PeerManager[F[_]](
       conn   <- Stream.eval(TcpUtil.socketToConnection[F](socket, false))
       _ = log.info(s"${conn} established")
       peer <- Stream.eval(handshakeOutgoing(conn, to.pk))
-      _    <- Stream.eval(outgoing.update(_ + (peer.conn.remoteAddress -> peer)))
+      _ = log.info(s"${conn} handshaked")
+      _ <- Stream.eval(outgoing.update(_ + (peer.conn.remoteAddress -> peer)))
       _ <- conn
         .reads[Message]()
         .evalMap(a => messages.publish1(Some(peer -> a)).map(_ => a))
         .through(pipe)
         .to(conn.writes())
         .onFinalize(outgoing.update(_ - conn.remoteAddress) *> F.delay(log.info(s"${conn} disconnected")))
-        .handleErrorWith(handleError)
     } yield ()
 
     Stream.eval(outgoing.get.map(_.contains(to.addr))).flatMap {
@@ -98,7 +100,7 @@ abstract class PeerManager[F[_]](
         log.info(s"already connected, ignore")
         Stream.empty.covary[F]
 
-      case false => connect0
+      case false => connect0.handleErrorWith(handleError)
     }
   }
 
@@ -129,7 +131,7 @@ abstract class PeerManager[F[_]](
   private[jbok] def localStatus: F[Status] =
     for {
       genesis <- history.genesisHeader
-      number  <- history.getBestBlockNumber
+      number <- history.getBestBlockNumber
     } yield Status(history.chainId, genesis.hash, number)
 
   private[jbok] def handshakeIncoming(conn: Connection[F]): F[Peer[F]]

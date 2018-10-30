@@ -79,9 +79,8 @@ object FullNode {
       sign      = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, keyPair) }
       clique    = Clique(CliqueConfig(), history, Address(keyPair), sign)
       consensus = new CliqueConsensus[IO](blockPool, clique)
-      blockPool   <- BlockPool(history)
       peerManager <- PeerManagerPlatform[IO](config.peer, keyPair, SyncConfig(), history)
-      executor = BlockExecutor[IO](config.blockchain, history, blockPool, consensus)
+      executor = BlockExecutor[IO](config.blockchain, consensus)
       txPool    <- TxPool[IO](peerManager)
       ommerPool <- OmmerPool[IO](history)
       broadcaster = Broadcaster[IO](peerManager)
@@ -114,13 +113,11 @@ object FullNode {
       CS: ContextShift[IO]
   ): IO[FullNode[IO]] = {
     val random = new SecureRandom()
+    val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val history = consensus.history
     for {
-      db <- KeyValueDB.inMemory[IO]
-      keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-      history     <- History(db)
-      blockPool   <- BlockPool(history)
       peerManager <- PeerManagerPlatform[IO](config.peer, keyPair, SyncConfig(), history)
-      executor = BlockExecutor[IO](config.blockchain, history, blockPool, consensus)
+      executor = BlockExecutor[IO](config.blockchain, consensus)
       txPool    <- TxPool[IO](peerManager)
       ommerPool <- OmmerPool[IO](history)
       broadcaster = Broadcaster[IO](peerManager)

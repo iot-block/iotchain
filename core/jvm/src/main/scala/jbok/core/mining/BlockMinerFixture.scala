@@ -15,9 +15,8 @@ class BlockMinerFixture(consensusFixture: ConsensusFixture, port: Int = 9999) {
   val consensus        = consensusFixture.consensus
   val blockChainConfig = BlockChainConfig()
   val history          = consensus.history
-  val blockPoolConfig = BlockPoolConfig()
-  val blockPool       = BlockPool[IO](history, blockPoolConfig).unsafeRunSync()
-  val executor        = BlockExecutor[IO](blockChainConfig, history, blockPool, consensus)
+  val blockPool       = consensus.blockPool
+  val executor        = BlockExecutor[IO](blockChainConfig, consensus)
 
   val syncConfig        = SyncConfig()
   val peerManagerConfig = PeerManagerConfig(port)

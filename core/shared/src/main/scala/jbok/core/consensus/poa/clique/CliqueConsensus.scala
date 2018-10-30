@@ -10,7 +10,7 @@ import scodec.bits.ByteVector
 import scala.util.Random
 
 class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit F: ConcurrentEffect[F])
-    extends Consensus[F](clique.history) {
+    extends Consensus[F](clique.history, blockPool) {
   private[this] val log = org.log4s.getLogger
 
   override def semanticValidate(parentHeader: BlockHeader, block: Block): F[Unit] =
