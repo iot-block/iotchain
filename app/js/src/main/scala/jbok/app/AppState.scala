@@ -7,6 +7,7 @@ import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.api.BlockParam
 import jbok.app.simulations.NodeInfo
 import jbok.core.models._
+import jbok.evm.abi.Description
 import scodec.bits.ByteVector
 
 case class ClientStatus(number: Var[BigInt] = Var(0),
@@ -15,6 +16,8 @@ case class ClientStatus(number: Var[BigInt] = Var(0),
                         miningStatus: Var[String] = Var("idle"))
 
 case class BlockHistory(bestBlockNumber: Var[BigInt] = Var(-1), history: Vars[Block] = Vars.empty)
+
+case class Contract(address: Address, abi: List[Description])
 
 case class AppState(
     config: Var[AppConfig],
@@ -28,7 +31,7 @@ case class AppState(
     receipts: Var[Map[String, Var[Map[ByteVector, Var[Option[Receipt]]]]]] = Var(Map.empty),
     simuAddress: Vars[Address] = Vars.empty[Address],
     addressInNode: Var[Map[String, Vars[Address]]] = Var(Map.empty),
-    contractAddress: Vars[Address] = Vars.empty[Address],
+    contractInfo: Vars[Contract] = Vars.empty[Contract],
     contracts: Var[Map[String, Var[Map[Address, Var[Account]]]]] = Var(Map.empty),
     update: Var[Boolean] = Var(true)
 ) {
@@ -74,13 +77,22 @@ case class AppState(
   def updateStatus(id: String, client: JbokClient) = {
     val p = for {
       bestBlockNumber <- client.public.bestBlockNumber
+      block           <- client.public.getBlockByNumber(bestBlockNumber)
       isMining        <- client.public.getMining
       gasPrice        <- client.public.getGasPrice
       miningStatus = if (isMining) "Mining" else "idle"
+      gasLimit = block
+        .map { b =>
+          val gasLimits = b.body.transactionList.map(_.gasLimit)
+          if (gasLimits.isEmpty) BigInt(0)
+          else gasLimits.min
+        }
+        .getOrElse(BigInt(0))
       _ = if (status.value.contains(id)) {
         status.value(id).number.value = bestBlockNumber
         status.value(id).miningStatus.value = miningStatus
         status.value(id).gasPrice.value = gasPrice
+        status.value(id).gasLimit.value = gasLimit
       } else {
         val cs = ClientStatus(Var(bestBlockNumber), Var(gasPrice), Var(0), Var(miningStatus))
         status.value += (id -> cs)
@@ -93,6 +105,8 @@ case class AppState(
     val p = for {
       bestBlockNumber <- client.public.bestBlockNumber
       localBestBlockNumber = blocks.value.find(p => p._1 == id).map(_._2.bestBlockNumber.value.toInt).getOrElse(-1)
+      expire               = bestBlockNumber - 100
+      start                = localBestBlockNumber.max(expire.toInt)
       xs <- (localBestBlockNumber.toInt until bestBlockNumber.toInt)
         .map(i => BigInt(i + 1))
         .toList
@@ -169,7 +183,7 @@ case class AppState(
   }
 
   def updateContracts(id: String, client: JbokClient) = {
-    val addresses = contractAddress.value.toList
+    val addresses = contractInfo.value.toList.map(_.address)
     val p = for {
       simuAccounts <- addresses.traverse(addr => client.public.getAccount(addr, BlockParam.Latest))
       _ = if (contracts.value.contains(id)) {

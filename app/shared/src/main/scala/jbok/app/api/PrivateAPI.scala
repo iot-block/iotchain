@@ -54,4 +54,3 @@ trait PrivateAPI {
 
   def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): IO[Boolean]
 }
-

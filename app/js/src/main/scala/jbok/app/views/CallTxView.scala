@@ -6,14 +6,12 @@ import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
-import jbok.app.{AppState, ContractAddress}
-import jbok.app.api.{BlockParam, CallTx, TransactionRequest}
+import jbok.app.AppState
+import jbok.app.api.{BlockParam, CallTx}
 import jbok.core.models.{Account, Address, UInt256}
 import org.scalajs.dom.raw.{HTMLInputElement, HTMLSelectElement}
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
-
-import scala.util.matching.Regex
 
 case class CallTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]
@@ -70,7 +68,7 @@ case class CallTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         from.value = input.value.trim.toLowerCase
-        fromSyntax.value = if (validator.isValidAddress(from.value)) true else false
+        fromSyntax.value = if (InputValidator.isValidAddress(from.value)) true else false
         if (fromSyntax.value) {
           updateAccount(from.value)
         } else {
@@ -84,7 +82,7 @@ case class CallTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         data.value = input.value.trim
-        dataSyntax.value = if (validator.isValidData(data.value)) true else false
+        dataSyntax.value = if (InputValidator.isValidData(data.value)) true else false
       case _ =>
     }
   }
@@ -114,7 +112,7 @@ case class CallTxView(state: AppState) {
       case select: HTMLSelectElement =>
         val v = select.options(select.selectedIndex).value
         to.value = v.substring(2)
-        toSyntax.value = validator.isValidAddress(to.value)
+        toSyntax.value = InputValidator.isValidAddress(to.value)
       case _ =>
     }
   }
@@ -181,7 +179,7 @@ case class CallTxView(state: AppState) {
         </label>
         <select class="autocomplete" onchange={onChangeHandlerTo}>
           {
-            val contractList = state.contractAddress.bind
+            val contractList = state.contractInfo.bind
             for(account<-Constants(contractList: _*)) yield {
               to.value = account.toString.substring(2)
           <option value={account.toString}>{account.toString}</option>
