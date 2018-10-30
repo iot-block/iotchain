@@ -4,26 +4,12 @@ import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
-import jbok.app.{AppState, ContractAddress}
 import jbok.app.api.{BlockParam, TransactionRequest}
+import jbok.app.{AppState, ContractAddress}
 import jbok.core.models.{Account, Address, UInt256}
 import org.scalajs.dom.raw.{HTMLInputElement, HTMLSelectElement}
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
-
-import scala.util.matching.Regex
-
-object validator {
-  val number = "0123456789"
-  val alpha  = new Regex("[a-z]+")
-  val hex    = "0123456789abcdef"
-
-  def isValidAddress(address: String): Boolean = address.forall(hex.contains(_)) && address.length == 40
-  def isValidNumber(n: String): Boolean        = n.forall(number.contains(_))
-  def isValidValue(value: String, account: Option[Account]): Boolean =
-    value.forall(number.contains(_)) && account.forall(_.balance.toBigInt >= BigInt(value))
-  def isValidData(data: String): Boolean = data.forall(hex.contains(_))
-}
 
 case class SendTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]
@@ -96,7 +82,7 @@ case class SendTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         from.value = input.value.trim.toLowerCase
-        fromSyntax.value = if (validator.isValidAddress(from.value)) true else false
+        fromSyntax.value = if (InputValidator.isValidAddress(from.value)) true else false
         if (fromSyntax.value) {
           updateAccount(from.value)
         } else {
@@ -110,7 +96,7 @@ case class SendTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         to.value = input.value.trim.toLowerCase
-        toSyntax.value = if (validator.isValidAddress(to.value)) true else false
+        toSyntax.value = if (InputValidator.isValidAddress(to.value)) true else false
       case _ =>
     }
   }
@@ -119,7 +105,7 @@ case class SendTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         value.value = input.value.trim
-        valueSyntax.value = if (validator.isValidValue(value.value, account.value)) true else false
+        valueSyntax.value = if (InputValidator.isValidValue(value.value, account.value)) true else false
       case _ =>
     }
   }
@@ -128,7 +114,7 @@ case class SendTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         gasLimit.value = input.value.trim
-        gasLimitSyntax.value = if (validator.isValidNumber(gasLimit.value)) true else false
+        gasLimitSyntax.value = if (InputValidator.isValidNumber(gasLimit.value)) true else false
       case _ =>
     }
   }
@@ -137,7 +123,7 @@ case class SendTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         gasPrice.value = input.value.trim
-        gasPriceSyntax.value = if (validator.isValidNumber(gasPrice.value)) true else false
+        gasPriceSyntax.value = if (InputValidator.isValidNumber(gasPrice.value)) true else false
       case _ =>
     }
   }
@@ -146,7 +132,7 @@ case class SendTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         nonce.value = input.value.trim
-        nonceSyntax.value = if (validator.isValidNumber(nonce.value)) true else false
+        nonceSyntax.value = if (InputValidator.isValidNumber(nonce.value)) true else false
       case _ =>
     }
   }
@@ -155,7 +141,7 @@ case class SendTxView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         data.value = input.value.trim
-        dataSyntax.value = if (validator.isValidData(data.value)) true else false
+        dataSyntax.value = if (InputValidator.isValidData(data.value)) true else false
       case _ =>
     }
   }

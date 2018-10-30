@@ -4,18 +4,23 @@ import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
 import jbok.app.components.{Form, FormEntry, Modal}
-import jbok.app.{AppState, SimuClient}
+import jbok.app.{AppState, Contract, SimuClient}
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom._
 import scodec.bits.ByteVector
+import jbok.evm.abi.parseContract
 
 case class ContractView(state: AppState) {
   val form = Form(
-    Constants(FormEntry("address", "text")), { data =>
+    Constants(FormEntry("address"), FormEntry("abi", "textarea")), { data =>
       state.currentId.value.map { id =>
+        val abi     = parseContract(data("abi").trim)
         val address = Address(ByteVector.fromValidHex(data("address")))
-        if (!state.contractAddress.value.toSet.contains(address))
-          state.contractAddress.value += address
+        if (data("data").trim.nonEmpty && abi.isRight && !state.contractInfo.value
+              .map(_.address)
+              .toSet
+              .contains(address))
+          state.contractInfo.value += Contract(address, abi.toTry.get)
       }
     }
   )

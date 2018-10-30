@@ -62,7 +62,7 @@ case class DeployContractView(state: AppState) {
         _       = stx.map(state.stxs.value(currentId.get).value += _)
         _       = state.receipts.value(currentId.get).value += (hash -> Var(None))
         address = ContractAddress.getContractAddress(fromSubmit, UInt256(nonceSubmit.get))
-        _       = if (!state.contractAddress.value.toSet.contains(address)) state.contractAddress.value += address
+//        _       = if (!state.contractInfo.value.toSet.contains(address)) state.contractInfo.value += address
       } yield ()
       p.unsafeToFuture()
 
@@ -82,7 +82,7 @@ case class DeployContractView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         from.value = input.value.trim.toLowerCase
-        fromSyntax.value = if (validator.isValidAddress(from.value)) true else false
+        fromSyntax.value = if (InputValidator.isValidAddress(from.value)) true else false
         if (fromSyntax.value) {
           updateAccount(from.value)
         } else {
@@ -96,7 +96,7 @@ case class DeployContractView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         value.value = input.value.trim
-        valueSyntax.value = if (validator.isValidValue(value.value, account.value)) true else false
+        valueSyntax.value = if (InputValidator.isValidValue(value.value, account.value)) true else false
       case _ =>
     }
   }
@@ -105,7 +105,7 @@ case class DeployContractView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         gasLimit.value = input.value.trim
-        gasLimitSyntax.value = if (validator.isValidNumber(gasLimit.value)) true else false
+        gasLimitSyntax.value = if (InputValidator.isValidNumber(gasLimit.value)) true else false
       case _ =>
     }
   }
@@ -114,7 +114,7 @@ case class DeployContractView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         gasPrice.value = input.value.trim
-        gasPriceSyntax.value = if (validator.isValidNumber(gasPrice.value)) true else false
+        gasPriceSyntax.value = if (InputValidator.isValidNumber(gasPrice.value)) true else false
       case _ =>
     }
   }
@@ -123,7 +123,7 @@ case class DeployContractView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         nonce.value = input.value.trim
-        nonceSyntax.value = if (validator.isValidNumber(nonce.value)) true else false
+        nonceSyntax.value = if (InputValidator.isValidNumber(nonce.value)) true else false
       case _ =>
     }
   }
@@ -132,7 +132,7 @@ case class DeployContractView(state: AppState) {
     event.currentTarget match {
       case input: HTMLInputElement =>
         data.value = input.value.trim
-        dataSyntax.value = if (validator.isValidData(data.value)) true else false
+        dataSyntax.value = if (InputValidator.isValidData(data.value)) true else false
       case _ =>
     }
   }
