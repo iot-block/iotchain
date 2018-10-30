@@ -22,7 +22,7 @@ class BlockMinerFixture(consensusFixture: ConsensusFixture, port: Int = 9999) {
   val peerManagerConfig = PeerManagerConfig(port)
   val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
   val peerManager =
-    PeerManagerPlatform[IO](peerManagerConfig, keyPair, syncConfig, history).unsafeRunSync()
+    PeerManagerPlatform[IO](peerManagerConfig, Some(keyPair), syncConfig, history).unsafeRunSync()
   val txPool       = TxPool[IO](peerManager, TxPoolConfig()).unsafeRunSync()
   val ommerPool    = OmmerPool[IO](history).unsafeRunSync()
   val broadcaster  = Broadcaster[IO](peerManager)

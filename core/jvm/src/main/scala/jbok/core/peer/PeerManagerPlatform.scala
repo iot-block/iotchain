@@ -1,30 +1,50 @@
 package jbok.core.peer
 import java.net.InetSocketAddress
-import java.nio.channels.{AsynchronousChannelGroup, AsynchronousCloseException, ClosedChannelException}
+import java.nio.channels.AsynchronousChannelGroup
 
+import better.files._
 import cats.data.OptionT
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, Timer}
-import fs2._
+import cats.effect.{ConcurrentEffect, IO, Timer}
+import cats.implicits._
 import fs2.concurrent.{SignallingRef, Topic}
 import jbok.common.concurrent.PriorityQueue
 import jbok.core.History
 import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
 import jbok.core.messages.{Message, Status}
 import jbok.core.sync.SyncService
-import jbok.crypto.signature.KeyPair
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.network.Connection
-import jbok.network.common.TcpUtil
 import jbok.network.rlpx.handshake.AuthHandshaker
-import cats.implicits._
-import cats.effect.implicits._
-
-import scala.concurrent.duration.FiniteDuration
 
 object PeerManagerPlatform {
+  private[this] val log = org.log4s.getLogger
+
+  def loadNodeKey(path: String): IO[KeyPair] =
+    for {
+      secret <- IO(File(path).lines(DefaultCharset).head).map(str => KeyPair.Secret(str))
+      pubkey <- Signature[ECDSA].generatePublicKey(secret)
+    } yield KeyPair(pubkey, secret)
+
+  def saveNodeKey(path: String, keyPair: KeyPair): IO[Unit] =
+    IO(File(path).overwrite(keyPair.secret.bytes.toHex))
+
+  def loadOrGenerateNodeKey(path: String): IO[KeyPair] =
+    loadNodeKey(path).attempt.flatMap {
+      case Left(e) =>
+        log.error(e)(s"read nodekey at ${path} failed, generating a random one")
+        for {
+          keyPair <- Signature[ECDSA].generateKeyPair()
+          _       <- saveNodeKey(path, keyPair)
+        } yield keyPair
+
+      case Right(nodeKey) =>
+        IO.pure(nodeKey)
+    }
+
   def apply[F[_]](
       config: PeerManagerConfig,
-      keyPair: KeyPair,
+      keyPairOpt: Option[KeyPair],
       sync: SyncConfig,
       history: History[F],
       maxQueueSize: Int = 64
@@ -34,6 +54,7 @@ object PeerManagerPlatform {
       AG: AsynchronousChannelGroup
   ): F[PeerManager[F]] =
     for {
+      keyPair   <- OptionT.fromOption[F](keyPairOpt).getOrElseF(F.liftIO(loadOrGenerateNodeKey(config.nodekeyPath)))
       incoming  <- Ref.of[F, Map[InetSocketAddress, Peer[F]]](Map.empty)
       outgoing  <- Ref.of[F, Map[InetSocketAddress, Peer[F]]](Map.empty)
       nodeQueue <- PriorityQueue.bounded[F, PeerNode](maxQueueSize)

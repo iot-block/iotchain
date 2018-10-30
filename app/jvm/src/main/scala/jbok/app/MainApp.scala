@@ -1,7 +1,11 @@
 package jbok.app
+import java.io.{IOException, RandomAccessFile}
 import java.net.InetSocketAddress
+import java.nio.channels.FileLock
+import java.nio.file.{Path, Paths, StandardOpenOption}
 
-import cats.effect.{ExitCode, IO, IOApp}
+import better.files.File
+import cats.effect.{ExitCode, IO, IOApp, Resource}
 import cats.implicits._
 import ch.qos.logback.classic.{Level, Logger}
 import jbok.core.config.Configs
@@ -121,6 +125,21 @@ class Conf(arguments: List[String]) extends ScallopConf(arguments) {
 }
 
 object MainApp extends IOApp {
+  def lock(path: Path): IO[Unit] = IO {
+    val file    = File(path).createIfNotExists()
+    val channel = file.newFileChannel(StandardOpenOption.WRITE :: Nil)
+    val lock    = channel.tryLock()
+    if (lock == null) {
+      println(s"process lock ${path} already used by another process, terminated")
+      System.exit(-1)
+    } else {
+      sys.addShutdownHook {
+        lock.release()
+        channel.close()
+        file.delete()
+      }
+    }
+  }
 
   override def run(args: List[String]): IO[ExitCode] = {
     val conf         = new Conf(args)
@@ -137,8 +156,10 @@ object MainApp extends IOApp {
     conf.subcommand match {
       case Some(conf.node) =>
         for {
+          _        <- lock(Paths.get(s"${conf.node.config.datadir}/LOCK"))
           fullNode <- FullNode.forConfig(conf.node.config)
           _        <- fullNode.start
+          _        <- IO.never
         } yield ExitCode.Success
 
       case Some(conf.web) =>

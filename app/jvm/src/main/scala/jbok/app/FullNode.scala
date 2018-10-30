@@ -1,9 +1,12 @@
 package jbok.app
 
+import java.io.{File, IOException, RandomAccessFile}
 import java.net.InetSocketAddress
+import java.nio.channels.{FileChannel, FileLock}
+import java.nio.file.{OpenOption, Path, Paths, StandardOpenOption}
 import java.security.SecureRandom
 
-import cats.effect.{ConcurrentEffect, ContextShift, IO, Timer}
+import cats.effect._
 import cats.implicits._
 import jbok.app.api.FilterManager
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
@@ -23,7 +26,6 @@ import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
-import jbok.persistent.KeyValueDB
 import jbok.persistent.leveldb.{LevelDB, LevelDBConfig}
 import scodec.bits.ByteVector
 
@@ -35,6 +37,7 @@ case class FullNode[F[_]](
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   val synchronizer = miner.synchronizer
   val peerManager  = synchronizer.peerManager
+  val txPool       = synchronizer.txPool
   val keyPair      = peerManager.keyPair
   val peerNode     = peerManager.peerNode
   val id           = peerNode.id.toHex
@@ -45,15 +48,15 @@ case class FullNode[F[_]](
   def start: F[Unit] =
     for {
       _ <- peerManager.start
-      _ <- synchronizer.txPool.start
       _ <- synchronizer.start
+      _ <- txPool.start
       _ <- if (config.rpc.enabled) rpcServer.start else F.unit
       _ <- if (config.mining.enabled) miner.start else F.unit
     } yield ()
 
   def stop: F[Unit] =
     for {
-      _ <- synchronizer.txPool.stop
+      _ <- txPool.stop
       _ <- synchronizer.stop
       _ <- rpcServer.stop
       _ <- miner.stop
@@ -79,7 +82,7 @@ object FullNode {
       sign      = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, keyPair) }
       clique    = Clique(CliqueConfig(), history, Address(keyPair), sign)
       consensus = new CliqueConsensus[IO](blockPool, clique)
-      peerManager <- PeerManagerPlatform[IO](config.peer, keyPair, SyncConfig(), history)
+      peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), SyncConfig(), history)
       executor = BlockExecutor[IO](config.blockchain, consensus)
       txPool    <- TxPool[IO](peerManager)
       ommerPool <- OmmerPool[IO](history)
@@ -112,11 +115,11 @@ object FullNode {
       T: Timer[IO],
       CS: ContextShift[IO]
   ): IO[FullNode[IO]] = {
-    val random = new SecureRandom()
+    val random  = new SecureRandom()
     val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
     val history = consensus.history
     for {
-      peerManager <- PeerManagerPlatform[IO](config.peer, keyPair, SyncConfig(), history)
+      peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), SyncConfig(), history)
       executor = BlockExecutor[IO](config.blockchain, consensus)
       txPool    <- TxPool[IO](peerManager)
       ommerPool <- OmmerPool[IO](history)

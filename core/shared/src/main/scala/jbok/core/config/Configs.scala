@@ -1,7 +1,6 @@
 package jbok.core.config
 
 import java.net.InetSocketAddress
-import java.util.UUID
 
 import jbok.core.models.{Address, UInt256}
 import jbok.core.peer.PeerNode
@@ -29,6 +28,7 @@ object Configs {
   case class PeerManagerConfig(
       port: Int = 10000,
       host: String = "localhost",
+      nodekeyPath: String = s"${defaultRootDir}/nodekey",
       bootUris: List[String] = Nil,
       updatePeersInterval: FiniteDuration = 10.seconds,
       maxOutgoingPeers: Int = 10,

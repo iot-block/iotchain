@@ -28,7 +28,7 @@ class PeerManagerFixture(port: Int) extends HistoryFixture {
   val pmConfig            = PeerManagerConfig(port)
   val addr                = pmConfig.bindAddr
   val keyPair             = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-  val pm: PeerManager[IO] = PeerManagerPlatform[IO](pmConfig, keyPair, SyncConfig(), history).unsafeRunSync()
+  val pm: PeerManager[IO] = PeerManagerPlatform[IO](pmConfig, Some(keyPair), SyncConfig(), history).unsafeRunSync()
   val node                = pm.peerNode
 }
 
@@ -89,7 +89,7 @@ class PeerManagerSpec extends JbokSpec {
       val history  = History[IO](db, fix1.history.chainId + 1).unsafeRunSync()
       history.loadGenesisConfig().unsafeRunSync()
       val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-      val pm2     = PeerManagerPlatform[IO](pmConfig, keyPair, SyncConfig(), history).unsafeRunSync()
+      val pm2     = PeerManagerPlatform[IO](pmConfig, Some(keyPair), SyncConfig(), history).unsafeRunSync()
 
       val p = for {
         fiber <- fix1.pm.listen().compile.drain.attempt.start
