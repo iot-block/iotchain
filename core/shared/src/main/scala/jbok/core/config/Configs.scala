@@ -15,12 +15,12 @@ object Configs {
   val defaultRootDir: String = s"${home}/.jbok"
 
   case class RpcConfig(
-      publicApiEnable: Boolean = false,
-      publicApiPort: Int,
-      publicApiVersion: Int = 1,
-      privateApiEnable: Boolean = false,
-      privateApiBindPort: Int,
-  )
+      enabled: Boolean = false,
+      host: String,
+      port: Int
+  ) {
+    val addr = new InetSocketAddress(host, port)
+  }
 
   case class KeyStoreConfig(
       keystoreDir: String = s"${defaultRootDir}/keystore"
@@ -28,7 +28,8 @@ object Configs {
 
   case class PeerManagerConfig(
       port: Int = 10000,
-      interface: String = "localhost",
+      host: String = "localhost",
+      bootUris: List[String] = Nil,
       updatePeersInterval: FiniteDuration = 10.seconds,
       maxOutgoingPeers: Int = 10,
       maxIncomingPeers: Int = 10,
@@ -37,19 +38,19 @@ object Configs {
       handshakeTimeout: FiniteDuration = 10.seconds,
       timeout: FiniteDuration = 10.seconds
   ) {
-    val bindAddr: InetSocketAddress = new InetSocketAddress(interface, port)
+    val bindAddr: InetSocketAddress = new InetSocketAddress(host, port)
+    val bootNodes = bootUris.flatMap(s => PeerNode.fromStr(s).toOption)
   }
 
   case class FullNodeConfig(
-      rootDir: String = defaultRootDir,
+      datadir: String,
       rpc: RpcConfig,
       keystore: KeyStoreConfig,
       peer: PeerManagerConfig,
-      blockChainConfig: BlockChainConfig,
-      daoForkConfig: DaoForkConfig,
+      blockchain: BlockChainConfig,
+      daofork: DaoForkConfig,
       sync: SyncConfig,
-      miningConfig: MiningConfig,
-      nodeId: String = UUID.randomUUID().toString
+      mining: MiningConfig
   )
 
   case class BlockChainConfig(
@@ -103,7 +104,7 @@ object Configs {
       activeTimeout: FiniteDuration = 5.seconds,
       ommerPoolQueryTimeout: FiniteDuration = 5.seconds,
       headerExtraData: ByteVector = ByteVector("jbok".getBytes),
-      miningEnabled: Boolean = false,
+      enabled: Boolean = false,
       ethashDir: String = "~/.ethash",
       mineRounds: Int = 100000
   )
@@ -150,7 +151,7 @@ object Configs {
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
       val rootDir                            = s"${defaultRootDir}/${suffix}"
-      val rpcConfig                          = RpcConfig(false, port + 100, 1, false, port + 100)
+      val rpcConfig                          = RpcConfig(false, "localhost", port + 100)
       val walletConfig                       = KeyStoreConfig(s"${rootDir}/keystore")
       val peerManagerConfig                  = PeerManagerConfig(port, timeout = 0.seconds)
       val blockChainConfig: BlockChainConfig = BlockChainConfig()

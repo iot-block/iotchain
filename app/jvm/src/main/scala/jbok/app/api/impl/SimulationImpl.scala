@@ -1,31 +1,24 @@
 package jbok.app.simulations
 import java.net.InetSocketAddress
-import java.security.SecureRandom
 import java.util.concurrent.Executors
 
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, IO, Timer}
 import cats.implicits._
 import fs2.concurrent.Topic
-import jbok.app.api.FilterManager
-import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
+import jbok.app.FullNode
 import jbok.app.simulations.SimulationImpl.NodeId
 import jbok.common.ExecutionPlatform.mkThreadFactory
 import jbok.common.execution._
-import jbok.core.config.Configs.{FilterConfig, FullNodeConfig}
+import jbok.core.History
+import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.GenesisConfig
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
-import jbok.core.keystore.KeyStorePlatform
-import jbok.core.ledger.BlockExecutor
-import jbok.core.mining.BlockMiner
 import jbok.core.models.{Account, Address, Block, SignedTransaction}
-import jbok.core.peer.PeerManagerPlatform
-import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
-import jbok.core.sync.{Broadcaster, Synchronizer}
-import jbok.core.{FullNode, History}
-import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.core.pool.BlockPool
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
+import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
@@ -37,17 +30,18 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Random
 
-class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
-                     val nodes: Ref[IO, Map[NodeId, FullNode[IO]]],
-                     val miners: Ref[IO, Map[NodeId, FullNode[IO]]])
-    extends SimulationAPI {
+class SimulationImpl(
+    val topic: Topic[IO, Option[SimulationEvent]],
+    val nodes: Ref[IO, Map[NodeId, FullNode[IO]]],
+    val miners: Ref[IO, Map[NodeId, FullNode[IO]]]
+) extends SimulationAPI {
   private[this] val log = org.log4s.getLogger
 
   val cliqueConfig = CliqueConfig(period = 5.seconds)
   val txGraphGen   = new TxGraphGen(10)
 
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
-    NodeInfo(fullNode.id, fullNode.config.peer.interface, fullNode.config.peer.port, fullNode.config.rpc.publicApiPort)
+    NodeInfo(fullNode.id, fullNode.config.peer.host, fullNode.config.peer.port, fullNode.config.rpc.port)
 
   private def newAPIServer[API](api: API, enable: Boolean, address: String, port: Int): IO[Option[Server[IO]]] =
     if (enable) {
@@ -61,51 +55,20 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
       } yield Some(server)
     } else { IO(None) }
 
-  private def newFullNode(config: FullNodeConfig,
-                          history: History[IO],
-                          consensus: Consensus[IO],
-                          blockPool: BlockPool[IO])(implicit F: ConcurrentEffect[IO],
-                                                    EC: ExecutionContext,
-                                                    T: Timer[IO]): IO[FullNode[IO]] =
-    for {
-      keyPair     <- F.liftIO(Signature[ECDSA].generateKeyPair())
-      peerManager <- PeerManagerPlatform[IO](config.peer, keyPair, config.sync, history)
-      executor = BlockExecutor[IO](config.blockChainConfig, history, blockPool, consensus)
-      txPool    <- TxPool[IO](peerManager)
-      ommerPool <- OmmerPool[IO](history)
-      broadcaster = Broadcaster[IO](peerManager)
-      synchronizer <- Synchronizer[IO](peerManager, executor, txPool, ommerPool, broadcaster)
-      random = new SecureRandom()
-      _      = log.info(s"keystore: ${config.keystore.keystoreDir}")
-      keyStore      <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
-      miner         <- BlockMiner[IO](synchronizer)
-      filterManager <- FilterManager[IO](miner, keyStore, FilterConfig())
-      publicAPI <- PublicApiImpl(history,
-                                 config.blockChainConfig,
-                                 config.miningConfig,
-                                 miner,
-                                 keyStore,
-                                 filterManager,
-                                 config.rpc.publicApiVersion)
-      privateAPI <- PrivateApiImpl(keyStore, history, config.blockChainConfig, txPool)
-      rpcServer = if (config.rpc.publicApiEnable) {
-        val rpcServer = RpcServer().unsafeRunSync().mountAPI(publicAPI).mountAPI(privateAPI)
-        log.info("api rpc server binding...")
-        val bind = new InetSocketAddress("localhost", config.rpc.publicApiPort)
-        log.info("api rpc server bind done")
-        val server = Server.websocket(bind, rpcServer.pipe).unsafeRunSync()
-        Some(server)
-      } else { None }
-    } yield new FullNode[IO](config, peerManager, synchronizer, keyStore, miner, rpcServer)
+  private def newFullNode(
+      config: FullNodeConfig,
+      history: History[IO],
+      consensus: Consensus[IO],
+      blockPool: BlockPool[IO]
+  )(implicit F: ConcurrentEffect[IO], EC: ExecutionContext, T: Timer[IO]): IO[FullNode[IO]] =
+    FullNode.forConfig(config)
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
     log.info("in createNodes")
     val fullNodeConfigs = FullNodeConfig.fill(n)
-    val signers = (1 to n)
-      .map(_ => {
-        SecP256k1.generateKeyPair().unsafeRunSync()
-      })
-      .toList
+    val signers = (1 to n).toList
+      .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair())
+      .unsafeRunSync()
     val (configs, minerSingers) = selectMiner(n, m, fullNodeConfigs, signers)
 
     log.info(minerSingers.toString)
@@ -132,9 +95,8 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
             fullNode <- newFullNode(config, history, consensus, blockPool)
           } yield fullNode
       }
-      _ <- nodes.update(_ ++ newNodes.map(x => x.id -> x).toMap)
-
-      _ <- miners.update(_ ++ newNodes.filter(n => n.config.miningConfig.miningEnabled).map(x => x.id -> x).toMap)
+      _ <- nodes.update(_ ++ newNodes.map(x => x.id                                       -> x).toMap)
+      _ <- miners.update(_ ++ newNodes.filter(n => n.config.mining.enabled).map(x => x.id -> x).toMap)
     } yield newNodes.map(x => infoFromNode(x))
   }
 
@@ -166,15 +128,18 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
 
   private def getNode(id: NodeId): IO[FullNode[IO]] = nodes.get.map(xs => xs(id))
 
+  private def getnodes: IO[List[FullNode[IO]]] = nodes.get.map(_.values.toList)
+
   override def getNodes: IO[List[NodeInfo]] = nodes.get.map(_.values.toList.map(n => infoFromNode(n)))
 
   override def getMiners: IO[List[NodeInfo]] = miners.get.map(_.values.toList.map(n => infoFromNode(n)))
 
-  override def stopMiners(ids: List[String]): IO[Unit] = {
-    val r = ids.map(id => miners.get.map(_(id).miner.stop.unsafeRunSync()).unsafeRunSync())
-    ids.map(id => miners.update(_ - id).unsafeRunSync())
-    IO.pure(Unit)
-  }
+  override def stopMiners(ids: List[NodeId]): IO[Unit] =
+    for {
+      nodes <- miners.get.map(m => ids.map(id => m(id)))
+      _     <- nodes.traverse(_.stop)
+      _     <- miners.update(_ -- ids)
+    } yield ()
 
   private def createConfigs(n: Int, m: Int): List[FullNodeConfig] = {
     val fullNodeConfigs = FullNodeConfig.fill(n)
@@ -183,16 +148,18 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
       val gap = n / m
       fullNodeConfigs.zipWithIndex.map {
         case (config, index) =>
-          if (index % gap == 0) config.copy(miningConfig = config.miningConfig.copy(miningEnabled = true))
+          if (index % gap == 0) config.copy(mining = config.mining.copy(enabled = true))
           else config
       }
     }
   }
 
-  private def selectMiner(n: Int,
-                          m: Int,
-                          fullNodeConfigs: List[FullNodeConfig],
-                          signers: List[KeyPair]): (List[FullNodeConfig], List[KeyPair]) =
+  private def selectMiner(
+      n: Int,
+      m: Int,
+      fullNodeConfigs: List[FullNodeConfig],
+      signers: List[KeyPair]
+  ): (List[FullNodeConfig], List[KeyPair]) =
     if (m == 0) (fullNodeConfigs, List.empty)
     else {
       val gap                    = (n + m - 1) / m
@@ -201,19 +168,18 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
         case ((config, signer), index) =>
           if (index % gap == 0) {
             miners += signer
-            config.copy(miningConfig = config.miningConfig.copy(miningEnabled = true),
-                        rpc = config.rpc.copy(publicApiEnable = true))
+            config.copy(mining = config.mining.copy(enabled = true), rpc = config.rpc.copy(enabled = true))
           } else config
       }
       (configs, miners.toList)
     }
 
-  override def setMiner(ids: List[String]): IO[Unit] = {
-    val newMiners = ids.map(id => nodes.get.map(_(id)).unsafeRunSync())
-    newMiners.map(_.miner.start.unsafeRunSync())
-    miners.update(_ ++ newMiners.map(x => x.id -> x).toMap)
-    IO.pure(Unit)
-  }
+  override def setMiner(ids: List[String]): IO[Unit] =
+    for {
+      newMiners <- nodes.get.map(m => ids.map(id => m(id)))
+      _         <- newMiners.traverse(_.start)
+      _         <- miners.update(_ ++ newMiners.map(x => x.id -> x).toMap)
+    } yield ()
 
   override def getNodeInfo(id: String): IO[NodeInfo] = getNode(id).map(x => infoFromNode(x))
 
@@ -231,21 +197,23 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
 
   override def connect(topology: String): IO[Unit] = topology match {
     case "ring" =>
-      val xs = nodes.get.unsafeRunSync().values.toList
-      IO {
-        (xs :+ xs.head).sliding(2).foreach {
+      for {
+        xs <- nodes.get.map(_.values.toList)
+        _ <- (xs :+ xs.head).sliding(2).toList.traverse[IO, Unit] {
           case a :: b :: Nil =>
-            a.peerManager.addPeerNode(b.peerNode).unsafeRunSync()
+            a.peerManager.addPeerNode(b.peerNode)
           case _ =>
-            ()
+            IO.unit
         }
-      }
+      } yield ()
 
     case "star" =>
-      val xs = nodes.get.unsafeRunSync().values.toList
-      xs.tail.traverse(_.peerManager.addPeerNode(xs.head.peerNode)).void
+      for {
+        xs <- nodes.get.map(_.values.toList)
+        _  <- xs.tail.traverse(_.peerManager.addPeerNode(xs.head.peerNode))
+      } yield ()
 
-    case _ => IO.raiseError(new RuntimeException(s"${topology} not supportted"))
+    case _ => IO.raiseError(new RuntimeException(s"${topology} not supported"))
   }
 
   override def events: fs2.Stream[IO, SimulationEvent] = ???
@@ -258,29 +226,39 @@ class SimulationImpl(val topic: Topic[IO, Option[SimulationEvent]],
     } yield ()
 
   override def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit] = {
-    val minerTxPool = nodes.get.unsafeRunSync().get(id).map(_.synchronizer.txPool)
-    val stxs = t match {
-      case "DoubleSpend" => txGraphGen.nextDoubleSpendTxs2(nStx)
-      case _             => txGraphGen.nextValidTxs(nStx)
-    }
-    minerTxPool.map(_.addTransactions(stxs)).getOrElse(IO.pure(Unit))
+    for {
+      minerTxPool <- nodes.get.map(_.get(id).map(_.synchronizer.txPool))
+      stxs = t match {
+        case "DoubleSpend" => txGraphGen.nextDoubleSpendTxs2(nStx)
+        case _             => txGraphGen.nextValidTxs(nStx)
+      }
+      _ <- minerTxPool.map(_.addTransactions(stxs)).getOrElse(IO.unit)
+    } yield ()
   }
 
   override def getBestBlock: IO[List[Block]] =
-    nodes.get.map(_.values.toList.map(_.synchronizer.history.getBestBlock.unsafeRunSync()))
+    for {
+      nodes  <- getnodes
+      blocks <- nodes.traverse(_.synchronizer.history.getBestBlock)
+    } yield blocks
 
   override def getPendingTx: IO[List[List[SignedTransaction]]] =
-    nodes.get.map(_.values.toList.map(_.synchronizer.txPool.getPendingTransactions.unsafeRunSync().map(_.stx)))
+    for {
+      nodes <- getnodes
+      txs   <- nodes.traverse(_.synchronizer.txPool.getPendingTransactions.map(_.map(_.stx)))
+    } yield txs
 
   override def getShakedPeerID: IO[List[List[String]]] =
     for {
-      nodesMap <- nodes.get
-      peerIds = nodesMap.values.toList
-        .map(_.peerManager.connected.unsafeRunSync().map(_.id))
-    } yield peerIds
+      nodes <- getnodes
+      ids <- nodes.traverse(_.peerManager.connected.map(_.map(_.id)))
+    } yield ids
 
   override def getBlocksByNumber(number: BigInt): IO[List[Block]] =
-    nodes.get.map(_.values.toList.map(_.synchronizer.history.getBlockByNumber(number).unsafeRunSync().get))
+    for {
+      nodes  <- getnodes
+      blocks <- nodes.traverse(_.synchronizer.history.getBlockByNumber(number).map(_.get))
+    } yield blocks
 
   override def getAccounts(): IO[List[(Address, Account)]] = IO { txGraphGen.accountMap.toList }
 

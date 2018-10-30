@@ -1,7 +1,5 @@
 package jbok.network.rpc
 
-import java.nio.charset.StandardCharsets
-
 import _root_.io.circe._
 import _root_.io.circe.generic.auto._
 import _root_.io.circe.parser._
@@ -13,7 +11,6 @@ import jbok.network.common.{RequestId, RequestMethod}
 import jbok.network.json.{JsonRPCNotification, JsonRPCResponse}
 import jbok.network.rpc.RpcServer._
 import scodec.Codec
-import scodec.codecs._
 
 import scala.language.experimental.macros
 
@@ -28,33 +25,33 @@ class RpcServer(
   def addHandlers(handlers: List[(String, String => IO[String])]): RpcServer =
     new RpcServer(this.handlers ++ handlers.toMap, queue)
 
-  val pipe: Pipe[IO, String, String] = { input =>
-    val s = input.evalMap[IO, String] { s =>
-      log.debug(s"received: ${s}")
-      RequestMethod[String].method(s) match {
-        case Some(m) =>
-          log.debug(s"handling request ${s}")
-          handlers.get(m) match {
-            case Some(f) =>
-              f(s).attempt.map {
-                case Left(e) =>
-                  log.debug(s"internal error: ${e.toString}")
-                  JsonRPCResponse.internalError(e.toString).asJson.noSpaces
+  def handler(req: String): IO[String] = {
+    RequestMethod[String].method(req) match {
+      case Some(m) =>
+        log.debug(s"handling request ${req}")
+        handlers.get(m) match {
+          case Some(f) =>
+            f(req).attempt.map {
+              case Left(e) =>
+                log.debug(s"internal error: ${e.toString}")
+                JsonRPCResponse.internalError(e.toString).asJson.noSpaces
 
-                case Right(resp) =>
-                  log.debug(s"response: ${resp}")
-                  resp
-              }
-            case None =>
-              log.debug(s"method not found: ${m}")
-              IO.pure(JsonRPCResponse.methodNotFound(m, RequestId[String].id(s)).asJson.noSpaces)
-          }
-        case None =>
-          IO.pure(JsonRPCResponse.invalidRequest("no method specified").asJson.noSpaces)
-      }
+              case Right(resp) =>
+                log.debug(s"response: ${resp}")
+                resp
+            }
+          case None =>
+            log.debug(s"method not found: ${m}")
+            IO.pure(JsonRPCResponse.methodNotFound(m, RequestId[String].id(req)).asJson.noSpaces)
+        }
+      case None =>
+        IO.pure(JsonRPCResponse.invalidRequest("no method specified").asJson.noSpaces)
     }
+  }
 
-    queue.dequeue.merge(s)
+  val pipe: Pipe[IO, String, String] = { input =>
+    val handles = input.evalMap(handler)
+    queue.dequeue.merge(handles)
   }
 
   def notify[A: Encoder](method: String, a: A): IO[Unit] = {
@@ -74,7 +71,7 @@ object RpcServer {
       parse(a).flatMap(_.hcursor.downField("method").as[String]).toOption
   }
 
-  implicit val codec: Codec[String] = variableSizeBytes(uint16, string(StandardCharsets.UTF_8))
+  implicit val codec: Codec[String] = jbok.codec.rlp.codecs.rstring.codec
 
   def apply(
       handlers: Map[String, String => IO[String]] = Map.empty

@@ -1,29 +1,41 @@
 package jbok.network.server
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
+import java.util.concurrent.{Executors, TimeUnit}
 
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.implicits._
+import cats.effect._
 import cats.implicits._
+import com.codahale.metrics.ConsoleReporter
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
 import jbok.network.common.TcpUtil
-import org.http4s.HttpRoutes
+import org.http4s.{EntityDecoder, HttpRoutes, Request, Response, StaticFile}
 import org.http4s.dsl.Http4sDsl
-import org.http4s.server.blaze.BlazeBuilder
+import org.http4s.server.Router
+import org.http4s.server.blaze.{BlazeBuilder, BlazeServerBuilder}
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import scodec.Codec
 import scodec.bits.BitVector
-import cats.effect.implicits._
+
+import scala.concurrent.ExecutionContext
 
 trait Server[F[_]] {
-  def localAddress: InetSocketAddress
+  def bindAddress: InetSocketAddress
 
-  def stream: Stream[F, Unit]
+  def haltWhenTrue: SignallingRef[F, Boolean]
 
-  def start: F[Unit]
+  def serve: Stream[F, Unit]
 
-  def stop: F[Unit]
+  def start(implicit F: Concurrent[F]): F[Unit] =
+    haltWhenTrue.get.flatMap {
+      case false => F.unit
+      case true  => haltWhenTrue.set(false) *> serve.interruptWhen(haltWhenTrue).compile.drain.start.void
+    }
+
+  def stop(implicit F: Concurrent[F]): F[Unit] =
+    haltWhenTrue.set(true)
 }
 
 object Server {
@@ -32,14 +44,16 @@ object Server {
       T: Timer[F],
       AG: AsynchronousChannelGroup): F[Server[F]] =
     for {
-      haltWhenTrue <- SignallingRef[F, Boolean](true)
+      signal <- SignallingRef[F, Boolean](true)
     } yield
       new Server[F] {
         private[this] val log = org.log4s.getLogger
 
-        override val localAddress: InetSocketAddress = bind
+        override val bindAddress: InetSocketAddress = bind
 
-        override val stream: Stream[F, Unit] =
+        override val haltWhenTrue: SignallingRef[F, Boolean] = signal
+
+        override val serve: Stream[F, Unit] =
           fs2.io.tcp
             .serverWithLocalAddress[F](bind)
             .map {
@@ -62,15 +76,6 @@ object Server {
             }
             .parJoin(maxOpen)
             .handleErrorWith(e => Stream.eval[F, Unit](F.delay(log.error(e)(s"server error: ${e}"))))
-
-        override def start: F[Unit] =
-          haltWhenTrue.get.flatMap {
-            case false => F.unit
-            case true  => haltWhenTrue.set(false) *> stream.interruptWhen(haltWhenTrue).compile.drain.start.void
-          }
-
-        override def stop: F[Unit] =
-          haltWhenTrue.set(true)
       }
 
   def websocket[F[_], A: Codec](bind: InetSocketAddress, pipe: Pipe[F, A, A], maxOpen: Int = Int.MaxValue)(
@@ -78,14 +83,16 @@ object Server {
       T: Timer[F],
       AG: AsynchronousChannelGroup): F[Server[F]] =
     for {
-      haltWhenTrue <- SignallingRef[F, Boolean](true)
+      signal <- SignallingRef[F, Boolean](true)
     } yield
       new Server[F] {
         private[this] val log = org.log4s.getLogger
 
-        override val localAddress: InetSocketAddress = bind
+        override val bindAddress: InetSocketAddress = bind
 
-        override val stream: Stream[F, Unit] = {
+        override val haltWhenTrue: SignallingRef[F, Boolean] = signal
+
+        override val serve: Stream[F, Unit] = {
           val dsl = Http4sDsl[F]
           import dsl._
           val service = HttpRoutes.of[F] {
@@ -120,16 +127,70 @@ object Server {
             .withNio2(true)
 
           log.info(s"binding on ${bind}")
-          builder.serve.handleErrorWith(e => Stream.eval(F.delay(log.error(e)("onError")))).drain
+          builder.serve.drain
         }
+      }
 
-        override def start: F[Unit] =
-          haltWhenTrue.get.flatMap {
-            case false => F.unit
-            case true  => haltWhenTrue.set(false) *> stream.interruptWhen(haltWhenTrue).compile.drain.start.void
+  def http[F[_]](bind: InetSocketAddress, handle: String => F[String])(
+      implicit F: ConcurrentEffect[F],
+      T: Timer[F],
+      cs: ContextShift[F]
+  ): F[Server[F]] =
+    for {
+      signal <- SignallingRef[F, Boolean](true)
+    } yield
+      new Server[F] {
+        private[this] val log = org.log4s.getLogger
+
+        override val bindAddress: InetSocketAddress = bind
+
+        override val haltWhenTrue: SignallingRef[F, Boolean] = signal
+
+        override val serve: Stream[F, Unit] = {
+          val dsl = Http4sDsl[F]
+          import dsl._
+
+          val blockEC = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(4))
+
+          def static(file: String, blockingEc: ExecutionContext, request: Request[F]): F[Response[F]] =
+            StaticFile.fromResource[F]("/" + file, blockingEc, Some(request)).getOrElseF(NotFound())
+
+          val service = HttpRoutes.of[F] {
+            case request @ GET -> Root / path if List(".js", ".css", ".map", ".html", ".webm").exists(path.endsWith) =>
+              static(path, blockEC, request)
+
+            case request @ GET -> Root / "api" =>
+              EntityDecoder.text
+                .decode(request, true)
+                .semiflatMap { req =>
+                  handle(req).flatMap(res => Ok.apply(res))
+                }
+                .getOrElseF(BadRequest())
           }
 
-        override def stop: F[Unit] =
-          haltWhenTrue.set(true)
+          import org.http4s.server.middleware.Metrics
+          import org.http4s.metrics.dropwizard.Dropwizard
+          import com.codahale.metrics.SharedMetricRegistries
+          implicit val clock = Clock.create[F]
+          val registry       = SharedMetricRegistries.getOrCreate("default")
+          val meteredRoutes  = Metrics[F](Dropwizard(registry, "server"))(service)
+          val reporter = ConsoleReporter
+            .forRegistry(registry)
+            .convertRatesTo(TimeUnit.SECONDS)
+            .convertDurationsTo(TimeUnit.MILLISECONDS)
+            .build()
+          reporter.start(1, TimeUnit.MINUTES)
+
+          val httpApp = Router("/" -> meteredRoutes).orNotFound
+
+          log.info(s"start serving http at ${bind}")
+
+          BlazeServerBuilder[F]
+            .bindSocketAddress(bind)
+            .withHttpApp(httpApp)
+            .withNio2(true)
+            .serve
+            .drain
+        }
       }
 }

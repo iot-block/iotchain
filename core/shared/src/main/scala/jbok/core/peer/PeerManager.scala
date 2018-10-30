@@ -32,7 +32,7 @@ abstract class PeerManager[F[_]](
 )(implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup) {
   private[this] val log = org.log4s.getLogger
 
-  val peerNode: PeerNode = PeerNode(keyPair.public, config.interface, config.port)
+  val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port)
 
   def handleError(e: Throwable): Stream[F, Unit] = e match {
     case _: AsynchronousCloseException | _: ClosedChannelException =>
