@@ -151,8 +151,12 @@ object Server {
 
           val blockEC = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(4))
 
-          def static(file: String, blockingEc: ExecutionContext, request: Request[F]): F[Response[F]] =
-            StaticFile.fromResource[F]("/" + file, blockingEc, Some(request)).getOrElseF(NotFound())
+          // TODO: fix resource path
+          def static(file: String, blockingEc: ExecutionContext, request: Request[F]): F[Response[F]] = {
+            StaticFile
+              .fromResource[F]("/META-INF/resources/webjars/jbok-app/0.0.1-SNAPSHOT/" + file, blockingEc, Some(request))
+              .getOrElseF(NotFound())
+          }
 
           val service = HttpRoutes.of[F] {
             case request @ GET -> Root / path if List(".js", ".css", ".map", ".html", ".webm").exists(path.endsWith) =>

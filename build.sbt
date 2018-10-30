@@ -167,8 +167,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
 lazy val appJS = app.js
 lazy val appJVM = app.jvm.settings(
   scalaJSProjects := Seq(appJS),
-  pipelineStages in Assets := Seq(scalaJSPipeline),
-  pipelineStages := Seq(digest, gzip)
+  pipelineStages in Assets := Seq(scalaJSPipeline)
 )
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)
