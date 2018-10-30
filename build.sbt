@@ -58,6 +58,8 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       // logging
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "org.log4s"      %% "log4s"          % "1.6.1",
+      // command line
+      "org.rogach" %%% "scallop" % "3.1.3",
       // test
       "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
       "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
@@ -117,9 +119,9 @@ lazy val examples = crossProject(JSPlatform, JVMPlatform)
 lazy val app = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
-  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin))
+  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin, WebScalaJSBundlerPlugin))
   .jsSettings(commonJsSettings)
-  .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
+  .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
   .settings(
     name := "jbok-app",
     packageName in Docker := "jbok",
@@ -160,6 +162,14 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
     webpackBundlingMode := BundlingMode.LibraryAndApplication()
   )
   .dependsOn(core % CompileAndTest, common % CompileAndTest)
+
+// for integrating with sbt-web
+lazy val appJS = app.js
+lazy val appJVM = app.jvm.settings(
+  scalaJSProjects := Seq(appJS),
+  pipelineStages in Assets := Seq(scalaJSPipeline),
+  pipelineStages := Seq(digest, gzip)
+)
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
@@ -229,7 +239,9 @@ lazy val http4s = Seq(
   "org.http4s" %% "http4s-blaze-server",
   "org.http4s" %% "http4s-blaze-client",
   "org.http4s" %% "http4s-circe",
-  "org.http4s" %% "http4s-dsl"
+  "org.http4s" %% "http4s-dsl",
+  "org.http4s" %% "http4s-dropwizard-metrics",
+  "org.http4s" %% "http4s-prometheus-metrics"
 ).map(_ % V.http4s)
 
 lazy val commonSettings = Seq(

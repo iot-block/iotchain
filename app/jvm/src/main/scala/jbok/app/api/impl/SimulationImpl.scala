@@ -57,11 +57,9 @@ class SimulationImpl(
 
   private def newFullNode(
       config: FullNodeConfig,
-      history: History[IO],
-      consensus: Consensus[IO],
-      blockPool: BlockPool[IO]
+      consensus: Consensus[IO]
   )(implicit F: ConcurrentEffect[IO], EC: ExecutionContext, T: Timer[IO]): IO[FullNode[IO]] =
-    FullNode.forConfig(config)
+    FullNode(config, consensus)
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
     log.info("in createNodes")
@@ -92,7 +90,7 @@ class SimulationImpl(
             clique = Clique[IO](cliqueConfig, history, Address(signers(idx)), sign)
             blockPool <- BlockPool(history)
             consensus = new CliqueConsensus[IO](blockPool, clique)
-            fullNode <- newFullNode(config, history, consensus, blockPool)
+            fullNode <- newFullNode(config, consensus)
           } yield fullNode
       }
       _ <- nodes.update(_ ++ newNodes.map(x => x.id                                       -> x).toMap)

@@ -1,4 +1,4 @@
-package jbok.core
+package jbok.app
 
 import cats.effect.IO
 import cats.implicits._
@@ -9,6 +9,7 @@ import jbok.core.mining.TxGen
 import jbok.core.pool.BlockPool
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.common.execution._
+import jbok.core.History
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
@@ -32,8 +33,7 @@ class FullNodeFixture {
     val clique    = Clique[IO](cliqueConfig, history, signer, sign)
     val blockPool = BlockPool(history).unsafeRunSync()
     val consensus = new CliqueConsensus[IO](blockPool, clique)
-
-    FullNode.apply[IO](config, history, consensus, blockPool).unsafeRunSync()
+    FullNode(config, consensus).unsafeRunSync()
   }
 }
 
@@ -94,8 +94,6 @@ class FullNodeSpec extends JbokSpec {
       val mined = miner.miningStream.take(1).compile.toList.unsafeRunSync().head
       Thread.sleep(3000)
       nodes.head.synchronizer.history.getBestBlock.unsafeRunSync() shouldBe mined
-//      nodes.map(_.synchronizer.history.getBestBlock.unsafeRunSync() shouldBe mined)
-
       nodes.traverse(_.stop).unsafeRunSync()
     }
   }

@@ -9,6 +9,7 @@ import jbok.app.api.FilterManager
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
 import jbok.core.History
 import jbok.core.config.Configs.{FilterConfig, FullNodeConfig, SyncConfig}
+import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.BlockExecutor
@@ -23,6 +24,7 @@ import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 import jbok.persistent.KeyValueDB
+import jbok.persistent.leveldb.{LevelDB, LevelDBConfig}
 import scodec.bits.ByteVector
 
 case class FullNode[F[_]](
@@ -68,7 +70,7 @@ object FullNode {
   ): IO[FullNode[IO]] = {
     val random = new SecureRandom()
     for {
-      db <- KeyValueDB.inMemory[IO]
+      db <- LevelDB(LevelDBConfig(s"${config.datadir}/db"))
       keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
       history <- History(db)
       // load genesis if does not exist
@@ -77,6 +79,45 @@ object FullNode {
       sign      = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, keyPair) }
       clique    = Clique(CliqueConfig(), history, Address(keyPair), sign)
       consensus = new CliqueConsensus[IO](blockPool, clique)
+      blockPool   <- BlockPool(history)
+      peerManager <- PeerManagerPlatform[IO](config.peer, keyPair, SyncConfig(), history)
+      executor = BlockExecutor[IO](config.blockchain, history, blockPool, consensus)
+      txPool    <- TxPool[IO](peerManager)
+      ommerPool <- OmmerPool[IO](history)
+      broadcaster = Broadcaster[IO](peerManager)
+      synchronizer <- Synchronizer[IO](peerManager, executor, txPool, ommerPool, broadcaster)
+      keyStore     <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
+      miner        <- BlockMiner[IO](synchronizer)
+
+      // mount rpc
+      filterManager <- FilterManager.apply(miner, keyStore, FilterConfig())
+      publicAPI <- PublicApiImpl(
+        history,
+        config.blockchain,
+        config.mining,
+        miner,
+        keyStore,
+        filterManager,
+        1
+      )
+
+      privateAPI <- PrivateApiImpl(keyStore, history, config.blockchain, txPool)
+      rpc        <- RpcServer()
+      pipe = rpc.mountAPI(publicAPI).mountAPI(privateAPI).pipe
+      server <- Server.websocket(config.rpc.addr, pipe)
+    } yield FullNode[IO](config, miner, keyStore, server)
+  }
+
+  def apply(config: FullNodeConfig, consensus: Consensus[IO])(
+      implicit F: ConcurrentEffect[IO],
+      T: Timer[IO],
+      CS: ContextShift[IO]
+  ): IO[FullNode[IO]] = {
+    val random = new SecureRandom()
+    for {
+      db <- KeyValueDB.inMemory[IO]
+      keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+      history     <- History(db)
       blockPool   <- BlockPool(history)
       peerManager <- PeerManagerPlatform[IO](config.peer, keyPair, SyncConfig(), history)
       executor = BlockExecutor[IO](config.blockchain, history, blockPool, consensus)
