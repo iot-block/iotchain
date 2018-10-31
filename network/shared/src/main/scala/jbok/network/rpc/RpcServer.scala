@@ -25,8 +25,8 @@ class RpcServer(
   def addHandlers(handlers: List[(String, String => IO[String])]): RpcServer =
     new RpcServer(this.handlers ++ handlers.toMap, queue)
 
-  def handler(req: String): IO[String] = {
-    RequestMethod[String].method(req) match {
+  def handle(req: String): IO[String] = {
+    requestMethod.method(req) match {
       case Some(m) =>
         log.debug(s"handling request ${req}")
         handlers.get(m) match {
@@ -50,7 +50,7 @@ class RpcServer(
   }
 
   val pipe: Pipe[IO, String, String] = { input =>
-    val handles = input.evalMap(handler)
+    val handles = input.evalMap(handle)
     queue.dequeue.merge(handles)
   }
 

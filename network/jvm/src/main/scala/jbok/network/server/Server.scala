@@ -162,7 +162,7 @@ object Server {
             case request @ GET -> Root / path if List(".js", ".css", ".map", ".html", ".webm").exists(path.endsWith) =>
               static(path, blockEC, request)
 
-            case request @ GET -> Root / "api" =>
+            case request @ POST -> Root / "api" =>
               EntityDecoder.text
                 .decode(request, true)
                 .semiflatMap { req =>

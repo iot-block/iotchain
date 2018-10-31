@@ -1,9 +1,6 @@
 package jbok.app
 
-import java.io.{File, IOException, RandomAccessFile}
 import java.net.InetSocketAddress
-import java.nio.channels.{FileChannel, FileLock}
-import java.nio.file.{OpenOption, Path, Paths, StandardOpenOption}
 import java.security.SecureRandom
 
 import cats.effect._
@@ -33,7 +30,8 @@ case class FullNode[F[_]](
     config: FullNodeConfig,
     miner: BlockMiner[F],
     keyStore: KeyStore[F],
-    rpcServer: Server[F]
+    rpc: RpcServer,
+    server: Server[F],
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   val synchronizer = miner.synchronizer
   val peerManager  = synchronizer.peerManager
@@ -50,7 +48,7 @@ case class FullNode[F[_]](
       _ <- peerManager.start
       _ <- synchronizer.start
       _ <- txPool.start
-      _ <- if (config.rpc.enabled) rpcServer.start else F.unit
+      _ <- if (config.rpc.enabled) server.start else F.unit
       _ <- if (config.mining.enabled) miner.start else F.unit
     } yield ()
 
@@ -58,7 +56,7 @@ case class FullNode[F[_]](
     for {
       _ <- txPool.stop
       _ <- synchronizer.stop
-      _ <- rpcServer.stop
+      _ <- server.stop
       _ <- miner.stop
       _ <- peerManager.stop
     } yield ()
@@ -104,10 +102,9 @@ object FullNode {
       )
 
       privateAPI <- PrivateApiImpl(keyStore, history, config.blockchain, txPool)
-      rpc        <- RpcServer()
-      pipe = rpc.mountAPI(publicAPI).mountAPI(privateAPI).pipe
-      server <- Server.websocket(config.rpc.addr, pipe)
-    } yield FullNode[IO](config, miner, keyStore, server)
+      rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
+      server     <- Server.websocket(config.rpc.addr, rpc.pipe)
+    } yield FullNode[IO](config, miner, keyStore, rpc, server)
   }
 
   def apply(config: FullNodeConfig, consensus: Consensus[IO])(
@@ -141,9 +138,8 @@ object FullNode {
       )
 
       privateAPI <- PrivateApiImpl(keyStore, history, config.blockchain, txPool)
-      rpc        <- RpcServer()
-      pipe = rpc.mountAPI(publicAPI).mountAPI(privateAPI).pipe
-      server <- Server.websocket(config.rpc.addr, pipe)
-    } yield FullNode[IO](config, miner, keyStore, server)
+      rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
+      server     <- Server.websocket(config.rpc.addr, rpc.pipe)
+    } yield FullNode[IO](config, miner, keyStore, rpc, server)
   }
 }
