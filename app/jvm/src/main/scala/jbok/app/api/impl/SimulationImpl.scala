@@ -223,7 +223,7 @@ class SimulationImpl(
       _ <- submitStxsToNode(nStx, t, nodeId)
     } yield ()
 
-  override def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit] = {
+  override def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit] =
     for {
       minerTxPool <- nodes.get.map(_.get(id).map(_.synchronizer.txPool))
       stxs = t match {
@@ -232,7 +232,6 @@ class SimulationImpl(
       }
       _ <- minerTxPool.map(_.addTransactions(stxs)).getOrElse(IO.unit)
     } yield ()
-  }
 
   override def getBestBlock: IO[List[Block]] =
     for {
@@ -249,7 +248,7 @@ class SimulationImpl(
   override def getShakedPeerID: IO[List[List[String]]] =
     for {
       nodes <- getnodes
-      ids <- nodes.traverse(_.peerManager.connected.map(_.map(_.id)))
+      ids   <- nodes.traverse(_.peerManager.connected.map(_.map(_.id)))
     } yield ids
 
   override def getBlocksByNumber(number: BigInt): IO[List[Block]] =

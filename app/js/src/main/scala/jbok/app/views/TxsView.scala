@@ -94,19 +94,6 @@ case class TxsView(state: AppState) {
         val modal       = Modal("send", newTxView.render, onConfirm, onCancel)
         modal.render().bind
       }
-      {
-        val client = state.currentId.bind match {
-          case Some(id) => state.clients.value.get(id)
-          case _ => None
-        }
-        val contractView = DeployContractView(state)
-        def onConfirm(): Unit= {
-          contractView.submit()
-        }
-        def onCancel(): Unit  = {}
-        val modal       = Modal("deploy", contractView.render, onConfirm, onCancel)
-        modal.render().bind
-      }
       </div>
     </div>
 }

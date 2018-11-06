@@ -54,6 +54,7 @@ case class AppState(
       jbokClients <- nodes.traverse(node => JbokClient(new URI(node.rpcAddr.toString)))
       _ = clients.value = nodes.map(_.id).zip(jbokClients).toMap
       nodeAddresses <- clients.value.toList.traverse(c => c._2.admin.listAccounts.map(c._1 -> _))
+      _ = println(s"nodeAddress: $nodeAddresses")
       _ = nodeAddresses.map {
         case (id, addresses) =>
           addressInNode.value(id).value ++= addresses

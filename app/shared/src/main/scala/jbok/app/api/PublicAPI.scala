@@ -14,8 +14,8 @@ object BlockParam {
 }
 
 case class CallTx(
-    from: Option[ByteVector],
-    to: Option[ByteVector],
+    from: Option[Address],
+    to: Option[Address],
     gas: Option[BigInt],
     gasPrice: BigInt,
     value: BigInt,

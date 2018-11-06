@@ -5,7 +5,7 @@ import java.util.UUID
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var}
-import org.scalajs.dom.raw.HTMLInputElement
+import org.scalajs.dom.raw.{HTMLInputElement, HTMLTextAreaElement}
 import org.scalajs.dom.{Element, Event, KeyboardEvent}
 
 case class FormEntry(name: String, `type`: String = "text", value: Var[String] = Var("")) {
@@ -30,6 +30,9 @@ case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Un
       case input: HTMLInputElement => {
         println(data)
         entryMap.get(input.name).foreach(x => x.value.value = input.value.trim)
+      }
+      case textarea: HTMLTextAreaElement => {
+        entryMap.get(textarea.name).foreach(x => x.value.value = textarea.value.trim)
       }
       case _ =>
     }

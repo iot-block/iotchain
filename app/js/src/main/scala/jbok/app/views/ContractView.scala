@@ -11,12 +11,13 @@ import scodec.bits.ByteVector
 import jbok.evm.abi.parseContract
 
 case class ContractView(state: AppState) {
-  val form = Form(
+  val watchForm = Form(
     Constants(FormEntry("address"), FormEntry("abi", "textarea")), { data =>
       state.currentId.value.map { id =>
         val abi     = parseContract(data("abi").trim)
         val address = Address(ByteVector.fromValidHex(data("address")))
-        if (data("data").trim.nonEmpty && abi.isRight && !state.contractInfo.value
+        println(s"send: ${data} ")
+        if (data("abi").trim.nonEmpty && abi.isRight && !state.contractInfo.value
               .map(_.address)
               .toSet
               .contains(address))
@@ -24,14 +25,14 @@ case class ContractView(state: AppState) {
       }
     }
   )
-  def onConfirm() = {
-    val data = form.data
-    form.submit(data)
-    form.clear()
+  def watchOnConfirm() = {
+    val data = watchForm.data
+    watchForm.submit(data)
+    watchForm.clear()
   }
-  def onCancel() =
-    form.clear()
-  val modal = Modal("watch", form.render(), onConfirm, onCancel)
+  def watchOnCancel() =
+    watchForm.clear()
+  val watchModal = Modal("watch", watchForm.render(), watchOnConfirm, watchOnCancel)
   @binding.dom
   def render: Binding[Element] =
     <div>
@@ -78,16 +79,27 @@ case class ContractView(state: AppState) {
       </table>
       }
       <div class="flex">
-        {modal.render().bind}
+        {watchModal.render().bind}
+        {
+          val client = state.currentId.bind match {
+            case Some(id) => state.clients.value.get(id)
+            case _ => None
+          }
+          val contractView = DeployContractView(state)
+          def onConfirm(): Unit= {
+            contractView.submit()
+          }
+          def onCancel(): Unit  = {}
+          val modal       = Modal("deploy", contractView.render, onConfirm, onCancel)
+          modal.render().bind
+        }
         {
           val client = state.currentId.bind match {
             case Some(id) => state.clients.value.get(id)
             case _ => None
           }
           val callTx = CallTxView(state)
-          def onConfirm(): Unit= {
-            callTx.submit()
-          }
+          def onConfirm(): Unit= {}
           def onCancel(): Unit  = {}
           val modal       = Modal("Contract Call", callTx.render, onConfirm, onCancel)
           modal.render().bind
