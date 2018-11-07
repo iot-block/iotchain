@@ -10,6 +10,7 @@ import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.common.execution._
+import jbok.core.config.GenesisConfig
 
 import scala.collection.mutable
 
@@ -24,11 +25,10 @@ case class Test(signers: List[String], votes: List[TestVote], results: List[Stri
 trait SnapshotFixture {
   def mkHistory(signers: List[Address]) = {
     val extra   = Clique.fillExtraData(signers)
-    val header  = Genesis.header.copy(extraData = extra)
-    val block   = Genesis.block.copy(header = header)
-    val db      = KeyValueDB.inMemory[IO].unsafeRunSync()
+    val config = GenesisConfig.default.copy(extraData = extra)
+    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
     val history = History[IO](db).unsafeRunSync()
-    history.loadGenesisBlock(Some(block)).unsafeRunSync()
+    history.init(config).unsafeRunSync()
     history
   }
 
@@ -78,7 +78,7 @@ class SnapshotSpec extends JbokSpec {
     }
 
     val head           = headers.last
-    val db             = KeyValueDB.inMemory[IO].unsafeRunSync()
+    val db             = KeyValueDB.inmem[IO].unsafeRunSync()
     val keyPair        = SecP256k1.generateKeyPair().unsafeRunSync()
     val sign           = (bv: ByteVector) => SecP256k1.sign(bv.toArray, keyPair)
     val clique         = Clique[IO](config, history, Address(keyPair), sign)

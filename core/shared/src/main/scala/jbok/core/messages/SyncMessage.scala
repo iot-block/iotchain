@@ -3,15 +3,18 @@ package jbok.core.messages
 import java.util.UUID
 
 import jbok.core.models.{BlockBody, BlockHeader, Receipt}
-import jbok.crypto.authds.mpt.Node
+import jbok.core.sync.NodeHash
 import scodec.bits.ByteVector
 
 sealed trait SyncMessage extends Message {
   def id: String
 }
 
-case class GetBlockBodies(hashes: List[ByteVector], id: String = UUID.randomUUID().toString) extends SyncMessage
-case class BlockBodies(bodies: List[BlockBody], id: String)                                  extends SyncMessage
+sealed trait SyncRequest  extends SyncMessage
+sealed trait SyncResponse extends SyncMessage
+
+case class GetBlockBodies(hashes: List[ByteVector], id: String = UUID.randomUUID().toString) extends SyncRequest
+case class BlockBodies(bodies: List[BlockBody], id: String)                                  extends SyncResponse
 
 case class GetBlockHeaders(
     block: Either[BigInt, ByteVector],
@@ -19,13 +22,11 @@ case class GetBlockHeaders(
     skip: Int,
     reverse: Boolean,
     id: String = UUID.randomUUID().toString
-) extends SyncMessage
-case class BlockHeaders(headers: List[BlockHeader], id: String) extends SyncMessage
+) extends SyncRequest
+case class BlockHeaders(headers: List[BlockHeader], id: String) extends SyncResponse
 
-case class GetReceipts(blockHashes: List[ByteVector], id: String = UUID.randomUUID().toString) extends SyncMessage
-case class Receipts(receiptsForBlocks: List[List[Receipt]], id: String)                        extends SyncMessage
+case class GetReceipts(blockHashes: List[ByteVector], id: String = UUID.randomUUID().toString) extends SyncRequest
+case class Receipts(receiptsForBlocks: List[List[Receipt]], id: String)                        extends SyncResponse
 
-case class GetNodeData(mptElementsHashes: List[ByteVector], id: String = UUID.randomUUID().toString) extends SyncMessage
-case class NodeData(values: List[ByteVector], id: String) extends SyncMessage {
-  def getMptNode(idx: Int): Node = ???
-}
+case class GetNodeData(nodeHashes: List[NodeHash], id: String = UUID.randomUUID().toString) extends SyncRequest
+case class NodeData(values: List[ByteVector], id: String)                               extends SyncResponse

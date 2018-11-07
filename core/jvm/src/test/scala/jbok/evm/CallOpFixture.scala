@@ -7,7 +7,7 @@ import jbok.evm._
 import jbok.testkit.VMGens
 import scodec.bits.ByteVector
 
-class CallOpFixture(val config: EvmConfig, val startState: WorldStateProxy[IO]) {
+class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
   import config.feeSchedule._
 
   val ownerAddr = Address(0xcafebabe)

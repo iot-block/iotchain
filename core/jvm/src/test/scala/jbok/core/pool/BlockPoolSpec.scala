@@ -13,14 +13,14 @@ trait BlockPoolFixture extends HistoryFixture {
   val blockPool = BlockPool[IO](history).unsafeRunSync()
 
   def setBestBlockNumber(n: BigInt) =
-    history.setBestBlockNumber(n).unsafeRunSync()
+    history.putBestBlockNumber(n).unsafeRunSync()
 
   def setTotalDifficultyForParent(block: Block, td: BigInt) =
-    history.save(block.header.parentHash, td).unsafeRunSync()
+    history.putDifficulty(block.header.parentHash, td).unsafeRunSync()
 
   def setBlockExists(block: Block, inChain: Boolean, inQueue: Boolean) =
     if (inChain) {
-      history.save(block).unsafeRunSync()
+      history.putBlock(block).unsafeRunSync()
     } else if (inQueue) {
       blockPool.addBlock(block, 1).unsafeRunSync()
     } else {
@@ -28,12 +28,12 @@ trait BlockPoolFixture extends HistoryFixture {
     }
 
   def setBestBlock(block: Block) = {
-    history.save(block).unsafeRunSync()
-    history.setBestBlockNumber(block.header.number).unsafeRunSync()
+    history.putBlock(block).unsafeRunSync()
+    history.putBestBlockNumber(block.header.number).unsafeRunSync()
   }
 
   def setTotalDifficultyForBlock(block: Block, td: BigInt) =
-    history.save(block.header.hash, td).unsafeRunSync()
+    history.putDifficulty(block.header.hash, td).unsafeRunSync()
 
   def randomHash() = Gens.byteVectorOfLengthNGen(32).sample.get
 
@@ -82,7 +82,7 @@ class BlockPoolSpec extends JbokSpec {
   }
 
   "ignore blocks outside of range" in new BlockPoolFixture {
-    val block1 = getBlock(1)
+    val block1  = getBlock(1)
     val block30 = getBlock(30)
     setBestBlockNumber(15)
 
@@ -117,10 +117,10 @@ class BlockPoolSpec extends JbokSpec {
   }
 
   "enqueue a block with queued ancestors rooted to the main chain updating its total difficulty" in new BlockPoolFixture {
-    val block1 = getBlock(1, 101)
+    val block1  = getBlock(1, 101)
     val block2a = getBlock(2, 102, block1.header.hash)
     val block2b = getBlock(2, 99, block1.header.hash)
-    val block3 = getBlock(3, 103, block2a.header.hash)
+    val block3  = getBlock(3, 103, block2a.header.hash)
 
     setBestBlockNumber(1)
     setTotalDifficultyForParent(block1, 42)
@@ -142,10 +142,10 @@ class BlockPoolSpec extends JbokSpec {
   }
 
   "remove a branch from a leaf up to the first shared ancestor" in new BlockPoolFixture {
-    val block1 = getBlock(1)
+    val block1  = getBlock(1)
     val block2a = getBlock(2, parent = block1.header.hash)
     val block2b = getBlock(2, parent = block1.header.hash)
-    val block3 = getBlock(3, parent = block2a.header.hash)
+    val block3  = getBlock(3, parent = block2a.header.hash)
 
     setBestBlockNumber(1)
 
@@ -167,7 +167,7 @@ class BlockPoolSpec extends JbokSpec {
     val block1b = getBlock(1)
     val block2a = getBlock(2, parent = block1a.header.hash)
     val block2b = getBlock(2, parent = block1a.header.hash)
-    val block3 = getBlock(3, parent = block2a.header.hash)
+    val block3  = getBlock(3, parent = block2a.header.hash)
 
     setBestBlockNumber(1)
 

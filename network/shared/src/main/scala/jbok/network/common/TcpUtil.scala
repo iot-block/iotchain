@@ -2,7 +2,6 @@ package jbok.network.common
 
 import java.net.InetSocketAddress
 import java.nio.channels.InterruptedByTimeoutException
-import java.util.concurrent.TimeoutException
 
 import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
@@ -46,19 +45,11 @@ private[jbok] object TcpUtil {
       promises <- Ref.of[F, Map[String, Deferred[F, Any]]](Map.empty)
     } yield
       new Connection[F] {
-        private def onError[A](e: Throwable): F[A] = e match {
-          case _: InterruptedByTimeoutException | _: TimeoutException => F.raiseError[A](NetworkErr.Timeout)
-          case _                                                      => F.raiseError[A](e)
-        }
-
         override def write[A: Codec](a: A, timeout: Option[FiniteDuration]): F[Unit] =
           encode[F, A](a)
             .flatMap(chunk => socket.write(chunk, timeout))
-            .attempt
-            .flatMap[Unit] {
-              case Right(_)                               => F.unit
-              case Left(_: InterruptedByTimeoutException) => F.raiseError(NetworkErr.Timeout)
-              case Left(e)                                => F.raiseError(e)
+            .adaptError {
+              case _: InterruptedByTimeoutException => NetworkErr.Timeout
             }
 
         override def writes[A: Codec](timeout: Option[FiniteDuration]): Sink[F, A] =
@@ -92,7 +83,7 @@ private[jbok] object TcpUtil {
               } yield a
             }
 
-        override def request[A: Codec: RequestId](a: A, timeoutOpt: Option[FiniteDuration] = None): F[A] = {
+        override def request[A: Codec: RequestId, B: Codec: RequestId](a: A, timeoutOpt: Option[FiniteDuration] = None): F[B] = {
           val acquire =
             for {
               id      <- F.delay(RequestId[A].id(a).getOrElse(""))
@@ -100,17 +91,16 @@ private[jbok] object TcpUtil {
               _       <- promises.update(_ + (id -> promise))
             } yield (id, promise)
 
-          def use(t: (String, Deferred[F, Any])): F[A] =
+          def use(t: (String, Deferred[F, Any])): F[B] =
             write(a, timeoutOpt) *>
               timeoutOpt
                 .fold(t._2.get)(timeout => t._2.get.timeout(timeout))
-                .flatMap(x => F.delay(x.asInstanceOf[A]))
-                .handleErrorWith(onError)
+                .flatMap(x => F.delay(x.asInstanceOf[B]))
 
           def release(t: (String, Deferred[F, Any])): F[Unit] =
             promises.update(_ - t._1)
 
-          F.bracket[(String, Deferred[F, Any]), A](acquire)(use)(release)
+          F.bracket[(String, Deferred[F, Any]), B](acquire)(use)(release)
         }
 
         override def close: F[Unit] =

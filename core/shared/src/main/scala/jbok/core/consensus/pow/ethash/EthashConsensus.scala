@@ -3,7 +3,7 @@ package jbok.core.consensus.pow.ethash
 import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.core.History
 import jbok.core.config.Configs.{BlockChainConfig, MiningConfig, MonetaryPolicyConfig}
 import jbok.core.consensus.{Consensus, ConsensusResult}

@@ -23,8 +23,8 @@ class SyncServiceSpec extends JbokSpec {
         hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
       )
 
-      history.save(receiptsHashes(0), Nil).unsafeRunSync()
-      history.save(receiptsHashes(1), Nil).unsafeRunSync()
+      history.putReceipts(receiptsHashes(0), Nil).unsafeRunSync()
+      history.putReceipts(receiptsHashes(1), Nil).unsafeRunSync()
       val req = GetReceipts(receiptsHashes)
       val res = Stream(req).covary[IO].through(pipe).compile.toList.unsafeRunSync().head
       res shouldBe Receipts(List(Nil, Nil), req.id)
@@ -37,8 +37,8 @@ class SyncServiceSpec extends JbokSpec {
       )
       val body        = BlockBody(Nil, Nil)
       val blockBodies = List(body, body)
-      history.save(blockBodiesHashes(0), blockBodies(0)).unsafeRunSync()
-      history.save(blockBodiesHashes(1), blockBodies(1)).unsafeRunSync()
+      history.putBlockBody(blockBodiesHashes(0), blockBodies(0)).unsafeRunSync()
+      history.putBlockBody(blockBodiesHashes(1), blockBodies(1)).unsafeRunSync()
       val req = GetBlockBodies(blockBodiesHashes)
       val res = Stream(req).covary[IO].through(pipe).compile.toList.unsafeRunSync().head
       res shouldBe BlockBodies(blockBodies, req.id)
@@ -49,10 +49,10 @@ class SyncServiceSpec extends JbokSpec {
       val firstHeader: BlockHeader  = baseHeader.copy(number = 3)
       val secondHeader: BlockHeader = baseHeader.copy(number = 4)
 
-      history.save(firstHeader).unsafeRunSync()
-      history.save(secondHeader).unsafeRunSync()
-      history.save(baseHeader.copy(number = 5)).unsafeRunSync()
-      history.save(baseHeader.copy(number = 6)).unsafeRunSync()
+      history.putBlockHeader(firstHeader).unsafeRunSync()
+      history.putBlockHeader(secondHeader).unsafeRunSync()
+      history.putBlockHeader(baseHeader.copy(number = 5)).unsafeRunSync()
+      history.putBlockHeader(baseHeader.copy(number = 6)).unsafeRunSync()
       val req = GetBlockHeaders(Left(3), 2, 0, reverse = false)
       val res = Stream(req).covary[IO].through(pipe).compile.toList.unsafeRunSync().head
       res shouldBe BlockHeaders(firstHeader :: secondHeader :: Nil, req.id)

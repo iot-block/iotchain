@@ -3,149 +3,78 @@ package jbok.core
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
+import jbok.codec.rlp.implicits._
 import jbok.core.config.GenesisConfig
 import jbok.core.models._
 import jbok.core.store._
-import jbok.core.sync.SyncState
-import jbok.crypto.authds.mpt.MPTrie
-import jbok.evm.WorldStateProxy
-import jbok.persistent.{KeyValueDB, RefCountKeyValueDB, SnapshotKeyValueStore}
+import jbok.crypto.authds.mpt.MerklePatriciaTrie
+import jbok.evm.WorldState
+import jbok.persistent.{KeyValueDB, SnapshotKeyValueDB}
 import scodec.bits._
 
-abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int)(implicit F: Sync[F]) {
-  protected val log = org.log4s.getLogger
+abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
+  // init
+  def init(config: GenesisConfig = GenesisConfig.default): F[Unit]
 
-  def loadGenesisBlock(genesis: Option[Block] = None): F[Unit] = {
-    log.info(s"loading genesis data")
-    for {
-      headerOpt <- getBlockHeaderByNumber(0)
-      default = GenesisConfig.default
-      _ <- headerOpt match {
-        case Some(h) if h.hash == default.header.hash =>
-          log.info("genesis data already in the database")
-          F.unit
-
-        case Some(_) =>
-          F.raiseError(
-            new RuntimeException("Genesis data present in the database does not match genesis block from file")
-          )
-
-        case None =>
-          genesis match {
-            case Some(block) => save(block, Nil, block.header.difficulty, saveAsBestBlock = true)
-            case None        => loadGenesisConfig()
-          }
-      }
-    } yield ()
-  }
-
-  def loadGenesisConfig(config: GenesisConfig = GenesisConfig.default): F[Unit] = {
-    log.info(s"load genesis config with ${config.alloc.size} alloc")
-    for {
-      mpt <- MPTrie(RefCountKeyValueDB.forVersion(db, 0))
-      accountStore = AddressAccountStore(mpt)
-      _ <- config.alloc.toList.traverse {
-        case (address, balance) =>
-          accountStore.put(Address(ByteVector.fromValidHex(address)), Account(0, UInt256(balance)))
-      }
-      stateRootHash <- accountStore.getRootHash
-      _ = log.info(s"stateRoothash: ${stateRootHash}")
-      block = Block(config.header.copy(stateRoot = stateRootHash), config.body)
-      _ <- save(block, Nil, block.header.difficulty, saveAsBestBlock = true)
-    } yield ()
-  }
-
-  /**
-    * Allows to query a blockHeader by block hash
-    *
-    * @param hash of the block that's being searched
-    * @return [[BlockHeader]] if found
-    */
+  // header
   def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]]
 
-  def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]] = {
-    val p = for {
-      hash   <- OptionT(getHashByBlockNumber(number))
-      header <- OptionT(getBlockHeaderByHash(hash))
-    } yield header
-    p.value
-  }
+  def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]]
 
-  /**
-    * Allows to query a blockBody by block hash
-    *
-    * @param hash of the block that's being searched
-    * @return [[BlockBody]] if found
-    */
+  def putBlockHeader(blockHeader: BlockHeader): F[Unit]
+
+  // body
   def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]]
 
-  /**
-    * Allows to query for a block based on it's hash
-    *
-    * @param hash of the block that's being searched
-    * @return Block if found
-    */
-  def getBlockByHash(hash: ByteVector): F[Option[Block]] = {
-    val p = for {
-      header <- OptionT(getBlockHeaderByHash(hash))
-      body   <- OptionT(getBlockBodyByHash(hash))
-    } yield Block(header, body)
+  def putBlockBody(blockHash: ByteVector, blockBody: BlockBody): F[Unit]
 
-    p.value
-  }
-
-  /**
-    * Allows to query for a block based on it's number
-    *
-    * @param number Block number
-    * @return Block if it exists
-    */
-  def getBlockByNumber(number: BigInt): F[Option[Block]] = {
-    val p = for {
-      hash  <- OptionT(getHashByBlockNumber(number))
-      block <- OptionT(getBlockByHash(hash))
-    } yield block
-    p.value
-  }
-
-  /**
-    * Get an account for an address and a block number
-    *
-    * @param address address of the account
-    * @param blockNumber the block that determines the state of the account
-    */
-  def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]]
-
-  /**
-    * Get account storage at given position
-    *
-    * @param rootHash storage root hash
-    * @param position storage position
-    */
-  def getAccountStorageAt(rootHash: ByteVector, position: BigInt): F[ByteVector]
-
-  /**
-    * @return Receipts if found
-    */
+  // receipts
   def getReceiptsByHash(blockhash: ByteVector): F[Option[List[Receipt]]]
 
-  /**
-    * Returns EVM code searched by it's hash
-    * @param hash Code Hash
-    * @return EVM code if found
-    */
-  def getEvmCodeByHash(hash: ByteVector): F[Option[ByteVector]]
+  def putReceipts(blockHash: ByteVector, receipts: List[Receipt]): F[Unit]
 
+  // block
+  def getBlockByHash(hash: ByteVector): F[Option[Block]]
+
+  def getBlockByNumber(number: BigInt): F[Option[Block]]
+
+  def putBlock(block: Block): F[Unit]
+
+  def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: BigInt, asBestBlock: Boolean): F[Unit]
+
+  def delBlock(hash: ByteVector, parentAsBestBlock: Boolean): F[Unit]
+
+  // accounts, storage and codes
+  def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]]
+
+  def getAccountNode(hash: ByteVector): F[Option[ByteVector]]
+
+  def putAccountNode(hash: ByteVector, bytes: ByteVector): F[Unit]
+
+  def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector]
+
+  def getStorageNode(hash: ByteVector): F[Option[ByteVector]]
+
+  def putStorageNode(hash: ByteVector, bytes: ByteVector): F[Unit]
+
+  def getCode(codeHash: ByteVector): F[Option[ByteVector]]
+
+  def putCode(hash: ByteVector, evmCode: ByteVector): F[Unit]
+
+  def getWorldState(
+      accountStartNonce: UInt256 = UInt256.Zero,
+      stateRootHash: Option[ByteVector] = None,
+      noEmptyAccounts: Boolean = false
+  ): F[WorldState[F]]
+
+  def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit]
+
+  // helpers
   def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]]
 
-  def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]] = {
-    val p = for {
-      hash <- OptionT(getHashByBlockNumber(blockNumber))
-      td   <- OptionT(getTotalDifficultyByHash(hash))
-    } yield td
+  def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]]
 
-    p.value
-  }
+  def putDifficulty(blockHash: ByteVector, totalDifficulty: BigInt): F[Unit]
 
   def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]]
 
@@ -155,246 +84,145 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int)(implicit F
 
   def getSyncStartingBlock: F[BigInt]
 
-  def setBestBlockNumber(bestBlockNumber: BigInt): F[Unit]
-
   def getBestBlock: F[Block]
 
-  /**
-    * Persists full block along with receipts and total difficulty
-    * @param saveAsBestBlock - whether to save the block's number as current best block
-    */
-  def save(block: Block, receipts: List[Receipt], totalDifficulty: BigInt, saveAsBestBlock: Boolean): F[Unit] =
-    save(block) *>
-      save(block.header.hash, receipts) *>
-      save(block.header.hash, totalDifficulty) *>
-      (if (saveAsBestBlock) {
-         saveBestBlockNumber(block.header.number)
-       } else {
-         F.unit
-       }) *>
-      pruneState(block.header.number)
+  def putBestBlockNumber(number: BigInt): F[Unit]
 
-  /**
-    * Persists a block in the underlying Blockchain Database
-    *
-    * @param block Block to be saved
-    */
-  def save(block: Block): F[Unit] =
-    save(block.header) *> save(block.header.hash, block.body)
-
-  def removeBlock(hash: ByteVector, saveParentAsBestBlock: Boolean): F[Unit]
-
-  /**
-    * Persists a block header in the underlying Blockchain Database
-    *
-    * @param blockHeader Block to be saved
-    */
-  def save(blockHeader: BlockHeader): F[Unit]
-
-  def save(blockHash: ByteVector, blockBody: BlockBody): F[Unit]
-
-  def save(blockHash: ByteVector, receipts: List[Receipt]): F[Unit]
-
-  def save(hash: ByteVector, evmCode: ByteVector): F[Unit]
-
-  def save(blockHash: ByteVector, totalDifficulty: BigInt): F[Unit]
-
-  def saveBestBlockNumber(number: BigInt): F[Unit]
-
-  /**
-    * Returns a block hash given a block number
-    *
-    * @param number Number of the searchead block
-    * @return Block hash if found
-    */
   def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]]
 
-  def genesisHeader: F[BlockHeader] = getBlockHeaderByNumber(0).map(_.get)
-
-  def genesisBlock: F[Block] = getBlockByNumber(0).map(_.get)
-
-  def getWorldStateProxy(
-      blockNumber: BigInt,
-      accountStartNonce: UInt256,
-      stateRootHash: Option[ByteVector] = None,
-      noEmptyAccounts: Boolean = false
-  ): F[WorldStateProxy[F]]
-
-  def getMptFor(blockNumber: BigInt, root: Option[ByteVector] = None): F[MPTrie[F]] = {
-    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
-    MPTrie[F](refCountDB, root)
-  }
-
-  def pruneState(blockNumber: BigInt): F[Unit] = {
-    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
-    refCountDB.prune(blockNumber)
-  }
-
-  def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit] = {
-    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
-    refCountDB.rollback(blockNumber)
-  }
-
-  def getSyncState: F[Option[SyncState]]
-
-  def putSyncState(syncState: SyncState): F[Unit]
-
-  def purgeSyncState: F[Unit]
+  def genesisHeader: F[BlockHeader]
 }
 
 object History {
-  def withGenesisConfig[F[_]: Sync](db: KeyValueDB[F], genesisConfig: GenesisConfig): F[History[F]] =
-    for {
-      history <- apply[F](db)
-      _       <- history.loadGenesisConfig(genesisConfig)
-    } yield history
-
-  def apply[F[_]: Sync](db: KeyValueDB[F], chainId: Int = 1): F[History[F]] = {
-    val headerStore          = new BlockHeaderStore[F](db)
-    val bodyStore            = new BlockBodyStore[F](db)
-    val receiptStore         = new ReceiptStore[F](db)
-    val numberHashStore      = new BlockNumberHashStore[F](db)
-    val txLocationStore      = new TransactionLocationStore[F](db)
-    val totalDifficultyStore = new TotalDifficultyStore[F](db)
-    val appStateStore        = new AppStateStore[F](db)
-    val evmCodeStore         = new EvmCodeStore[F](db)
-    val fastSyncStore        = new FastSyncStore[F](db)
+  def apply[F[_]: Sync](db: KeyValueDB[F], chainId: Int = 1): F[History[F]] =
     Sync[F].pure {
       new HistoryImpl[F](
         db,
-        headerStore,
-        bodyStore,
-        receiptStore,
-        numberHashStore,
-        txLocationStore,
-        totalDifficultyStore,
-        fastSyncStore,
-        appStateStore,
-        evmCodeStore,
         chainId
       )
     }
-  }
 }
 
 class HistoryImpl[F[_]](
     db: KeyValueDB[F],
-    headerStore: BlockHeaderStore[F],
-    bodyStore: BlockBodyStore[F],
-    receiptStore: ReceiptStore[F],
-    numberHashStore: BlockNumberHashStore[F],
-    txLocationStore: TransactionLocationStore[F],
-    totalDifficultyStore: TotalDifficultyStore[F],
-    fastSyncStore: FastSyncStore[F],
-    appStateStore: AppStateStore[F],
-    evmCodeStore: EvmCodeStore[F],
     chainId: Int
-)(implicit F: Sync[F]) extends History[F](db, chainId) {
+)(implicit F: Sync[F])
+    extends History[F](db, chainId) {
+  private[this] val log = org.log4s.getLogger("History")
 
-  /**
-    * Allows to query a blockHeader by block hash
-    *
-    * @param hash of the block that's being searched
-    * @return [[BlockHeader]] if found
-    */
-  override def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]] =
-    headerStore.getOpt(hash)
+  private val appStateStore = new AppStateStore[F](db)
 
-  /**
-    * Allows to query a blockBody by block hash
-    *
-    * @param hash of the block that's being searched
-    * @return [[BlockBody]] if found
-    */
-  override def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]] =
-    bodyStore.getOpt(hash)
-
-  /**
-    * Get account storage at given position
-    *
-    * @param rootHash storage root hash
-    * @param position storage position
-    */
-  override def getAccountStorageAt(rootHash: ByteVector, position: BigInt): F[ByteVector] =
+  // init
+  override def init(config: GenesisConfig): F[Unit] =
     for {
-      storage <- ContractStorageStore(db, Some(rootHash))
-      bytes   <- storage.getOpt(UInt256(position)).map(_.getOrElse(UInt256.Zero).bytes)
-    } yield bytes
+      _ <- getBlockHeaderByNumber(0)
+        .map(_.isDefined)
+        .ifM(F.raiseError(new Exception("genesis already defined")), F.unit)
+      state <- getWorldState()
+      world <- config.alloc.toList
+        .foldLeft(state) {
+          case (acc, (addr, balance)) =>
+            acc.putAccount(Address(ByteVector.fromValidHex(addr)), Account(0, UInt256(balance)))
+        }
+        .persisted
+      block = Block(config.header.copy(stateRoot = world.stateRootHash), config.body)
+      _ <- putBlockAndReceipts(block, Nil, block.header.difficulty, asBestBlock = true)
+    } yield ()
 
-  /**
-    * Get an account for an address and a block number
-    *
-    * @param address     address of the account
-    * @param blockNumber the block that determines the state of the account
-    */
-  override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] =
-    (for {
-      header <- OptionT(getBlockHeaderByNumber(blockNumber))
-      mpt    <- OptionT.liftF(getMptFor(blockNumber, Some(header.stateRoot)))
-      accountStore = AddressAccountStore(mpt)
-      account <- OptionT(accountStore.getOpt(address))
-    } yield account).value
+  // header
+  override def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]] =
+    db.getOpt[ByteVector, BlockHeader](hash, namespaces.BlockHeader)
 
-  /**
-    * Returns the receipts based on a block hash
-    *
-    * @return Receipts if found
-    */
+  override def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]] = {
+    val p = for {
+      hash   <- OptionT(getHashByBlockNumber(number))
+      header <- OptionT(getBlockHeaderByHash(hash))
+    } yield header
+    p.value
+  }
+
+  override def putBlockHeader(blockHeader: BlockHeader): F[Unit] = {
+    val hash = blockHeader.hash
+    db.put(hash, blockHeader, namespaces.BlockHeader) *> db.put(blockHeader.number, hash, namespaces.NumberHash)
+  }
+
+  // body
+  override def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]] =
+    db.getOpt[ByteVector, BlockBody](hash, namespaces.BlockBody)
+
+  override def putBlockBody(blockHash: ByteVector, blockBody: BlockBody): F[Unit] =
+    db.put(blockHash, blockBody, namespaces.BlockBody) *>
+      blockBody.transactionList.zipWithIndex
+        .map {
+          case (tx, index) =>
+            db.put(tx.hash, TransactionLocation(blockHash, index), namespaces.TxLocation)
+        }
+        .sequence
+        .void
+
+// receipts
   override def getReceiptsByHash(blockhash: ByteVector): F[Option[List[Receipt]]] =
-    receiptStore.getOpt(blockhash)
+    db.getOpt[ByteVector, List[Receipt]](blockhash, namespaces.Receipts)
 
-  /**
-    * Returns EVM code searched by it's hash
-    *
-    * @param hash Code Hash
-    * @return EVM code if found
-    */
-  override def getEvmCodeByHash(hash: ByteVector): F[Option[ByteVector]] =
-    evmCodeStore.getOpt(hash)
+  override def putReceipts(blockHash: ByteVector, receipts: List[Receipt]): F[Unit] =
+    db.put(blockHash, receipts, namespaces.Receipts)
 
-  override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]] =
-    totalDifficultyStore.getOpt(blockHash)
+  // block
+  override def getBlockByHash(hash: ByteVector): F[Option[Block]] = {
+    val p = for {
+      header <- OptionT(getBlockHeaderByHash(hash))
+      body   <- OptionT(getBlockBodyByHash(hash))
+    } yield Block(header, body)
 
-  override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
-    txLocationStore.getOpt(txHash)
+    p.value
+  }
 
-  override def getBestBlockNumber: F[BigInt] =
-    appStateStore.getBestBlockNumber
+  override def getBlockByNumber(number: BigInt): F[Option[Block]] = {
+    val p = for {
+      hash  <- OptionT(getHashByBlockNumber(number))
+      block <- OptionT(getBlockByHash(hash))
+    } yield block
+    p.value
+  }
 
-  override def getEstimatedHighestBlock: F[BigInt] =
-    appStateStore.getEstimatedHighestBlock
+  override def putBlockAndReceipts(block: Block,
+                                   receipts: List[Receipt],
+                                   totalDifficulty: BigInt,
+                                   asBestBlock: Boolean): F[Unit] =
+    putBlock(block) *>
+      putReceipts(block.header.hash, receipts) *>
+      putDifficulty(block.header.hash, totalDifficulty) *>
+      (if (asBestBlock) {
+         putBestBlockNumber(block.header.number)
+       } else {
+         F.unit
+       })
 
-  override def getSyncStartingBlock: F[BigInt] =
-    appStateStore.getSyncStartingBlock
+  override def putBlock(block: Block): F[Unit] =
+    putBlockHeader(block.header) *> putBlockBody(block.header.hash, block.body)
 
-  override def setBestBlockNumber(bestBlockNumber: BigInt): F[Unit] =
-    appStateStore.putBestBlockNumber(bestBlockNumber)
-
-  override def getBestBlock: F[Block] =
-    getBestBlockNumber.flatMap(bn => getBlockByNumber(bn).map(_.get))
-
-  override def removeBlock(blockHash: ByteVector, saveParentAsBestBlock: Boolean): F[Unit] = {
+  override def delBlock(blockHash: ByteVector, parentAsBestBlock: Boolean): F[Unit] = {
     val maybeBlockHeader = getBlockHeaderByHash(blockHash)
     val maybeTxList      = getBlockBodyByHash(blockHash).map(_.map(_.transactionList))
 
-    headerStore.del(blockHash) *>
-      bodyStore.del(blockHash) *>
-      //    totalDifficultyStorage.remove(blockHash)
-      receiptStore.del(blockHash) *>
+    db.del(blockHash, namespaces.BlockHeader) *>
+      db.del(blockHash, namespaces.BlockBody) *>
+      db.del(blockHash, namespaces.TotalDifficulty) *>
+      db.del(blockHash, namespaces.Receipts) *>
       maybeTxList.map {
-        case Some(txs) => txs.map(tx => txLocationStore.del(tx.hash)).sequence.void
+        case Some(txs) => txs.traverse(tx => db.del(tx.hash, namespaces.TxLocation)).void
         case None      => F.unit
       } *>
       maybeBlockHeader.map {
         case Some(bh) =>
           val rollback = rollbackStateChangesMadeByBlock(bh.number)
           val removeMapping = getHashByBlockNumber(bh.number).flatMap {
-            case Some(hash) => numberHashStore.del(bh.number)
-            case None       => F.unit
+            case Some(_) => db.del(bh.number, namespaces.NumberHash)
+            case None    => F.unit
           }
 
           val updateBest =
-            if (saveParentAsBestBlock) appStateStore.putBestBlockNumber(bh.number - 1)
+            if (parentAsBestBlock) appStateStore.putBestBlockNumber(bh.number - 1)
             else F.unit
 
           rollback *> removeMapping *> updateBest
@@ -403,78 +231,106 @@ class HistoryImpl[F[_]](
       }
   }
 
-  /**
-    * Persists a block header in the underlying Blockchain Database
-    *
-    * @param blockHeader Block to be saved
-    */
-  override def save(blockHeader: BlockHeader): F[Unit] = {
-    val hash = blockHeader.hash
-    headerStore.put(hash, blockHeader) *> numberHashStore.put(blockHeader.number, hash)
+  // accounts, storage and codes
+  override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] = {
+    val p = for {
+      header  <- OptionT(getBlockHeaderByNumber(blockNumber))
+      mpt     <- OptionT.liftF(MerklePatriciaTrie[F](namespaces.Node, db, Some(header.stateRoot)))
+      account <- OptionT(mpt.getOpt[Address, Account](address, namespaces.empty))
+    } yield account
+    p.value
   }
 
-  override def save(blockHash: ByteVector, blockBody: BlockBody): F[Unit] =
-    bodyStore.put(blockHash, blockBody) *>
-      blockBody.transactionList.zipWithIndex
-        .map {
-          case (tx, index) =>
-            txLocationStore.put(tx.hash, TransactionLocation(blockHash, index))
-        }
-        .sequence
-        .void
+  override def getAccountNode(hash: ByteVector): F[Option[ByteVector]] =
+    db.getOpt[ByteVector, ByteVector](hash, namespaces.Node)
 
-  override def save(blockHash: ByteVector, receipts: List[Receipt]): F[Unit] =
-    receiptStore.put(blockHash, receipts)
+  override def putAccountNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
+    db.put(hash, bytes, namespaces.Node)
 
-  override def save(hash: ByteVector, evmCode: ByteVector): F[Unit] =
-    evmCodeStore.put(hash, evmCode)
+  override def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector] =
+    for {
+      mpt   <- MerklePatriciaTrie[F](namespaces.Node, db, Some(rootHash))
+      bytes <- mpt.getOpt[UInt256, UInt256](UInt256(position), namespaces.empty).map(_.getOrElse(UInt256.Zero).bytes)
+    } yield bytes
 
-  override def save(blockhash: ByteVector, totalDifficulty: BigInt): F[Unit] =
-    totalDifficultyStore.put(blockhash, totalDifficulty)
+  override def getStorageNode(hash: ByteVector): F[Option[ByteVector]] =
+    db.getOpt[ByteVector, ByteVector](hash, namespaces.Node)
 
-  override def saveBestBlockNumber(number: BigInt): F[Unit] =
-    appStateStore.putBestBlockNumber(number)
+  override def putStorageNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
+    db.put(hash, bytes, namespaces.Node)
 
-  /**
-    * Returns a block hash given a block number
-    *
-    * @param number Number of the searched block
-    * @return Block hash if found
-    */
-  override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
-    numberHashStore.getOpt(number)
+  override def getCode(hash: ByteVector): F[Option[ByteVector]] =
+    db.getOpt[ByteVector, ByteVector](hash, namespaces.Code)
 
-  override def getWorldStateProxy(
-      blockNumber: BigInt,
+  override def putCode(hash: ByteVector, code: ByteVector): F[Unit] =
+    db.put(hash, code, namespaces.Code)
+
+  override def getWorldState(
       accountStartNonce: UInt256,
       stateRootHash: Option[ByteVector],
       noEmptyAccounts: Boolean
-  ): F[WorldStateProxy[F]] = {
-    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
+  ): F[WorldState[F]] =
     for {
-      mpt <- MPTrie[F](refCountDB, stateRootHash)
-      accountStore = AddressAccountStore[F](mpt)
-      accountProxy = SnapshotKeyValueStore(accountStore)
+      mpt <- MerklePatriciaTrie[F](namespaces.Node, db, stateRootHash)
+      accountProxy = SnapshotKeyValueDB[F, Address, Account](namespaces.empty, mpt)
     } yield
-      WorldStateProxy[F](
-        refCountDB,
+      WorldState[F](
+        this,
         accountProxy,
-        evmCodeStore,
-        stateRootHash.getOrElse(MPTrie.emptyRootHash),
+        stateRootHash.getOrElse(MerklePatriciaTrie.emptyRootHash),
         Set.empty,
         Map.empty,
         Map.empty,
         accountStartNonce,
         noEmptyAccounts
       )
+
+  override def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit] =
+    ???
+//    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
+//    refCountDB.rollback(blockNumber)
+
+  // helpers
+  override def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]] = {
+    val p = for {
+      hash <- OptionT(getHashByBlockNumber(blockNumber))
+      td   <- OptionT(getTotalDifficultyByHash(hash))
+    } yield td
+
+    p.value
   }
 
-  override def getSyncState: F[Option[SyncState]] =
-    fastSyncStore.getSyncState
+  override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]] =
+    db.getOpt[ByteVector, BigInt](blockHash, namespaces.TotalDifficulty)
 
-  override def putSyncState(syncState: SyncState): F[Unit] =
-    fastSyncStore.putSyncState(syncState)
+  override def putDifficulty(blockhash: ByteVector, totalDifficulty: BigInt): F[Unit] =
+    db.put(blockhash, totalDifficulty, namespaces.TotalDifficulty)
 
-  override def purgeSyncState: F[Unit] =
-    fastSyncStore.purge
+  override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
+    db.getOpt[BigInt, ByteVector](number, namespaces.NumberHash)
+
+  override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
+    db.getOpt[ByteVector, TransactionLocation](txHash, namespaces.TxLocation)
+
+  override def getEstimatedHighestBlock: F[BigInt] =
+    appStateStore.getEstimatedHighestBlock
+
+  override def getSyncStartingBlock: F[BigInt] =
+    appStateStore.getSyncStartingBlock
+
+  override def getBestBlock: F[Block] =
+    getBestBlockNumber.flatMap(bn =>
+      getBlockByNumber(bn).flatMap {
+        case Some(block) => F.pure(block)
+        case None        => F.raiseError(new Exception(s"best block at ${bn} does not exist"))
+    })
+
+  override def getBestBlockNumber: F[BigInt] =
+    appStateStore.getBestBlockNumber
+
+  override def putBestBlockNumber(number: BigInt): F[Unit] =
+    appStateStore.putBestBlockNumber(number)
+
+  override def genesisHeader: F[BlockHeader] =
+    getBlockHeaderByNumber(0).map(_.get)
 }

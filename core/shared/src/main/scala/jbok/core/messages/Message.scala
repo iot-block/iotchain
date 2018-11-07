@@ -1,7 +1,7 @@
 package jbok.core.messages
 
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.network.common.{RequestId, RequestMethod}
 import scodec.bits.{BitVector, ByteVector}
 import scodec.{Attempt, Codec, DecodeResult, Decoder, Encoder, SizeBound}

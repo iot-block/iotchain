@@ -1,16 +1,14 @@
 package jbok.core.peer
-import cats.data.OptionT
 import cats.effect.Sync
-import cats.implicits._
-import jbok.codec.rlp.codecs._
-import jbok.core.store.Namespaces
-import jbok.persistent.{KeyValueDB, KeyValueStore}
+import jbok.core.store.namespaces
+import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.FiniteDuration
+import jbok.codec.rlp.implicits._
 
-class PeerStore[F[_]](db: KeyValueDB[F])(implicit F: Sync[F])
-  extends KeyValueStore[F, String, ByteVector](Namespaces.NodeNamespace, db) {
+class PeerStore[F[_]](db: KeyValueDB[F])(implicit F: Sync[F]) {
+  val ns = namespaces.Peer
 
   def lastPingKey(id: ByteVector) = s"n:${id.toHex}:lastping"
 
@@ -21,37 +19,28 @@ class PeerStore[F[_]](db: KeyValueDB[F])(implicit F: Sync[F])
   def nodeKey(id: ByteVector) = s"n:${id.toHex}"
 
   def getLastPingReceived(id: ByteVector): F[Long] =
-    for {
-      opt <- getOpt(lastPingKey(id))
-      ts <- opt.fold(F.pure(0L))(decode[Long])
-    } yield ts
+    db.getOptT[String, Long](lastPingKey(id), ns).getOrElse(0L)
 
   def putLastPingReceived(id: ByteVector, ts: Long): F[Unit] =
-    encode(ts).flatMap(bytes => put(lastPingKey(id), bytes))
+    db.put(lastPingKey(id), ts, ns)
 
   def getLastPongReceived(id: ByteVector): F[Long] =
-    for {
-      opt <- getOpt(lastPongKey(id))
-      ts <- opt.fold(F.pure(0L))(decode[Long])
-    } yield ts
+    db.getOptT[String, Long](lastPongKey(id), ns).getOrElse(0)
 
   def putLastPongReceived(id: ByteVector, ts: Long): F[Unit] =
-    encode(ts).flatMap(bytes => put(lastPongKey(id), bytes))
+    db.put(lastPongKey(id), ts, ns)
 
   def getFails(id: ByteVector): F[Int] =
-    for {
-      opt <- getOpt(failsKey(id))
-      fails <- opt.fold(F.pure(0))(decode[Int])
-    } yield fails
+    db.getOptT[String, Int](failsKey(id), ns).getOrElse(0)
 
   def putFails(id: ByteVector, fails: Int): F[Unit] =
-    encode(fails).flatMap(bytes => put(failsKey(id), bytes))
+    db.put(failsKey(id), fails, ns)
 
   def getSeeds(n: Int, maxAge: FiniteDuration): F[List[PeerNode]] = ???
 
   def getNodeOpt(id: ByteVector): F[Option[PeerNode]] =
-      OptionT(getOpt(nodeKey(id))).semiflatMap(decode[PeerNode]).value
+    db.getOpt[String, PeerNode](nodeKey(id), ns)
 
   def delNode(id: ByteVector): F[Unit] =
-    del(nodeKey(id))
+    db.del[String](nodeKey(id), ns)
 }

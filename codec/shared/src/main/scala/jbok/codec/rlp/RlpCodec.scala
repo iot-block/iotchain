@@ -6,19 +6,19 @@ import scodec.codecs._
 import scodec.bits._
 import shapeless._
 
-import scala.annotation.tailrec
+import scala.annotation.{implicitNotFound, tailrec}
 
 sealed trait CodecType
-case object PureCodec extends CodecType
-case object ItemCodec extends CodecType
+case object PureCodec  extends CodecType
+case object ItemCodec  extends CodecType
 case object HListCodec extends CodecType
 
 final case class RlpCodec[A](codecType: CodecType, valueCodec: Codec[A]) {
   import RlpCodec.listLengthCodec
 
   val codec: Codec[A] = codecType match {
-    case ItemCodec  => RlpCodec.rlpitem(valueCodec)
     case PureCodec  => valueCodec
+    case ItemCodec  => RlpCodec.rlpitem(valueCodec)
     case HListCodec => variableSizeBytes(listLengthCodec.xmap[Int](_.toInt, _.toLong), valueCodec)
   }
 
@@ -32,6 +32,7 @@ final case class RlpCodec[A](codecType: CodecType, valueCodec: Codec[A]) {
 object RlpCodec {
   def apply[A](implicit codec: Lazy[RlpCodec[A]]): RlpCodec[A] = codec.value
 
+  @implicitNotFound("Cannot find implicit value for RlpCodec[${A}]")
   def encode[A](a: A)(implicit codec: RlpCodec[A]) =
     codec.encode(a)
 

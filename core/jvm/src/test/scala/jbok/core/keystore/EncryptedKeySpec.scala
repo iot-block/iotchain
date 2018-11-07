@@ -3,11 +3,9 @@ package jbok.core.keystore
 import java.security.SecureRandom
 
 import jbok.JbokSpec
-import io.circe._
 import io.circe.parser._
-import io.circe.generic.auto._
 import jbok.crypto._
-import jbok.codec.json._
+import jbok.codec.json.implicits._
 import jbok.crypto.signature.KeyPair
 import io.circe.syntax._
 

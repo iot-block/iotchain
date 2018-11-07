@@ -1,7 +1,9 @@
 package jbok.app
 
 import java.net.InetSocketAddress
+import java.security.SecureRandom
 
+import better.files.File
 import cats.effect.IO
 import fs2.Pipe
 import jbok.JbokSpec
@@ -10,15 +12,19 @@ import jbok.app.api.{FilterManager, PrivateAPI, PublicAPI}
 import jbok.common.execution._
 import jbok.core.config.Configs.{BlockChainConfig, FilterConfig, MiningConfig}
 import jbok.core.consensus.poa.clique.CliqueFixture
-import jbok.core.keystore.KeyStoreFixture
+import jbok.core.keystore.KeyStorePlatform
 import jbok.core.mining.BlockMinerFixture
 import jbok.network.rpc.RpcServer
 import jbok.network.server.Server
 
 import scala.io.StdIn
 
-class JbokServer extends BlockMinerFixture(new CliqueFixture {}) with KeyStoreFixture with JbokSpec {
+class JbokServer extends BlockMinerFixture(new CliqueFixture {}) with JbokSpec {
   val bind = new InetSocketAddress("localhost", 8888)
+
+  val secureRandom = new SecureRandom()
+  val dir          = File.newTemporaryDirectory()
+  val keyStore     = KeyStorePlatform[IO](dir.pathAsString, secureRandom).unsafeRunSync()
 
   val filterManager = FilterManager(miner, keyStore, FilterConfig()).unsafeRunSync()
 

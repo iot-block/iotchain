@@ -48,7 +48,7 @@ class EthashHeaderValidatorFixture extends HistoryFixture {
 
   val blockChainConfig = BlockChainConfig()
   val daoForkConfig    = DaoForkConfig().copy(blockExtraData = Some(hex"d783010507846765746887676f312e372e33856c696e7578"))
-  history.save(validBlockParent).unsafeRunSync()
+  history.putBlockHeader(validBlockParent).unsafeRunSync()
   val blockHeaderValidator = new EthashHeaderValidator[IO](blockChainConfig, daoForkConfig)
 }
 

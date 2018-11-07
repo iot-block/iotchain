@@ -5,7 +5,7 @@ import java.net.InetSocketAddress
 import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.common.execution._
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.common.{RequestId, TcpUtil}

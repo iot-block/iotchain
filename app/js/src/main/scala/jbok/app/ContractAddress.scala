@@ -1,7 +1,7 @@
 package jbok.app
 
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.core.models.{Address, UInt256}
 import jbok.crypto._
 import shapeless._

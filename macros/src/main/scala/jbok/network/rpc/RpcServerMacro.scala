@@ -63,10 +63,9 @@ object RpcServerMacro {
         import fs2._
         import _root_.io.circe.syntax._
         import _root_.io.circe.parser._
-        import _root_.io.circe.generic.auto._
         import cats.implicits._
         import jbok.network.json._
-        import jbok.codec.json._
+        import jbok.codec.json.implicits._
 
         ${c.prefix.tree}.addHandlers($handlers)
        """

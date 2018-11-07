@@ -263,14 +263,14 @@ class OmmersValidatorFixture extends HistoryFixture {
 
   val ommersBlockParentHash = block96.header.hash
 
-  history.save(block89).unsafeRunSync()
-  history.save(block90).unsafeRunSync()
-  history.save(block91).unsafeRunSync()
-  history.save(block92).unsafeRunSync()
-  history.save(block93).unsafeRunSync()
-  history.save(block94).unsafeRunSync()
-  history.save(block95).unsafeRunSync()
-  history.save(block96).unsafeRunSync()
+  history.putBlock(block89).unsafeRunSync()
+  history.putBlock(block90).unsafeRunSync()
+  history.putBlock(block91).unsafeRunSync()
+  history.putBlock(block92).unsafeRunSync()
+  history.putBlock(block93).unsafeRunSync()
+  history.putBlock(block94).unsafeRunSync()
+  history.putBlock(block95).unsafeRunSync()
+  history.putBlock(block96).unsafeRunSync()
 
   val blockChainConfig = BlockChainConfig()
   val daoForkConfig    = DaoForkConfig()

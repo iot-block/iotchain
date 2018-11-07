@@ -1,7 +1,8 @@
 package jbok
 
 import BasicGen._
-import jbok.core.models.BlockHeader
+import jbok.core.models.{Account, Address, BlockHeader, UInt256}
+import org.scalacheck.Gen
 
 object ModelGen {
   val blockHeaderGen = for {
@@ -38,4 +39,15 @@ object ModelGen {
       mixHash = mixHash,
       nonce = nonce
     )
+
+  val addressGen: Gen[Address] = BasicGen.byteVectorOfLengthNGen(20).map(v => Address(v))
+
+  val uint256Gen: Gen[UInt256] = BasicGen.longGen.map(x => UInt256(x))
+
+  val accountGen: Gen[Account] = for {
+    nonce    <- uint256Gen
+    balance  <- uint256Gen
+    rootHash <- byteVectorOfLengthNGen(32)
+    codeHash <- byteVectorOfLengthNGen(32)
+  } yield Account(UInt256(0), UInt256(0), rootHash, codeHash)
 }

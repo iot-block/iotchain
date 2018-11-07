@@ -11,7 +11,7 @@ class BlockMinerSpec extends JbokSpec {
     "BlockMiner" should {
       "generate block with no transaction" in new BlockMinerFixture(newConsensus()) {
         val parent = miner.history.getBestBlock.unsafeRunSync()
-        val block  = miner.generateBlock(parent).unsafeRunSync()
+        val block  = miner.generateBlock(parent, Nil, Nil).unsafeRunSync()
       }
 
       "generate block with transactions" in new BlockMinerFixture(newConsensus()) {
@@ -22,11 +22,7 @@ class BlockMinerSpec extends JbokSpec {
       }
 
       "mine block" in new BlockMinerFixture(newConsensus()) {
-        val mined = miner.mine.unsafeRunSync()
-        println(pprint(mined.get))
-
-        val mined2 = miner.mine.unsafeRunSync()
-        println(pprint(mined2.get))
+        miner.mine.unsafeRunSync().isDefined shouldBe true
       }
 
       "mine blocks" in new BlockMinerFixture(newConsensus()) {
@@ -41,7 +37,7 @@ class BlockMinerSpec extends JbokSpec {
         val parent = history.getBestBlock.unsafeRunSync()
         val header = consensus.prepareHeader(parent, Nil).unsafeRunSync()
         val world = history
-          .getWorldStateProxy(header.number, UInt256.Zero, Some(parent.header.stateRoot))
+          .getWorldState(UInt256.Zero, Some(parent.header.stateRoot))
           .unsafeRunSync()
         val initSenderBalance =
           world.getBalance(sender).unsafeRunSync()
@@ -64,7 +60,7 @@ class BlockMinerSpec extends JbokSpec {
         val parent = miner.history.getBestBlock.unsafeRunSync()
         val header = miner.executor.consensus.prepareHeader(parent, Nil).unsafeRunSync()
         val world = miner.history
-          .getWorldStateProxy(header.number, UInt256.Zero, Some(parent.header.stateRoot))
+          .getWorldState(UInt256.Zero, Some(parent.header.stateRoot))
           .unsafeRunSync()
         val preNonce  = world.getAccount(sender).unsafeRunSync().nonce
         val result    = miner.executor.executeTransaction(stx, header, world).unsafeRunSync()
@@ -102,7 +98,9 @@ class BlockMinerSpec extends JbokSpec {
       "produce empty block if all txs fail" ignore {}
     }
 
-  check(() => new CliqueFixture {})
-
-//  check(() => new EthashFixture {})
+  check(() => {
+    val fix = new CliqueFixture {}
+    fix.history.init(fix.genesisConfig).unsafeRunSync()
+    fix
+  })
 }

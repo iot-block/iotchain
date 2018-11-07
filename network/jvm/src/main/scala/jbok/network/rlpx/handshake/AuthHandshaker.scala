@@ -7,7 +7,7 @@ import java.security.SecureRandom
 import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import jbok.crypto.{ECIES, _}
@@ -16,7 +16,7 @@ import org.bouncycastle.crypto.agreement.ECDHBasicAgreement
 import org.bouncycastle.crypto.digests.KeccakDigest
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
-import jbok.codec.rlp.codecs.rbytes
+import jbok.codec.rlp.implicits.rbytes
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Random

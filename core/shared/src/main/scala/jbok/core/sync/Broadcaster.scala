@@ -8,8 +8,8 @@ import jbok.core.peer.{Peer, PeerManager}
 
 import scala.util.Random
 
-case class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger
+final class Broadcaster[F[_]](val peerManager: PeerManager[F])(implicit F: ConcurrentEffect[F], T: Timer[F]) {
+  private[this] val log = org.log4s.getLogger("Broadcaster")
 
   def broadcastBlock(newBlock: NewBlock): F[Unit] =
     for {
@@ -53,4 +53,9 @@ case class Broadcaster[F[_]](peerManager: PeerManager[F])(implicit F: Concurrent
     val numberOfPeersToSend = Math.sqrt(peers.size).toInt
     Random.shuffle(peers).take(numberOfPeersToSend)
   }
+}
+
+object Broadcaster {
+  def apply[F[_]](peerManager: PeerManager[F])(implicit F: ConcurrentEffect[F], T: Timer[F]) =
+    new Broadcaster[F](peerManager)
 }

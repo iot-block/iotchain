@@ -6,4 +6,5 @@ trait CryptoHasherInstances extends CryptoHasherPlatform {
   implicit val sha256: CryptoHasher[SHA256]      = sha256Platform
   implicit val ripemd160: CryptoHasher[RipeMD160] = ripemd160Platform
 }
+
 object CryptoHasherInstances extends CryptoHasherInstances

@@ -71,6 +71,7 @@ object PeerManagerPlatform {
             _            <- conn.write[Message](localStatus, Some(config.handshakeTimeout))
             remoteStatus <- conn.read[Message](Some(config.handshakeTimeout)).map(_.asInstanceOf[Status])
             _ <- if (!localStatus.isCompatible(remoteStatus)) {
+              log.warn(s"drop incompatible ${conn}")
               F.raiseError(new Exception("incompatible peer"))
             } else {
               F.unit
@@ -86,6 +87,7 @@ object PeerManagerPlatform {
             _            <- conn.write[Message](localStatus, Some(config.handshakeTimeout))
             remoteStatus <- conn.read[Message](Some(config.handshakeTimeout)).map(_.asInstanceOf[Status])
             _ <- if (!localStatus.isCompatible(remoteStatus)) {
+              log.warn(s"drop incompatible ${conn}")
               F.raiseError(new Exception("incompatible peer"))
             } else {
               F.unit

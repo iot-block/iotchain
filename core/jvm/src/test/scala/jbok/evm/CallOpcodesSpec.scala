@@ -2,17 +2,20 @@ package jbok.evm
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.core.History
 import jbok.core.models._
 import jbok.crypto._
-import jbok.evm._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
 class CallOpcodesSpec extends JbokSpec {
 
-  val config     = EvmConfig.PostEIP160ConfigBuilder(None)
-  val db         = KeyValueDB.inMemory[IO].unsafeRunSync()
-  val startState = WorldStateProxy.inMemory[IO](db).unsafeRunSync()
+  val config  = EvmConfig.PostEIP160ConfigBuilder(None)
+  val db      = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history = History[IO](db).unsafeRunSync()
+//  val startState = WorldStateProxy.inMemory[IO](db).unsafeRunSync()
+  val startState =
+    history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
   import config.feeSchedule._
 
   val fxt = new CallOpFixture(config, startState)

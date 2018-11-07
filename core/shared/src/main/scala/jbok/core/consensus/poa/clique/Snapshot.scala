@@ -4,15 +4,15 @@ import cats.effect.Sync
 import cats.implicits._
 import io.circe.Decoder.Result
 import io.circe._
-import io.circe.generic.auto._
 import io.circe.parser._
 import io.circe.syntax._
-import jbok.codec.json._
+import jbok.codec.json.implicits._
 import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.consensus.poa.clique.Snapshot._
 import jbok.core.models.{Address, BlockHeader}
-import jbok.persistent.KeyValueStore
+import jbok.persistent.KeyValueDB
 import scodec.bits._
+import jbok.codec.rlp.implicits._
 
 import scala.collection.mutable.{ArrayBuffer, Map => MMap, Set => MSet}
 
@@ -85,6 +85,8 @@ case class Snapshot(
 }
 
 object Snapshot {
+  val namespace = ByteVector("clique".getBytes)
+
   implicit private val addressKeyEncoder =
     KeyEncoder.instance[Address](_.bytes.asJson.noSpaces)
   implicit private val addressKeyDecoder =
@@ -149,11 +151,11 @@ object Snapshot {
 
   implicit private[jbok] val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
-  def storeSnapshot[F[_]: Sync](snapshot: Snapshot, store: KeyValueStore[F, ByteVector, String]): F[Unit] =
-    store.put(snapshot.hash, snapshot.asJson.noSpaces)
+  def storeSnapshot[F[_]: Sync](snapshot: Snapshot, db: KeyValueDB[F]): F[Unit] =
+    db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace)
 
-  def loadSnapshot[F[_]: Sync](store: KeyValueStore[F, ByteVector, String], hash: ByteVector): F[Option[Snapshot]] =
-    store.getOpt(hash).map(_.map(json => io.circe.parser.decode[Snapshot](json).right.get))
+  def loadSnapshot[F[_]: Sync](db: KeyValueDB[F], hash: ByteVector): F[Option[Snapshot]] =
+    db.getOpt[ByteVector, String](hash, namespace).map(_.map(json => io.circe.parser.decode[Snapshot](json).right.get))
 
   def apply(config: CliqueConfig, number: BigInt, hash: ByteVector, signers: Set[Address]): Snapshot =
     new Snapshot(config, number, hash, MSet(signers.toSeq: _*), MMap.empty, ArrayBuffer.empty, MMap.empty)

@@ -12,7 +12,7 @@ import jbok.core.pool.TxPool
 import scala.util.Try
 
 /**
-  * FullSync should download the block headers, the block bodies
+  * [[FullSync]] should download the block headers, the block bodies
   * then import them into the local chain (validate and execute)
   */
 case class FullSync[F[_]](
@@ -53,11 +53,11 @@ case class FullSync[F[_]](
     for {
       current <- executor.history.getBestBlockNumber
       requestNumber = current + 1
-      _             = log.info(s"request ${config.blockHeadersPerRequest} headers at most, starting from ${requestNumber}")
+      _             = log.info(s"request ${config.maxBlockHeadersPerRequest} headers at most, starting from ${requestNumber}")
       _ <- peer.conn
-        .request[Message](
-          GetBlockHeaders(Left(requestNumber), config.blockHeadersPerRequest, 0, false),
-          Some(config.peerResponseTimeout)
+        .request[Message, Message](
+          GetBlockHeaders(Left(requestNumber), config.maxBlockHeadersPerRequest, 0, false),
+          config.timeout
         )
         .attempt
         .flatMap {
@@ -121,9 +121,9 @@ case class FullSync[F[_]](
     val transactionsToAdd = oldBranch.flatMap(_.body.transactionList)
     for {
       _ <- txPool.addTransactions(transactionsToAdd)
-      hashes = headers.take(config.blockBodiesPerRequest).map(_.hash)
+      hashes = headers.take(config.maxBlockBodiesPerRequest).map(_.hash)
       _      = log.info(s"request ${hashes.length} bodies, starting from ${headers.head.number}")
-      _ <- peer.conn.request[Message](GetBlockBodies(hashes), Some(config.peerResponseTimeout)).attempt.flatMap {
+      _ <- peer.conn.request[Message, Message](GetBlockBodies(hashes), config.timeout).attempt.flatMap {
         case Right(BlockBodies(bodies, _)) =>
           if (bodies.isEmpty) {
             F.delay(log.info(s"got empty bodies from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))

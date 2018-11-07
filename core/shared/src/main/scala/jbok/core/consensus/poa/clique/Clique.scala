@@ -1,53 +1,49 @@
 package jbok.core.consensus.poa.clique
 
 import cats.data.OptionT
-import cats.effect.{ConcurrentEffect, Sync}
+import cats.effect.ConcurrentEffect
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.core.History
 import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.models._
 import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, Signature}
-import jbok.persistent.{KeyValueDB, KeyValueStore, LruMap}
+import jbok.persistent.LruMap
 import scodec.bits._
 
 import scala.concurrent.duration._
 
-class SnapshotStore[F[_]: Sync](db: KeyValueDB[F])
-    extends KeyValueStore[F, ByteVector, String](ByteVector("clique".getBytes()), db)
-
 class Clique[F[_]](
     val config: CliqueConfig,
     val history: History[F],
-    val store: SnapshotStore[F],
     val recents: LruMap[ByteVector, Snapshot],
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
     val signer: Address,
     val sign: ByteVector => F[CryptoSignature]
 )(implicit F: ConcurrentEffect[F]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("Clique")
 
   def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
     // try to read snapshot from cache or db
-    log.info(s"try to read snapshot${number} from cache")
+    log.trace(s"try to read snapshot(${number}) from cache")
     OptionT
       .fromOption[F](recents.get(hash)) // If an in-memory snapshot was found, use that
       .orElseF(
         if (number % checkpointInterval == 0) {
           // If an on-disk checkpoint snapshot can be found, use that
-          log.info(s"try to read snapshot${number} from db")
-          Snapshot.loadSnapshot[F](store, hash)
+          log.trace(s"not found in cache, try to read snapshot(${number}) from db")
+          Snapshot.loadSnapshot[F](history.db, hash)
         } else {
-          log.info(s"snapshot${number} not found in cache and db")
+          log.trace(s"snapshot(${number}) not found in cache and db")
           F.pure(None)
         }
       )
   }
 
   def genesisSnapshot: F[Snapshot] = {
-    log.info(s"making a genesis snapshot")
+    log.trace(s"making a genesis snapshot")
     for {
       genesis <- history.genesisHeader
       n = (genesis.extraData.length - extraVanity - extraSeal).toInt / 20
@@ -55,8 +51,8 @@ class Clique[F[_]](
         .map(i => Address(genesis.extraData.slice(i * 20 + extraVanity, i * 20 + extraVanity + 20)))
         .toSet
       snap = Snapshot(config, 0, genesis.hash, signers)
-      _ <- Snapshot.storeSnapshot[F](snap, store)
-      _ = log.info(s"stored genesis with ${signers.size} signers")
+      _ <- Snapshot.storeSnapshot[F](snap, history.db)
+      _ = log.trace(s"stored genesis with ${signers.size} signers")
     } yield snap
   }
 
@@ -70,12 +66,12 @@ class Clique[F[_]](
     snap.value flatMap {
       case Some(s) =>
         // Previous snapshot found, apply any pending headers on top of it
-        log.info(s"applying ${headers.length} headers")
+        log.trace(s"applying ${headers.length} headers")
         val newSnap = Snapshot.applyHeaders(s, headers)
         recents.put(newSnap.hash, newSnap)
         // If we've generated a new checkpoint snapshot, save to disk
         if (newSnap.number % checkpointInterval == 0 && headers.nonEmpty) {
-          Snapshot.storeSnapshot[F](newSnap, store).map(_ => newSnap)
+          Snapshot.storeSnapshot[F](newSnap, history.db).map(_ => newSnap)
         } else {
           F.pure(newSnap)
         }
@@ -119,7 +115,6 @@ object Clique {
     new Clique[F](
       config,
       history,
-      new SnapshotStore[F](history.db),
       new LruMap[ByteVector, Snapshot](inMemorySnapshots),
       Map.empty,
       signer,

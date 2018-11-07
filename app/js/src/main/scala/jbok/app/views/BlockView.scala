@@ -7,7 +7,7 @@ import io.circe.generic.auto._
 import io.circe.syntax._
 import jbok.core.models.Block
 import org.scalajs.dom._
-import jbok.codec.json._
+import jbok.codec.implicits._
 
 class BlockView(block: Block) {
   val show: Var[Block] = Var(block)

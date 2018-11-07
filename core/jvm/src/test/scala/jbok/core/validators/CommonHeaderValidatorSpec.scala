@@ -45,7 +45,7 @@ class CommonHeaderValidatorFixture extends HistoryFixture {
     nonce = hex"3fc7bc671f7cee70"
   )
 
-  history.save(validBlockParent).unsafeRunSync()
+  history.putBlockHeader(validBlockParent).unsafeRunSync()
   val commonHeaderValidator = new CommonHeaderValidator[IO](history)
 }
 
@@ -85,7 +85,7 @@ class CommonHeaderValidatorSpec extends JbokSpec {
     }
 
     "return a failure if the parent's header is not in storage" in new CommonHeaderValidatorFixture {
-      history.removeBlock(validBlockParent.hash, saveParentAsBestBlock = false).unsafeRunSync()
+      history.delBlock(validBlockParent.hash, parentAsBestBlock = false).unsafeRunSync()
       commonHeaderValidator.validate(validBlockHeader).attempt.unsafeRunSync() shouldBe Left(
         HeaderParentNotFoundInvalid)
     }

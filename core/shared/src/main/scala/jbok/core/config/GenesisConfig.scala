@@ -1,7 +1,7 @@
 package jbok.core.config
 
 import jbok.core.models._
-import jbok.crypto.authds.mpt.MPTrie
+import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
 
 case class GenesisConfig(
@@ -19,9 +19,9 @@ case class GenesisConfig(
     ByteVector.empty,
     ByteVector.empty,
     coinbase,
-    MPTrie.emptyRootHash,
-    MPTrie.emptyRootHash,
-    MPTrie.emptyRootHash,
+    MerklePatriciaTrie.emptyRootHash,
+    MerklePatriciaTrie.emptyRootHash,
+    MerklePatriciaTrie.emptyRootHash,
     ByteVector.empty,
     BigInt(Integer.parseInt(difficulty.replace("0x", ""), 16)),
     0,

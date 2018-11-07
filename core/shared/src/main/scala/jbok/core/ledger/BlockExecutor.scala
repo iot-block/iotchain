@@ -1,22 +1,19 @@
 package jbok.core.ledger
 
 import cats.Foldable
-import cats.data.Kleisli
 import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
-import jbok.core.History
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.consensus.{Consensus, ConsensusResult}
 import jbok.core.models.UInt256._
 import jbok.core.models._
-import jbok.core.pool.BlockPool
 import jbok.core.validators.{BlockValidator, CommonHeaderValidator, TransactionValidator}
 import jbok.evm._
 import scodec.bits.ByteVector
 
-case class BlockResult[F[_]](worldState: WorldStateProxy[F], gasUsed: BigInt = 0, receipts: List[Receipt] = Nil)
+case class BlockResult[F[_]](worldState: WorldState[F], gasUsed: BigInt = 0, receipts: List[Receipt] = Nil)
 case class TxResult[F[_]](
-    world: WorldStateProxy[F],
+    world: WorldState[F],
     gasUsed: BigInt,
     logs: List[TxLogEntry],
     vmReturnData: ByteVector,
@@ -38,9 +35,9 @@ class BlockExecutor[F[_]](
     val txValidator: TransactionValidator[F],
     val vm: VM
 )(implicit F: ConcurrentEffect[F]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("BlockExecutor")
 
-  val history = consensus.history
+  val history   = consensus.history
   val blockPool = consensus.blockPool
 
   def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxResult[F]] = {
@@ -53,7 +50,7 @@ class BlockExecutor[F[_]](
 
     for {
       _       <- txValidator.validateSimulateTx(stx)
-      world1  <- history.getWorldStateProxy(blockHeader.number, config.accountStartNonce, Some(stateRoot))
+      world1  <- history.getWorldState(config.accountStartNonce, Some(stateRoot))
       world2  <- updateSenderAccountBeforeExecution(senderAddress, stx, world1)
       context <- prepareProgramContext(stx, blockHeader, world2, vmConfig)
       result  <- runVM(stx, context, vmConfig)
@@ -136,8 +133,8 @@ class BlockExecutor[F[_]](
       }
     } yield result
 
-  def payReward(block: Block, world: WorldStateProxy[F]): F[WorldStateProxy[F]] = {
-    def getAccountToPay(address: Address, ws: WorldStateProxy[F]): F[Account] =
+  def payReward(block: Block, world: WorldState[F]): F[WorldState[F]] = {
+    def getAccountToPay(address: Address, ws: WorldState[F]): F[Account] =
       ws.getAccountOpt(address)
         .getOrElse(Account.empty(config.accountStartNonce))
 
@@ -147,13 +144,13 @@ class BlockExecutor[F[_]](
       minerAccount <- getAccountToPay(minerAddress, world)
       minerReward  <- consensus.calcBlockMinerReward(block.header.number, block.body.uncleNodesList.size)
       afterMinerReward = world.putAccount(minerAddress, minerAccount.increaseBalance(UInt256(minerReward)))
-      _                = log.info(s"paying ${block.tag} reward of $minerReward to miner $minerAddress")
+      _                = log.debug(s"block(${block.header.number}) reward of $minerReward paid to miner $minerAddress")
       world <- Foldable[List].foldLeftM(block.body.uncleNodesList, afterMinerReward) { (ws, ommer) =>
         val ommerAddress = Address(ommer.beneficiary)
         for {
           account     <- getAccountToPay(ommerAddress, ws)
           ommerReward <- consensus.calcOmmerMinerReward(block.header.number, ommer.number)
-          _ = log.info(s"paying ${block.tag} reward of $ommerReward to ommer $ommerAddress")
+          _ = log.debug(s"block(${block.header.number}) reward of $ommerReward paid to ommer $ommerAddress")
         } yield ws.putAccount(ommerAddress, account.increaseBalance(UInt256(ommerReward)))
       }
     } yield world
@@ -168,9 +165,12 @@ class BlockExecutor[F[_]](
 
   def executeBlock(block: Block, alreadyValidated: Boolean = false): F[List[Receipt]] =
     for {
-      (result, _)    <- executeBlockTransactions(block)
+      (result, _) <- executeBlockTransactions(block)
+      _ = log.debug(s"execute block result ${result.worldState.stateRootHash}")
       worldToPersist <- payReward(block, result.worldState)
+      _ = log.debug(s"to persist ${worldToPersist.stateRootHash}")
       worldPersisted <- worldToPersist.persisted
+      _ = log.debug(s"persisted ${worldPersisted.stateRootHash}")
       _ <- commonBlockValidator.postExecuteValidate(
         block.header,
         worldPersisted.stateRootHash,
@@ -183,13 +183,11 @@ class BlockExecutor[F[_]](
                                shortCircuit: Boolean = true): F[(BlockResult[F], List[SignedTransaction])] =
     for {
       parentStateRoot <- history.getBlockHeaderByHash(block.header.parentHash).map(_.map(_.stateRoot))
-      world <- history.getWorldStateProxy(
-        block.header.number,
+      world <- history.getWorldState(
         config.accountStartNonce,
         parentStateRoot,
-        EvmConfig.forBlock(block.header.number, config).noEmptyAccounts
+        false
       )
-      _ = log.info(s"parentStateRoot: ${parentStateRoot}, ${world}")
       result <- executeTransactions(block.body.transactionList, block.header, world, shortCircuit = shortCircuit)
     } yield result
 
@@ -198,16 +196,16 @@ class BlockExecutor[F[_]](
       case block :: tail =>
         executeBlock(block, alreadyValidated = true).attempt.flatMap {
           case Right(receipts) =>
-            log.info(s"execute ${block.tag} succeed")
+            log.info(s"${block.tag} execution succeed")
             val td = parentTd + block.header.difficulty
             for {
-              _ <- history.save(block, receipts, td, saveAsBestBlock = true)
-              _ = log.info(s"saved ${block.tag} as the best block")
+              _ <- history.putBlockAndReceipts(block, receipts, td, asBestBlock = true)
+              _ = log.info(s"${block.tag} saved as the best block")
               executedBlocks <- executeBlocks(tail, td)
             } yield block :: executedBlocks
 
           case Left(error) =>
-            log.error(error)(s"execute ${block.tag} failed")
+            log.error(error)(s"${block.tag} execution failed")
             F.raiseError(error)
         }
 
@@ -218,7 +216,7 @@ class BlockExecutor[F[_]](
   def executeTransactions(
       stxs: List[SignedTransaction],
       header: BlockHeader,
-      world: WorldStateProxy[F],
+      world: WorldState[F],
       accGas: BigInt = 0,
       accReceipts: List[Receipt] = Nil,
       executed: List[SignedTransaction] = Nil,
@@ -279,7 +277,7 @@ class BlockExecutor[F[_]](
   def executeTransaction(
       stx: SignedTransaction,
       header: BlockHeader,
-      world: WorldStateProxy[F]
+      world: WorldState[F]
   ): F[TxResult[F]] = {
     log.info(s"Transaction(${stx.hash.toHex.take(7)}) execution start")
     val gasPrice      = UInt256(stx.gasPrice)
@@ -304,13 +302,8 @@ class BlockExecutor[F[_]](
       payMinerForGasFn         = pay(Address(header.beneficiary), (executionGasToPayToMiner * gasPrice).toUInt256) _
       deleteAccountsFn         = deleteAccounts(resultWithErrorHandling.addressesToDelete) _
       deleteTouchedAccountsFn  = deleteEmptyTouchedAccounts _
-      persistStateFn           = WorldStateProxy.persist[F] _
-      worldAfterPayments <- Kleisli(refundGasFn).andThen(payMinerForGasFn).run(resultWithErrorHandling.world)
-      world2 <- Kleisli(deleteAccountsFn)
-        .andThen(deleteTouchedAccountsFn)
-        .andThen(persistStateFn)
-        .run(worldAfterPayments)
-
+      worldAfterPayments <- refundGasFn(resultWithErrorHandling.world) >>= payMinerForGasFn
+      world2             <- (deleteAccountsFn(worldAfterPayments) >>= deleteTouchedAccountsFn).flatMap(_.persisted)
     } yield {
       log.info(
         s"""Transaction(${stx.hash.toHex.take(7)}) execution end with ${result.error} error.
@@ -328,8 +321,8 @@ class BlockExecutor[F[_]](
   private def updateSenderAccountBeforeExecution(
       senderAddress: Address,
       stx: SignedTransaction,
-      world: WorldStateProxy[F]
-  ): F[WorldStateProxy[F]] =
+      world: WorldState[F]
+  ): F[WorldState[F]] =
     world.getAccount(senderAddress).map { account =>
       world.putAccount(senderAddress, account.increaseBalance(-calculateUpfrontGas(stx)).increaseNonce())
     }
@@ -337,7 +330,7 @@ class BlockExecutor[F[_]](
   private def prepareProgramContext(
       stx: SignedTransaction,
       blockHeader: BlockHeader,
-      world: WorldStateProxy[F],
+      world: WorldState[F],
       config: EvmConfig
   ): F[ProgramContext[F]] = {
     val senderAddress = getSenderAddress(stx, blockHeader.number)
@@ -394,7 +387,7 @@ class BlockExecutor[F[_]](
     }
   }
 
-  private def pay(address: Address, value: UInt256)(world: WorldStateProxy[F]): F[WorldStateProxy[F]] =
+  private def pay(address: Address, value: UInt256)(world: WorldState[F]): F[WorldState[F]] =
     F.ifM(world.isZeroValueTransferToNonExistentAccount(address, value))(
       ifTrue = world.pure[F],
       ifFalse = for {
@@ -426,12 +419,11 @@ class BlockExecutor[F[_]](
       0
     }
 
-  private def deleteAccounts(addressesToDelete: Set[Address])(
-      worldStateProxy: WorldStateProxy[F]): F[WorldStateProxy[F]] =
+  private def deleteAccounts(addressesToDelete: Set[Address])(worldStateProxy: WorldState[F]): F[WorldState[F]] =
     addressesToDelete.foldLeft(worldStateProxy) { case (world, address) => world.delAccount(address) }.pure[F]
 
-  private def deleteEmptyTouchedAccounts(world: WorldStateProxy[F]): F[WorldStateProxy[F]] = {
-    def deleteEmptyAccount(world: WorldStateProxy[F], address: Address): F[WorldStateProxy[F]] =
+  private def deleteEmptyTouchedAccounts(world: WorldState[F]): F[WorldState[F]] = {
+    def deleteEmptyAccount(world: WorldState[F], address: Address): F[WorldState[F]] =
       Sync[F].ifM(world.getAccountOpt(address).exists(_.isEmpty(config.accountStartNonce)))(
         ifTrue = world.delAccount(address).pure[F],
         ifFalse = world.pure[F]

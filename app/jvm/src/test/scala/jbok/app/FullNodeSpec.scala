@@ -27,9 +27,9 @@ class FullNodeFixture {
   }
 
   def newFullNode(config: FullNodeConfig): FullNode[IO] = {
-    val db      = KeyValueDB.inMemory[IO].unsafeRunSync()
+    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
     val history = History[IO](db).unsafeRunSync()
-    history.loadGenesisConfig(genesisConfig).unsafeRunSync()
+    history.init(genesisConfig).unsafeRunSync()
     val clique    = Clique[IO](cliqueConfig, history, signer, sign)
     val blockPool = BlockPool(history).unsafeRunSync()
     val consensus = new CliqueConsensus[IO](blockPool, clique)

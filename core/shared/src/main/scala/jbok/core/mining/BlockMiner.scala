@@ -1,26 +1,29 @@
 package jbok.core.mining
 
-import cats.effect.ConcurrentEffect
+import cats.effect.{Clock, ConcurrentEffect}
 import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
-import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.core.ledger.{BlockResult, BloomFilter}
 import jbok.core.models._
+import jbok.core.store.namespaces
 import jbok.core.sync.Synchronizer
 import jbok.core.utils.ByteUtils
-import jbok.crypto.authds.mpt.MPTrieStore
+import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.persistent.KeyValueDB
+import scodec.Codec
 import scodec.bits.ByteVector
+
+import scala.concurrent.duration.MILLISECONDS
 
 case class BlockPreparationResult[F[_]](block: Block, blockResult: BlockResult[F], stateRootHash: ByteVector)
 
-class BlockMiner[F[_]](
+final class BlockMiner[F[_]](
     val synchronizer: Synchronizer[F],
     val stopWhenTrue: SignallingRef[F, Boolean]
-)(implicit F: ConcurrentEffect[F]) {
-  private[this] val log = org.log4s.getLogger
+)(implicit F: ConcurrentEffect[F], clock: Clock[F]) {
+  private[this] val log = org.log4s.getLogger("BlockMiner")
 
   val history = synchronizer.history
 
@@ -65,7 +68,10 @@ class BlockMiner[F[_]](
   def prepareBlock(header: BlockHeader, body: BlockBody): F[BlockPreparationResult[F]] = {
     val block = Block(header, body)
     for {
-      (br, stxs)     <- executor.executeBlockTransactions(block, shortCircuit = false)
+      start      <- clock.monotonic(MILLISECONDS)
+      (br, stxs) <- executor.executeBlockTransactions(block, shortCircuit = false)
+      finish     <- clock.monotonic(MILLISECONDS)
+      _ = log.debug(s"execute prepared block(${block.header.number}) within ${finish - start}ms")
       worldToPersist <- executor.payReward(block, br.worldState)
       worldPersisted <- worldToPersist.persisted
     } yield {
@@ -85,11 +91,10 @@ class BlockMiner[F[_]](
   ): F[Block] =
     for {
       header <- executor.consensus.prepareHeader(parent, ommers)
-      _ = log.info(s"prepared header: ${header}")
+      _ = log.debug(s"prepared header for block(${parent.header.number + 1})")
       txs <- prepareTransactions(stxs, header.gasLimit)
-      _ = log.info(s"prepared txs: ${txs}")
-      prepared <- prepareBlock(header, BlockBody(txs, ommers))
-      _ = log.info(s"prepared block success")
+      _ = log.debug(s"prepared ${txs.length} tx(s) for block(${parent.header.number + 1})")
+      prepared         <- prepareBlock(header, BlockBody(txs, ommers))
       transactionsRoot <- calcMerkleRoot(prepared.block.body.transactionList)
       receiptsRoot     <- calcMerkleRoot(prepared.blockResult.receipts)
     } yield {
@@ -118,16 +123,17 @@ class BlockMiner[F[_]](
   def mine: F[Option[Block]] =
     for {
       parent <- executor.history.getBestBlock
-      _ = log.info(s"begin mine ${parent.header.number + 1}")
-      block    <- generateBlock(parent)
+      block  <- generateBlock(parent)
+      _ = log.info(s"${block.tag} prepared for mining")
       minedOpt <- mine(block)
       _        <- minedOpt.fold(F.unit)(block => submitNewBlock(block))
-      _ = log.info("mine end")
     } yield minedOpt
 
   // submit a newly mined block
-  def submitNewBlock(block: Block): F[Unit] =
+  def submitNewBlock(block: Block): F[Unit] = {
+    log.info(s"${block.tag} successfully mined, submit to synchronizer")
     synchronizer.handleMinedBlock(block)
+  }
 
   def miningStream: Stream[F, Block] =
     Stream
@@ -149,35 +155,18 @@ class BlockMiner[F[_]](
   //////////////////////////////
   //////////////////////////////
 
-  def generateBlock(stxs: List[SignedTransaction], ommers: List[BlockHeader]): F[Block] =
+  private def generateBlock(parent: Block): F[Block] =
     for {
-      parent <- executor.history.getBestBlock
-      block  <- generateBlock(parent, stxs, ommers)
-    } yield block
-
-  def generateBlock(parent: Block): F[Block] =
-    for {
-      tx   <- synchronizer.txPool.getPendingTransactions
-      stxs <- synchronizer.txPool.getPendingTransactions.map(_.map(_.stx))
-      _ = log.debug(s"generate block number: ${parent.header.number}, stx")
+      stxs   <- synchronizer.txPool.getPendingTransactions.map(_.map(_.stx))
       ommers <- synchronizer.ommerPool.getOmmers(parent.header.number + 1)
       block  <- generateBlock(parent, stxs, ommers)
     } yield block
 
-  def generateBlock(number: BigInt): F[Block] =
+  private[jbok] def calcMerkleRoot[V: Codec](entities: List[V]): F[ByteVector] =
     for {
-      parent <- executor.history.getBlockByNumber(number - 1).flatMap {
-        case Some(block) => F.pure(block)
-        case None        => F.raiseError[Block](new Exception(s"parent block at ${number - 1} does not exist"))
-      }
-      block <- generateBlock(parent)
-    } yield block
-
-  private[jbok] def calcMerkleRoot[V](entities: List[V])(implicit cv: RlpCodec[V]): F[ByteVector] =
-    for {
-      db   <- KeyValueDB.inMemory[F]
-      mpt  <- MPTrieStore[F, Int, V](db)
-      _    <- entities.zipWithIndex.map { case (v, k) => mpt.put(k, v) }.sequence
+      db   <- KeyValueDB.inmem[F]
+      mpt  <- MerklePatriciaTrie[F](namespaces.empty, db)
+      _    <- entities.zipWithIndex.map { case (v, k) => mpt.put[Int, V](k, v, namespaces.empty) }.sequence
       root <- mpt.getRootHash
     } yield root
 }
@@ -185,7 +174,7 @@ class BlockMiner[F[_]](
 object BlockMiner {
   def apply[F[_]: ConcurrentEffect](
       synchronizer: Synchronizer[F]
-  ): F[BlockMiner[F]] = SignallingRef[F, Boolean](true).map { stopWhenTrue =>
+  )(implicit clock: Clock[F]): F[BlockMiner[F]] = SignallingRef[F, Boolean](true).map { stopWhenTrue =>
     new BlockMiner[F](
       synchronizer,
       stopWhenTrue

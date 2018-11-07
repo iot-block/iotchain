@@ -4,8 +4,7 @@ import java.net.{InetAddress, InetSocketAddress}
 
 import cats.effect.Sync
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
-import jbok.core.peer.PeerNode
+import jbok.codec.rlp.implicits._
 import jbok.core.peer.discovery.UdpPacket._
 import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
@@ -13,7 +12,6 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{discriminated, uint8}
 
-import scala.concurrent.duration._
 import scala.util.Try
 
 sealed trait KadPacket

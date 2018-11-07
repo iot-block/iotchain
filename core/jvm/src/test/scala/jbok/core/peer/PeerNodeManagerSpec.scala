@@ -6,7 +6,7 @@ import jbok.persistent.KeyValueDB
 
 class PeerNodeManagerSpec extends JbokSpec {
   "PeerNodeManager" should {
-    val db = KeyValueDB.inMemory[IO].unsafeRunSync()
+    val db = KeyValueDB.inmem[IO].unsafeRunSync()
     val nodeManager = PeerNodeManager[IO](db).unsafeRunSync()
 
     "add uri" in {

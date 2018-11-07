@@ -19,7 +19,7 @@ case class Synchronizer[F[_]](
     broadcaster: Broadcaster[F],
     stopWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("Synchronizer")
 
   val history = executor.history
 

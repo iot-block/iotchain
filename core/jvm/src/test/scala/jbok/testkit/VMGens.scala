@@ -1,8 +1,9 @@
 package jbok.testkit
 
 import cats.effect.IO
+import jbok.core.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
-import jbok.evm.{Storage, WorldStateProxy, _}
+import jbok.evm.{Storage, WorldState, _}
 import jbok.persistent.KeyValueDB
 import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits._
@@ -18,10 +19,10 @@ trait VMGens extends Gens {
     getListGen(minSize, maxSize, byteGen).map(l => ByteVector(l.toArray))
 
   def getBigIntGen(min: BigInt = 0, max: BigInt = BigInt(2).pow(256) - 1): Gen[BigInt] = {
-    val mod = max - min
+    val mod    = max - min
     val nBytes = mod.bitLength / 8 + 1
     for {
-      byte <- Arbitrary.arbitrary[Byte]
+      byte  <- Arbitrary.arbitrary[Byte]
       bytes <- getByteVectorGen(nBytes, nBytes)
       bigInt = (if (mod > 0) BigInt(bytes.toArray).abs % mod else BigInt(0)) + min
     } yield bigInt
@@ -58,7 +59,7 @@ trait VMGens extends Gens {
   def getStorageGen(maxSize: Int = 0, uint256Gen: Gen[UInt256] = getUInt256Gen()): Gen[Storage[IO]] =
     getListGen(0, maxSize, uint256Gen).map(l => Storage.fromList[IO](l).unsafeRunSync())
 
-  val ownerAddr = Address(0x123456)
+  val ownerAddr  = Address(0x123456)
   val callerAddr = Address(0xabcdef)
 
   val exampleBlockHeader = BlockHeader(
@@ -92,22 +93,25 @@ trait VMGens extends Gens {
       evmConfig: EvmConfig = EvmConfig.PostEIP160ConfigBuilder(None)
   ): Gen[ProgramState[IO]] =
     for {
-      stack <- stackGen
-      memory <- memGen
-      storage <- storageGen
-      gas <- gasGen
-      program <- codeGen.map(Program.apply)
-      inputData <- inputDataGen
-      value <- valueGen
-      blockNumber <- blockNumberGen
+      stack          <- stackGen
+      memory         <- memGen
+      storage        <- storageGen
+      gas            <- gasGen
+      program        <- codeGen.map(Program.apply)
+      inputData      <- inputDataGen
+      value          <- valueGen
+      blockNumber    <- blockNumberGen
       blockPlacement <- getUInt256Gen(0, blockNumber)
 
       blockHeader = exampleBlockHeader.copy(number = blockNumber - blockPlacement)
 
       env = ExecEnv(ownerAddr, callerAddr, callerAddr, 0, inputData, value, program, blockHeader, 0)
 
-      db = KeyValueDB.inMemory[IO].unsafeRunSync()
-      world = WorldStateProxy.inMemory[IO](db).unsafeRunSync()
+      db      = KeyValueDB.inmem[IO].unsafeRunSync()
+      history = History[IO](db).unsafeRunSync()
+      world = history
+        .getWorldState()
+        .unsafeRunSync()
         .putCode(ownerAddr, program.code)
         .putStorage(ownerAddr, storage)
         .putAccount(ownerAddr, Account.empty().increaseBalance(value))

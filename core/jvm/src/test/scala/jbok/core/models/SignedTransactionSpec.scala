@@ -1,13 +1,9 @@
 package jbok.core.models
 
-import cats.effect.IO
 import jbok.JbokSpec
-import jbok.testkit.VMGens
 import jbok.crypto._
 import jbok.crypto.signature.ecdsa.SecP256k1
-import scodec.bits.ByteVector
-import scodec.bits._
-import scodec.codecs._
+import jbok.testkit.VMGens
 
 class SignedTransactionSpec extends JbokSpec {
   "SignedTransaction" should {

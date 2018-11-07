@@ -13,24 +13,17 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration._
 
 trait CliqueFixture extends ConsensusFixture {
-  val db           = KeyValueDB.inMemory[IO].unsafeRunSync()
-  val history      = History[IO](db).unsafeRunSync()
-  val blockPool    = BlockPool[IO](history, BlockPoolConfig()).unsafeRunSync()
-  val cliqueConfig = CliqueConfig(period = 1.seconds)
-
+  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history       = History[IO](db).unsafeRunSync()
+  val blockPool     = BlockPool[IO](history, BlockPoolConfig()).unsafeRunSync()
+  val cliqueConfig  = CliqueConfig(period = 1.seconds)
   val txGen         = new TxGen(3)
   val miner         = txGen.addresses.take(1).toList
   val genesisConfig = txGen.genesisConfig.copy(extraData = Clique.fillExtraData(miner.map(_.address)))
-  history.loadGenesisConfig(genesisConfig).unsafeRunSync()
-
-  val signer = miner.head
-
+  val signer        = miner.head
   val sign = (bv: ByteVector) => {
     SecP256k1.sign(bv.toArray, signer.keyPair)
   }
-  val clique = Clique[IO](cliqueConfig, history, signer.address, sign)
-
-  println(s"miners: ${miner.map(_.address)}")
-  println(s"genesis signers: ${clique.genesisSnapshot.unsafeRunSync().signers}")
+  val clique    = Clique[IO](cliqueConfig, history, signer.address, sign)
   val consensus = new CliqueConsensus[IO](blockPool, clique)
 }

@@ -115,19 +115,17 @@ object Configs {
   )
 
   case class SyncConfig(
-      blacklistDuration: FiniteDuration = 200.seconds,
-      startRetryInterval: FiniteDuration = 5.seconds,
-      printStatusInterval: FiniteDuration = 30.seconds,
-      checkForNewBlockInterval: FiniteDuration = 5.seconds,
-      peerResponseTimeout: FiniteDuration = 60.seconds,
       maxConcurrentRequests: Int = 50,
-      blockHeadersPerRequest: Int = 200,
-      blockBodiesPerRequest: Int = 128,
-      receiptsPerRequest: Int = 60,
-      nodesPerRequest: Int = 200,
+      maxBlockHeadersPerRequest: Int = 200,
+      maxBlockBodiesPerRequest: Int = 128,
+      maxReceiptsPerRequest: Int = 60,
+      maxNodesPerRequest: Int = 200,
       minPeersToChooseTargetBlock: Int = 2,
       targetBlockOffset: Int = 500,
-      blockChainOnlyPeersPoolSize: Int = 100
+      retryInterval: FiniteDuration = 5.seconds,
+      checkForNewBlockInterval: FiniteDuration = 5.seconds,
+      banDuration: FiniteDuration = 200.seconds,
+      timeout: Option[FiniteDuration] = Some(10.seconds)
   )
 
   case class Timeouts(

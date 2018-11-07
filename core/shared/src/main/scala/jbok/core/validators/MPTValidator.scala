@@ -2,11 +2,12 @@ package jbok.core.validators
 
 import cats.effect.Sync
 import cats.implicits._
-import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
-import jbok.crypto.authds.mpt.MPTrieStore
+import jbok.core.store.namespaces
+import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.persistent.KeyValueDB
+import scodec.Codec
 import scodec.bits.ByteVector
+import jbok.codec.rlp.implicits._
 
 class MPTValidator[F[_]](implicit F: Sync[F]) {
 
@@ -19,11 +20,11 @@ class MPTValidator[F[_]](implicit F: Sync[F]) {
     * @tparam V Type of the items cointained within the List
     * @return true if hash matches trie hash, false otherwise
     */
-  def isValid[V](hash: ByteVector, toValidate: List[V])(implicit cv: RlpCodec[V]): F[Boolean] =
+  def isValid[V: Codec](hash: ByteVector, toValidate: List[V]): F[Boolean] =
     for {
-      db <- KeyValueDB.inMemory[F]
-      trie <- MPTrieStore[F, Int, V](db)
-      _ <- toValidate.zipWithIndex.map { case (v, k) => trie.put(k, v) }.sequence
+      db   <- KeyValueDB.inmem[F]
+      trie <- MerklePatriciaTrie[F](namespaces.empty, db)
+      _    <- toValidate.zipWithIndex.map { case (v, k) => trie.put(k, v, namespaces.empty) }.sequence
       root <- trie.getRootHash
       r = root equals hash
     } yield r

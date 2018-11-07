@@ -9,7 +9,7 @@ import scodec.bits.{BitVector, ByteVector}
 
 import scala.annotation.tailrec
 import scala.collection.mutable
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 
 class Consensus[F[_]](
     config: Config,

@@ -13,14 +13,15 @@ import jbok.crypto.signature.{ECDSA, Signature}
 class BlockMinerFixture(consensusFixture: ConsensusFixture, port: Int = 9999) {
   val txGen            = consensusFixture.txGen
   val consensus        = consensusFixture.consensus
+  val genesisConfig    = consensusFixture.genesisConfig
   val blockChainConfig = BlockChainConfig()
   val history          = consensus.history
-  val blockPool       = consensus.blockPool
-  val executor        = BlockExecutor[IO](blockChainConfig, consensus)
+  val blockPool        = consensus.blockPool
+  val executor         = BlockExecutor[IO](blockChainConfig, consensus)
 
   val syncConfig        = SyncConfig()
   val peerManagerConfig = PeerManagerConfig(port)
-  val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+  val keyPair           = Signature[ECDSA].generateKeyPair().unsafeRunSync()
   val peerManager =
     PeerManagerPlatform[IO](peerManagerConfig, Some(keyPair), syncConfig, history).unsafeRunSync()
   val txPool       = TxPool[IO](peerManager, TxPoolConfig()).unsafeRunSync()

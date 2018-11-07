@@ -1,12 +1,14 @@
 package jbok.core.models
 
-import jbok.codec.json.{bigIntDecoder, bigIntEncoder}
+import jbok.codec.json.implicits.{bigIntDecoder, bigIntEncoder}
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
+import scodec.Codec
 import scodec.bits.ByteVector
 
 object UInt256 {
-  implicit val codec: RlpCodec[UInt256] = rbytes.xmap[UInt256](UInt256.apply, _.unpaddedBytes)
+  implicit val rlp: RlpCodec[UInt256] = rbytes.xmap[UInt256](UInt256.apply, _.unpaddedBytes)
+  implicit val codec: Codec[UInt256]  = rlp.codec
 
   implicit val decodeUInt256: io.circe.Decoder[UInt256] = bigIntDecoder.map(UInt256.apply)
   implicit val encodeUInt256: io.circe.Encoder[UInt256] = bigIntEncoder.contramap(_.toBigInt)

@@ -2,6 +2,7 @@ package jbok.evm
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.core.History
 import jbok.core.models.{Address, UInt256}
 import jbok.crypto._
 import jbok.crypto.signature.ecdsa.SecP256k1
@@ -14,8 +15,11 @@ class PrecompiledContractsSpec extends JbokSpec {
   def buildContext(recipient: Address, inputData: ByteVector, gas: UInt256 = 1000000): ProgramContext[IO] = {
     val origin = Address(0xcafebabe)
     val env    = ExecEnv(recipient, origin, origin, 1000, inputData, 0, Program(ByteVector.empty), null, 0)
-    val db     = KeyValueDB.inMemory[IO].unsafeRunSync()
-    val world  = WorldStateProxy.inMemory[IO](db).unsafeRunSync()
+    val db     = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history = History[IO](db).unsafeRunSync()
+    val world = history
+      .getWorldState()
+      .unsafeRunSync()
     ProgramContext(env, recipient, gas, world, EvmConfig.PostEIP161ConfigBuilder(None))
   }
 

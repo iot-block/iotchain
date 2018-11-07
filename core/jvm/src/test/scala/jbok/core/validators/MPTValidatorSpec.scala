@@ -8,7 +8,7 @@ import jbok.core.models._
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.{ByteVector, _}
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 
 class MPTValidatorFixture extends HistoryFixture {
   val validBlockHeader = BlockHeader(
