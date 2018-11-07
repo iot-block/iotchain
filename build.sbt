@@ -259,6 +259,7 @@ lazy val commonJsSettings = Seq(
   scalaJSUseMainModuleInitializer in Test := false,
   requiresDOM in Test := true,
   webpackBundlingMode := BundlingMode.LibraryOnly(),
+  scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
   libraryDependencies ++= Seq(
     "org.scala-js"             %%% "scalajs-dom"   % "0.9.6",
     "com.thoughtworks.binding" %%% "dom"           % "11.0.1",

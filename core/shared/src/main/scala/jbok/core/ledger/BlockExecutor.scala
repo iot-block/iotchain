@@ -69,8 +69,17 @@ class BlockExecutor[F[_]](
     }
   }
 
-  def binarySearchGasEstimation(stx: SignedTransaction, blockHeader: BlockHeader): F[BigInt] =
-    ???
+  def binarySearchGasEstimation(stx: SignedTransaction, blockHeader: BlockHeader): F[BigInt] = {
+    val lowLimit  = EvmConfig.forBlock(blockHeader.number, config).feeSchedule.G_transaction
+    val highLimit = stx.gasLimit
+
+    if (highLimit < lowLimit)
+      F.pure(highLimit)
+    else {
+      binaryChop(lowLimit, highLimit)(gasLimit =>
+        simulateTransaction(stx.copy(gasLimit = gasLimit), blockHeader).map(_.vmError))
+    }
+  }
 
   // FIXME
   def importBlocks(blocks: List[Block], imported: List[Block] = Nil): F[List[Block]] =
@@ -431,6 +440,18 @@ class BlockExecutor[F[_]](
     Foldable[List]
       .foldLeftM(world.touchedAccounts.toList, world)((world, address) => deleteEmptyAccount(world, address))
       .map(_.clearTouchedAccounts)
+  }
+
+  private def binaryChop[Error](min: BigInt, max: BigInt)(f: BigInt => F[Option[Error]]): F[BigInt] = {
+    assert(min <= max)
+
+    if (min == max)
+      F.pure(max)
+    else {
+      val mid           = min + (max - min) / 2
+      val possibleError = f(mid)
+      F.ifM(possibleError.map(_.isEmpty))(ifTrue = binaryChop(min, mid)(f), ifFalse = binaryChop(mid + 1, max)(f))
+    }
   }
 }
 

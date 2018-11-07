@@ -14,7 +14,7 @@ import org.scalajs.dom._
 import fs2._
 
 import scala.scalajs.js
-import scala.scalajs.js.annotation.JSImport
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel, JSImport}
 import scala.util.{Failure, Success}
 import scala.concurrent.duration._
 
@@ -53,13 +53,13 @@ object JbokApp {
   val accountView      = AccountView().render
   val blockView        = BlockView2().render
   val contractView     = ContractView(state).render
-  val configView       = ConfigView.render()
+  val configView       = ConfigView(state).render()
 
   val tabs = Vars(
     Tab("Accounts", accountsView, "fa-user-circle"),
     Tab("Blocks", blocksView, "fa-th-large"),
     Tab("Transactions", transactionsView, "fa-arrow-circle-right"),
-    Tab("Simulations", simulationsView, "fa-stethoscope"),
+//    Tab("Simulations", simulationsView, "fa-stethoscope"),
     Tab("Account", accountView, "fa-user-circle"),
     Tab("Block", blockView, "fa-square"),
     Tab("Contract", contractView, "fa-file-contract"),
