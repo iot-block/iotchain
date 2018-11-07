@@ -8,7 +8,7 @@ import scalax.collection.GraphEdge.DiEdge
 import scalax.collection.GraphPredef._
 import scalax.collection.mutable.{Graph => MGraph}
 import scodec.bits.ByteVector
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 
 import scala.util.Random
 

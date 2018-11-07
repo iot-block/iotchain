@@ -3,7 +3,7 @@ package jbok.core.validators
 import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.core.ledger.BloomFilter
 import jbok.core.models._
 import jbok.core.utils.ByteUtils

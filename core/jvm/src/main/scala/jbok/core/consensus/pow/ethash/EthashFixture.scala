@@ -10,7 +10,7 @@ import jbok.common.execution._
 import jbok.persistent.KeyValueDB
 
 trait EthashFixture extends ConsensusFixture {
-  val db               = KeyValueDB.inMemory[IO].unsafeRunSync()
+  val db               = KeyValueDB.inmem[IO].unsafeRunSync()
   val history          = History[IO](db).unsafeRunSync()
   val blockChainConfig = BlockChainConfig()
   val miningConfig     = MiningConfig()
@@ -22,7 +22,7 @@ trait EthashFixture extends ConsensusFixture {
   //  val blockChainGen = new BlockChainGen(txGen)
   val miners        = txGen.addresses.take(2).toList
   val genesisConfig = txGen.genesisConfig
-  history.loadGenesisConfig(genesisConfig).unsafeRunSync()
+  history.init(genesisConfig).unsafeRunSync()
 
   val consensus = new EthashConsensus[IO](
     blockChainConfig,

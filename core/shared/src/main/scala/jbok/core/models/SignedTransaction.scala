@@ -2,7 +2,7 @@ package jbok.core.models
 
 import cats.effect.IO
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector

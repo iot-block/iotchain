@@ -30,17 +30,9 @@ abstract class PeerManager[F[_]](
     val pipe: Pipe[F, Message, Message],
     val haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("PeerManager")
 
   val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port)
-
-  def handleError(e: Throwable): Stream[F, Unit] = e match {
-    case _: AsynchronousCloseException | _: ClosedChannelException =>
-      log.error(e)("peer manager error")
-      Stream.empty.covary[F]
-    case _ =>
-      Stream.raiseError[F](e)
-  }
 
   def listen(
       bind: InetSocketAddress = config.bindAddr,
@@ -57,20 +49,19 @@ abstract class PeerManager[F[_]](
           for {
             socket <- Stream.resource(res)
             conn   <- Stream.eval(TcpUtil.socketToConnection[F](socket, true))
-            _ = log.info(s"${conn} established")
+            _ = log.debug(s"${conn} established")
             peer <- Stream.eval(handshakeIncoming(conn))
-            _ = log.info(s"${conn} handshaked")
+            _ = log.debug(s"${conn} handshaked")
             _ <- Stream.eval(incoming.update(_ + (conn.remoteAddress -> peer)))
             _ <- conn
               .readsAndResolve[Message]()
               .evalMap(a => messages.publish1(Some(peer -> a)).map(_ => a))
               .through(pipe)
               .to(conn.writes())
-              .onFinalize(incoming.update(_ - conn.remoteAddress) *> F.delay(log.info(s"${conn} disconnected")))
+              .onFinalize(incoming.update(_ - conn.remoteAddress) *> F.delay(log.debug(s"${conn} disconnected")))
           } yield ()
       }
       .parJoin(maxOpen)
-      .handleErrorWith(handleError)
 
   def connect(maxOpen: Int = config.maxOutgoingPeers): Stream[F, Unit] =
     nodeQueue.dequeue
@@ -83,24 +74,24 @@ abstract class PeerManager[F[_]](
     val connect0 = for {
       socket <- Stream.resource(fs2.io.tcp.client[F](to.addr, keepAlive = true, noDelay = true))
       conn   <- Stream.eval(TcpUtil.socketToConnection[F](socket, false))
-      _ = log.info(s"${conn} established")
+      _ = log.debug(s"${conn} established")
       peer <- Stream.eval(handshakeOutgoing(conn, to.pk))
-      _ = log.info(s"${conn} handshaked")
+      _ = log.debug(s"${conn} handshaked")
       _ <- Stream.eval(outgoing.update(_ + (peer.conn.remoteAddress -> peer)))
       _ <- conn
         .reads[Message]()
         .evalMap(a => messages.publish1(Some(peer -> a)).map(_ => a))
         .through(pipe)
         .to(conn.writes())
-        .onFinalize(outgoing.update(_ - conn.remoteAddress) *> F.delay(log.info(s"${conn} disconnected")))
+        .onFinalize(outgoing.update(_ - conn.remoteAddress) *> F.delay(log.debug(s"${conn} disconnected")))
     } yield ()
 
     Stream.eval(outgoing.get.map(_.contains(to.addr))).flatMap {
       case true =>
-        log.info(s"already connected, ignore")
+        log.debug(s"already connected, ignore")
         Stream.empty.covary[F]
 
-      case false => connect0.handleErrorWith(handleError)
+      case false => connect0
     }
   }
 
@@ -113,7 +104,7 @@ abstract class PeerManager[F[_]](
     }
 
   def stop: F[Unit] =
-    haltWhenTrue.set(true)
+    connected.flatMap(_.traverse(_.conn.close)) *> haltWhenTrue.set(true)
 
   def addPeerNode(nodes: PeerNode*): F[Unit] =
     nodes.toList

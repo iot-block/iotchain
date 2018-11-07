@@ -5,10 +5,10 @@ import org.scalacheck.Gen
 import scodec.bits._
 
 class HexPrefixSpec extends JbokSpec {
-  "hex-prefix" should {
+  "HexPrefix" should {
     val charGen: Gen[Char] = Gen.oneOf("0123456789abcdef")
     val hexGen: Gen[String] = for {
-      size <- Gen.chooseNum(0, 100)
+      size  <- Gen.chooseNum(0, 100)
       chars <- Gen.listOfN(size, charGen)
     } yield chars.mkString
 
@@ -27,7 +27,7 @@ class HexPrefixSpec extends JbokSpec {
 
       forAll(hexGen, boolGen) {
         case (hex, isLeaf) =>
-          val bytes = HexPrefix.encode(hex, isLeaf = isLeaf)
+          val bytes   = HexPrefix.encode(hex, isLeaf = isLeaf)
           val decoded = HexPrefix.decode(bytes).require
           decoded shouldBe ((isLeaf, hex))
       }

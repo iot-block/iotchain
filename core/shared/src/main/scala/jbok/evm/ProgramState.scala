@@ -32,7 +32,7 @@ object ProgramState {
 case class ProgramState[F[_]: Sync](
     context: ProgramContext[F],
     gas: BigInt,
-    world: WorldStateProxy[F],
+    world: WorldState[F],
     stack: Stack = Stack.empty(),
     memory: Memory = Memory.empty,
     pc: Int = 0,
@@ -57,7 +57,7 @@ case class ProgramState[F[_]: Sync](
 
   def gasUsed: BigInt = context.startGas - gas
 
-  def withWorld(updated: WorldStateProxy[F]): ProgramState[F] =
+  def withWorld(updated: WorldState[F]): ProgramState[F] =
     copy(world = updated)
 
   def withStorage(updated: Storage[F]): ProgramState[F] =

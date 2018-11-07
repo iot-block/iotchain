@@ -5,8 +5,9 @@ import java.net.URI
 import cats.effect.Effect
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import jbok.core.store.PeerNodeStore
+import jbok.core.store.namespaces
 import jbok.persistent.KeyValueDB
+import jbok.codec.rlp.implicits._
 
 trait PeerNodeManager[F[_]] {
   def add(uris: URI*): F[Unit]
@@ -17,12 +18,17 @@ trait PeerNodeManager[F[_]] {
 }
 
 object PeerNodeManager {
-  def apply[F[_]](db: KeyValueDB[F], maxPersisted: Int = 1024)(implicit F: Effect[F]): F[PeerNodeManager[F]] = {
-    val store = new PeerNodeStore[F](db)
+  val key = "KnownAddrs"
+
+  def apply[F[_]](db: KeyValueDB[F], maxPersisted: Int = 1024)(implicit F: Effect[F]): F[PeerNodeManager[F]] =
     for {
-      init  <- store.get
+      init  <- db.getOpt[String, Set[PeerNode]](key, namespaces.Peer).map(_.getOrElse(Set.empty))
       known <- Ref.of[F, Set[PeerNode]](init)
-    } yield new PeerNodeManager[F] {
+    } yield
+      new PeerNodeManager[F] {
+        private def put(now: Set[PeerNode]): F[Unit] =
+          db.put(key, now, namespaces.Peer)
+
         override def add(uris: URI*): F[Unit] =
           for {
             cur <- known.get
@@ -30,7 +36,7 @@ object PeerNodeManager {
             _ <- if (cur == now) {
               F.unit
             } else {
-              known.set(now) *> store.put(now)
+              known.set(now) *> put(now)
             }
           } yield ()
 
@@ -41,12 +47,11 @@ object PeerNodeManager {
             _ <- if (cur == now) {
               F.unit
             } else {
-              known.set(now) *> store.put(now)
+              known.set(now) *> put(now)
             }
           } yield ()
 
         override def getAll: F[Set[PeerNode]] =
           known.get
       }
-  }
 }

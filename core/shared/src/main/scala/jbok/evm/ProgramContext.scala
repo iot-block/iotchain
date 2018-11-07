@@ -10,7 +10,7 @@ object ProgramContext {
       recipientAddress: Address,
       program: Program,
       blockHeader: BlockHeader,
-      world: WorldStateProxy[F],
+      world: WorldState[F],
       config: EvmConfig
   ): ProgramContext[F] = {
 
@@ -64,7 +64,7 @@ case class ProgramContext[F[_]: Sync](
     env: ExecEnv,
     receivingAddr: Address,
     startGas: BigInt,
-    world: WorldStateProxy[F],
+    world: WorldState[F],
     config: EvmConfig,
     initialAddressesToDelete: Set[Address] = Set.empty
 )

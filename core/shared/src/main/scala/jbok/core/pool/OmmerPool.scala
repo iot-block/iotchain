@@ -6,7 +6,7 @@ import cats.implicits._
 import jbok.core.History
 import jbok.core.models.BlockHeader
 
-class OmmerPool[F[_]: Sync](history: History[F], poolSize: Int, ommersList: Ref[F, List[BlockHeader]]) {
+final class OmmerPool[F[_]: Sync](history: History[F], poolSize: Int, ommersList: Ref[F, List[BlockHeader]]) {
   private[this] val log = org.log4s.getLogger
 
   val ommerGenerationLimit: Int = 6 //Stated on section 11.1, eq. (143) of the YP

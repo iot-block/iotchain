@@ -7,7 +7,7 @@ import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.DiscoveryConfig
 import jbok.core.peer.{PeerNode, PeerStore}
 import jbok.crypto._

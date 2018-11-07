@@ -1,19 +1,19 @@
 package jbok.codec.rlp
 
 import jbok.JbokSpec
-import jbok.codec.rlp.RlpCodec._
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import org.scalacheck.{Arbitrary, Gen}
-import scodec.bits.ByteVector
+import scodec.Codec
+import scodec.bits._
 import shapeless.HNil
 
 class RlpCodecSpec extends JbokSpec {
-  def roundtrip[A](a: A, hex: String = "")(implicit ev: RlpCodec[A]) = {
-    val bytes = encode(a).require.bytes
+  def roundtrip[A: Codec](a: A, hex: String = "") = {
+    val bytes = Codec.encode(a).require.bytes
     if (hex.nonEmpty) {
       bytes shouldBe ByteVector.fromValidHex(hex)
     }
-    decode[A](bytes.bits).require.value shouldBe a
+    Codec.decode[A](bytes.bits).require.value shouldBe a
   }
 
   "RlpCodec" should {
@@ -101,28 +101,25 @@ class RlpCodecSpec extends JbokSpec {
     }
 
     "codec https://github.com/ethereum/wiki/wiki/RLP" in {
-      val data = Seq(
-        encode(0) -> "80",
-        encode("") -> "80",
-        encode("d") -> "64",
-        encode("cat") -> "83636174",
-        encode("dog") -> "83646f67",
-        encode(List("cat", "dog")) -> "c88363617483646f67",
-        encode(List("dog", "god", "cat")) -> "cc83646f6783676f6483636174",
-        encode(1) -> "01",
-        encode(10) -> "0a",
-        encode(100) -> "64",
-        encode(1000) -> "8203e8",
-        encode(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935"))
-          -> "a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-        encode(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639936"))
-          -> "a1010000000000000000000000000000000000000000000000000000000000000000"
+      roundtrip(0, "80")
+      roundtrip("", "80")
+      roundtrip("d", "64")
+      roundtrip("cat", "83636174")
+      roundtrip("dog", "83646f67")
+      roundtrip(List("cat", "dog"), "c88363617483646f67")
+      roundtrip(List("dog", "god", "cat"), "cc83646f6783676f6483636174")
+      roundtrip(1, "01")
+      roundtrip(10, "0a")
+      roundtrip(100, "64")
+      roundtrip(1000, "8203e8")
+      roundtrip(
+        BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935"),
+        "a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
       )
-      for {
-        (attempt, hex) <- data
-      } {
-        attempt.require.bytes shouldBe ByteVector.fromValidHex(hex)
-      }
+      roundtrip(
+        BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639936"),
+        "a1010000000000000000000000000000000000000000000000000000000000000000"
+      )
     }
   }
 }

@@ -71,7 +71,7 @@ object RpcServer {
       parse(a).flatMap(_.hcursor.downField("method").as[String]).toOption
   }
 
-  implicit val codec: Codec[String] = jbok.codec.rlp.codecs.rstring.codec
+  implicit val codec: Codec[String] = jbok.codec.rlp.implicits.rstring.codec
 
   def apply(
       handlers: Map[String, String => IO[String]] = Map.empty

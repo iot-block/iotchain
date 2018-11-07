@@ -14,7 +14,7 @@ import jbok.persistent.KeyValueDB
 class DiscoveryFixture(port: Int) {
   val keyPair            = Signature[ECDSA].generateKeyPair().unsafeRunSync()
   val addr               = new InetSocketAddress("localhost", port)
-  val db                 = KeyValueDB.inMemory[IO].unsafeRunSync()
+  val db                 = KeyValueDB.inmem[IO].unsafeRunSync()
   val transport = UdpTransport[IO](addr)
   val config = DiscoveryConfig().copy(port = port)
   val discovery = Discovery[IO](config, keyPair, transport, db).unsafeRunSync()

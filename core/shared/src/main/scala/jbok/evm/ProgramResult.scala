@@ -16,7 +16,7 @@ import scodec.bits.ByteVector
 case class ProgramResult[F[_]](
     returnData: ByteVector,
     gasRemaining: BigInt,
-    world: WorldStateProxy[F],
+    world: WorldState[F],
     addressesToDelete: Set[Address],
     logs: List[TxLogEntry],
     internalTxs: List[InternalTransaction],

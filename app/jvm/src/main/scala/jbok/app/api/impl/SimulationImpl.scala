@@ -84,9 +84,9 @@ class SimulationImpl(
             ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2, mkThreadFactory(s"EC${idx}", true)))
           val sign = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, signers(idx)) }
           for {
-            db      <- KeyValueDB.inMemory[IO]
+            db      <- KeyValueDB.inmem[IO]
             history <- History[IO](db)
-            _       <- history.loadGenesisConfig(genesisConfig)
+            _       <- history.init(genesisConfig)
             clique = Clique[IO](cliqueConfig, history, Address(signers(idx)), sign)
             blockPool <- BlockPool(history)
             consensus = new CliqueConsensus[IO](blockPool, clique)

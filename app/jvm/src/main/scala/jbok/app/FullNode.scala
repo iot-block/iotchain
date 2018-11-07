@@ -23,7 +23,7 @@ import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
-import jbok.persistent.leveldb.{LevelDB, LevelDBConfig}
+import jbok.persistent.leveldb.LevelDB
 import scodec.bits.ByteVector
 
 case class FullNode[F[_]](
@@ -71,11 +71,11 @@ object FullNode {
   ): IO[FullNode[IO]] = {
     val random = new SecureRandom()
     for {
-      db <- LevelDB(LevelDBConfig(s"${config.datadir}/db"))
+      db <- LevelDB(s"${config.datadir}/db")
       keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
       history <- History(db)
       // load genesis if does not exist
-      _         <- history.loadGenesisConfig()
+      _         <- history.init()
       blockPool <- BlockPool(history, BlockPoolConfig())
       sign      = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, keyPair) }
       clique    = Clique(CliqueConfig(), history, Address(keyPair), sign)

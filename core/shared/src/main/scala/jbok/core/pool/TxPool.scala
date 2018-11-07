@@ -26,7 +26,7 @@ case class TxPool[F[_]](
     peerManager: PeerManager[F],
     config: TxPoolConfig
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("TxPool")
 
   def stream: Stream[F, Unit] =
     peerManager.subscribe
@@ -93,11 +93,10 @@ case class TxPool[F[_]](
           tx.stx.senderAddress(Some(0x3d.toByte)) == newStx
             .senderAddress(Some(0x3d.toByte)) && tx.stx.nonce == newStx.nonce)
       _ <- a.traverse(x => clearTimeout(x.stx))
-      _ = println(a.length, b.length)
       timestamp = System.currentTimeMillis()
       _     <- pending.set((PendingTransaction(newStx, timestamp) +: b).take(config.poolSize))
       peers <- peerManager.connected
-      _ = log.info(s"notify ${peers.length} peer(s)")
+      _ = log.debug(s"notify ${peers.length} peer(s)")
       _ <- peers.traverse(peer => notifyPeer(peer, newStx :: Nil))
     } yield ()
 

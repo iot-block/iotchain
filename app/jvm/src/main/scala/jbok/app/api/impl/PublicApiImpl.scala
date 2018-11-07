@@ -9,7 +9,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.app.api._
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.core.History
 import jbok.core.config.Configs.{BlockChainConfig, MiningConfig}
 import jbok.core.keystore.KeyStore
@@ -176,8 +176,7 @@ class PublicApiImpl(
   override def getCode(address: Address, blockParam: BlockParam): IO[ByteVector] =
     for {
       block <- resolveBlock(blockParam)
-      world <- history.getWorldStateProxy(block.header.number,
-                                          blockChainConfig.accountStartNonce,
+      world <- history.getWorldState(blockChainConfig.accountStartNonce,
                                           Some(block.header.stateRoot))
       code <- world.getCode(address)
     } yield code
@@ -217,7 +216,7 @@ class PublicApiImpl(
   override def getStorageAt(address: Address, position: BigInt, blockParam: BlockParam): IO[ByteVector] =
     for {
       account <- resolveAccount(address, blockParam)
-      storage <- history.getAccountStorageAt(account.storageRoot, position)
+      storage <- history.getStorage(account.storageRoot, position)
     } yield storage
 
   override def getTransactionCount(address: Address, blockParam: BlockParam): IO[BigInt] =

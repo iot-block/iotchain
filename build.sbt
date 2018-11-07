@@ -58,6 +58,8 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       // logging
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "org.log4s"      %% "log4s"          % "1.6.1",
+      // files
+      "com.github.pathikrit" %% "better-files" % "3.5.0",
       // command line
       "org.rogach" %%% "scallop" % "3.1.3",
       // test
@@ -71,10 +73,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(commonSettings)
   .jsSettings(commonJsSettings)
   .settings(
-    name := "jbok-core",
-    libraryDependencies ++= Seq(
-      "com.github.pathikrit" %% "better-files" % "3.5.0"
-    )
+    name := "jbok-core"
   )
   .dependsOn(common % CompileAndTest, codec, crypto, network, persistent)
 
@@ -199,8 +198,10 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-persistent",
     libraryDependencies ++= Seq(
-      "org.iq80.leveldb" % "leveldb" % "0.10"
-    )
+      "org.iq80.leveldb"          % "leveldb"        % "0.10",
+      "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8"
+    ),
+    resolvers += "4th line" at "http://4thline.org/m2/"
   )
   .dependsOn(common % CompileAndTest, codec)
 
@@ -248,13 +249,13 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.2.4"),
   addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
 //  addCompilerPlugin(scalafixSemanticdb),
-  fork in test := false,
-  fork in run := true,
+  fork := true,
   parallelExecution in test := false,
   scalacOpts
 )
 
 lazy val commonJsSettings = Seq(
+  fork := false,
   scalaJSUseMainModuleInitializer := true,
   scalaJSUseMainModuleInitializer in Test := false,
   requiresDOM in Test := true,

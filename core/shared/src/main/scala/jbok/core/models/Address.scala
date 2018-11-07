@@ -1,9 +1,8 @@
 package jbok.core.models
 
-import jbok.codec.json.{bytesDecoder, bytesEncoder}
+import jbok.codec.json.implicits.{bytesDecoder, bytesEncoder}
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.json._
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
 import scodec.bits.ByteVector

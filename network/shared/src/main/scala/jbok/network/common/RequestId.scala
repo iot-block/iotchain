@@ -1,6 +1,6 @@
 package jbok.network.common
 
-trait RequestId[A] {
+trait RequestId[-A] {
   def id(a: A): Option[String]
 }
 

@@ -8,7 +8,7 @@ class PeerTableSpec extends JbokSpec {
   val fix = new DiscoveryFixture(10000)
   "PeerTable" should {
     "return 0 node when empty" in {
-      val db = KeyValueDB.inMemory[IO].unsafeRunSync()
+      val db = KeyValueDB.inmem[IO].unsafeRunSync()
       val table = fix.table
     }
   }

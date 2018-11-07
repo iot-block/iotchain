@@ -7,24 +7,22 @@ import java.time.{ZoneOffset, ZonedDateTime}
 import better.files._
 import cats.effect.{Async, Sync}
 import cats.implicits._
-import io.circe.generic.auto._
 import io.circe.parser._
 import io.circe.syntax._
 import jbok.core.keystore.KeyStoreError.KeyNotFound
 import jbok.core.models.Address
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
-import jbok.codec.json._
+import jbok.codec.json.implicits._
 
 class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("KeyStore")
 
   private val keyLength = 32
 
   override def newAccount(passphrase: String): F[Address] =
     for {
       keyPair <- F.liftIO(Signature[ECDSA].generateKeyPair())
-      _      = log.debug(s"passphrase: ${passphrase}")
       encKey = EncryptedKey(keyPair.secret, passphrase, secureRandom)
       _ <- save(encKey)
     } yield encKey.address
@@ -47,7 +45,6 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
   override def unlockAccount(address: Address, passphrase: String): F[Wallet] =
     for {
       key <- load(address)
-      _ = log.debug(s"passphrase: ${passphrase}")
       wallet <- key
         .decrypt(passphrase) match {
         case Left(e)       => F.raiseError(KeyStoreError.DecryptionFailed)
@@ -89,7 +86,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
         F.unit
       } else {
         log.info(s"saving key into ${file.pathAsString}")
-        F.delay(file.writeText(json)).attempt.flatMap {
+        F.delay(file.createIfNotExists(createParents = true).writeText(json)).attempt.flatMap {
           case Left(e)  => F.raiseError[Unit](KeyStoreError.IOError(e.toString))
           case Right(_) => F.unit
         }
@@ -102,7 +99,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
 
   private[jbok] def overwrite(file: File, encKey: EncryptedKey): F[Unit] = {
     val json = encKey.asJson.spaces2
-    F.delay(file.writeText(json)).attempt.flatMap {
+    F.delay(file.createIfNotExists(createParents = true).writeText(json)).attempt.flatMap {
       case Left(e)  => F.raiseError(KeyStoreError.IOError(e.toString))
       case Right(_) => F.unit
     }
@@ -134,7 +131,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
 
   private[jbok] def listFiles(): F[List[File]] =
     if (!keyStoreDir.exists || !keyStoreDir.isDirectory) {
-      F.raiseError(KeyStoreError.IOError(s"could not read ${keyStoreDir}"))
+      F.pure(Nil)
     } else {
       F.pure(keyStoreDir.list.toList)
     }

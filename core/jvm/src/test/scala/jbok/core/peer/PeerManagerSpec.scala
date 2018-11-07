@@ -82,12 +82,12 @@ class PeerManagerSpec extends JbokSpec {
       status.genesisHash shouldBe fix.history.getBestBlock.unsafeRunSync().header.hash
     }
 
-    "handshake should fail if peers are incompatible" in {
+    "fail if peers are incompatible" in {
       val fix1     = new PeerManagerFixture(10001)
       val pmConfig = PeerManagerConfig(10002)
-      val db       = KeyValueDB.inMemory[IO].unsafeRunSync()
+      val db       = KeyValueDB.inmem[IO].unsafeRunSync()
       val history  = History[IO](db, fix1.history.chainId + 1).unsafeRunSync()
-      history.loadGenesisConfig().unsafeRunSync()
+      history.init().unsafeRunSync()
       val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
       val pm2     = PeerManagerPlatform[IO](pmConfig, Some(keyPair), SyncConfig(), history).unsafeRunSync()
 
@@ -119,7 +119,7 @@ class PeerManagerSpec extends JbokSpec {
       val message = GetBlockBodies(Nil)
       val p = for {
         _    <- startAll
-        resp <- pms.head.pm.incoming.get.map(_.head._2).unsafeRunSync().conn.request[Message](message)
+        resp <- pms.head.pm.incoming.get.map(_.head._2).unsafeRunSync().conn.request[Message, Message](message)
         _ = resp shouldBe a[BlockBodies]
         _ <- stopAll
       } yield ()
@@ -129,7 +129,7 @@ class PeerManagerSpec extends JbokSpec {
 
     "close connection explicitly" in new PeersFixture(2) {
       val p = for {
-        _ <- startAll
+        _        <- startAll
         incoming <- pms.head.pm.incoming.get
         outgoing <- pms.last.pm.outgoing.get
         _ = incoming.size shouldBe 1

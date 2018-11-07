@@ -1,34 +1,28 @@
 package jbok.core.sync
 import jbok.JbokSpec
-import jbok.core.consensus.ConsensusFixture
+import jbok.common.execution._
 import jbok.core.consensus.poa.clique.CliqueFixture
 import jbok.core.mining.BlockMinerFixture
-import jbok.common.execution._
 
 class FullSyncSpec extends JbokSpec {
-  def check(newConsensus: () => ConsensusFixture): Unit =
-    "FullSync" should {
-      "sync all nodes to a single highest state" in {
-        val fixture1 = newConsensus()
-        val miner1 = new BlockMinerFixture(fixture1, 20000)
-        miner1.peerManager.start.unsafeRunSync()
+  "FullSync" should {
+    val fix1 = new BlockMinerFixture(new CliqueFixture {}, 20000)
+    val fix2 = new BlockMinerFixture(new CliqueFixture {}, 20001)
+    fix1.history.init(fix1.genesisConfig).unsafeRunSync()
+    fix2.history.init(fix1.genesisConfig).unsafeRunSync()
 
-        val fixture2 = newConsensus()
-        val miner2 = new BlockMinerFixture(fixture2, 20001)
-        miner2.history.loadGenesisConfig(fixture1.genesisConfig).unsafeRunSync()
+    "sync all nodes to a single highest state" in {
+      fix1.peerManager.start.unsafeRunSync()
 
-        val N = 3
-        miner1.miner.miningStream.take(N).compile.toList.unsafeRunSync()
-        miner1.history.getBestBlockNumber.unsafeRunSync() shouldBe N
+      val N = 3
+      fix1.miner.miningStream.take(N).compile.toList.unsafeRunSync()
 
-        miner2.peerManager.addPeerNode(miner1.peerManager.peerNode).unsafeRunSync()
-        Thread.sleep(2000)
+      fix2.peerManager.addPeerNode(fix1.peerManager.peerNode).unsafeRunSync()
+      Thread.sleep(2000)
 
-        // miner2 sync to miner1
-        miner2.fullSync.stream.take(1).compile.drain.unsafeRunSync()
-        miner1.peerManager.stop.unsafeRunSync()
-      }
+      // miner2 sync to miner1
+      fix2.fullSync.stream.take(1).compile.drain.unsafeRunSync()
+      fix1.peerManager.stop.unsafeRunSync()
     }
-
-  check(() => new CliqueFixture {})
+  }
 }

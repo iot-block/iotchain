@@ -126,7 +126,6 @@ object Server {
             .mountService(service, "/")
             .withWebSockets(true)
             .withoutBanner
-            .withNio2(true)
             .withIdleTimeout(Duration.Inf)
 
           log.info(s"start websocket server at ${bind}")

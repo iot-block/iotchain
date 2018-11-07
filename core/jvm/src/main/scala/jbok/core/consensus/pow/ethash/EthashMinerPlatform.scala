@@ -4,7 +4,6 @@ import better.files.File
 import cats.effect.Effect
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import jbok.codec._
 import jbok.core.config.Configs.MiningConfig
 import jbok.core.consensus.pow.ProofOfWork
 import jbok.core.models.Block
@@ -91,12 +90,18 @@ class EthashMinerPlatform[F[_]](
     (0 to numRounds).toStream
       .map { n =>
         val nonce      = (initNonce + n) % MaxNonce
-        val nonceBytes = ByteVector(nonce.toUnsignedByteArray).padLeft(8)
+        val nonceBytes = ByteVector(toUnsignedByteArray(nonce)).padLeft(8)
         val pow        = Ethash.hashimoto(headerHash.toArray, nonceBytes.toArray, dagSize, dag.apply)
         (Ethash.checkDifficulty(difficulty, pow), pow, nonceBytes, n)
       }
       .collectFirst { case (true, pow, nonceBytes, n) => MiningSuccessful(n + 1, pow, nonceBytes) }
       .getOrElse(MiningUnsuccessful(numRounds))
+  }
+
+  private def toUnsignedByteArray(bi: BigInt): Array[Byte] = {
+    val asByteArray = bi.toByteArray
+    if (asByteArray.head == 0) asByteArray.tail
+    else asByteArray
   }
 
   private[jbok] def dagFile(seed: ByteVector): File =

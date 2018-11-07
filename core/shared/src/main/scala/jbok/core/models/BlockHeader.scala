@@ -1,7 +1,7 @@
 package jbok.core.models
 
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import scodec.bits._
 import shapeless._
@@ -26,6 +26,8 @@ case class BlockHeader(
   lazy val hash: ByteVector = RlpCodec.encode(this).require.bytes.kec256
 
   lazy val hashWithoutNonce: ByteVector = BlockHeader.encodeWithoutNonce(this).kec256
+
+  lazy val tag: String = s"BlockHeader(${number})#${hash.toHex.take(7)}"
 }
 
 object BlockHeader {

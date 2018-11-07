@@ -3,22 +3,20 @@ package jbok.evm.testsuite
 import better.files._
 import cats.effect.IO
 import io.circe._
-import io.circe.generic.auto._
 import io.circe.parser._
+import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.codecs._
+import jbok.codec.rlp.implicits._
+import jbok.core.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
-import jbok.core.store.EvmCodeStore
+import jbok.core.store.namespaces
 import jbok.crypto._
-import jbok.crypto.authds.mpt.{MPTrie, MPTrieStore}
+import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
-import jbok.persistent.{KeyValueDB, SnapshotKeyValueStore}
+import jbok.persistent.{KeyValueDB, SnapshotKeyValueDB}
 import org.scalatest.{Matchers, WordSpec}
 import scodec.bits.ByteVector
-import jbok.codec.json._
-import scala.io.Source
-import testsuite._
-import better.files._
+
 import scala.collection.JavaConverters._
 
 //Env           stEnv                 `json:"env"`
@@ -94,7 +92,7 @@ case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLimit: B
 case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
 class VMTest extends WordSpec with Matchers {
-  def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: BigInt): WorldStateProxy[IO] = {
+  def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: BigInt): WorldState[IO] = {
     val accounts = json.map {
       case (addr, account) => (addr, Account(balance = UInt256(account.balance), nonce = UInt256(account.nonce)))
     }
@@ -103,24 +101,24 @@ class VMTest extends WordSpec with Matchers {
       case (addr, account) => (addr, account.code)
     }
 
-    val db = KeyValueDB.inMemory[IO].unsafeRunSync()
+    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history = History[IO](db).unsafeRunSync()
 
     val storages = json.map {
       case (addr, account) =>
         (addr, Storage.fromMap[IO](account.storage.map(s => (UInt256(s._1), UInt256(s._2)))).unsafeRunSync())
     }
 
-    val mpt = MPTrieStore[IO, Address, Account](db).unsafeRunSync()
-    val accountProxy = SnapshotKeyValueStore[IO, Address, Account](mpt) ++ accounts
+    val mpt          = MerklePatriciaTrie[IO](namespaces.Node, db).unsafeRunSync()
+    val accountProxy = SnapshotKeyValueDB[IO, Address, Account](namespaces.empty, mpt) ++ accounts
 
-    WorldStateProxy[IO](
-      db,
+    WorldState[IO](
+      history,
       accountProxy,
-      new EvmCodeStore[IO](db),
-      MPTrie.emptyRootHash,
+      MerklePatriciaTrie.emptyRootHash,
       Set.empty,
-      accountCodes,
       storages,
+      accountCodes,
       UInt256.Zero,
       noEmptyAccounts = true
     )
@@ -128,8 +126,8 @@ class VMTest extends WordSpec with Matchers {
 
   def check(label: String, vmJson: VMJson) =
     s"test pass test suite ${label}" in {
-      val config = EvmConfig.HomesteadConfigBuilder(None)
-      val preState = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
+      val config    = EvmConfig.HomesteadConfigBuilder(None)
+      val preState  = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
       val postState = loadMockWorldState(vmJson.post, vmJson.env.currentNumber)
       val currentBlockHeader = BlockHeader(
         ByteVector.empty,
@@ -165,12 +163,12 @@ class VMTest extends WordSpec with Matchers {
       val result = VM.run(context).unsafeRunSync()
 
       val world = if (result.addressesToDelete.nonEmpty) {
-        result.world.accountCodes
-          .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.accountCodes.filter(
+        result.world.contractCodes
+          .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.contractCodes.filter(
           !_._2.isEmpty)
         result.world.delAccount(result.addressesToDelete.head)
       } else {
-        result.world.accountCodes.filter(!_._2.isEmpty) shouldEqual postState.accountCodes.filter(!_._2.isEmpty)
+        result.world.contractCodes.filter(!_._2.isEmpty) shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
         result.world
       }
 

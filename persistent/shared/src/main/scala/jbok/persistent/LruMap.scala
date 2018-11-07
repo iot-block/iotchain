@@ -53,17 +53,8 @@ private[jbok] object LruMap {
 /**
   * A scala `Map` backed by a [[java.util.LinkedHashMap]]
   */
-private[jbok] class LruMap[K, V](val maxSize: Int, val underlying: ju.Map[K, V]) extends JMapWrapperLike[K, V, LruMap[K, V]] {
+private[jbok] class LruMap[K, V](val maxSize: Int, val underlying: ju.Map[K, V])
+    extends JMapWrapperLike[K, V, LruMap[K, V]] {
   override def empty: LruMap[K, V] = new LruMap[K, V](maxSize)
   def this(maxSize: Int) = this(maxSize, LruMap.makeUnderlying(maxSize))
 }
-
-///**
-//  * A synchronized scala `Map` backed by an [[java.util.LinkedHashMap]]
-//  */
-//class SynchronizedLruMap[K, V](maxSize: Int, underlying: ju.Map[K, V])
-//    extends LruMap[K, V](maxSize, ju.Collections.synchronizedMap(underlying))
-//    with SynchronizedMap[K, V] {
-//  override def empty: SynchronizedLruMap[K, V] = new SynchronizedLruMap[K, V](maxSize)
-//  def this(maxSize: Int) = this(maxSize, LruMap.makeUnderlying(maxSize))
-//}
