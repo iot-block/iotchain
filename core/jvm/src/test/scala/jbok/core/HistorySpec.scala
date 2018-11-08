@@ -19,7 +19,6 @@ trait HistoryFixture {
 }
 
 class HistorySpec extends JbokSpec {
-
   "History" should {
     // accounts, storages and codes
     "put and get account node" in new HistoryFixture {

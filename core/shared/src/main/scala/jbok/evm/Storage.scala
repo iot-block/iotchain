@@ -4,9 +4,9 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.core.models.UInt256
 import jbok.core.store.namespaces
-import jbok.persistent.{KeyValueDB, SnapshotKeyValueDB}
+import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 
-case class Storage[F[_]: Sync](db: SnapshotKeyValueDB[F, UInt256, UInt256]) {
+case class Storage[F[_]: Sync](db: StageKeyValueDB[F, UInt256, UInt256]) {
   def store(offset: UInt256, value: UInt256): Storage[F] =
     if (value == UInt256.Zero) {
       this.copy(db = db.del(offset))
@@ -25,7 +25,7 @@ object Storage {
   def empty[F[_]: Sync]: F[Storage[F]] =
     for {
       db <- KeyValueDB.inmem[F]
-      s = SnapshotKeyValueDB[F, UInt256, UInt256](namespaces.Node, db)
+      s = StageKeyValueDB[F, UInt256, UInt256](namespaces.Node, db)
     } yield Storage[F](s)
 
   def fromMap[F[_]: Sync](kvs: Map[UInt256, UInt256]): F[Storage[F]] =

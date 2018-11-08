@@ -13,7 +13,7 @@ import jbok.core.store.namespaces
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
-import jbok.persistent.{KeyValueDB, SnapshotKeyValueDB}
+import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import org.scalatest.{Matchers, WordSpec}
 import scodec.bits.ByteVector
 
@@ -110,7 +110,7 @@ class VMTest extends WordSpec with Matchers {
     }
 
     val mpt          = MerklePatriciaTrie[IO](namespaces.Node, db).unsafeRunSync()
-    val accountProxy = SnapshotKeyValueDB[IO, Address, Account](namespaces.empty, mpt) ++ accounts
+    val accountProxy = StageKeyValueDB[IO, Address, Account](namespaces.empty, mpt) ++ accounts
 
     WorldState[IO](
       history,

@@ -2,14 +2,14 @@ package jbok.crypto.authds.mpt
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.common.testkit.{HexGen, _}
+import jbok.codec.rlp.implicits._
+import jbok.common.testkit._
 import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
 import jbok.crypto.testkit._
 import jbok.persistent.KeyValueDB
 import org.scalacheck.Gen
-import scodec.bits._
-import jbok.codec.rlp.implicits._
 import scodec.Codec
+import scodec.bits._
 
 import scala.util.Random
 
@@ -73,7 +73,7 @@ class MerklePatriciaTrieSpec extends JbokSpec {
   val kvsGen = for {
     n    <- Gen.chooseNum(0, 32)
     size <- Gen.chooseNum(0, 100)
-  } yield (1 to n).toList.map(_ => HexGen.genHex(0, size).sample.get -> HexGen.genHex(0, size).sample.get).toMap
+  } yield (1 to n).toList.map(_ => genHex(0, size).sample.get -> genHex(0, size).sample.get).toMap
 
   "get empty root & hash" in new Fixture {
     val hash = mpt.getRootHash.unsafeRunSync()
@@ -87,8 +87,8 @@ class MerklePatriciaTrieSpec extends JbokSpec {
   }
 
   "put large key and value" in new Fixture {
-    val key   = HexGen.genHex(0, 1024).sample.get
-    val value = HexGen.genHex(1024, 2048).sample.get
+    val key   = genHex(0, 1024).sample.get
+    val value = genHex(1024, 2048).sample.get
     mpt.put(key, value, namespace).unsafeRunSync()
     mpt.getOpt[String, String](key, namespace).unsafeRunSync() shouldBe Some(value)
   }

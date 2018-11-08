@@ -1,22 +1,20 @@
-package jbok.crypto.authds.mpt
+package jbok.persistent
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.persistent.{KeyValueDB, SnapshotKeyValueDB}
-import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
+import scodec.bits.ByteVector
 
-class SnapshotMerkleTrieSpec extends JbokSpec {
-  trait Fixture {
+class StageKeyValueDBSpec extends JbokSpec {
+  class Fixture {
     val db        = KeyValueDB.inmem[IO].unsafeRunSync()
     val namespace = ByteVector.empty
-    val mpt       = MerklePatriciaTrie[IO](namespace, db).unsafeRunSync()
-    val snapshot  = SnapshotKeyValueDB[IO, String, String](namespace, mpt)
+    val stage  = StageKeyValueDB[IO, String, String](namespace, db)
   }
 
-  "SnapshotMerkleTrie" should {
+  "StageKeyValueDB" should {
     "not write inserts until commit" in new Fixture {
-      val updated = snapshot
+      val updated = stage
         .put("1", "1")
         .put("2", "2")
 
@@ -25,18 +23,18 @@ class SnapshotMerkleTrieSpec extends JbokSpec {
       updated.inner.has[String]("1", namespace).unsafeRunSync() shouldBe false
       updated.inner.has[String]("2", namespace).unsafeRunSync() shouldBe false
 
-      snapshot.has("1").unsafeRunSync() shouldBe false
-      snapshot.has("2").unsafeRunSync() shouldBe false
-      snapshot.inner.has[String]("1", namespace).unsafeRunSync() shouldBe false
-      snapshot.inner.has[String]("2", namespace).unsafeRunSync() shouldBe false
+      stage.has("1").unsafeRunSync() shouldBe false
+      stage.has("2").unsafeRunSync() shouldBe false
+      stage.inner.has[String]("1", namespace).unsafeRunSync() shouldBe false
+      stage.inner.has[String]("2", namespace).unsafeRunSync() shouldBe false
 
       val committed = updated.commit.unsafeRunSync()
       committed.inner.has[String]("1", namespace).unsafeRunSync() shouldBe true
       committed.inner.has[String]("2", namespace).unsafeRunSync() shouldBe true
 
       // after commit
-      snapshot.has("1").unsafeRunSync() shouldBe true
-      snapshot.has("2").unsafeRunSync() shouldBe true
+      stage.has("1").unsafeRunSync() shouldBe true
+      stage.has("2").unsafeRunSync() shouldBe true
     }
   }
 }

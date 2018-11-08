@@ -12,13 +12,13 @@ import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.store.namespaces
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
-import jbok.persistent.SnapshotKeyValueDB
+import jbok.persistent.StageKeyValueDB
 import scodec.bits.ByteVector
 import shapeless._
 
 final case class WorldState[F[_]](
     history: History[F],
-    accountProxy: SnapshotKeyValueDB[F, Address, Account],
+    accountProxy: StageKeyValueDB[F, Address, Account],
     stateRootHash: ByteVector = MerklePatriciaTrie.emptyRootHash,
     touchedAccounts: Set[Address] = Set.empty[Address],
     contractStorages: Map[Address, Storage[F]] = Map.empty[Address, Storage[F]],
@@ -61,7 +61,7 @@ final case class WorldState[F[_]](
       for {
         storageRoot <- getAccountOpt(address).map(_.storageRoot).value
         mpt         <- MerklePatriciaTrie[F](namespaces.Node, history.db, storageRoot)
-        s = SnapshotKeyValueDB[F, UInt256, UInt256](namespaces.empty, mpt)
+        s = StageKeyValueDB[F, UInt256, UInt256](namespaces.empty, mpt)
       } yield Storage[F](s)
     }
 

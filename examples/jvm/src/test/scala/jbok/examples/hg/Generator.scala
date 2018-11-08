@@ -2,7 +2,7 @@ package jbok.examples.hg
 
 import jbok.codec.rlp.RlpCodec
 import jbok.crypto._
-import jbok.testkit.Cast
+import jbok.common.testkit.Cast
 import scalax.collection.Graph
 import scalax.collection.GraphEdge.DiEdge
 import scalax.collection.GraphPredef._

@@ -4,13 +4,13 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.common.GraphUtil
-import jbok.persistent.InMemoryKeyValueDB
-import jbok.testkit.Cast
+import jbok.common.testkit.Cast
+import jbok.persistent.KeyValueDB
 import scalax.collection.io.dot.DotAttr
 import scalax.collection.io.dot.implicits._
 
 trait ConsensusFixture extends Generator {
-  val db = InMemoryKeyValueDB[IO].unsafeRunSync()
+  val db = KeyValueDB.inmem[IO].unsafeRunSync()
   val pool = EventPool[IO].unsafeRunSync()
   val numEvents = 50
   val numMembers = 2

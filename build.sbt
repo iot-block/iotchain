@@ -229,12 +229,12 @@ lazy val docs = project
 
 // dependencies
 lazy val tsec = Seq(
-  "io.github.jmcardon" %% "tsec-common"     % V.tsec,
-  "io.github.jmcardon" %% "tsec-hash-jca"   % V.tsec,
-  "io.github.jmcardon" %% "tsec-signatures" % V.tsec,
-  "io.github.jmcardon" %% "tsec-cipher-jca" % V.tsec,
-  "io.github.jmcardon" %% "tsec-password"   % V.tsec
-)
+  "io.github.jmcardon" %% "tsec-common",
+  "io.github.jmcardon" %% "tsec-hash-jca",
+  "io.github.jmcardon" %% "tsec-signatures",
+  "io.github.jmcardon" %% "tsec-cipher-jca",
+  "io.github.jmcardon" %% "tsec-password"
+).map(_ % V.tsec)
 
 lazy val http4s = Seq(
   "org.http4s" %% "http4s-core",

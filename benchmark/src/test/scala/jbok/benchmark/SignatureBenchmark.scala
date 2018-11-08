@@ -11,14 +11,14 @@ class SignatureBenchmark extends JbokBenchmark {
   val sig = Signature[ECDSA].sign(h, k).unsafeRunSync()
 
   @Benchmark
-  def sign() =
+  def signSecp256k1() =
     Signature[ECDSA].sign(h, k).unsafeRunSync()
 
   @Benchmark
-  def verify() =
+  def verifySecp256k1() =
     Signature[ECDSA].verify(h, sig, k.public).unsafeRunSync()
 
   @Benchmark
-  def recover() =
+  def recoverSecp256k1() =
     Signature[ECDSA].recoverPublic(h, sig)
 }

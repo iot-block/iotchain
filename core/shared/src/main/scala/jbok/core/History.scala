@@ -9,7 +9,7 @@ import jbok.core.models._
 import jbok.core.store._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm.WorldState
-import jbok.persistent.{KeyValueDB, SnapshotKeyValueDB}
+import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits._
 
 abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
@@ -66,8 +66,6 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
       stateRootHash: Option[ByteVector] = None,
       noEmptyAccounts: Boolean = false
   ): F[WorldState[F]]
-
-  def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit]
 
   // helpers
   def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]]
@@ -215,7 +213,6 @@ class HistoryImpl[F[_]](
       } *>
       maybeBlockHeader.map {
         case Some(bh) =>
-          val rollback = rollbackStateChangesMadeByBlock(bh.number)
           val removeMapping = getHashByBlockNumber(bh.number).flatMap {
             case Some(_) => db.del(bh.number, namespaces.NumberHash)
             case None    => F.unit
@@ -225,7 +222,7 @@ class HistoryImpl[F[_]](
             if (parentAsBestBlock) appStateStore.putBestBlockNumber(bh.number - 1)
             else F.unit
 
-          rollback *> removeMapping *> updateBest
+          removeMapping *> updateBest
 
         case None => F.unit
       }
@@ -272,7 +269,7 @@ class HistoryImpl[F[_]](
   ): F[WorldState[F]] =
     for {
       mpt <- MerklePatriciaTrie[F](namespaces.Node, db, stateRootHash)
-      accountProxy = SnapshotKeyValueDB[F, Address, Account](namespaces.empty, mpt)
+      accountProxy = StageKeyValueDB[F, Address, Account](namespaces.empty, mpt)
     } yield
       WorldState[F](
         this,
@@ -284,11 +281,6 @@ class HistoryImpl[F[_]](
         accountStartNonce,
         noEmptyAccounts
       )
-
-  override def rollbackStateChangesMadeByBlock(blockNumber: BigInt): F[Unit] =
-    ???
-//    val refCountDB = RefCountKeyValueDB.forVersion(db, blockNumber)
-//    refCountDB.rollback(blockNumber)
 
   // helpers
   override def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]] = {
