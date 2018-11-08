@@ -3,6 +3,7 @@ package jbok.core.nat
 import jbok.JbokSpec
 
 class NatSpec extends JbokSpec{
+  val log = org.log4s.getLogger
 
   "nat-pmp" should {
     "add mapping" in {
@@ -13,13 +14,12 @@ class NatSpec extends JbokSpec{
 
       result.attempt.unsafeRunSync() match {
         case Left(e) => {
-          e.printStackTrace()
+          log.error(e)("nat-pmp add mapping error")
           assert(false)
         }
         case Right(s) => assert(s)
       }
 
-      Thread.sleep(20*1000)
     }
     "delete mapping" in {
       val delResult = for {
@@ -29,7 +29,7 @@ class NatSpec extends JbokSpec{
 
       delResult.attempt.unsafeRunSync() match {
         case Left(e) => {
-          e.printStackTrace()
+          log.error(e)("nat-pmp delete mapping error")
           assert(false)
         }
         case Right(s) => assert(s)
@@ -46,13 +46,12 @@ class NatSpec extends JbokSpec{
 
       result.attempt.unsafeRunSync() match {
         case Left(e) => {
-          e.printStackTrace()
+          log.error(e)("upnp add mapping error")
           assert(false)
         }
         case Right(s) => assert(s)
       }
 
-      Thread.sleep(20*1000)
     }
 
     "delete mapping" in {
@@ -63,7 +62,7 @@ class NatSpec extends JbokSpec{
 
       delResult.attempt.unsafeRunSync() match {
         case Left(e) => {
-          e.printStackTrace()
+          log.error(e)("upnp delete mapping error")
           assert(false)
         }
         case Right(s) => assert(s)
