@@ -74,7 +74,8 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
     name := "jbok-core",
     libraryDependencies ++= Seq(
       "com.github.pathikrit" %% "better-files" % "3.5.0",
-      "com.offbynull.portmapper" % "portmapper" % "2.0.5"
+      "com.offbynull.portmapper" % "portmapper" % "2.0.5",
+      "org.bitlet" % "weupnp" % "0.1.4"
     )
   )
   .dependsOn(common % CompileAndTest, codec, crypto, network, persistent)
