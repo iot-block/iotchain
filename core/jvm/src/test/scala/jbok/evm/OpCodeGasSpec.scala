@@ -3,7 +3,7 @@ package jbok.evm
 import cats.effect.IO
 import jbok.core.models.UInt256._
 import jbok.core.models.{Account, Address, UInt256}
-import jbok.testkit.VMGens._
+import jbok.evm.testkit._
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FunSuite, Matchers}
 

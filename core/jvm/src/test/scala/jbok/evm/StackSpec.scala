@@ -2,18 +2,18 @@ package jbok.evm
 
 import jbok.JbokSpec
 import jbok.core.models.UInt256
-import jbok.testkit.VMGens
 import org.scalacheck.Gen
+import jbok.evm.testkit._
 
 class StackSpec extends JbokSpec {
-  val maxStackSize = 32
-  val stackGen = VMGens.getStackGen(maxSize = maxStackSize)
-  val intGen = Gen.choose(0, maxStackSize).filter(_ >= 0)
-  val uint256Gen = VMGens.getUInt256Gen()
-  val uint256ListGen = VMGens.getListGen(0, 16, uint256Gen)
-  
+  val maxStackSize   = 32
+  val stackGen       = getStackGen(maxSize = maxStackSize)
+  val intGen         = Gen.choose(0, maxStackSize).filter(_ >= 0)
+  val uint256Gen     = getUInt256Gen()
+  val uint256ListGen = getListGen(0, 16, uint256Gen)
+
   "stack" should {
-    "pop single element" in  {
+    "pop single element" in {
       forAll(stackGen) { stack =>
         val (v, stack1) = stack.pop
         if (stack.size > 0) {
@@ -26,7 +26,7 @@ class StackSpec extends JbokSpec {
       }
     }
 
-    "pop multiple elements" in  {
+    "pop multiple elements" in {
       forAll(stackGen, intGen) { (stack, i) =>
         val (vs, stack1) = stack.pop(i)
         if (stack.size >= i) {
@@ -39,7 +39,7 @@ class StackSpec extends JbokSpec {
       }
     }
 
-    "push single element" in  {
+    "push single element" in {
       forAll(stackGen, uint256Gen) { (stack, v) =>
         val stack1 = stack.push(v)
 
@@ -51,7 +51,7 @@ class StackSpec extends JbokSpec {
       }
     }
 
-    "push multiple elements" in  {
+    "push multiple elements" in {
       forAll(stackGen, uint256ListGen) { (stack, vs) =>
         val stack1 = stack.push(vs)
 
@@ -63,7 +63,7 @@ class StackSpec extends JbokSpec {
       }
     }
 
-    "duplicate element" in  {
+    "duplicate element" in {
       forAll(stackGen, intGen) { (stack, i) =>
         val stack1 = stack.dup(i)
 
@@ -76,7 +76,7 @@ class StackSpec extends JbokSpec {
       }
     }
 
-    "swap elements" in  {
+    "swap elements" in {
       forAll(stackGen, intGen) { (stack, i) =>
         val stack1 = stack.swap(i)
 

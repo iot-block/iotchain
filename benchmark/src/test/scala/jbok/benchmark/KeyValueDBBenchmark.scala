@@ -1,23 +1,23 @@
 package jbok.benchmark
 import better.files._
 import cats.effect.IO
-import jbok.ModelGen
 import jbok.common.execution._
-import jbok.common.testkit.ByteGen
+import jbok.common.testkit._
 import jbok.persistent.KeyValueDB
 import jbok.persistent.leveldb.LevelDB
+import jbok.core.testkit._
 import org.openjdk.jmh.annotations.{Benchmark, OperationsPerInvocation, TearDown}
 import org.scalacheck.Gen
 
 class KeyValueDBBenchmark extends JbokBenchmark {
   val size = 10000
 
-  val blockHeaders = Gen.listOfN(size, ModelGen.blockHeaderGen).sample.get.toArray
+  val blockHeaders = Gen.listOfN(size, arbBlockHeader.arbitrary).sample.get.toArray
 
   var i = 0
 
-  val keyGen   = ByteGen.genBoundedByteVector(16, 16)
-  val valueGen = ByteGen.genBoundedByteVector(100, 100)
+  val keyGen   = genBoundedByteVector(16, 16)
+  val valueGen = genBoundedByteVector(100, 100)
 
   val keys   = Gen.listOfN(size, keyGen).sample.get
   val values = Gen.listOfN(size, valueGen).sample.get

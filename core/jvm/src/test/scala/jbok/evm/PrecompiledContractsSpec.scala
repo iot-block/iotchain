@@ -7,8 +7,8 @@ import jbok.core.models.{Address, UInt256}
 import jbok.crypto._
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.KeyValueDB
-import jbok.testkit.VMGens
 import scodec.bits._
+import jbok.evm.testkit._
 
 class PrecompiledContractsSpec extends JbokSpec {
 
@@ -25,7 +25,7 @@ class PrecompiledContractsSpec extends JbokSpec {
 
   "ECDSARECOVER" in {
     val keyPair  = SecP256k1.generateKeyPair().unsafeRunSync()
-    val bytesGen = VMGens.getByteVectorGen(1, 128)
+    val bytesGen = getByteVectorGen(1, 128)
 
     forAll(bytesGen) { bytes =>
       val hash             = bytes.kec256
@@ -77,7 +77,7 @@ class PrecompiledContractsSpec extends JbokSpec {
   }
 
   "SHA256" in {
-    val bytesGen = VMGens.getByteVectorGen(0, 256)
+    val bytesGen = getByteVectorGen(0, 256)
     forAll(bytesGen) { bytes =>
       val context = buildContext(PrecompiledContracts.Sha256Addr, bytes)
       val result  = VM.run(context).unsafeRunSync()
@@ -90,7 +90,7 @@ class PrecompiledContractsSpec extends JbokSpec {
   }
 
   "RIPEMD160" in {
-    val bytesGen = VMGens.getByteVectorGen(0, 256)
+    val bytesGen = getByteVectorGen(0, 256)
     forAll(bytesGen) { bytes =>
       val context = buildContext(PrecompiledContracts.Rip160Addr, bytes)
       val result  = VM.run(context).unsafeRunSync()
@@ -103,7 +103,7 @@ class PrecompiledContractsSpec extends JbokSpec {
   }
 
   "IDENTITY" in {
-    val bytesGen = VMGens.getByteVectorGen(0, 256)
+    val bytesGen = getByteVectorGen(0, 256)
     forAll(bytesGen) { bytes =>
       val context = buildContext(PrecompiledContracts.IdAddr, bytes)
       val result  = VM.run(context).unsafeRunSync()

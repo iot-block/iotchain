@@ -1,16 +1,16 @@
 package jbok.core
 
 import cats.effect.IO
-import jbok.{JbokSpec, ModelGen}
-import jbok.persistent.KeyValueDB
 import cats.implicits._
+import jbok.JbokSpec
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.common.testkit.ByteGen
+import jbok.common.testkit._
 import jbok.core.models._
-import org.scalacheck.Arbitrary
-import scodec.bits.ByteVector
 import jbok.crypto._
+import jbok.persistent.KeyValueDB
+import jbok.core.testkit._
+import scodec.bits.ByteVector
 
 trait HistoryFixture {
   val db      = KeyValueDB.inmem[IO].unsafeRunSync()
@@ -19,10 +19,6 @@ trait HistoryFixture {
 }
 
 class HistorySpec extends JbokSpec {
-  implicit val arbByteVector = Arbitrary { ByteGen.genBoundedByteVector(0, 1024) }
-  implicit val arbAddress    = Arbitrary { ModelGen.addressGen }
-  implicit val arbAccount    = Arbitrary { ModelGen.accountGen }
-  implicit val arbUint256    = Arbitrary { ModelGen.uint256Gen }
 
   "History" should {
     // accounts, storages and codes

@@ -2,12 +2,12 @@ package jbok.core.pool
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.common.execution._
+import jbok.common.testkit._
 import jbok.core.HistoryFixture
 import jbok.core.models.{Block, BlockBody, BlockHeader}
 import jbok.core.pool.BlockPool.Leaf
-import jbok.testkit.Gens
 import scodec.bits.ByteVector
-import jbok.common.execution._
 
 trait BlockPoolFixture extends HistoryFixture {
   val blockPool = BlockPool[IO](history).unsafeRunSync()
@@ -35,7 +35,7 @@ trait BlockPoolFixture extends HistoryFixture {
   def setTotalDifficultyForBlock(block: Block, td: BigInt) =
     history.putDifficulty(block.header.hash, td).unsafeRunSync()
 
-  def randomHash() = Gens.byteVectorOfLengthNGen(32).sample.get
+  def randomHash() = genBoundedByteVector(32, 32).sample.get
 
   val defaultHeader = BlockHeader(
     parentHash = ByteVector.empty,

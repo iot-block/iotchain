@@ -2,12 +2,12 @@ package jbok.core.ledger
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.common.testkit.ByteGen
+import jbok.common.testkit._
 import jbok.core.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.evm.WorldState
+import jbok.evm.testkit._
 import jbok.persistent.KeyValueDB
-import jbok.testkit.VMGens
 import scodec.bits._
 
 class WorldStateSpec extends JbokSpec {
@@ -34,14 +34,14 @@ class WorldStateSpec extends JbokSpec {
     }
 
     "put then get code" in new Fixture {
-      forAll(ByteGen.genBoundedByteVector(0, 1024)) { code =>
+      forAll(genBoundedByteVector(0, 1024)) { code =>
         world.putCode(address1, code).getCode(address1).unsafeRunSync() shouldBe code
       }
     }
 
     "put then get storage" in new Fixture {
-      val addr  = VMGens.getUInt256Gen().sample.getOrElse(UInt256.MaxValue)
-      val value = VMGens.getUInt256Gen().sample.getOrElse(UInt256.MaxValue)
+      val addr  = getUInt256Gen().sample.getOrElse(UInt256.MaxValue)
+      val value = getUInt256Gen().sample.getOrElse(UInt256.MaxValue)
 
       val storage = world
         .getStorage(address1)

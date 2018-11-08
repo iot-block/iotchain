@@ -2,7 +2,7 @@ package jbok.evm
 
 import jbok.JbokSpec
 import jbok.core.models.UInt256
-import jbok.testkit.VMGens._
+import jbok.evm.testkit._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen._
 import org.scalacheck.{Arbitrary, Gen}

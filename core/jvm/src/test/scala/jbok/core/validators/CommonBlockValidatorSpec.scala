@@ -2,6 +2,7 @@ package jbok.core.validators
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.common.testkit._
 import jbok.core.HistoryFixture
 import jbok.core.models._
 import jbok.core.validators.BlockInvalid.{
@@ -10,7 +11,6 @@ import jbok.core.validators.BlockInvalid.{
   BlockReceiptsHashInvalid,
   BlockTransactionsHashInvalid
 }
-import jbok.testkit.Gens
 import scodec.bits._
 
 class CommonBlockValidatorFixture extends HistoryFixture {
@@ -126,14 +126,14 @@ class CommonBlockValidatorFixture extends HistoryFixture {
   val blockValidator = new BlockValidator[IO]()
 }
 
-class CommonBlockValidatorSpec extends JbokSpec with Gens {
+class CommonBlockValidatorSpec extends JbokSpec {
   "BlockValidator" should {
     "return true if valid block" in new CommonBlockValidatorFixture {
       blockValidator.validate(block, validReceipts).attempt.unsafeRunSync() shouldBe Right(())
     }
 
     "return a failure if created based on invalid transactions header" in new CommonBlockValidatorFixture {
-      forAll(randomSizeByteStringGen(0, 32)) { txHash =>
+      forAll(genBoundedByteVector(0, 32)) { txHash =>
         val invalidTxHash = validBlockHeader.copy(transactionsRoot = txHash)
         val result =
           blockValidator.validate(Block(invalidTxHash, validBlockBody), validReceipts).attempt.unsafeRunSync()
@@ -143,7 +143,7 @@ class CommonBlockValidatorSpec extends JbokSpec with Gens {
     }
 
     "return a failure if created based on invalid ommers header" in new CommonBlockValidatorFixture {
-      forAll(randomSizeByteStringGen(0, 32)) { ommersHash =>
+      forAll(genBoundedByteVector(0, 32)) { ommersHash =>
         val invalidOmmersHash = validBlockHeader.copy(ommersHash = ommersHash)
         val result = blockValidator
           .validate(Block(invalidOmmersHash, validBlockBody), validReceipts)
@@ -155,7 +155,7 @@ class CommonBlockValidatorSpec extends JbokSpec with Gens {
     }
 
     "return a failure if created based on invalid receipts header" in new CommonBlockValidatorFixture {
-      forAll(randomSizeByteStringGen(0, 32)) { receiptesHash =>
+      forAll(genBoundedByteVector(0, 32)) { receiptesHash =>
         val invalidReceiptsHash = validBlockHeader.copy(receiptsRoot = receiptesHash)
         val result = blockValidator
           .validate(Block(invalidReceiptsHash, validBlockBody), validReceipts)
@@ -167,7 +167,7 @@ class CommonBlockValidatorSpec extends JbokSpec with Gens {
     }
 
     "return a failure if created based on invalid log bloom header" in new CommonBlockValidatorFixture {
-      forAll(randomSizeByteStringGen(0, 32)) { logBloom =>
+      forAll(genBoundedByteVector(0, 32)) { logBloom =>
         val invalidLogBloom = validBlockHeader.copy(logsBloom = logBloom)
         val result = blockValidator
           .validate(Block(invalidLogBloom, validBlockBody), validReceipts)

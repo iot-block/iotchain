@@ -1,9 +1,9 @@
 package jbok.evm
 
 import jbok.core.models.{Account, Address}
+import jbok.evm.testkit._
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FunSuite, Matchers}
-import jbok.testkit.VMGens._
 
 class OpCodeGasSpecPostEip161 extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 

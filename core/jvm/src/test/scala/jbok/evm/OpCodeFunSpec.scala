@@ -6,7 +6,7 @@ import org.scalacheck.Gen
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FunSuite, Matchers}
 import scodec.bits.ByteVector
-import jbok.testkit.VMGens._
+import jbok.evm.testkit._
 import UInt256._
 import jbok.crypto._
 

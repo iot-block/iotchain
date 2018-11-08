@@ -54,7 +54,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
 
   def genTransaction(account: Account, receiver: Address): (Transaction, Account) = {
     val value = genValue(account)
-    (Transaction(account.nonce, gasPrice, gasLimit, receiver, value, ByteVector.empty),
+    (Transaction(account.nonce, gasPrice, gasLimit, Some(receiver), value, ByteVector.empty),
      account.increaseNonce().increaseBalance(UInt256(-value)))
   }
 
@@ -166,7 +166,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
   def getCoin(address: Address, value: BigInt): SignedTransaction = {
     val keyPair = Random.shuffle(keyPairs).head
     val sender  = keyPair.address
-    val tx      = Transaction(accountMap(sender).nonce, gasPrice, gasLimit, address, value, ByteVector.empty)
+    val tx      = Transaction(accountMap(sender).nonce, gasPrice, gasLimit, Some(address), value, ByteVector.empty)
     accountMap(sender).increaseNonce().increaseBalance(UInt256(-value))
     SignedTransaction.sign(tx, keyPair.keyPair)
   }

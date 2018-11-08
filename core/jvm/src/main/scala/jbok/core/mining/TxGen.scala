@@ -63,7 +63,7 @@ class TxGen(nAddr: Int, gasLimit: BigInt = BigInt(21000)) {
       val tx = Transaction(senderAccount.nonce,
                            gasPrice,
                            gasLimit,
-                           receiver.address,
+                           Some(receiver.address),
                            genValue(senderAccount),
                            ByteVector.empty)
       val stx = SignedTransaction.sign(tx, sender.keyPair)

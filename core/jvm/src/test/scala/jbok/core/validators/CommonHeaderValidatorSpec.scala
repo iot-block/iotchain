@@ -5,7 +5,7 @@ import jbok.JbokSpec
 import jbok.core.HistoryFixture
 import jbok.core.models.BlockHeader
 import jbok.core.validators.CommonHeaderInvalid._
-import jbok.testkit.Gens._
+import jbok.common.testkit._
 import scodec.bits._
 
 class CommonHeaderValidatorFixture extends HistoryFixture {

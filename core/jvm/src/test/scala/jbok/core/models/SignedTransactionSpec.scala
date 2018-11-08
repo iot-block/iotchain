@@ -3,12 +3,12 @@ package jbok.core.models
 import jbok.JbokSpec
 import jbok.crypto._
 import jbok.crypto.signature.ecdsa.SecP256k1
-import jbok.testkit.VMGens
+import jbok.core.testkit._
 
 class SignedTransactionSpec extends JbokSpec {
   "SignedTransaction" should {
     "correctly set pointSign for chainId with chain specific signing schema" in {
-      forAll(VMGens.transactionGen) { tx =>
+      forAll { tx: Transaction =>
         val keyPair               = SecP256k1.generateKeyPair().unsafeRunSync()
         val chainId: Option[Byte] = Some(0x3d.toByte)
         val address               = Address(keyPair.public.bytes.kec256)
@@ -19,7 +19,7 @@ class SignedTransactionSpec extends JbokSpec {
     }
 
     "correctly set pointSign for chainId with general signing schema" in {
-      forAll(VMGens.transactionGen) { tx =>
+      forAll { tx: Transaction =>
         val keyPair               = SecP256k1.generateKeyPair().unsafeRunSync()
         val chainId: Option[Byte] = Some(0x3d.toByte)
         val address               = Address(keyPair.public.bytes.kec256)

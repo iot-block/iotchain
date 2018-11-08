@@ -1,15 +1,12 @@
-package jbok.testkit
-
+package jbok.evm
 import cats.effect.IO
 import jbok.core.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
-import jbok.evm.{Storage, WorldState, _}
 import jbok.persistent.KeyValueDB
 import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits._
 
-object VMGens extends VMGens
-trait VMGens extends Gens {
+object testkit {
   val testStackMaxSize = 32
 
   def getListGen[T](minSize: Int, maxSize: Int, genT: Gen[T]): Gen[List[T]] =
@@ -80,7 +77,6 @@ trait VMGens extends Gens {
     nonce = hex"797a8f3a494f937b"
   )
 
-  // scalastyle:off
   def getProgramStateGen(
       stackGen: Gen[Stack] = getStackGen(),
       memGen: Gen[Memory] = getMemoryGen(),
