@@ -1,4 +1,5 @@
-package jbok.core.nat
+package jbok.network.nat
+
 import cats.effect.IO
 import org.bitlet.weupnp.{GatewayDevice, GatewayDiscover}
 

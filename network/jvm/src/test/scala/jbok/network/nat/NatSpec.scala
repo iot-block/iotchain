@@ -1,4 +1,4 @@
-package jbok.core.nat
+package jbok.network.nat
 
 import jbok.JbokSpec
 

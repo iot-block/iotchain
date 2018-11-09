@@ -1,4 +1,4 @@
-package jbok.core.nat
+package jbok.network.nat
 
 import cats.effect.IO
 import com.offbynull.portmapper.gateways.network.NetworkGateway
@@ -15,10 +15,10 @@ import java.net.InetAddress
 
 
 case class NatPmpClient(
-  newwork:NetworkGateway,
-  processor:ProcessGateway,
-  mapper:PortMapper,
-  natType:NatType) extends Nat {
+                         newwork:NetworkGateway,
+                         processor:ProcessGateway,
+                         mapper:PortMapper,
+                         natType:NatType) extends Nat {
   val log = org.log4s.getLogger
 
   def addMapping(internalPort: Int,externalPort: Int,lifetime:Long): IO[Boolean] = {
