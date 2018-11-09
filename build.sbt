@@ -73,10 +73,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(commonSettings)
   .jsSettings(commonJsSettings)
   .settings(
-    name := "jbok-core",
-    libraryDependencies ++= Seq(
-
-    )
+    name := "jbok-core"
   )
   .dependsOn(common % CompileAndTest, codec, crypto, network, persistent)
 
