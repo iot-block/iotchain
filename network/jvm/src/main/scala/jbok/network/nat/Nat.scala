@@ -1,22 +1,23 @@
 package jbok.network.nat
 
-import cats.effect.IO
+import cats.effect.Sync
 
-sealed abstract class NatType
-case object NatPMP extends NatType
+sealed trait NatType
+case object NatPMP  extends NatType
 case object NatUPnP extends NatType
 
-trait Nat {
-  def addMapping(internalPort: Int,externalPort: Int,lifetime:Long): IO[Boolean]
-  def deleteMapping(internalPort: Int,externalPort: Int): IO[Boolean]
-  def stop(): IO[Unit]
+trait Nat[F[_]] {
+  def addMapping(internalPort: Int, externalPort: Int, lifetime: Long): F[Unit]
+
+  def deleteMapping(externalPort: Int): F[Unit]
+
+  def stop: F[Unit]
 }
 
-object Nat{
-  def apply(natType: NatType): IO[Nat] = {
+object Nat {
+  def apply[F[_]: Sync](natType: NatType): F[Nat[F]] =
     natType match {
-      case NatPMP => NatPmpClient(natType)
-      case NatUPnP => NatUpnpClient()
+      case NatPMP  => NatPmpClient[F]
+      case NatUPnP => NatUpnpClient[F]
     }
-  }
 }

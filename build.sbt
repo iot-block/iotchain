@@ -184,9 +184,9 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
   .settings(
     name := "jbok-network",
     libraryDependencies ++= http4s ++ Seq(
-      "com.spinoco" %% "fs2-http" % "0.4.0",
+      "com.spinoco"              %% "fs2-http"  % "0.4.0",
       "com.offbynull.portmapper" % "portmapper" % "2.0.5",
-      "org.bitlet" % "weupnp" % "0.1.4"
+      "org.bitlet"               % "weupnp"     % "0.1.4"
     )
   )
   .jsSettings(commonJsSettings)
@@ -202,8 +202,7 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq(
       "org.iq80.leveldb"          % "leveldb"        % "0.10",
       "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8"
-    ),
-    resolvers += "4th line" at "http://4thline.org/m2/"
+    )
   )
   .dependsOn(common % CompileAndTest, codec)
 

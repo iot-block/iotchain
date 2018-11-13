@@ -1,73 +1,59 @@
 package jbok.network.nat
 
+import java.net.{InetSocketAddress, URI}
+
+import cats.effect.IO
+import fs2._
 import jbok.JbokSpec
+import jbok.codec.rlp.implicits._
+import jbok.common.execution._
+import jbok.network.client.{Client, TcpClientBuilder}
+import jbok.network.common.{RequestId, RequestMethod}
+import jbok.network.server.Server
 
-class NatSpec extends JbokSpec{
-  val log = org.log4s.getLogger
+import scala.concurrent.duration._
 
-  "nat-pmp" should {
-    "add mapping" in {
-      val result = for {
-        pmp <- Nat(NatPMP)
-        result <- pmp.addMapping(12346,12346,120)
-      }yield result
-
-      result.attempt.unsafeRunSync() match {
-        case Left(e) => {
-          log.error(e)("nat-pmp add mapping error")
-          assert(false)
-        }
-        case Right(s) => assert(s)
-      }
-
-    }
-    "delete mapping" in {
-      val delResult = for {
-        pmp <- Nat(NatPMP)
-        result <- pmp.deleteMapping(12346,12346)
-      }yield result
-
-      delResult.attempt.unsafeRunSync() match {
-        case Left(e) => {
-          log.error(e)("nat-pmp delete mapping error")
-          assert(false)
-        }
-        case Right(s) => assert(s)
-      }
-    }
+class NatSpec extends JbokSpec {
+  implicit val requestId = new RequestId[String] {
+    override def id(a: String): Option[String] = None
   }
-
-  "upnp" should {
-    "add mapping" in {
-      val result = for {
-        upnp <- Nat(NatUPnP)
-        result <- upnp.addMapping(12346,12346,120)
-      }yield result
-
-      result.attempt.unsafeRunSync() match {
-        case Left(e) => {
-          log.error(e)("upnp add mapping error")
-          assert(false)
-        }
-        case Right(s) => assert(s)
-      }
-
-    }
-
-    "delete mapping" in {
-      val delResult = for {
-        upnp <- Nat(NatUPnP)
-        result <- upnp.deleteMapping(12346,12346)
-      }yield result
-
-      delResult.attempt.unsafeRunSync() match {
-        case Left(e) => {
-          log.error(e)("upnp delete mapping error")
-          assert(false)
-        }
-        case Right(s) => assert(s)
-      }
-    }
+  implicit val requestMethod: RequestMethod[String] = new RequestMethod[String] {
+    override def method(a: String): Option[String] = None
   }
+  val pipe: Pipe[IO, String, String] = _.map(identity)
 
+  def tcpServer(port: Int) =
+    Server.tcp[IO, String](new InetSocketAddress("0.0.0.0", port), pipe).unsafeRunSync()
+
+  def tcpClient(port: Int) =
+    Client(TcpClientBuilder[IO, String], new URI(s"tcp://180.154.231.218:${port}"))
+
+  def checkNat(natType: NatType) =
+    s"NAT $natType" should {
+      val internalPort = 12345
+      val externalPort = 12346
+
+      "add and delete mapping" ignore {
+        val p = for {
+          nat <- Nat[IO](natType)
+          _   <- nat.addMapping(internalPort, externalPort, 120)
+          _   <- nat.deleteMapping(externalPort)
+          _   <- nat.addMapping(internalPort, externalPort, 120)
+          server = tcpServer(internalPort)
+          fiber  <- server.serve.compile.drain.start
+          _      <- T.sleep(1.second)
+          client <- tcpClient(externalPort)
+          _      <- client.start
+          _      <- client.write("hello")
+          res    <- client.read
+          _ = res shouldBe "hello"
+          _ <- fiber.cancel
+        } yield ()
+
+        p.unsafeRunSync()
+      }
+    }
+
+  checkNat(NatPMP)
+  checkNat(NatUPnP)
 }

@@ -8,7 +8,7 @@ import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.common.testkit.HexGen
+import jbok.common.testkit._
 import jbok.network.client.{Client, WSClientBuilderPlatform}
 import jbok.network.common.{RequestId, RequestMethod}
 import jbok.network.server.Server
@@ -40,14 +40,14 @@ class WsClientServerSpec extends JbokSpec {
 
   "WebSocket Client" should {
     "write and read" in {
-      forAll(HexGen.genHex(0, 2048)) { str =>
+      forAll(genHex(0, 2048)) { str =>
         client.write(Data(str)).unsafeRunSync()
         client.read.unsafeRunSync().data shouldBe s"hello, ${str}"
       }
     }
 
     "get response for request" in {
-      forAll(HexGen.genHex(0, 2048)) { str =>
+      forAll(genHex(0, 2048)) { str =>
         val data = Data(str)
         client.request(data).unsafeRunSync().data shouldBe s"hello, ${str}"
       }

@@ -1,81 +1,52 @@
 package jbok.network.nat
 
-import cats.effect.IO
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
+import cats.implicits._
 import com.offbynull.portmapper.gateways.network.NetworkGateway
 import com.offbynull.portmapper.gateways.network.internalmessages.KillNetworkRequest
 import com.offbynull.portmapper.gateways.process.ProcessGateway
 import com.offbynull.portmapper.gateways.process.internalmessages.KillProcessRequest
-import com.offbynull.portmapper.mapper.{MappedPort, PortMapper, PortType}
+import com.offbynull.portmapper.mapper.{MappedPort, PortType}
 import com.offbynull.portmapper.mappers.natpmp.NatPmpPortMapper
-import com.offbynull.portmapper.mappers.upnpigd.UpnpIgdPortMapper
-import org.apache.commons.collections4.CollectionUtils
-import com.offbynull.portmapper.mapper.PortType
-import java.lang.reflect.Constructor
-import java.net.InetAddress
 
-
-case class NatPmpClient(
-                         newwork:NetworkGateway,
-                         processor:ProcessGateway,
-                         mapper:PortMapper,
-                         natType:NatType) extends Nat {
-  val log = org.log4s.getLogger
-
-  def addMapping(internalPort: Int,externalPort: Int,lifetime:Long): IO[Boolean] = {
+object NatPmpClient {
+  def apply[F[_]](implicit F: Sync[F]): F[Nat[F]] =
     for {
-      _ <- deleteMapping(internalPort,externalPort)
-      mappedPort = mapper.mapPort(PortType.TCP,internalPort,externalPort, lifetime)
-    }yield true
-  }
-
-  def deleteMapping(internalPort: Int,externalPort: Int): IO[Boolean] = {
-    IO{
-      val mappedPort = initMappedPort(internalPort,externalPort)
-      mapper.unmapPort(mappedPort.asInstanceOf[MappedPort])
-    }.map(_ => true)
-  }
-
-  private def initMappedPort(internalPort: Int,externalPort: Int): MappedPort ={
-    val obj = natType match {
-      case NatPMP => {
-        val cls = Class.forName("com.offbynull.portmapper.mappers.natpmp.NatPmpMappedPort")
-        val constructor = cls.getDeclaredConstructors()(0)
-        constructor.setAccessible(true)
-        val obj = constructor.newInstance(Int.box(internalPort), Int.box(externalPort), InetAddress.getLocalHost, PortType.TCP, Int.box(1000))
-        obj
-      }
-      case NatUPnP => {
-        val cls = Class.forName("com.offbynull.portmapper.mappers.upnpigd.PortMapperMappedPort")
-        val constructor = cls.getDeclaredConstructors()(0)
-        constructor.setAccessible(true)
-        val obj = constructor.newInstance(Int.box(internalPort), Int.box(externalPort), InetAddress.getLocalHost, PortType.TCP, Int.box(1000))
-        obj
-      }
-    }
-    obj.asInstanceOf[MappedPort]
-  }
-
-  def stop(): IO[Unit] ={
-    IO{
-      newwork.getBus.send(new KillNetworkRequest())
-      processor.getBus.send(new KillProcessRequest())
-    }
-  }
-
-}
-
-object NatPmpClient{
-  def apply(natType: NatType): IO[NatPmpClient] = {
-    for {
-      network <- IO(NetworkGateway.create)
+      network <- F.delay(NetworkGateway.create)
       networkBus = network.getBus
-      process <- IO(ProcessGateway.create)
+      process <- F.delay(ProcessGateway.create)
       processBus = process.getBus
-      mappers = natType match {
-        case NatPMP => NatPmpPortMapper.identify(networkBus,processBus)
-        case NatUPnP => UpnpIgdPortMapper.identify(networkBus)
+      mappers     <- F.delay(NatPmpPortMapper.identify(networkBus, processBus))
+      mapper      <- F.delay(mappers.get(0))
+      mappedPorts <- Ref.of[F, Map[Int, MappedPort]](Map.empty)
+    } yield
+      new Nat[F] {
+        private[this] val log = org.log4s.getLogger("NatPmpClient")
+
+        override def addMapping(internalPort: Int, externalPort: Int, lifetime: Long): F[Unit] =
+          for {
+            _ <- deleteMapping(externalPort)
+            port <- F
+              .delay(mapper.mapPort(PortType.TCP, internalPort, externalPort, lifetime))
+              .handleErrorWith { e =>
+                log.error(e)(s"add port mapping from ${internalPort} to ${externalPort} failed")
+                F.raiseError(e)
+              }
+            _ <- mappedPorts.update(_ + (externalPort -> port))
+          } yield ()
+
+        override def deleteMapping(externalPort: Int): F[Unit] =
+          for {
+            portOpt <- mappedPorts.get.map(_.get(externalPort))
+            _       <- portOpt.fold(F.unit)(port => F.delay(mapper.unmapPort(port)))
+            _       <- mappedPorts.update(_ - externalPort)
+          } yield ()
+
+        override def stop: F[Unit] =
+          F.delay {
+            network.getBus.send(new KillNetworkRequest())
+            process.getBus.send(new KillProcessRequest())
+          }
       }
-      nat = NatPmpClient(network,process,mappers.get(0),natType)
-    }yield nat
-  }
 }
