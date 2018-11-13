@@ -288,10 +288,9 @@ class PublicApiImpl(
     for {
       gasLimit <- getGasLimit(callTx, blockParam)
       from <- OptionT
-        .fromOption[IO](callTx.from.map(Address.apply))
+        .fromOption[IO](callTx.from)
         .getOrElseF(keyStore.listAccounts.map(_.head))
-      to            = callTx.to.map(Address.apply)
-      tx            = Transaction(0, callTx.gasPrice, gasLimit, to, callTx.value, callTx.data)
+      tx            = Transaction(0, callTx.gasPrice, gasLimit, callTx.to, callTx.value, callTx.data)
       fakeSignature = CryptoSignature(0, 0, 0.toByte)
     } yield SignedTransaction(tx, 0.toByte, ByteVector(0), ByteVector(0), from)
 

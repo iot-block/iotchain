@@ -3,52 +3,55 @@ package jbok.app.views
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
-import jbok.app.components.{Form, FormEntry, Modal}
+import jbok.app.components.{Form2, Modal}
 import jbok.app.{AppState, SimuClient}
 import jbok.core.models.{Account, Address}
-import org.scalajs.dom._
+import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
 
 case class AccountsView(state: AppState) {
-  val newAccountForm = Form(
-    Constants(FormEntry("password", "password")), { data =>
-      state.currentId.value.map { id =>
+  val newAccountForm = Form2(
+    Constants(CustomInput("Password", "password", None, (addr: String) => true, "password")), { data =>
+      if (data.values.forall(_.isValid))
+        state.currentId.value.map { id =>
+          val p = for {
+            address <- state.clients.value(id).admin.newAccount(data("Password").value)
+            _ = if (state.addressInNode.value.contains(id)) state.addressInNode.value(id).value += address
+            else state.addressInNode.value += (id -> Vars(address))
+          } yield address
+          p.unsafeToFuture()
+        }
+    }
+  )
+  def onConfirm(): Unit = {
+    newAccountForm.submit(newAccountForm.entryMap)
+    newAccountForm.clear()
+  }
+  def onCancel(): Unit =
+    newAccountForm.clear()
+  val newAccountModal = Modal("new account", newAccountForm.render(), () => onConfirm(), () => onCancel())
+
+  val getCoinForm = Form2(
+    Constants(CustomInput("Address", "address", None, (addr: String) => InputValidator.isValidAddress(addr))), { data =>
+      if (data.values.forall(_.isValid)) {
         val p = for {
-          address <- state.clients.value(id).admin.newAccount(data("password"))
-          _ = if (state.addressInNode.value.contains(id)) state.addressInNode.value(id).value += address
-          else state.addressInNode.value += (id -> Vars(address))
-        } yield address
+          sc <- SimuClient(state.config.value.uri)
+          address = Address(ByteVector.fromValidHex(data("Address").value))
+          _ <- sc.simulation.getCoin(address, BigInt("100000000"))
+        } yield ()
         p.unsafeToFuture()
       }
     }
   )
-  def onConfirm() = {
-    val data = newAccountForm.data
-    newAccountForm.submit(data)
-    newAccountForm.clear()
-  }
-  def onCancel() =
-    newAccountForm.clear()
-  val newAccountModal = Modal("new account", newAccountForm.render(), onConfirm, onCancel)
 
-  val getCoinForm = Form(
-    Constants(FormEntry("address")), { data =>
-      val p = for {
-        sc <- SimuClient(state.config.value.uri)
-        address = Address(ByteVector.fromValidHex(data("address")))
-        _ <- sc.simulation.getCoin(address, BigInt("100000000"))
-      } yield ()
-      p.unsafeToFuture()
-    }
-  )
-  def onConfirm2() = {
-    val data = getCoinForm.data
-    getCoinForm.submit(data)
+  def onConfirm2(): Unit = {
+    getCoinForm.submit(getCoinForm.entryMap)
     getCoinForm.clear()
   }
-  def onCancel2() =
+  def onCancel2(): Unit =
     getCoinForm.clear()
-  val getCoinModal = Modal("get coins", getCoinForm.render(), onConfirm2, onCancel2)
+
+  val getCoinModal = Modal("get conins", getCoinForm.render(), () => onConfirm2(), () => onCancel2())
 
   @binding.dom
   def render: Binding[Element] =
@@ -73,7 +76,7 @@ case class AccountsView(state: AppState) {
             for ((address, account) <- Constants(accounts.bind.toList: _*)) yield {
               <tr>
                 <td>
-                  <a>
+                  <a onclick={state.hrefHandler} type="address">
                     {address.toString}
                   </a>
                 </td>

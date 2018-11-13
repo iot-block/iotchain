@@ -25,7 +25,6 @@ case class BlocksView(state: AppState) {
               <th>Timestamp</th>
               <th>Gas Used</th>
               <th>Transactions</th>
-              <th>Detail</th>
             </tr>
           </thead>
           <tbody>
@@ -35,7 +34,7 @@ case class BlocksView(state: AppState) {
                 {block.header.number.toString}
               </td>
               <td>
-                <a>
+                <a onclick={state.hrefHandler} type="block">
                   {block.header.hash.toHex}
                 </a>
               </td>
@@ -47,9 +46,6 @@ case class BlocksView(state: AppState) {
               </td>
               <td>
                 {block.body.transactionList.length.toString}
-              </td>
-              <td>
-                {Modal("view", new BlockView(block).render).render().bind}
               </td>
             </tr>
           }}

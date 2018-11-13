@@ -252,6 +252,7 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
 //  addCompilerPlugin(scalafixSemanticdb),
   fork := true,
+  connectInput := true,
   parallelExecution in test := false,
   scalacOpts
 )

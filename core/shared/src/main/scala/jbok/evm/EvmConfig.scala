@@ -18,11 +18,11 @@ object EvmConfig {
     */
   def forBlock(blockNumber: BigInt, blockchainConfig: BlockChainConfig): EvmConfig = {
     val transitionBlockToConfigMapping: Map[BigInt, EvmConfigBuilder] = Map(
-      blockchainConfig.frontierBlockNumber -> FrontierConfigBuilder,
+      blockchainConfig.frontierBlockNumber  -> FrontierConfigBuilder,
       blockchainConfig.homesteadBlockNumber -> HomesteadConfigBuilder,
-      blockchainConfig.eip150BlockNumber -> PostEIP150ConfigBuilder,
-      blockchainConfig.eip160BlockNumber -> PostEIP160ConfigBuilder,
-      blockchainConfig.eip161BlockNumber -> PostEIP161ConfigBuilder
+      blockchainConfig.eip150BlockNumber    -> PostEIP150ConfigBuilder,
+      blockchainConfig.eip160BlockNumber    -> PostEIP160ConfigBuilder,
+      blockchainConfig.eip161BlockNumber    -> PostEIP161ConfigBuilder
     )
 
     // highest transition block that is less/equal to `blockNumber`
@@ -37,7 +37,6 @@ object EvmConfig {
     EvmConfig(
       feeSchedule = new FeeSchedule.FrontierFeeSchedule,
       opCodes = OpCodes.FrontierOpCodes,
-      exceptionalFailedCodeDeposit = false,
       subGasCapDivisor = None,
       chargeSelfDestructForNewAccount = false,
       maxCodeSize = maxCodeSize,
@@ -48,7 +47,6 @@ object EvmConfig {
     EvmConfig(
       feeSchedule = new FeeSchedule.HomesteadFeeSchedule,
       opCodes = OpCodes.HomesteadOpCodes,
-      exceptionalFailedCodeDeposit = true,
       subGasCapDivisor = None,
       chargeSelfDestructForNewAccount = false,
       maxCodeSize = maxCodeSize,
@@ -71,7 +69,6 @@ object EvmConfig {
 case class EvmConfig(
     feeSchedule: FeeSchedule,
     opCodes: List[OpCode],
-    exceptionalFailedCodeDeposit: Boolean,
     subGasCapDivisor: Option[Long],
     chargeSelfDestructForNewAccount: Boolean,
     maxCodeSize: Option[BigInt],
@@ -115,7 +112,7 @@ case class EvmConfig(
     *
     */
   def calcTransactionIntrinsicGas(txData: ByteVector, isContractCreation: Boolean): BigInt = {
-    val txDataZero = txData.foldLeft(0)((c, d) => if (d == 0) c + 1 else c)
+    val txDataZero    = txData.foldLeft(0)((c, d) => if (d == 0) c + 1 else c)
     val txDataNonZero = txData.length - txDataZero
 
     txDataZero * G_txdatazero +
@@ -143,41 +140,41 @@ case class EvmConfig(
 
 object FeeSchedule {
   class FrontierFeeSchedule extends FeeSchedule {
-    override val G_zero: BigInt = 0
-    override val G_base: BigInt = 2
-    override val G_verylow: BigInt = 3
-    override val G_low: BigInt = 5
-    override val G_mid: BigInt = 8
-    override val G_high: BigInt = 10
-    override val G_balance: BigInt = 20
-    override val G_sload: BigInt = 50
-    override val G_jumpdest: BigInt = 1
-    override val G_sset: BigInt = 20000
-    override val G_sreset: BigInt = 5000
-    override val R_sclear: BigInt = 15000
-    override val R_selfdestruct: BigInt = 24000
-    override val G_selfdestruct: BigInt = 0
-    override val G_create: BigInt = 32000
-    override val G_codedeposit: BigInt = 200
-    override val G_call: BigInt = 40
-    override val G_callvalue: BigInt = 9000
-    override val G_callstipend: BigInt = 2300
-    override val G_newaccount: BigInt = 25000
-    override val G_exp: BigInt = 10
-    override val G_expbyte: BigInt = 10
-    override val G_memory: BigInt = 3
-    override val G_txcreate: BigInt = 0
-    override val G_txdatazero: BigInt = 4
+    override val G_zero: BigInt          = 0
+    override val G_base: BigInt          = 2
+    override val G_verylow: BigInt       = 3
+    override val G_low: BigInt           = 5
+    override val G_mid: BigInt           = 8
+    override val G_high: BigInt          = 10
+    override val G_balance: BigInt       = 20
+    override val G_sload: BigInt         = 50
+    override val G_jumpdest: BigInt      = 1
+    override val G_sset: BigInt          = 20000
+    override val G_sreset: BigInt        = 5000
+    override val R_sclear: BigInt        = 15000
+    override val R_selfdestruct: BigInt  = 24000
+    override val G_selfdestruct: BigInt  = 0
+    override val G_create: BigInt        = 32000
+    override val G_codedeposit: BigInt   = 200
+    override val G_call: BigInt          = 40
+    override val G_callvalue: BigInt     = 9000
+    override val G_callstipend: BigInt   = 2300
+    override val G_newaccount: BigInt    = 25000
+    override val G_exp: BigInt           = 10
+    override val G_expbyte: BigInt       = 10
+    override val G_memory: BigInt        = 3
+    override val G_txcreate: BigInt      = 0
+    override val G_txdatazero: BigInt    = 4
     override val G_txdatanonzero: BigInt = 68
-    override val G_transaction: BigInt = 21000
-    override val G_log: BigInt = 375
-    override val G_logdata: BigInt = 8
-    override val G_logtopic: BigInt = 375
-    override val G_sha3: BigInt = 30
-    override val G_sha3word: BigInt = 6
-    override val G_copy: BigInt = 3
-    override val G_blockhash: BigInt = 20
-    override val G_extcode: BigInt = 20
+    override val G_transaction: BigInt   = 21000
+    override val G_log: BigInt           = 375
+    override val G_logdata: BigInt       = 8
+    override val G_logtopic: BigInt      = 375
+    override val G_sha3: BigInt          = 30
+    override val G_sha3word: BigInt      = 6
+    override val G_copy: BigInt          = 3
+    override val G_blockhash: BigInt     = 20
+    override val G_extcode: BigInt       = 20
   }
 
   class HomesteadFeeSchedule extends FrontierFeeSchedule {
@@ -185,11 +182,11 @@ object FeeSchedule {
   }
 
   class PostEIP150FeeSchedule extends HomesteadFeeSchedule {
-    override val G_sload: BigInt = 200
-    override val G_call: BigInt = 700
-    override val G_balance: BigInt = 400
+    override val G_sload: BigInt        = 200
+    override val G_call: BigInt         = 700
+    override val G_balance: BigInt      = 400
     override val G_selfdestruct: BigInt = 5000
-    override val G_extcode: BigInt = 700
+    override val G_extcode: BigInt      = 700
   }
 
   class PostEIP160FeeSchedule extends PostEIP150FeeSchedule {

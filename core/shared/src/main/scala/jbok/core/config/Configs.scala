@@ -149,7 +149,7 @@ object Configs {
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
       val rootDir                            = s"${defaultRootDir}/${suffix}"
-      val rpcConfig                          = RpcConfig(false, "localhost", port + 100)
+      val rpcConfig                          = RpcConfig(true, "localhost", port + 100)
       val walletConfig                       = KeyStoreConfig(s"${rootDir}/keystore")
       val peerManagerConfig                  = PeerManagerConfig(port, timeout = 0.seconds)
       val blockChainConfig: BlockChainConfig = BlockChainConfig()

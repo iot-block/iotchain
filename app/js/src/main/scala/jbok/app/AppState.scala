@@ -9,6 +9,7 @@ import jbok.app.simulations.NodeInfo
 import jbok.core.models._
 import jbok.evm.abi.Description
 import scodec.bits.ByteVector
+import org.scalajs.dom.Event
 
 case class ClientStatus(number: Var[BigInt] = Var(0),
                         gasPrice: Var[BigInt] = Var(0),
@@ -21,6 +22,7 @@ case class Contract(address: Address, abi: List[Description])
 
 case class AppState(
     config: Var[AppConfig],
+    hrefHandler: Event => Unit,
     currentId: Var[Option[String]] = Var(None),
     clients: Var[Map[String, JbokClient]] = Var(Map.empty),
     status: Var[Map[String, ClientStatus]] = Var(Map.empty),
@@ -33,6 +35,8 @@ case class AppState(
     addressInNode: Var[Map[String, Vars[Address]]] = Var(Map.empty),
     contractInfo: Vars[Contract] = Vars.empty[Contract],
     contracts: Var[Map[String, Var[Map[Address, Var[Account]]]]] = Var(Map.empty),
+    selectedAccount: Var[Option[(Address, Account, List[SignedTransaction])]] = Var(None),
+    selectedBlock: Var[Option[Block]] = Var(None),
     update: Var[Boolean] = Var(true)
 ) {
   def init() = {
@@ -54,6 +58,7 @@ case class AppState(
       jbokClients <- nodes.traverse(node => JbokClient(new URI(node.rpcAddr.toString)))
       _ = clients.value = nodes.map(_.id).zip(jbokClients).toMap
       nodeAddresses <- clients.value.toList.traverse(c => c._2.admin.listAccounts.map(c._1 -> _))
+      _ = println(s"nodeAddress: $nodeAddresses")
       _ = nodeAddresses.map {
         case (id, addresses) =>
           addressInNode.value(id).value ++= addresses

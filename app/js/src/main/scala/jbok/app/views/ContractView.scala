@@ -2,36 +2,52 @@ package jbok.app.views
 
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
-import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
-import jbok.app.components.{Form, FormEntry, Modal}
-import jbok.app.{AppState, Contract, SimuClient}
+import com.thoughtworks.binding.Binding.{Constants, Var}
+import jbok.app.components.{Form2, Modal}
+import jbok.app.{AppState, Contract}
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom._
 import scodec.bits.ByteVector
 import jbok.evm.abi.parseContract
 
 case class ContractView(state: AppState) {
-  val form = Form(
-    Constants(FormEntry("address"), FormEntry("abi", "textarea")), { data =>
-      state.currentId.value.map { id =>
-        val abi     = parseContract(data("abi").trim)
-        val address = Address(ByteVector.fromValidHex(data("address")))
-        if (data("data").trim.nonEmpty && abi.isRight && !state.contractInfo.value
-              .map(_.address)
-              .toSet
-              .contains(address))
-          state.contractInfo.value += Contract(address, abi.toTry.get)
+  val watchForm = Form2(
+    Constants(
+      CustomInput("Address", "address", None, (addr: String) => InputValidator.isValidAddress(addr)),
+      CustomInput(
+        "Abi",
+        """
+          |[
+          |	{
+          |		"inputs": [...],
+          |		"name": "...",
+          |		"type": "function"
+          |	},
+          | ...
+          |]
+        """.stripMargin,
+        None,
+        (abi: String) => InputValidator.isValidABI(abi),
+        "textarea"
+      )
+    ), { data =>
+      if (data.values.forall(_.isValid)) {
+        state.currentId.value.map { id =>
+          val abi     = parseContract(data("Abi").value)
+          val address = Address(ByteVector.fromValidHex(data("Address").value))
+          if (!state.contractInfo.value.map(_.address).toSet.contains(address))
+            state.contractInfo.value += Contract(address, abi.toTry.get)
+        }
       }
     }
   )
-  def onConfirm() = {
-    val data = form.data
-    form.submit(data)
-    form.clear()
+  def watchOnConfirm(): Unit = {
+    watchForm.submit(watchForm.entryMap)
+    watchForm.clear()
   }
-  def onCancel() =
-    form.clear()
-  val modal = Modal("watch", form.render(), onConfirm, onCancel)
+  def watchOnCancel() =
+    watchForm.clear()
+  val watchModal = Modal("watch", watchForm.render(), () => watchOnConfirm(), () => watchOnCancel())
   @binding.dom
   def render: Binding[Element] =
     <div>
@@ -78,18 +94,29 @@ case class ContractView(state: AppState) {
       </table>
       }
       <div class="flex">
-        {modal.render().bind}
+        {watchModal.render().bind}
+        {
+          val client = state.currentId.bind match {
+            case Some(id) => state.clients.value.get(id)
+            case _ => None
+          }
+          val contractView = DeployContractView(state)
+          def onConfirm(): Unit= {
+            contractView.submit()
+          }
+          def onCancel(): Unit  = {}
+          val modal       = Modal("deploy", contractView.render, () => onConfirm(), () => onCancel())
+          modal.render().bind
+        }
         {
           val client = state.currentId.bind match {
             case Some(id) => state.clients.value.get(id)
             case _ => None
           }
           val callTx = CallTxView(state)
-          def onConfirm(): Unit= {
-            callTx.submit()
-          }
+          def onConfirm(): Unit= {}
           def onCancel(): Unit  = {}
-          val modal       = Modal("Contract Call", callTx.render, onConfirm, onCancel)
+          val modal       = Modal("Contract Call", callTx.render, () => onConfirm(), () => onCancel())
           modal.render().bind
         }
       </div>

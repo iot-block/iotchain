@@ -15,13 +15,6 @@ case class StatusView(state: AppState) {
     </div>
 
   @binding.dom
-  def renderSwitch(title: String, value: Boolean): Binding[Element] =
-    <label class="switch">
-      <input type="checkbox" checked ={value}></input>
-      <span class="slider"></span>
-    </label>
-
-  @binding.dom
   def render: Binding[Element] = {
     val onToggleHandler = { event: Event =>
       event.currentTarget match {
@@ -37,29 +30,17 @@ case class StatusView(state: AppState) {
           case Some(id) => state.status.value.getOrElse(id, ClientStatus())
           case _ => ClientStatus()
         }
-        <div class="status-item delimiter">
-          <p class="status-title">current number</p>
-          <p class="status-value">
-            {status.number.bind.toString}
-          </p>
+        <div>
+          {renderItem("current number", status.number.bind.toString).bind}
         </div>
-        <div class="status-item delimiter">
-          <p class="status-title">gas price</p>
-          <p class="status-value">
-            {status.gasPrice.bind.toString}
-          </p>
+        <div>
+          {renderItem("gas price", status.gasPrice.bind.toString).bind}
         </div>
-        <div class="status-item delimiter">
-          <p class="status-title">gas limit</p>
-          <p class="status-value">
-            {status.gasLimit.bind.toString}
-          </p>
+        <div>
+          {renderItem("gas limit", status.gasLimit.bind.toString).bind}
         </div>
-        <div class="status-item delimiter">
-          <p class="status-title">mining status</p>
-          <p class="status-value">
-            {status.miningStatus.bind.toString}
-          </p>
+        <div>
+          {renderItem("mining status", status.miningStatus.bind.toString).bind}
         </div>
         <div class="status-item delimiter">
           <p class="status-title">rpc server</p>

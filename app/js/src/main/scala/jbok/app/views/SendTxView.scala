@@ -3,11 +3,11 @@ package jbok.app.views
 import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
-import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
+import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.api.{BlockParam, TransactionRequest}
-import jbok.app.{AppState, ContractAddress}
-import jbok.core.models.{Account, Address, UInt256}
-import org.scalajs.dom.raw.{HTMLInputElement, HTMLSelectElement}
+import jbok.app.AppState
+import jbok.core.models.{Account, Address}
+import org.scalajs.dom.raw.HTMLButtonElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
 
@@ -17,21 +17,20 @@ case class SendTxView(state: AppState) {
   val currentId                     = state.currentId.value
   val client                        = currentId.flatMap(state.clients.value.get(_))
   val account: Var[Option[Account]] = Var(None)
-  val from: Var[String]             = Var("")
-  val fromSyntax: Var[Boolean]      = Var(true)
-  val to: Var[String]               = Var("")
-  val toSyntax: Var[Boolean]        = Var(true)
-  val value: Var[String]            = Var("")
-  val valueSyntax: Var[Boolean]     = Var(true)
-  val gasLimit: Var[String]         = Var("21000")
-  val gasLimitSyntax: Var[Boolean]  = Var(true)
-  val gasPrice: Var[String]         = Var("1")
-  val gasPriceSyntax: Var[Boolean]  = Var(true)
-  val nonce: Var[String]            = Var("")
-  val nonceSyntax: Var[Boolean]     = Var(true)
-  val data: Var[String]             = Var("")
-  val dataSyntax: Var[Boolean]      = Var(true)
-  val passphase: Var[String]        = Var("")
+  val moreOption: Var[Boolean]      = Var(false)
+
+  val fromInput = AddressOptionInput(nodeAccounts)
+  val toInput   = CustomInput("To", "address", None, (addr: String) => InputValidator.isValidAddress(addr))
+  val valueInput = CustomInput(
+    "Value",
+    "0.0",
+    None,
+    (value: String) => InputValidator.isValidNumber(value) && account.value.forall(BigInt(value) <= _.balance.toBigInt))
+  val dataInput      = CustomInput("Data", "0x...", None, (data: String) => InputValidator.isValidData(data), "textarea")
+  val passphaseInput = CustomInput("Passphase", "", None, (_: String) => true, "password")
+
+  val regularGasLimit = BigInt(21000)
+  val callGasLimit    = BigInt(4000000)
 
   private def fetch() = {
     val p = for {
@@ -40,29 +39,39 @@ case class SendTxView(state: AppState) {
     } yield ()
     p.unsafeToFuture()
   }
-
   fetch()
 
+  def allReady: Boolean =
+    fromInput.isValid &&
+      toInput.isValid &&
+      valueInput.isValid &&
+      passphaseInput.isValid &&
+      (!moreOption.value || (moreOption.value && dataInput.isValid)) &&
+      client.nonEmpty
+
   def submit() =
-    if (from.value.nonEmpty && fromSyntax.value && toSyntax.value && valueSyntax.value && gasLimitSyntax.value && gasPriceSyntax.value && nonceSyntax.value && dataSyntax.value && client.nonEmpty) {
-      val fromSubmit     = Address(ByteVector.fromValidHex(from.value))
-      val toSubmit       = if (to.value.isEmpty) None else Some(Address(ByteVector.fromValidHex(to.value)))
-      val valueSubmit    = if (value.value.isEmpty) None else Some(BigInt(value.value))
-      val gasLimitSubmit = if (gasLimit.value.isEmpty) None else Some(BigInt(gasLimit.value))
-      val gasPriceSubmit = if (gasPrice.value.isEmpty) None else Some(BigInt(gasPrice.value))
-      val nonceSubmit    = if (nonce.value.isEmpty) None else Some(BigInt(nonce.value))
-      val dataSubmit     = if (data.value.isEmpty) None else Some(ByteVector.fromValidHex(data.value))
+    if (allReady) {
+      val fromSubmit = Address(ByteVector.fromValidHex(fromInput.value))
+      val toSubmit   = Some(Address(ByteVector.fromValidHex(toInput.value)))
+      val value      = BigInt(valueInput.value)
+      val (gasLimitSubmit, dataSubmit) =
+        if (!moreOption.value || (moreOption.value && dataInput.value == "")) Some(regularGasLimit) -> None
+        else Some(callGasLimit)                                                                     -> Some(ByteVector.fromValidHex(dataInput.value))
       val txRequest =
-        TransactionRequest(fromSubmit, toSubmit, valueSubmit, gasLimitSubmit, gasPriceSubmit, nonceSubmit, dataSubmit)
-      val password = if (passphase.value.isEmpty) Some("") else Some(passphase.value)
+        TransactionRequest(fromSubmit, toSubmit, None, gasLimitSubmit, None, None, dataSubmit)
+      val password = Some(passphaseInput.value)
 
       val p = for {
-        hash <- client.get.admin.sendTransaction(txRequest, password)
-        stx  <- client.get.public.getTransactionByHash(hash)
+        account  <- client.get.public.getAccount(fromSubmit, BlockParam.Latest)
+        gasPrice <- client.get.public.getGasPrice
+        hash <- client.get.admin
+          .sendTransaction(txRequest.copy(value = Some(account.balance.min(value)),
+                                          nonce = Some(account.nonce),
+                                          gasPrice = Some(gasPrice)),
+                           password)
+        stx <- client.get.public.getTransactionByHash(hash)
         _ = stx.map(state.stxs.value(currentId.get).value += _)
         _ = state.receipts.value(currentId.get).value += (hash -> Var(None))
-        _ = if (toSubmit.isEmpty)
-          state.simuAddress.value += ContractAddress.getContractAddress(fromSubmit, UInt256(nonceSubmit.get))
       } yield ()
       p.unsafeToFuture()
 
@@ -78,97 +87,11 @@ case class SendTxView(state: AppState) {
     p.unsafeToFuture()
   }
 
-  private val fromOnInputHandler = { event: Event =>
+  private val onClickMoreOption = { event: Event =>
     event.currentTarget match {
-      case input: HTMLInputElement =>
-        from.value = input.value.trim.toLowerCase
-        fromSyntax.value = if (InputValidator.isValidAddress(from.value)) true else false
-        if (fromSyntax.value) {
-          updateAccount(from.value)
-        } else {
-          account.value = None
-        }
-      case _ =>
-    }
-  }
-
-  private val toOnInputHandler = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement =>
-        to.value = input.value.trim.toLowerCase
-        toSyntax.value = if (InputValidator.isValidAddress(to.value)) true else false
-      case _ =>
-    }
-  }
-
-  private val valueOnInputHandler = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement =>
-        value.value = input.value.trim
-        valueSyntax.value = if (InputValidator.isValidValue(value.value, account.value)) true else false
-      case _ =>
-    }
-  }
-
-  private val gasLimitOnInputHandler = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement =>
-        gasLimit.value = input.value.trim
-        gasLimitSyntax.value = if (InputValidator.isValidNumber(gasLimit.value)) true else false
-      case _ =>
-    }
-  }
-
-  private val gasPriceOnInputHandler = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement =>
-        gasPrice.value = input.value.trim
-        gasPriceSyntax.value = if (InputValidator.isValidNumber(gasPrice.value)) true else false
-      case _ =>
-    }
-  }
-
-  private val nonceOnInputHandler = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement =>
-        nonce.value = input.value.trim
-        nonceSyntax.value = if (InputValidator.isValidNumber(nonce.value)) true else false
-      case _ =>
-    }
-  }
-
-  private val dataOnInputHandler = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement =>
-        data.value = input.value.trim
-        dataSyntax.value = if (InputValidator.isValidData(data.value)) true else false
-      case _ =>
-    }
-  }
-
-  private val passphaseOnInputHandler = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement => passphase.value = input.value.trim
-      case _                       =>
-    }
-  }
-
-  val otherAddressDisable: Var[Boolean] = Var(false)
-  private val onChangeHandler = { event: Event =>
-    event.currentTarget match {
-      case select: HTMLSelectElement =>
-        val v = select.options(select.selectedIndex).value
-        otherAddressDisable.value = if (v == "other") {
-          from.value = ""
-          account.value = None
-          fromSyntax.value = false
-          false
-        } else {
-          from.value = v.substring(2)
-          updateAccount(from.value)
-          fromSyntax.value = true
-          true
-        }
+      case _: HTMLButtonElement => {
+        moreOption.value = !moreOption.value
+      }
       case _ =>
     }
   }
@@ -176,32 +99,18 @@ case class SendTxView(state: AppState) {
   @binding.dom
   def render: Binding[Element] =
     <div>
-      {
-        val accountList = nodeAccounts.bind
-
-        <div>
-        <label for="account-to-send">Choose a account:</label>
-          <select id="1" class="autocomplete" onchange={onChangeHandler}>
-          {for(account<-Constants(accountList: _*)) yield {
-          <option value={account.toString}>{account.toString}</option>
-        }}
-          <option value="other" selected={true}>other address</option>
-        </select>
-        <input type="text" placeholder="" name="other" oninput={fromOnInputHandler} value={from.bind} class={if(fromSyntax.bind) "valid" else "invalid"} disabled={otherAddressDisable.bind}/>
-        </div>
-      }
-
+      {fromInput.render.bind}
       <div>
         <label for="to">
           <b>
             to
           </b>
         </label>
-        <input type="text" placeholder="" name="to" oninput={toOnInputHandler} value={to.bind} class={if(toSyntax.bind) "valid" else "invalid"} />
+        {toInput.render.bind}
       </div>
 
       <div>
-        <label for="value">
+        <label for="Value">
           <b>
             {
               account.bind match {
@@ -211,50 +120,24 @@ case class SendTxView(state: AppState) {
             }
           </b>
         </label>
-        <input type="text" placeholder="" name="value" oninput={valueOnInputHandler} value={value.bind} class={if(valueSyntax.bind) "valid" else "invalid"} />
+        {valueInput.render.bind}
       </div>
 
-      <div>
-        <label for="gasLimit">
-          <b>
-            gasLimit
-          </b>
-        </label>
-        <input type="text" placeholder="" name="gasLimit" oninput={gasLimitOnInputHandler} value={gasLimit.bind} class={if(gasLimitSyntax.bind) "valid" else "invalid"} />
-      </div>
-
-      <div>
-        <label for="gasPrice">
-          <b>
-            gasPrice
-          </b>
-        </label>
-        <input type="text" placeholder="" name="gasPrice" oninput={gasPriceOnInputHandler} value={gasPrice.bind} class={if(gasPriceSyntax.bind) "valid" else "invalid"} />
-      </div>
-
-      <div>
-        <label for="nonce">
-          <b>
-            nonce
-          </b>
-        </label>
-        <input type="text" placeholder= {
-          account.bind match{
-            case Some(a) =>
-              nonce.value = a.nonce.toString
-              nonce.value
-            case _ => "" }
-          } name="nonce" oninput={nonceOnInputHandler} value={nonce.bind} class={if(nonceSyntax.bind) "valid" else "invalid"} />
-      </div>
-
-      <div>
-        <label for="data">
-          <b>
-            data
-          </b>
-        </label>
-        <input type="text" placeholder="" name="data" oninput={dataOnInputHandler} value={data.bind} class={if(dataSyntax.bind) "valid" else "invalid"} />
-      </div>
+      <button onclick={onClickMoreOption}>show more option</button>
+      {
+        if (moreOption.bind) {
+          <div>
+            <label for="data">
+              <b>
+                data
+              </b>
+            </label>
+            {dataInput.render.bind}
+          </div>
+        } else {
+          <div/>
+        }
+      }
 
       <div>
         <label for="passphase">
@@ -262,7 +145,7 @@ case class SendTxView(state: AppState) {
             passphase
           </b>
         </label>
-        <input type="password" placeholder="" name="passphase" oninput={passphaseOnInputHandler} value={passphase.bind} class="valid" />
+        {passphaseInput.render.bind}
       </div>
 
    </div>
