@@ -41,21 +41,21 @@ case class TxsView(state: AppState) {
           {for (tx <- Constants(stxs.bind.toList: _*)) yield {
           <tr>
             <td>
-              <a>
+              <a onclick={state.hrefHandler} type="tx">
                 {tx.hash.toHex}
               </a>
             </td>
             <td>
-              <a>
+              <a onclick={state.hrefHandler} type="address">
                 {SignedTransaction.getSender(tx).get.toString}
               </a>
             </td>
             <td>
               {
                 if (tx.receivingAddress == Address.empty) {
-                  <p>Contract: <a>{ContractAddress.getContractAddress(SignedTransaction.getSender(tx).get, UInt256(tx.nonce)).toString}</a> Created</p>
+                  <p>Contract: <a onclick={state.hrefHandler} type="address">{ContractAddress.getContractAddress(SignedTransaction.getSender(tx).get, UInt256(tx.nonce)).toString}</a> Created</p>
                 } else {
-                  <a>{tx.receivingAddress.toString}</a>
+                  <a onclick={state.hrefHandler} type="address">{tx.receivingAddress.toString}</a>
                 }
               }
             </td>
@@ -91,7 +91,7 @@ case class TxsView(state: AppState) {
           newTxView.submit()
         }
         def onCancel(): Unit  = {}
-        val modal       = Modal("send", newTxView.render, onConfirm, onCancel)
+        val modal       = Modal("send", newTxView.render, () => onConfirm(), () => onCancel())
         modal.render().bind
       }
       </div>

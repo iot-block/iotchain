@@ -8,12 +8,14 @@ import org.scalajs.dom._
 object Nav {
   case class Tab(name: String, content: Binding[Node], icon: String)
   case class TabList(tabs: Vars[Tab], selected: Var[Tab])
+  @binding.dom
+  def renderEmpty: Binding[Node] =
+    <div></div>
 
   @binding.dom
-  def render(left: Binding[Node], right: Binding[Node]): Binding[Node] = {
+  def render(left: Binding[Node], right: Binding[Node] = renderEmpty): Binding[Node] =
     <nav>
       {left.bind}
       {right.bind}
     </nav>
-  }
 }

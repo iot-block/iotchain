@@ -1,11 +1,9 @@
 package jbok.evm
 import jbok.JbokSpec
 import better.files._
-import io.circe
 import jbok.evm.abi.Param
 import io.circe._
 import io.circe.parser._
-import io.circe.syntax._
 import scodec.bits._
 
 class ABISpec extends JbokSpec {
@@ -348,78 +346,6 @@ class ABISpec extends JbokSpec {
   }
 
   "abi.encodeInput" should {
-    "encode inputs" in {
-      val functionABI =
-        """
-          |{
-          |		"constant": false,
-          |		"inputs": [
-          |			{
-          |				"components": [
-          |					{
-          |						"name": "a",
-          |						"type": "uint256"
-          |					},
-          |					{
-          |						"name": "b",
-          |						"type": "uint256[]"
-          |					},
-          |					{
-          |						"components": [
-          |							{
-          |								"name": "x",
-          |								"type": "uint256"
-          |							},
-          |							{
-          |								"name": "y",
-          |								"type": "uint256"
-          |							}
-          |						],
-          |						"name": "c",
-          |						"type": "tuple[]"
-          |					}
-          |				],
-          |				"name": "s",
-          |				"type": "tuple"
-          |			},
-          |			{
-          |				"components": [
-          |					{
-          |						"name": "x",
-          |						"type": "uint256"
-          |					},
-          |					{
-          |						"name": "y",
-          |						"type": "uint256"
-          |					}
-          |				],
-          |				"name": "t",
-          |				"type": "tuple"
-          |			},
-          |			{
-          |				"name": "a",
-          |				"type": "uint256"
-          |			}
-          |		],
-          |		"name": "f",
-          |		"outputs": [
-          |			{
-          |				"name": "",
-          |				"type": "uint256"
-          |			}
-          |		],
-          |		"payable": false,
-          |		"stateMutability": "nonpayable",
-          |		"type": "function"
-          |	}
-        """.stripMargin
-      val f = abi.parseFunction(functionABI)
-      f.isRight shouldBe true
-      val result = f.right.get.getByteCode("[[1, [2, 3], [[4, 5], [6, 7]]], [8, 9], 10]")
-      result.isRight shouldBe true
-      result.right.get shouldBe hex"6f2be728000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000009000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000500000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000007"
-    }
-
     "encode uint256[]" in {
       val inputs = Param("a", "uint256[]", None)
       val param  = parse("[[1,2]]").getOrElse(Json.Null)
@@ -499,7 +425,7 @@ class ABISpec extends JbokSpec {
                          Some(
                            List(
                              Param("b", "uint256", None),
-                             Param("b", "uint256[]", None)
+                             Param("c", "uint256[]", None)
                            )))
       val param = parse("[[1, [2,3]]]").getOrElse(Json.Null)
 
@@ -525,7 +451,7 @@ class ABISpec extends JbokSpec {
                          Some(
                            List(
                              Param("b", "uint256", None),
-                             Param("b", "bool", None)
+                             Param("c", "bool", None)
                            )))
       val param = parse("[[1, true]]").getOrElse(Json.Null)
 
@@ -637,7 +563,7 @@ class ABISpec extends JbokSpec {
       val value   = hex"0000000000000000000000000000000000000000000000000000000000001234"
       val result  = abi.decodePrimaryType(outputs, value)
       result.isRight shouldBe true
-      result.right.get shouldBe JsonObject(("a", Json.fromBigInt(4660))).asJson
+      result.right.get shouldBe Json.fromBigInt(4660)
     }
 
     "decode uint256" in {
@@ -645,8 +571,8 @@ class ABISpec extends JbokSpec {
       val value   = hex"1234567890123456789012345678901234567890123456789012345678901234"
       val result  = abi.decodePrimaryType(outputs, value)
       result.isRight shouldBe true
-      result.right.get shouldBe JsonObject(
-        ("a", Json.fromBigInt(BigInt("8234104122419153896766082834368325185836758793849283143825308940974890684980")))).asJson
+      result.right.get shouldBe
+        Json.fromBigInt(BigInt("8234104122419153896766082834368325185836758793849283143825308940974890684980"))
     }
 
     "decode bool" in {
@@ -654,7 +580,7 @@ class ABISpec extends JbokSpec {
       val value   = hex"0000000000000000000000000000000000000000000000000000000000000001"
       val result  = abi.decodePrimaryType(outputs, value)
       result.isRight shouldBe true
-      result.right.get shouldBe JsonObject(("a", Json.True)).asJson
+      result.right.get shouldBe Json.True
     }
 
     "decode address" in {
@@ -662,7 +588,7 @@ class ABISpec extends JbokSpec {
       val value   = hex"000000000000000000000000ca35b7d915458ef540ade6068dfe2f44e8fa733c"
       val result  = abi.decodePrimaryType(outputs, value)
       result.isRight shouldBe true
-      result.right.get shouldBe JsonObject(("a", Json.fromString("0xca35b7d915458ef540ade6068dfe2f44e8fa733c"))).asJson
+      result.right.get shouldBe Json.fromString("0xca35b7d915458ef540ade6068dfe2f44e8fa733c")
     }
 
     "decode string" in {
@@ -671,7 +597,7 @@ class ABISpec extends JbokSpec {
         hex"000000000000000000000000000000000000000000000000000000000000002568656c6c6f20776f726c64212068656c6c6f20626c6f636b636861696e2120e4bda0e5a5bd000000000000000000000000000000000000000000000000000000"
       val result = abi.decodePrimaryType(outputs, value)
       result.isRight shouldBe true
-      result.right.get shouldBe JsonObject(("a", Json.fromString("hello world! hello blockchain! 你好"))).asJson
+      result.right.get shouldBe Json.fromString("hello world! hello blockchain! 你好")
     }
 
     "decode bytes" in {
@@ -680,8 +606,198 @@ class ABISpec extends JbokSpec {
         hex"000000000000000000000000000000000000000000000000000000000000002568656c6c6f20776f726c64212068656c6c6f20626c6f636b636861696e2120e4bda0e5a5bd000000000000000000000000000000000000000000000000000000"
       val result = abi.decodePrimaryType(outputs, value)
       result.isRight shouldBe true
-      result.right.get shouldBe JsonObject(
-        ("a", Json.fromString("0x68656c6c6f20776f726c64212068656c6c6f20626c6f636b636861696e2120e4bda0e5a5bd"))).asJson
+      result.right.get shouldBe
+        Json.fromString("0x68656c6c6f20776f726c64212068656c6c6f20626c6f636b636861696e2120e4bda0e5a5bd")
+    }
+  }
+
+  "abi.decodeOutputs" should {
+    "decode uint256[]" in {
+      val inputs = Param("a", "uint256[]", None)
+      val param  = parse("[[3,4]]").getOrElse(Json.Null)
+      val value =
+        hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000004"
+
+      val result = abi.decodeOutputs(List(inputs), value)
+      result.isRight shouldBe true
+      result.right.get shouldBe param
+    }
+
+    "decode uint256[2]" in {
+      val inputs = Param("a", "uint256[2]", None)
+      val param  = parse("[[3,4]]").getOrElse(Json.Null)
+      val value =
+        hex"0x00000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000004"
+
+      val result = abi.decodeOutputs(List(inputs), value)
+      result.isRight shouldBe true
+      result.right.get shouldBe param
+    }
+
+    "decode uint256[][]" in {
+      val inputs = Param("a", "uint256[][]", None)
+      val param  = parse("[[[1,2],[3,4]]]").getOrElse(Json.Null)
+      val value =
+        hex"0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000004"
+
+      val result = abi.decodeOutputs(List(inputs), value)
+      result.isRight shouldBe true
+      result.right.get shouldBe param
+    }
+
+    "decode dynamic tuple" in {
+      val inputs = Param("a",
+                         "tuple",
+                         Some(
+                           List(
+                             Param("b", "uint256", None),
+                             Param("c", "uint256[]", None)
+                           )))
+      val param = parse("[[1, [2,3]]]").getOrElse(Json.Null)
+      val value =
+        hex"0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003"
+
+      val result = abi.decodeOutputs(List(inputs), value)
+      result.isRight shouldBe true
+      result.right.get shouldBe param
+    }
+
+    "decode static tuple" in {
+      val inputs = Param("a",
+                         "tuple",
+                         Some(
+                           List(
+                             Param("b", "uint256", None),
+                             Param("c", "bool", None)
+                           )))
+      val param = parse("[[1, true]]").getOrElse(Json.Null)
+      val value =
+        hex"0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001"
+
+      val result = abi.decodeOutputs(List(inputs), value)
+      result.isRight shouldBe true
+      result.right.get shouldBe param
+    }
+
+    "decode tuple[]" in {
+      val inputs = Param("a",
+                         "tuple[]",
+                         Some(
+                           List(
+                             Param("b", "string", None),
+                             Param("b", "uint256[]", None)
+                           )))
+      val param = parse("[[[\"hello iot chain!\", [1, 0, 2, 4]]]]").getOrElse(Json.Null)
+      val value =
+        hex"0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000001068656c6c6f20696f7420636861696e210000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000004"
+
+      val result = abi.decodeOutputs(List(inputs), value)
+      result.isRight shouldBe true
+      result.right.get shouldBe param
+    }
+
+    "decode string[]" in {
+      val inputs = Param("a", "string[]", None)
+      val param  = parse("[[\"one\", \"two\", \"three\"]]").getOrElse(Json.Null)
+      val value =
+        hex"0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000036f6e650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000374776f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000057468726565000000000000000000000000000000000000000000000000000000"
+
+      val result = abi.decodeOutputs(List(inputs), value)
+      result.isRight shouldBe true
+      result.right.get shouldBe param
+    }
+
+    "decode uint[][], string[]" in {
+      val inputs = List(
+        Param("a", "uint[][]", None),
+        Param("b", "string[]", None)
+      )
+      val param = parse("[[[1, 2], [3]], [\"one\", \"two\", \"three\"]]").getOrElse(Json.Null)
+      val value =
+        hex"0x000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001400000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000036f6e650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000374776f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000057468726565000000000000000000000000000000000000000000000000000000"
+
+      val result = abi.decodeOutputs(inputs, value)
+      result.isRight shouldBe true
+      result.right.get shouldBe param
+    }
+  }
+
+  "abi.encode and decode" should {
+    "encode inputs" in {
+      val functionABI =
+        """
+          |{
+          |		"constant": false,
+          |		"inputs": [
+          |			{
+          |				"components": [
+          |					{
+          |						"name": "a",
+          |						"type": "uint256"
+          |					},
+          |					{
+          |						"name": "b",
+          |						"type": "uint256[]"
+          |					},
+          |					{
+          |						"components": [
+          |							{
+          |								"name": "x",
+          |								"type": "uint256"
+          |							},
+          |							{
+          |								"name": "y",
+          |								"type": "uint256"
+          |							}
+          |						],
+          |						"name": "c",
+          |						"type": "tuple[]"
+          |					}
+          |				],
+          |				"name": "s",
+          |				"type": "tuple"
+          |			},
+          |			{
+          |				"components": [
+          |					{
+          |						"name": "x",
+          |						"type": "uint256"
+          |					},
+          |					{
+          |						"name": "y",
+          |						"type": "uint256"
+          |					}
+          |				],
+          |				"name": "t",
+          |				"type": "tuple"
+          |			},
+          |			{
+          |				"name": "a",
+          |				"type": "uint256"
+          |			}
+          |		],
+          |		"name": "f",
+          |		"outputs": [
+          |			{
+          |				"name": "",
+          |				"type": "uint256"
+          |			}
+          |		],
+          |		"payable": false,
+          |		"stateMutability": "nonpayable",
+          |		"type": "function"
+          |	}
+        """.stripMargin
+      val f = abi.parseFunction(functionABI)
+      f.isRight shouldBe true
+      val result = f.right.get.getByteCode("[[1, [2, 3], [[4, 5], [6, 7]]], [8, 9], 10]")
+      result.isRight shouldBe true
+      result.right.get shouldBe hex"6f2be728000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000009000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000500000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000007"
+
+      val result2 = abi.decodeOutputs(f.right.get.inputs, result.right.get.drop(4))
+      result2.isRight shouldBe true
+
+      result2.right.get shouldBe parse("[[1, [2, 3], [[4, 5], [6, 7]]], [8, 9], 10]").getOrElse(Json.Null)
     }
   }
 }

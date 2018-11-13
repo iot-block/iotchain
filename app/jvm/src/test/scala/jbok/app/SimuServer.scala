@@ -1,6 +1,6 @@
 package jbok.app
 
-import java.net.InetSocketAddress
+import java.net.{InetSocketAddress, URI}
 import java.security.SecureRandom
 
 import better.files.File
@@ -11,7 +11,8 @@ import jbok.common.execution._
 import jbok.core.consensus.poa.clique.CliqueFixture
 import jbok.core.keystore.KeyStorePlatform
 import jbok.core.mining.BlockMinerFixture
-import jbok.network.rpc.RpcServer
+import jbok.network.client.{Client, WSClientBuilderPlatform}
+import jbok.network.rpc.{RpcClient, RpcServer}
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 
@@ -35,7 +36,7 @@ class SimuServer extends BlockMinerFixture(new CliqueFixture {}) with JbokSpec {
     _ <- impl.createNodesWithMiner(peerCount, minerCount)
     _ <- impl.startNetwork
     _ <- impl.connect("ring")
-    _ = Thread.sleep(1000)
+    _ = Thread.sleep(5000)
     _ <- impl.submitStxsToNetwork(10, "valid")
   } yield ()
   init.unsafeRunSync()

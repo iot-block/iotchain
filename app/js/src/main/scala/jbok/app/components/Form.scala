@@ -5,11 +5,33 @@ import java.util.UUID
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var}
+import jbok.app.views.CustomInput
 import org.scalajs.dom.raw.{HTMLInputElement, HTMLTextAreaElement}
 import org.scalajs.dom.{Element, Event, KeyboardEvent}
 
 case class FormEntry(name: String, `type`: String = "text", value: Var[String] = Var("")) {
   val initValue = value.value
+}
+
+case class Form2(entries: Constants[CustomInput], submit: Map[String, CustomInput] => Unit) {
+  val entryMap = entries.value.map(x => x.name -> x).toMap
+
+  def clear() = entries.value.foreach(_.clear())
+
+  @binding.dom
+  def render(): Binding[Element] =
+    <div> 
+      {
+        entries.map { entry =>
+          <div>
+            <label for={entry.name}>
+              <b>{entry.name}</b>
+            </label>
+            {entry.render.bind}
+          </div>
+        }
+      }
+    </div>
 }
 
 case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Unit, idOpt: Option[String] = None) {

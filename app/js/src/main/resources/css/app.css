@@ -269,10 +269,19 @@ textarea {
     padding: 12px 20px;
     margin: 8px 0;
     display: inline-block;
-    border: 1px solid #ccc;
     font-size: 0.85em;
     font-family: monospace;
     height: 40em;
+}
+
+textarea.invalid, textarea.invalid:focus
+{
+  border: 1px solid red;
+}
+
+textarea.valid, textarea.valid:focus
+{
+  border: 1px solid #ccc;
 }
 
 button {

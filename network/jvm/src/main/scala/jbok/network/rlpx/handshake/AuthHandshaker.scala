@@ -42,6 +42,7 @@ case class AuthHandshaker[F[_]](
     remotePubKeyOpt: Option[ByteVector] = None
 )(implicit F: Sync[F]) {
   import AuthHandshaker._
+  private[this] val log = org.log4s.getLogger
 
   implicit val codec: Codec[ByteVector] = rbytes.codec
 
@@ -321,15 +322,15 @@ object AuthHandshaker {
 
   val secureRandom = new SecureRandom()
 
-  def apply[F[_]: Sync](nodeKey: KeyPair): F[AuthHandshaker[F]] = {
+  def apply[F[_]: Sync](nodeKey: KeyPair): F[AuthHandshaker[F]] =
     for {
       nonce <- Sync[F].delay(randomByteArray(secureRandom, NonceSize))
       ephemeralKey = Signature[ECDSA].generateKeyPair(Some(secureRandom)).unsafeRunSync()
-    } yield AuthHandshaker[F](
-      nodeKey,
-      ByteVector(nonce),
-      ephemeralKey,
-      secureRandom
-    )
-  }
+    } yield
+      AuthHandshaker[F](
+        nodeKey,
+        ByteVector(nonce),
+        ephemeralKey,
+        secureRandom
+      )
 }

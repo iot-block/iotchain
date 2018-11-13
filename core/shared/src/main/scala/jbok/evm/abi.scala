@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import io.circe.generic.auto._
 import io.circe.parser._
 import cats.implicits._
-import io.circe.{Decoder, Encoder, Json, JsonObject}
+import io.circe.{Decoder, Encoder, Json}
 import io.circe.syntax._
 import jbok.core.models.{Address, UInt256}
 import scodec.bits.ByteVector
@@ -17,6 +17,15 @@ object abi {
       name: String, // the name of the parameter
       `type`: String, // the canonical type of the parameter (more below).
       components: Option[List[Param]],
+  )
+
+  case class ParamAttribute(isDynamic: Boolean, size: Option[Int])
+
+  case class ParamWithAttr(
+      name: String, // the name of the parameter
+      `type`: String, // the canonical type of the parameter (more below).
+      components: Option[List[ParamWithAttr]],
+      attr: ParamAttribute
   )
 
   sealed trait Description
@@ -54,7 +63,8 @@ object abi {
           (isDynamic, encoded) <- encodeInputs(inputs, json)
         } yield encoded.foldLeft(methodID)((xs, r) => xs ++ r)
 
-      def deocodeOutputs(result: ByteVector): String = ???
+      def deocodeOutputs(result: ByteVector): Either[AbiError, Json] =
+        outputs.map(decodeOutputs(_, result)).getOrElse(InvalidType("no outputs format.").asLeft)
     }
 
     case class Event(
@@ -193,14 +203,13 @@ object abi {
       } else {
         val results = inputs.zip(params).map {
           case (i, p) =>
-            val fixedArray = "\\[([0-9]+)\\]\\$".r
-            val fixedSize  = "(\\[\\d+\\])"
+            val fixedSize = "(\\[\\d+\\])"
             i.`type` match {
               case t if t.endsWith("[]") =>
                 val subType   = t.substring(0, t.length - 2)
                 val input     = i.copy(`type` = subType)
                 val length    = p.asArray.get.size
-                val inputList = List.fill(length)(input)
+                val inputList = List.fill(length)(i.copy(`type` = subType))
                 for {
                   (b, r) <- encodeInputs(inputList, p)
                   len = UInt256(length).bytes
@@ -211,8 +220,10 @@ object abi {
                 val input     = i.copy(`type` = subType)
                 val inputList = List.fill(p.asArray.get.size)(input)
                 encodeInputs(inputList, p)
-              case "tuple" => encodeInputs(i.components.get, p)
-              case _       => encodePrimaryType(i, p)
+              case "tuple" =>
+                if (i.components.nonEmpty) encodeInputs(i.components.get, p)
+                else InvalidType("type is tuple but have no componects.").asLeft
+              case _ => encodePrimaryType(i, p)
             }
         }
 
@@ -223,7 +234,7 @@ object abi {
             case (pre, (isDynamic, _)) =>
               pre || isDynamic
           }
-          var size = rights.foldLeft(0) {
+          val size = rights.foldLeft(0) {
             case (pre, (isDynamic, result)) =>
               if (isDynamic) {
                 pre + 1
@@ -231,14 +242,12 @@ object abi {
                 pre + result.size
               }
           }
-          val result = rights.foldLeft(List.empty[ByteVector]) {
-            case (pre, (isDynamic, result)) =>
+          val (_, result) = rights.foldLeft((size, List.empty[ByteVector])) {
+            case ((preSize, preBV), (isDynamic, result)) =>
               if (isDynamic) {
-                val r = pre :+ UInt256(size * 32).bytes
-                size += result.size
-                r
+                (preSize + result.size, preBV :+ UInt256(preSize * 32).bytes)
               } else {
-                pre ++ result
+                (preSize, preBV ++ result)
               }
           }
 
@@ -278,9 +287,13 @@ object abi {
         if (bit.nonEmpty && (bit.toInt % 8 != 0 || bit.toInt > 256 || bit.toInt == 0)) {
           InvalidType(s"${output.`type`} with specific bits must satisfy [ num % 8 == 0 ].").asLeft
         } else {
+          val b = if (bit.isEmpty) 256 else bit.toInt
           if (value.length == 32) {
-            if (value.take(32 - bit.toInt / 8).toArray.forall(_ == 0.toByte)) {
-              JsonObject((output.name, Json.fromBigInt(UInt256(value).toBigInt))).asJson.asRight
+            if (value.take(32 - b / 8).toArray.forall(_ == 0.toByte)) {
+//              if (output.name.nonEmpty)
+//                JsonObject((output.name, Json.fromBigInt(UInt256(value).toBigInt))).asJson.asRight
+//              else
+              Json.fromBigInt(UInt256(value).toBigInt).asRight
             } else {
               InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
             }
@@ -294,7 +307,8 @@ object abi {
         } else {
           if (value.length == 32) {
             if (value.take(32 - bit.toInt / 8).toArray.forall(b => b == 0.toByte || b == 255.toByte)) {
-              JsonObject((output.name, Json.fromBigInt(UInt256(value).toBigInt))).asJson.asRight
+//              JsonObject((output.name, Json.fromBigInt(UInt256(value).toBigInt))).asJson.asRight
+              Json.fromBigInt(UInt256(value).toBigInt).asRight
             } else {
               InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
             }
@@ -311,7 +325,8 @@ object abi {
         if (value.length == 32) {
           if (value.take(31).toArray.forall(_ == 0.toByte) && (value.last == 0.toByte || value.last == 1.toByte)) {
             val bool = if (value.last == 1.toByte) Json.True else Json.False
-            JsonObject((output.name, bool)).asJson.asRight
+//            JsonObject((output.name, bool)).asJson.asRight
+            bool.asRight
           } else {
             InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
           }
@@ -321,7 +336,8 @@ object abi {
       case "address" =>
         if (value.length == 32) {
           if (value.take(12).toArray.forall(b => b == 0.toByte)) {
-            JsonObject((output.name, Json.fromString(Address(value).toString))).asJson.asRight
+//            JsonObject((output.name, Json.fromString(Address(value).toString))).asJson.asRight
+            Json.fromString(Address(value).toString).asRight
           } else {
             InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
           }
@@ -331,7 +347,8 @@ object abi {
       case bytes(size) if size.toInt > 0 && size.toInt <= 32 =>
         if (value.length == 32) {
           if (value.takeRight(32 - size.toInt).toArray.forall(b => b == 0.toByte)) {
-            JsonObject((output.name, Json.fromString(s"0x${value.take(size.toInt).toHex}"))).asJson.asRight
+//            JsonObject((output.name, Json.fromString(s"0x${value.take(size.toInt).toHex}"))).asJson.asRight
+            Json.fromString(s"0x${value.take(size.toInt).toHex}").asRight
           } else {
             InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
           }
@@ -349,7 +366,8 @@ object abi {
               val codec = scodec.codecs.string(StandardCharsets.UTF_8)
               codec.decode(r.take(size).bits).require.value
             }
-            JsonObject((output.name, Json.fromString(data))).asJson.asRight
+//            JsonObject((output.name, Json.fromString(data))).asJson.asRight
+            Json.fromString(data).asRight
           } else {
             InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
           }
@@ -360,7 +378,159 @@ object abi {
     }
   }
 
+  private def parseOutput(output: ParamWithAttr): Either[AbiError, ParamWithAttr] = {
+    val tuple        = raw"tuple(\[\d*\])*".r
+    val bytes        = raw"bytes(\[\d*\])*"
+    val fixSizeArray = raw"[a-z0-9]+(\[\d*\])*".r
+    output.`type` match {
+      case t @ tuple(_) =>
+        if (output.components.isEmpty) {
+          InvalidType(s"tuple type must have components. ${output.`type`}").asLeft
+        } else {
+          val components = output.components.get
+          if (t.contains("[]") || components.foldLeft(false)((z, p) => z || p.attr.isDynamic)) {
+            output.copy(attr = ParamAttribute(true, None)).asRight
+          } else {
+            output
+              .copy(attr = ParamAttribute(false, Some(components.foldLeft(0)((z, p) => z + p.attr.size.getOrElse(0)))))
+              .asRight
+          }
+        }
+      case t if t.contains("[]") || t.contains("string") || t.matches(bytes) =>
+        output.copy(attr = ParamAttribute(true, None)).asRight
+      case t @ fixSizeArray(_) =>
+        val fixedSize = raw"\[(\d+)\]".r
+        val totalSize =
+          fixedSize.findAllIn(t).matchData.toList.map(_.group(1).toInt).foldLeft(1)((z, size) => z * size)
+        output.copy(attr = ParamAttribute(false, Some(totalSize * 32))).asRight
+      case _ =>
+        output.copy(attr = ParamAttribute(false, Some(32))).asRight
+    }
+  }
+
+  private def parseOutputs(outputs: List[Param]): Either[AbiError, List[ParamWithAttr]] = {
+    val outputParsed: List[Either[AbiError, ParamWithAttr]] = outputs.map { output =>
+      val tuple        = raw"tuple(\[\d*\])*".r
+      val bytes        = raw"bytes(\[\d*\])*"
+      val fixSizeArray = raw"[a-z0-9]+(\[\d*\])*".r
+      output.`type` match {
+        case t @ tuple(_) =>
+          if (output.components.isEmpty) {
+            InvalidType(s"tuple type must have components. ${output.`type`}").asLeft
+          } else {
+            val pwaList = parseOutputs(output.components.get)
+            if (pwaList.isRight) {
+              val pwas = pwaList.right.get
+              if (t.contains("[]") || pwas.foldLeft(false)((z, pwa) => pwa.attr.isDynamic || z)) {
+                ParamWithAttr(output.name, output.`type`, Some(pwas), ParamAttribute(true, None)).asRight
+              } else {
+                ParamWithAttr(output.name,
+                              output.`type`,
+                              Some(pwas),
+                              ParamAttribute(false, Some(pwas.foldLeft(0)((z, pwa) => z + pwa.attr.size.get)))).asRight
+              }
+            } else {
+              pwaList.left.get.asLeft
+            }
+          }
+        case t if t.contains("[]") || t.contains("string") || t.matches(bytes) =>
+          ParamWithAttr(output.name, output.`type`, None, ParamAttribute(true, None)).asRight
+        case t @ fixSizeArray(_) =>
+          val fixedSize = raw"\[(\d+)\]".r
+          val totalSize =
+            fixedSize.findAllIn(t).matchData.toList.map(_.group(1).toInt).foldLeft(1)((z, size) => z * size)
+          ParamWithAttr(output.name, output.`type`, None, ParamAttribute(false, Some(totalSize * 32))).asRight
+        case _ => ParamWithAttr(output.name, output.`type`, None, ParamAttribute(false, Some(32))).asRight
+      }
+    }
+
+    if (outputParsed.forall(_.isRight)) {
+      val result = outputParsed.map(_.right.get)
+      result.asRight
+    } else {
+      outputParsed.find(_.isLeft).get.left.get.asLeft
+    }
+  }
+
+  private def decodeOutputs_(outputs: List[ParamWithAttr], byteVector: ByteVector): Either[AbiError, Json] = {
+    val (headSize, offsets) = outputs.foldLeft((0, List.empty[Int])) {
+      case ((pre, offsets), output) =>
+        if (output.attr.isDynamic)
+          (pre + 32, offsets :+ UInt256(byteVector.slice(pre, pre + 32)).toInt)
+        else
+          (pre + output.attr.size.get, offsets)
+    }
+    val tailLength = (offsets :+ byteVector.length.toInt).sliding(2).toList.map {
+      case a :: b :: Nil =>
+        if (a % 32 != 0 || b % 32 != 0 || b < a)
+          -1
+        else
+          b - a
+      case _ => 0
+    }
+
+    if (tailLength.contains(-1)) {
+      InvalidValue("type cannot parse value.").asLeft
+    } else {
+      val (_, _, values) = outputs.foldLeft((0, 0, List.empty[ByteVector])) {
+        case ((pre, idx, byteVectors), output) =>
+          if (output.attr.isDynamic) {
+            val offset = UInt256(byteVector.slice(pre, pre + 32)).toInt
+            (pre + 32, idx + 1, byteVectors :+ byteVector.slice(offset, offset + tailLength.get(idx).get))
+          } else
+            (pre + output.attr.size.get, idx, byteVectors :+ byteVector.slice(pre, pre + output.attr.size.get))
+      }
+      val eitherResults = outputs.zip(values).map {
+        case (p, v) =>
+          val fixedSize = "(\\[\\d+\\])"
+          p.`type` match {
+            case t if t.endsWith("[]") =>
+              val (l, r)  = v.splitAt(32)
+              val size    = UInt256(l).toInt
+              val subType = t.substring(0, t.length - 2)
+              val outputE = parseOutput(p.copy(name = "", `type` = subType))
+              if (outputE.isRight) {
+                val outputsList = List.fill(size)(outputE.right.get)
+                decodeOutputs_(outputsList, r)
+              } else {
+                outputE.left.get.asLeft
+              }
+            case t if t.contains('[') && t.substring(t.lastIndexOf('[')).matches(fixedSize) =>
+              if (!p.attr.isDynamic && p.attr.size.get == v.size) {
+                val size        = (v.size / 32).toInt
+                val subType     = t.substring(0, t.lastIndexOf('['))
+                val outputsList = List.fill(size)(p.copy(`type` = subType))
+                val outputE     = parseOutput(p.copy(name = "", `type` = subType))
+                if (outputE.isRight) {
+                  val outputsList = List.fill(size)(outputE.right.get)
+                  decodeOutputs_(outputsList, v)
+                } else {
+                  outputE.left.get.asLeft
+                }
+              } else {
+                InvalidType("fix size array must have same size element.").asLeft
+              }
+            case "tuple" =>
+              if (p.components.nonEmpty)
+                decodeOutputs_(p.components.get, v)
+              else
+                InvalidType("type is tuple but have no componects.").asLeft
+            case _ => decodePrimaryType(Param(p.name, p.`type`, None), v)
+          }
+      }
+      if (eitherResults.forall(_.isRight)) {
+        val rights = eitherResults.map(_.right.get)
+        rights.asJson.asRight
+      } else {
+        eitherResults.find(_.isLeft).get
+      }
+    }
+  }
+
   def decodeOutputs(outputs: List[Param], byteVector: ByteVector): Either[AbiError, Json] =
-    ???
+    for {
+      outputsParsed <- parseOutputs(outputs)
+      json          <- decodeOutputs_(outputsParsed, byteVector)
+    } yield json
 
 }

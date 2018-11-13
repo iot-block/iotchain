@@ -261,7 +261,8 @@ class SimulationImpl(
 
   override def getCoin(address: Address, value: BigInt): IO[Unit] =
     for {
-      nodeIdList <- nodes.get.map(_.keys.toList)
+//      nodeIdList   <- nodes.get.map(_.keys.toList)
+      nodeIdList <- miners.get.map(_.keys.toList)
       nodeId = Random.shuffle(nodeIdList).take(1).head
       ns <- nodes.get
       _  <- ns(nodeId).synchronizer.txPool.addTransactions(List(txGraphGen.getCoin(address, value)))
