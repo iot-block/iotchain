@@ -35,6 +35,9 @@ abstract class PeerManager[F[_]](
   val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port)
 
   def handleError(e: Throwable): Stream[F, Unit] = e match {
+    case _: AsynchronousCloseException | _: ClosedChannelException =>
+      log.error(e)("peer manager error")
+      Stream.empty.covary[F]
     case _ =>
       log.error(e)("peer manager error")
       Stream.raiseError[F](e)
@@ -112,7 +115,7 @@ abstract class PeerManager[F[_]](
     }
 
   def stop: F[Unit] =
-    connected.flatMap(_.traverse(_.conn.close)) *> haltWhenTrue.set(true)
+    haltWhenTrue.set(true)
 
   def addPeerNode(nodes: PeerNode*): F[Unit] =
     nodes.toList

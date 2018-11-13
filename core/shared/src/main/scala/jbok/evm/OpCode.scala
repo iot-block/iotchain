@@ -846,10 +846,9 @@ abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
           totalGasRequired = gasUsedInVm + codeDepositGas
 
           maxCodeSizeExceeded = state.config.maxCodeSize.exists(codeSizeLimit => contractCode.size > codeSizeLimit)
-          enoughGasForDeposit = totalGasRequired <= startGas
+          outOfGasForDeposit  = totalGasRequired >= startGas
 
-          creationFailed = maxCodeSizeExceeded || result.error.isDefined ||
-            !enoughGasForDeposit && state.config.exceptionalFailedCodeDeposit
+          creationFailed = maxCodeSizeExceeded || result.error.isDefined || outOfGasForDeposit
 
         } yield {
           if (state.env.noSelfCall) {
@@ -868,7 +867,7 @@ abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
             } else {
               val stack2 = stack1.push(newAddress.toUInt256)
               val state1 =
-                if (!enoughGasForDeposit)
+                if (outOfGasForDeposit)
                   state.withWorld(result.world).spendGas(gasUsedInVm)
                 else {
                   val world3     = result.world.putCode(newAddress, result.returnData)

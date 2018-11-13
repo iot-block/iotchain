@@ -371,14 +371,10 @@ class BlockExecutor[F[_]](
 
     log.debug(
       s"codeDepositCost: ${codeDepositCost}, maxCodeSizeExceeded: ${maxCodeSizeExceeded}, codeStoreOutOfGas: ${codeStoreOutOfGas}")
-    if (maxCodeSizeExceeded || (codeStoreOutOfGas && config.exceptionalFailedCodeDeposit)) {
+    if (maxCodeSizeExceeded || codeStoreOutOfGas) {
       // Code size too big or code storage causes out-of-gas with exceptionalFailedCodeDeposit enabled
       log.debug("putcode outofgas")
       result.copy(error = Some(OutOfGas))
-    } else if (codeStoreOutOfGas && !config.exceptionalFailedCodeDeposit) {
-      // Code storage causes out-of-gas with exceptionalFailedCodeDeposit disabled
-      log.debug("putcode outofgas or exceptionalFailedCodeDeposite")
-      result
     } else {
       // Code storage succeeded
       log.debug(s"address putcode: ${address}")
