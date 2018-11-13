@@ -30,7 +30,7 @@ abstract class PeerManager[F[_]](
     val pipe: Pipe[F, Message, Message],
     val haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("PeerManager")
 
   val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port)
 
