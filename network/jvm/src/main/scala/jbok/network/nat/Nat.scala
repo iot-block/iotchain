@@ -10,8 +10,6 @@ trait Nat[F[_]] {
   def addMapping(internalPort: Int, externalPort: Int, lifetime: Long): F[Unit]
 
   def deleteMapping(externalPort: Int): F[Unit]
-
-  def stop: F[Unit]
 }
 
 object Nat {

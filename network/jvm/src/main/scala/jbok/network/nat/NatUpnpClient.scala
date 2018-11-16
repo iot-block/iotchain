@@ -24,8 +24,5 @@ object NatUpnpClient {
 
         override def deleteMapping(externalPort: Int): F[Unit] =
           F.delay(device.deletePortMapping(externalPort, "TCP"))
-
-        override def stop: F[Unit] =
-          F.unit
       }
 }

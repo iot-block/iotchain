@@ -20,6 +20,8 @@ object NatPmpClient {
       mappers     <- F.delay(NatPmpPortMapper.identify(networkBus, processBus))
       mapper      <- F.delay(mappers.get(0))
       mappedPorts <- Ref.of[F, Map[Int, MappedPort]](Map.empty)
+      _           <- F.delay(network.getBus.send(new KillNetworkRequest()))
+      _           <- F.delay(process.getBus.send(new KillProcessRequest()))
     } yield
       new Nat[F] {
         private[this] val log = org.log4s.getLogger("NatPmpClient")
@@ -42,11 +44,5 @@ object NatPmpClient {
             _       <- portOpt.fold(F.unit)(port => F.delay(mapper.unmapPort(port)))
             _       <- mappedPorts.update(_ - externalPort)
           } yield ()
-
-        override def stop: F[Unit] =
-          F.delay {
-            network.getBus.send(new KillNetworkRequest())
-            process.getBus.send(new KillProcessRequest())
-          }
       }
 }
