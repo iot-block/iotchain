@@ -2,11 +2,11 @@ package jbok.codec.rlp
 
 import scodec.Attempt.{Failure, Successful}
 import scodec._
-import scodec.codecs._
 import scodec.bits._
+import scodec.codecs._
 import shapeless._
 
-import scala.annotation.{implicitNotFound, tailrec}
+import scala.annotation.tailrec
 
 sealed trait CodecType
 case object PureCodec  extends CodecType
@@ -32,7 +32,6 @@ final case class RlpCodec[A](codecType: CodecType, valueCodec: Codec[A]) {
 object RlpCodec {
   def apply[A](implicit codec: Lazy[RlpCodec[A]]): RlpCodec[A] = codec.value
 
-  @implicitNotFound("Cannot find implicit value for RlpCodec[${A}]")
   def encode[A](a: A)(implicit codec: RlpCodec[A]) =
     codec.encode(a)
 

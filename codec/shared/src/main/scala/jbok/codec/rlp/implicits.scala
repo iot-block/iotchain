@@ -3,13 +3,30 @@ package jbok.codec.rlp
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 
+import cats.effect.Sync
 import jbok.codec.rlp.RlpCodec.item
 import scodec.{Attempt, Codec, DecodeResult, SizeBound}
 import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
 import shapeless._
 
-object implicits {
+trait CodecSyntax {
+  implicit final def encodeSyntax[A](a: A): EncodeOps[A] = new EncodeOps(a)
+
+  implicit final def decodeSyntax(bytes: ByteVector): DecodeOps = new DecodeOps(bytes)
+}
+
+final class EncodeOps[A](val a: A) extends AnyVal {
+  def encode[F[_]](implicit F: Sync[F], C: Codec[A]): F[ByteVector] =
+    F.delay(C.encode(a).require.bytes)
+}
+
+final class DecodeOps(val bytes: ByteVector) extends AnyVal {
+  def decode[F[_], A](implicit F: Sync[F], C: Codec[A]): F[A] =
+    F.delay(C.decode(bytes.bits).require.value)
+}
+
+object implicits extends CodecSyntax {
   val pure: RlpCodec[ByteVector] = RlpCodec.pure(bytes)
 
   implicit def deriveCodec[A](implicit codec: Lazy[RlpCodec[A]]): Codec[A] =

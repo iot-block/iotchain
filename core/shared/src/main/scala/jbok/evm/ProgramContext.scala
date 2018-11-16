@@ -7,6 +7,7 @@ import scodec.bits.ByteVector
 object ProgramContext {
   def apply[F[_]: Sync](
       stx: SignedTransaction,
+      senderAddress: Address,
       recipientAddress: Address,
       program: Program,
       blockHeader: BlockHeader,
@@ -18,8 +19,6 @@ object ProgramContext {
     val inputData =
       if (stx.isContractInit) ByteVector.empty
       else stx.payload
-
-    val senderAddress = stx.senderAddress(None).getOrElse(Address.empty)
 
     val env = ExecEnv(
       recipientAddress,
@@ -37,15 +36,6 @@ object ProgramContext {
 
     ProgramContext[F](env, recipientAddress, gasLimit, world, config)
   }
-
-//  private def getSenderAddress(stx: SignedTransaction, number: BigInt): Address = {
-//    val addrOpt =
-//      if (number >= blockChainConfig.eip155BlockNumber)
-//        stx.senderAddress(Some(blockChainConfig.chainId))
-//      else
-//        stx.senderAddress(None)
-//    addrOpt.getOrElse(Address.empty)
-//  }
 }
 
 /**

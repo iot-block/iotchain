@@ -1,5 +1,5 @@
 package jbok.core.peer
-import java.net.InetSocketAddress
+
 import java.nio.channels.AsynchronousChannelGroup
 
 import better.files._
@@ -7,18 +7,17 @@ import cats.data.OptionT
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, IO, Timer}
 import cats.implicits._
-import fs2.concurrent.{SignallingRef, Topic}
+import fs2.concurrent.Queue
 import jbok.common.concurrent.PriorityQueue
 import jbok.core.History
-import jbok.core.config.Configs.{PeerManagerConfig, SyncConfig}
+import jbok.core.config.Configs.PeerManagerConfig
 import jbok.core.messages.{Message, Status}
-import jbok.core.sync.SyncService
+import jbok.core.rlpx.handshake.AuthHandshaker
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.network.Connection
-import jbok.network.rlpx.handshake.AuthHandshaker
 
 object PeerManagerPlatform {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("PeerManager")
 
   def loadNodeKey(path: String): IO[KeyPair] =
     for {
@@ -45,7 +44,6 @@ object PeerManagerPlatform {
   def apply[F[_]](
       config: PeerManagerConfig,
       keyPairOpt: Option[KeyPair],
-      sync: SyncConfig,
       history: History[F],
       maxQueueSize: Int = 64
   )(
@@ -54,41 +52,37 @@ object PeerManagerPlatform {
       AG: AsynchronousChannelGroup
   ): F[PeerManager[F]] =
     for {
-      keyPair   <- OptionT.fromOption[F](keyPairOpt).getOrElseF(F.liftIO(loadOrGenerateNodeKey(config.nodekeyPath)))
-      incoming  <- Ref.of[F, Map[InetSocketAddress, Peer[F]]](Map.empty)
-      outgoing  <- Ref.of[F, Map[InetSocketAddress, Peer[F]]](Map.empty)
-      nodeQueue <- PriorityQueue.bounded[F, PeerNode](maxQueueSize)
-      messages  <- Topic[F, Option[(Peer[F], Message)]](None)
-      pipe = SyncService[F](sync, history).pipe
-      haltWhenTrue <- SignallingRef[F, Boolean](true)
+      keyPair      <- OptionT.fromOption[F](keyPairOpt).getOrElseF(F.liftIO(loadOrGenerateNodeKey(config.nodekeyPath)))
+      incoming     <- Ref.of[F, Map[KeyPair.Public, Peer[F]]](Map.empty)
+      outgoing     <- Ref.of[F, Map[KeyPair.Public, Peer[F]]](Map.empty)
+      nodeQueue    <- PriorityQueue.bounded[F, PeerNode](maxQueueSize)
+      messageQueue <- Queue.bounded[F, Request[F]](maxQueueSize)
     } yield
-      new PeerManager[F](config, keyPair, history, incoming, outgoing, nodeQueue, messages, pipe, haltWhenTrue) {
-        private[jbok] def handshakeIncoming(conn: Connection[F]): F[Peer[F]] =
+      new PeerManager[F](config, keyPair, history, incoming, outgoing, nodeQueue, messageQueue) {
+        private[jbok] def handshakeIncoming(conn: Connection[F, Message]): F[Peer[F]] =
           for {
             handshaker   <- AuthHandshaker[F](keyPair)
             result       <- handshaker.accept(conn)
             localStatus  <- localStatus
-            _            <- conn.write[Message](localStatus, Some(config.handshakeTimeout))
-            remoteStatus <- conn.read[Message](Some(config.handshakeTimeout)).map(_.asInstanceOf[Status])
+            _            <- conn.write(localStatus)
+            remoteStatus <- conn.read.map(_.asInstanceOf[Status])
             _ <- if (!localStatus.isCompatible(remoteStatus)) {
-              log.warn(s"drop incompatible ${conn}")
-              F.raiseError(new Exception("incompatible peer"))
+              F.raiseError(PeerErr.Incompatible)
             } else {
               F.unit
             }
             peer <- Peer[F](KeyPair.Public(result.remotePubKey), conn, remoteStatus)
           } yield peer
 
-        private[jbok] def handshakeOutgoing(conn: Connection[F], remotePk: KeyPair.Public): F[Peer[F]] =
+        private[jbok] def handshakeOutgoing(conn: Connection[F, Message], remotePk: KeyPair.Public): F[Peer[F]] =
           for {
             handshaker   <- AuthHandshaker[F](keyPair)
             result       <- handshaker.connect(conn, remotePk)
             localStatus  <- localStatus
-            _            <- conn.write[Message](localStatus, Some(config.handshakeTimeout))
-            remoteStatus <- conn.read[Message](Some(config.handshakeTimeout)).map(_.asInstanceOf[Status])
+            _            <- conn.write(localStatus)
+            remoteStatus <- conn.read.map(_.asInstanceOf[Status])
             _ <- if (!localStatus.isCompatible(remoteStatus)) {
-              log.warn(s"drop incompatible ${conn}")
-              F.raiseError(new Exception("incompatible peer"))
+              F.raiseError(PeerErr.Incompatible)
             } else {
               F.unit
             }

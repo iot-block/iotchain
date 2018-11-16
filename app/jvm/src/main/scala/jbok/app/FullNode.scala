@@ -16,8 +16,7 @@ import jbok.core.ledger.BlockExecutor
 import jbok.core.mining.BlockMiner
 import jbok.core.models.Address
 import jbok.core.peer.PeerManagerPlatform
-import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
-import jbok.core.sync.{Broadcaster, Synchronizer}
+import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool}
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.rpc.RpcServer
