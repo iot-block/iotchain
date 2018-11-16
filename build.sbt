@@ -22,6 +22,7 @@ lazy val V = new {
   val fs2             = "1.0.0"
   val catsEffect      = "1.0.0"
   val catsCollections = "0.7.0"
+  val refined         = "0.9.3"
 }
 
 lazy val jbok = project
@@ -41,6 +42,11 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "org.typelevel" %% "cats-collections-core" % V.catsCollections,
       "co.fs2"        %%% "fs2-core"             % V.fs2,
       "co.fs2"        %% "fs2-io"                % V.fs2,
+      // refined
+      "eu.timepit" %%% "refined"           % V.refined,
+      "eu.timepit" %%% "refined-cats"      % V.refined,
+      "eu.timepit" %%% "refined-scodec"    % V.refined,
+      "eu.timepit" %%% "refined-shapeless" % V.refined,
       // json
       "io.circe" %%% "circe-core"    % V.circe,
       "io.circe" %%% "circe-generic" % V.circe,
@@ -63,8 +69,9 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       // command line
       "org.rogach" %%% "scallop" % "3.1.3",
       // test
-      "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
-      "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
+      "org.scalatest"  %%% "scalatest"               % "3.0.5"   % Test,
+      "org.scalacheck" %%% "scalacheck"              % "1.13.4"  % Test,
+      "eu.timepit"     %%% "refined-scalacheck_1.13" % V.refined % Test
     )
   )
 
@@ -75,7 +82,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-core"
   )
-  .dependsOn(common % CompileAndTest, codec, crypto, network, persistent)
+  .dependsOn(common % CompileAndTest, codec, crypto % CompileAndTest, network, persistent)
 
 lazy val crypto = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -251,7 +258,7 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
 //  addCompilerPlugin(scalafixSemanticdb),
   fork := true,
-  connectInput := true,
+  fork in Test := false,
   parallelExecution in test := false,
   scalacOpts
 )
