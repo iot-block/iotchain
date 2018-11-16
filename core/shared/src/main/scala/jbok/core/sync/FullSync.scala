@@ -9,67 +9,56 @@ import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager}
 import jbok.core.pool.TxPool
 
-import scala.util.Try
+import scala.concurrent.duration._
 
 /**
   * [[FullSync]] should download the block headers, the block bodies
   * then import them into the local chain (validate and execute)
   */
-case class FullSync[F[_]](
+final case class FullSync[F[_]](
     config: SyncConfig,
     peerManager: PeerManager[F],
     executor: BlockExecutor[F],
     txPool: TxPool[F]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("FullSync")
 
-  def stream: Stream[F, Unit] =
-    Stream.awakeEvery[F](config.checkForNewBlockInterval).evalMap { _ =>
-      for {
-        bestPeerOpt <- getBestPeer
-        _ <- bestPeerOpt match {
-          case Some(peer) =>
-            log.info(s"about to sync with ${peer.id}")
-            requestPeer(peer)
-          case None =>
-            log.info(s"no peer for syncing now, retry in ${config.checkForNewBlockInterval}")
-            F.unit
-        }
-      } yield ()
-    }
+  def run: Stream[F, Option[Unit]] = {
+    val check = for {
+      bestPeerOpt <- peerManager.peerSet.bestPeer
+      result <- bestPeerOpt match {
+        case Some(peer) =>
+          requestPeer(peer).map(_.some)
+        case None =>
+          log.debug(s"no peer for syncing now, retry in ${config.checkForNewBlockInterval}")
+          none[Unit].pure[F]
+      }
+    } yield result
 
-  def start: F[Unit] =
-    F.start(stream.compile.drain).void
-
-  private def getBestPeer: F[Option[Peer[F]]] =
-    for {
-      incoming <- peerManager.incoming.get
-      outgoing <- peerManager.outgoing.get
-      peers    <- (incoming ++ outgoing).values.toList.traverse(p => p.status.get.map(_.bestNumber).map(bn => bn -> p))
-      best = Try(peers.maxBy(_._1)._2).toOption
-    } yield best
+    Stream.eval(check) ++ Stream.awakeEvery[F](config.checkForNewBlockInterval).evalMap(_ => check)
+  }
 
   private def requestPeer(peer: Peer[F]): F[Unit] =
     for {
       current <- executor.history.getBestBlockNumber
       requestNumber = current + 1
-      _             = log.info(s"request ${config.maxBlockHeadersPerRequest} headers at most, starting from ${requestNumber}")
+
+      _ = log.debug(s"request BlockHeader [${requestNumber}, ${requestNumber + config.maxBlockHeadersPerRequest}]")
+      start <- T.clock.monotonic(MILLISECONDS)
       _ <- peer.conn
-        .request[Message, Message](
-          GetBlockHeaders(Left(requestNumber), config.maxBlockHeadersPerRequest, 0, false),
-          config.timeout
-        )
+        .request(GetBlockHeaders(Left(requestNumber), config.maxBlockHeadersPerRequest, 0, false))
         .attempt
         .flatMap {
           case Right(BlockHeaders(headers, _)) =>
             if (headers.isEmpty) {
-              F.delay(log.info(s"got empty headers from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
+              F.delay(log.debug(s"got empty headers from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
             } else {
-              log.info(s"got ${headers.length} headers from ${peer.id}")
-              handleBlockHeaders(peer, current, headers)
+              T.clock.monotonic(MILLISECONDS).map { end =>
+                log.debug(s"received ${headers.length} BlockHeader(s) in ${end - start}ms")
+              } *> handleBlockHeaders(peer, current, headers)
             }
           case _ =>
-            log.info(s"got headers timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")
+            log.debug(s"got headers timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")
             F.unit
         }
     } yield ()
@@ -79,15 +68,11 @@ case class FullSync[F[_]](
       log.warn(s"got invalid block headers from ${peer.id}")
       F.unit
     } else {
-      log.info(s"received headers: ${headers.mkString("\n")}")
-
-      require(headers.head.number == 1)
-
       val parentIsKnown = executor.history
         .getBlockHeaderByHash(headers.head.parentHash)
         .map(_.isDefined)
 
-      F.ifM(parentIsKnown)(
+      parentIsKnown.ifM(
         ifTrue = {
           // find blocks with same numbers in the current chain, removing any common prefix
           for {
@@ -105,7 +90,6 @@ case class FullSync[F[_]](
             _ <- if (currentBranchDifficulty < newBranchDifficulty) {
               handleBetterBranch(peer, oldBranch, headers)
             } else {
-              log.warn(s"no chain switch, ignore")
               F.unit
             }
           } yield ()
@@ -122,17 +106,19 @@ case class FullSync[F[_]](
     for {
       _ <- txPool.addTransactions(transactionsToAdd)
       hashes = headers.take(config.maxBlockBodiesPerRequest).map(_.hash)
-      _      = log.info(s"request ${hashes.length} bodies, starting from ${headers.head.number}")
-      _ <- peer.conn.request[Message, Message](GetBlockBodies(hashes), config.timeout).attempt.flatMap {
+      _      = log.debug(s"request BlockBody [${headers.head.number}, ${headers.head.number + hashes.length}]")
+      start <- T.clock.monotonic(MILLISECONDS)
+      _ <- peer.conn.request(GetBlockBodies(hashes)).attempt.flatMap {
         case Right(BlockBodies(bodies, _)) =>
           if (bodies.isEmpty) {
-            F.delay(log.info(s"got empty bodies from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
+            F.delay(log.debug(s"got empty bodies from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
           } else {
-            log.info(s"got ${bodies.length} bodies from ${peer.id}")
-            handleBlockBodies(peer, headers, bodies)
+            T.clock.monotonic(MILLISECONDS).map { end =>
+              log.info(s"received ${bodies.length} BlockBody(s) in ${end - start}ms")
+            } *> handleBlockBodies(peer, headers, bodies)
           }
         case _ =>
-          log.info(s"got bodies timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")
+          log.debug(s"got bodies timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")
           F.unit
       }
     } yield ()
@@ -153,5 +139,4 @@ case class FullSync[F[_]](
       _ = log.info(s"successfully synced to ${imported.head.tag}")
     } yield ()
   }
-
 }

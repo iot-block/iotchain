@@ -7,8 +7,9 @@ import fs2.concurrent.SignallingRef
 import jbok.codec.rlp.implicits._
 import jbok.core.ledger.{BlockResult, BloomFilter}
 import jbok.core.models._
+import jbok.core.peer.PeerSet
 import jbok.core.store.namespaces
-import jbok.core.sync.Synchronizer
+import jbok.core.sync.BlockHandler
 import jbok.core.utils.ByteUtils
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.persistent.KeyValueDB
@@ -20,14 +21,14 @@ import scala.concurrent.duration.MILLISECONDS
 case class BlockPreparationResult[F[_]](block: Block, blockResult: BlockResult[F], stateRootHash: ByteVector)
 
 final class BlockMiner[F[_]](
-    val synchronizer: Synchronizer[F],
+    val blockHandler: BlockHandler[F],
     val stopWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], clock: Clock[F]) {
   private[this] val log = org.log4s.getLogger("BlockMiner")
 
-  val history = synchronizer.history
-
-  val executor = synchronizer.executor
+  val executor  = blockHandler.executor
+  val consensus = executor.consensus
+  val history   = executor.history
 
   // sort and truncate transactions
   def prepareTransactions(stxs: List[SignedTransaction], blockGasLimit: BigInt): F[List[SignedTransaction]] = {
@@ -85,11 +86,14 @@ final class BlockMiner[F[_]](
 
   // generate a new block with specified transactions and ommers
   def generateBlock(
-      parent: Block,
-      stxs: List[SignedTransaction],
-      ommers: List[BlockHeader]
+      parentOpt: Option[Block] = None,
+      stxsOpt: Option[List[SignedTransaction]] = None,
+      ommersOpt: Option[List[BlockHeader]] = None
   ): F[Block] =
     for {
+      parent <- parentOpt.fold(history.getBestBlock)(F.pure)
+      stxs   <- stxsOpt.fold(blockHandler.txPool.getPendingTransactions.map(_.map(_.stx)))(F.pure)
+      ommers <- ommersOpt.fold(blockHandler.ommerPool.getOmmers(parent.header.number + 1))(F.pure)
       header <- executor.consensus.prepareHeader(parent, ommers)
       _ = log.debug(s"prepared header for block(${parent.header.number + 1})")
       txs <- prepareTransactions(stxs, header.gasLimit)
@@ -120,30 +124,35 @@ final class BlockMiner[F[_]](
         Some(b)
     }
 
-  def mine: F[Option[Block]] =
-    for {
-      parent <- executor.history.getBestBlock
-      block  <- generateBlock(parent)
-      _ = log.info(s"${block.tag} prepared for mining")
-      minedOpt <- mine(block)
-      _        <- minedOpt.fold(F.unit)(block => submitNewBlock(block))
-    } yield minedOpt
-
   // submit a newly mined block
   def submitNewBlock(block: Block): F[Unit] = {
-    log.info(s"${block.tag} successfully mined, submit to synchronizer")
-    synchronizer.handleMinedBlock(block)
+    log.info(s"${block.tag} successfully mined, submit to BlockHandler")
+    blockHandler
+      .handleBlock(block, PeerSet.empty)
+      .flatMap(_.traverse { case (peer, message) => peer.conn.write(message) }.void)
   }
 
-  def miningStream: Stream[F, Block] =
+  def mineAndSubmit(
+      parentOpt: Option[Block] = None,
+      stxsOpt: Option[List[SignedTransaction]] = None,
+      ommersOpt: Option[List[BlockHeader]] = None
+  ): F[Option[Block]] =
+    for {
+      block <- generateBlock(parentOpt, stxsOpt, ommersOpt)
+      _ = log.info(s"${block.tag} prepared for mining")
+      minedOpt <- mine(block)
+      _        <- minedOpt.fold(F.unit)(submitNewBlock)
+    } yield minedOpt
+
+  def miningStream(): Stream[F, Block] =
     Stream
-      .repeatEval(mine)
+      .repeatEval(mineAndSubmit())
       .unNone
       .onFinalize(stopWhenTrue.set(true))
 
   def start: F[Unit] =
     stopWhenTrue.get.flatMap {
-      case true  => stopWhenTrue.set(false) *> F.start(miningStream.interruptWhen(stopWhenTrue).compile.drain).void
+      case true  => stopWhenTrue.set(false) *> F.start(miningStream().interruptWhen(stopWhenTrue).compile.drain).void
       case false => F.unit
     }
 
@@ -154,13 +163,6 @@ final class BlockMiner[F[_]](
 
   //////////////////////////////
   //////////////////////////////
-
-  private def generateBlock(parent: Block): F[Block] =
-    for {
-      stxs   <- synchronizer.txPool.getPendingTransactions.map(_.map(_.stx))
-      ommers <- synchronizer.ommerPool.getOmmers(parent.header.number + 1)
-      block  <- generateBlock(parent, stxs, ommers)
-    } yield block
 
   private[jbok] def calcMerkleRoot[V: Codec](entities: List[V]): F[ByteVector] =
     for {
@@ -173,7 +175,7 @@ final class BlockMiner[F[_]](
 
 object BlockMiner {
   def apply[F[_]: ConcurrentEffect](
-      synchronizer: Synchronizer[F]
+      synchronizer: BlockHandler[F]
   )(implicit clock: Clock[F]): F[BlockMiner[F]] = SignallingRef[F, Boolean](true).map { stopWhenTrue =>
     new BlockMiner[F](
       synchronizer,

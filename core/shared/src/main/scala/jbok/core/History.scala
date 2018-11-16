@@ -45,17 +45,13 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
   def delBlock(hash: ByteVector, parentAsBestBlock: Boolean): F[Unit]
 
   // accounts, storage and codes
+  def getMptNode(hash: ByteVector): F[Option[ByteVector]]
+
+  def putMptNode(hash: ByteVector, bytes: ByteVector): F[Unit]
+
   def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]]
 
-  def getAccountNode(hash: ByteVector): F[Option[ByteVector]]
-
-  def putAccountNode(hash: ByteVector, bytes: ByteVector): F[Unit]
-
   def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector]
-
-  def getStorageNode(hash: ByteVector): F[Option[ByteVector]]
-
-  def putStorageNode(hash: ByteVector, bytes: ByteVector): F[Unit]
 
   def getCode(codeHash: ByteVector): F[Option[ByteVector]]
 
@@ -106,7 +102,6 @@ class HistoryImpl[F[_]](
     chainId: Int
 )(implicit F: Sync[F])
     extends History[F](db, chainId) {
-  private[this] val log = org.log4s.getLogger("History")
 
   private val appStateStore = new AppStateStore[F](db)
 
@@ -158,7 +153,7 @@ class HistoryImpl[F[_]](
         .sequence
         .void
 
-// receipts
+  // receipts
   override def getReceiptsByHash(blockhash: ByteVector): F[Option[List[Receipt]]] =
     db.getOpt[ByteVector, List[Receipt]](blockhash, namespaces.Receipts)
 
@@ -229,6 +224,12 @@ class HistoryImpl[F[_]](
   }
 
   // accounts, storage and codes
+  override def getMptNode(hash: ByteVector): F[Option[ByteVector]] =
+    db.getRaw(namespaces.Node ++ hash)
+
+  override def putMptNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
+    db.putRaw(namespaces.Node ++ hash, bytes)
+
   override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] = {
     val p = for {
       header  <- OptionT(getBlockHeaderByNumber(blockNumber))
@@ -238,29 +239,17 @@ class HistoryImpl[F[_]](
     p.value
   }
 
-  override def getAccountNode(hash: ByteVector): F[Option[ByteVector]] =
-    db.getOpt[ByteVector, ByteVector](hash, namespaces.Node)
-
-  override def putAccountNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
-    db.put(hash, bytes, namespaces.Node)
-
   override def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector] =
     for {
       mpt   <- MerklePatriciaTrie[F](namespaces.Node, db, Some(rootHash))
       bytes <- mpt.getOpt[UInt256, UInt256](UInt256(position), namespaces.empty).map(_.getOrElse(UInt256.Zero).bytes)
     } yield bytes
 
-  override def getStorageNode(hash: ByteVector): F[Option[ByteVector]] =
-    db.getOpt[ByteVector, ByteVector](hash, namespaces.Node)
-
-  override def putStorageNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
-    db.put(hash, bytes, namespaces.Node)
-
   override def getCode(hash: ByteVector): F[Option[ByteVector]] =
-    db.getOpt[ByteVector, ByteVector](hash, namespaces.Code)
+    db.getRaw(namespaces.Code ++ hash)
 
   override def putCode(hash: ByteVector, code: ByteVector): F[Unit] =
-    db.put(hash, code, namespaces.Code)
+    db.putRaw(namespaces.Code ++ hash, code)
 
   override def getWorldState(
       accountStartNonce: UInt256,

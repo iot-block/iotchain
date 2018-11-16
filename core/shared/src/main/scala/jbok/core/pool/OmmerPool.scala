@@ -6,11 +6,10 @@ import cats.implicits._
 import jbok.core.History
 import jbok.core.models.BlockHeader
 
-final class OmmerPool[F[_]: Sync](history: History[F], poolSize: Int, ommersList: Ref[F, List[BlockHeader]]) {
+final case class OmmerPool[F[_]: Sync](history: History[F], poolSize: Int, ommersList: Ref[F, List[BlockHeader]]) {
   private[this] val log = org.log4s.getLogger
 
-  val ommerGenerationLimit: Int = 6 //Stated on section 11.1, eq. (143) of the YP
-  val ommerSizeLimit: Int       = 2
+  import OmmerPool._
 
   def addOmmers(ommers: List[BlockHeader]): F[Unit] =
     ommersList.update(xs => (ommers ++ xs).take(poolSize)).void
@@ -27,13 +26,16 @@ final class OmmerPool[F[_]: Sync](history: History[F], poolSize: Int, ommersList
       ommers
         .filter { b =>
           val generationDifference = blockNumber - b.number
-          generationDifference > 0 && generationDifference <= ommerGenerationLimit
+          generationDifference > 0 && generationDifference <= OmmerGenerationLimit
         }
-        .take(ommerSizeLimit)
+        .take(OmmerSizeLimit)
     }
 }
 
 object OmmerPool {
+  val OmmerGenerationLimit: Int = 6 //Stated on section 11.1, eq. (143) of the YP
+  val OmmerSizeLimit: Int       = 2
+
   def apply[F[_]: Sync](history: History[F], poolSize: Int = 30): F[OmmerPool[F]] =
     for {
       ref <- Ref.of[F, List[BlockHeader]](Nil)

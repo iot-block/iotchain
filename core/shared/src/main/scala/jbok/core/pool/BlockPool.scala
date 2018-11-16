@@ -21,7 +21,7 @@ case class BlockPool[F[_]](
     blocks: Ref[F, Map[ByteVector, QueuedBlock]],
     parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]],
 )(implicit F: ConcurrentEffect[F]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("BlockPool")
 
   def contains(blockHash: ByteVector): F[Boolean] =
     blocks.get.map(_.contains(blockHash))
@@ -37,11 +37,11 @@ case class BlockPool[F[_]](
       m <- blocks.get
       leaf <- m.get(hash) match {
         case Some(_) =>
-          log.info(s"Block(${hash}) already in, ignore")
+          log.debug(s"${block.tag} already in, ignore")
           F.pure(None)
 
         case None if isNumberOutOfRange(number, bestBlockNumber) =>
-          log.info(s"Block(${hash} is outside accepted range. Current best block number is: $bestBlockNumber")
+          log.debug(s"${block.tag} is outside accepted range. Current best block number is: $bestBlockNumber")
           F.pure(None)
 
         case None =>
@@ -50,17 +50,17 @@ case class BlockPool[F[_]](
             l <- {
               parentTd match {
                 case Some(_) =>
-                  log.info(s"add a new block(${hash}) with parent on the main chain")
+                  log.debug(s"${block.tag} will be on the main chain")
                   addBlock(block, parentTd) *> updateTotalDifficulties(hash)
 
                 case None =>
                   val p: F[Option[Leaf]] = findClosestChainedAncestor(block).flatMap {
                     case Some(ancestor) =>
-                      log.info(s"add a new block (${hash}) to a rooted sidechain")
+                      log.debug(s"${block.tag} to will be on a rooted side chain")
                       updateTotalDifficulties(ancestor)
 
                     case None =>
-                      log.info(s"add a new block (${hash}) with unknown relation to the main chain")
+                      log.debug(s"${block.tag} with unknown relation to the main chain")
                       none[Leaf].pure[F]
                   }
 
@@ -164,7 +164,7 @@ case class BlockPool[F[_]](
           b.header.hash
       }
       _ <- if (staleHashes.nonEmpty) {
-        log.info(s"clean up ${staleHashes.length} staleHashes")
+        log.debug(s"clean up ${staleHashes.length} staleHashes")
         blocks.update(_ -- staleHashes) *> parentToChildren.update(_ -- staleHashes)
       } else {
         F.unit

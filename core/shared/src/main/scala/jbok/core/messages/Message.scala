@@ -1,72 +1,127 @@
 package jbok.core.messages
 
-import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
-import jbok.network.common.{RequestId, RequestMethod}
-import scodec.bits.{BitVector, ByteVector}
-import scodec.{Attempt, Codec, DecodeResult, Decoder, Encoder, SizeBound}
+import java.util.UUID
 
-trait Message {
-  def name = getClass.getSimpleName
+import jbok.core.models._
+import jbok.core.sync.NodeHash
+import jbok.network.common.{RequestId, RequestMethod}
+import scodec.Codec
+import scodec.bits.ByteVector
+import scodec.codecs.{discriminated, uint16}
+import jbok.codec.rlp.implicits._
+
+sealed abstract class Message(val code: Int, val id: String = UUID.randomUUID().toString)
+
+case class Handshake(
+    version: Int,
+    listenPort: Int,
+    sid: ByteVector
+) extends Message(0x00)
+
+case class Status(
+    chainId: Int,
+    genesisHash: ByteVector,
+    bestNumber: BigInt
+) extends Message(0x1000) {
+  def isCompatible(other: Status): Boolean =
+    chainId == other.chainId && genesisHash == other.genesisHash
 }
 
+case class BlockHash(hash: ByteVector, number: BigInt)
+case class NewBlockHashes(hashes: List[BlockHash])          extends Message(0x1001)
+case class SignedTransactions(txs: List[SignedTransaction]) extends Message(0x1002)
+
+case class GetBlockHeaders(
+    block: Either[BigInt, ByteVector],
+    maxHeaders: Int,
+    skip: Int,
+    reverse: Boolean,
+    override val id: String = UUID.randomUUID().toString
+) extends Message(0x1003)
+case class BlockHeaders(headers: List[BlockHeader], override val id: String) extends Message(0x1004)
+
+case class GetBlockBodies(hashes: List[ByteVector], override val id: String = UUID.randomUUID().toString)
+    extends Message(0x1005)
+case class BlockBodies(bodies: List[BlockBody], override val id: String) extends Message(0x1006)
+case class NewBlock(block: Block)                                        extends Message(0x1007)
+
+case class GetNodeData(nodeHashes: List[NodeHash], override val id: String = UUID.randomUUID().toString)
+    extends Message(0x100d)
+case class NodeData(values: List[ByteVector], override val id: String) extends Message(0x100e)
+
+case class GetReceipts(blockHashes: List[ByteVector], override val id: String = UUID.randomUUID().toString)
+    extends Message(0x100f)
+case class Receipts(receiptsForBlocks: List[List[Receipt]], override val id: String) extends Message(0x1010)
+
+case class AuthPacket(bytes: ByteVector) extends Message(0x2000)
+
 object Message {
-  val codecMap = Map(
-    "Handshake"          -> RlpCodec[Handshake],
-    "Status"             -> RlpCodec[Status],
-    "SignedTransactions" -> RlpCodec[SignedTransactions],
-    "GetReceipts"        -> RlpCodec[GetReceipts],
-    "Receipts"           -> RlpCodec[Receipts],
-    "GetBlockBodies"     -> RlpCodec[GetBlockBodies],
-    "BlockBodies"        -> RlpCodec[BlockBodies],
-    "GetBlockHeaders"    -> RlpCodec[GetBlockHeaders],
-    "BlockHeaders"       -> RlpCodec[BlockHeaders],
-    "NewBlock"           -> RlpCodec[NewBlock],
-    "NewBlockHashes"     -> RlpCodec[NewBlockHashes]
-  )
-
-  def encode(msg: Message): ByteVector =
-    rstring.encode(msg.name).require.bytes ++ (msg.name match {
-      case "Handshake"          => RlpCodec[Handshake].encode(msg.asInstanceOf[Handshake])
-      case "Status"             => RlpCodec[Status].encode(msg.asInstanceOf[Status])
-      case "SignedTransactions" => RlpCodec[SignedTransactions].encode(msg.asInstanceOf[SignedTransactions])
-      case "GetReceipts"        => RlpCodec[GetReceipts].encode(msg.asInstanceOf[GetReceipts])
-      case "Receipts"           => RlpCodec[Receipts].encode(msg.asInstanceOf[Receipts])
-      case "GetBlockBodies"     => RlpCodec[GetBlockBodies].encode(msg.asInstanceOf[GetBlockBodies])
-      case "BlockBodies"        => RlpCodec[BlockBodies].encode(msg.asInstanceOf[BlockBodies])
-      case "GetBlockHeaders"    => RlpCodec[GetBlockHeaders].encode(msg.asInstanceOf[GetBlockHeaders])
-      case "BlockHeaders"       => RlpCodec[BlockHeaders].encode(msg.asInstanceOf[BlockHeaders])
-      case "NewBlock"           => RlpCodec[NewBlock].encode(msg.asInstanceOf[NewBlock])
-      case "NewBlockHashes"     => RlpCodec[NewBlockHashes].encode(msg.asInstanceOf[NewBlockHashes])
-    }).require.bytes
-
-  def decode(bytes: ByteVector): Attempt[Message] = rstring.decode(bytes.bits).map { r =>
-    val name = r.value
-    codecMap(name).decode(r.remainder).require.value.asInstanceOf[Message]
+  implicit val codec: Codec[Message] = {
+    discriminated[Message]
+      .by(uint16)
+      .subcaseO(0x0000) {
+        case x: Handshake => Some(x)
+        case _            => None
+      }(Codec[Handshake])
+      .subcaseO(0x1000) {
+        case x: Status => Some(x)
+        case _         => None
+      }(Codec[Status])
+      .subcaseO(0x1001) {
+        case x: NewBlockHashes => Some(x)
+        case _                 => None
+      }(Codec[NewBlockHashes])
+      .subcaseO(0x1002) {
+        case x: SignedTransactions => Some(x)
+        case _                     => None
+      }(Codec[SignedTransactions])
+      .subcaseO(0x1003) {
+        case x: GetBlockHeaders => Some(x)
+        case _                  => None
+      }(Codec[GetBlockHeaders])
+      .subcaseO(0x1004) {
+        case x: BlockHeaders => Some(x)
+        case _               => None
+      }(Codec[BlockHeaders])
+      .subcaseO(0x1005) {
+        case x: GetBlockBodies => Some(x)
+        case _                 => None
+      }(Codec[GetBlockBodies])
+      .subcaseO(0x1006) {
+        case x: BlockBodies => Some(x)
+        case _              => None
+      }(Codec[BlockBodies])
+      .subcaseO(0x1007) {
+        case x: NewBlock => Some(x)
+        case _           => None
+      }(Codec[NewBlock])
+      .subcaseO(0x100d) {
+        case x: GetNodeData => Some(x)
+        case _              => None
+      }(Codec[GetNodeData])
+      .subcaseO(0x100e) {
+        case x: NodeData => Some(x)
+        case _           => None
+      }(Codec[NodeData])
+      .subcaseO(0x100f) {
+        case x: GetReceipts => Some(x)
+        case _              => None
+      }(Codec[GetReceipts])
+      .subcaseO(0x1010) {
+        case x: Receipts => Some(x)
+        case _           => None
+      }(Codec[Receipts])
+      .subcaseO(0x2000) {
+        case x: AuthPacket => Some(x)
+        case _             => None
+      }(Codec[AuthPacket])
   }
-
-  implicit val encoder: Encoder[Message] = new Encoder[Message] {
-    override def encode(value: Message): Attempt[BitVector] =
-      Attempt.successful(Message.encode(value).bits)
-
-    override def sizeBound: SizeBound = SizeBound.unknown
-  }
-
-  implicit val decoder: Decoder[Message] = new Decoder[Message] {
-    override def decode(bits: BitVector): Attempt[DecodeResult[Message]] =
-      Message.decode(bits.bytes).map(message => DecodeResult(message, BitVector.empty))
-  }
-
-  implicit val codec: Codec[Message] = Codec(encoder, decoder)
 
   implicit val I: RequestId[Message] = new RequestId[Message] {
-    override def id(a: Message): Option[String] = a match {
-      case x: SyncMessage => Some(x.id)
-      case _              => None
-    }
+    override def id(a: Message): String = a.id
   }
 
   implicit val M: RequestMethod[Message] = new RequestMethod[Message] {
-    override def method(a: Message): Option[String] = Some(a.name)
+    override def method(a: Message): Option[String] = Some(a.code.toString)
   }
 }

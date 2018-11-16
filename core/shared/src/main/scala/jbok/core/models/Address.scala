@@ -7,7 +7,7 @@ import jbok.crypto._
 import jbok.crypto.signature.KeyPair
 import scodec.bits.ByteVector
 
-class Address private (val bytes: ByteVector) extends AnyVal {
+final class Address private (val bytes: ByteVector) extends AnyVal {
   def toUInt256: UInt256 = UInt256(bytes)
 
   override def toString: String = s"0x${bytes.toHex}"

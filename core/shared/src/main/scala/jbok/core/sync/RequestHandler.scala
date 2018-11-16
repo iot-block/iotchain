@@ -2,27 +2,25 @@ package jbok.core.sync
 
 import cats.effect.ConcurrentEffect
 import cats.implicits._
-import fs2._
 import jbok.core.History
 import jbok.core.config.Configs.SyncConfig
 import jbok.core.messages._
+import jbok.core.peer._
 import scodec.bits.ByteVector
 
-case class SyncService[F[_]](config: SyncConfig, history: History[F])(implicit F: ConcurrentEffect[F]) {
-  private[this] val log = org.log4s.getLogger
-
-  def handle(request: SyncRequest): F[Option[SyncResponse]] = request match {
-    case GetReceipts(hashes, id) =>
+final case class RequestHandler[F[_]](config: SyncConfig, history: History[F])(implicit F: ConcurrentEffect[F]) {
+  val service: PeerRoutes[F] = PeerRoutes.of[F] {
+    case Request(peer, peerSet, GetReceipts(hashes, id)) =>
       for {
         receipts <- hashes.traverse(history.getReceiptsByHash).map(_.flatten)
-      } yield Receipts(receipts, id).some
+      } yield peer -> Receipts(receipts, id) :: Nil
 
-    case GetBlockBodies(hashes, id) =>
+    case Request(peer, peerSet, GetBlockBodies(hashes, id)) =>
       for {
         bodies <- hashes.traverse(hash => history.getBlockBodyByHash(hash)).map(_.flatten)
-      } yield BlockBodies(bodies, id).some
+      } yield peer -> BlockBodies(bodies, id) :: Nil
 
-    case GetBlockHeaders(block, maxHeaders, skip, reverse, id) =>
+    case Request(peer, peerSet, GetBlockHeaders(block, maxHeaders, skip, reverse, id)) =>
       val blockNumber: F[Option[BigInt]] = block match {
         case Left(v)   => v.some.pure[F]
         case Right(bv) => history.getBlockHeaderByHash(bv).map(_.map(_.number))
@@ -41,28 +39,22 @@ case class SyncService[F[_]](config: SyncConfig, history: History[F])(implicit F
           range.toList
             .traverse(history.getBlockHeaderByNumber)
             .map(_.flatten)
-            .map(values => BlockHeaders(values, id).some)
+            .map(values => peer -> BlockHeaders(values, id) :: Nil)
 
         case _ =>
-          log.warn(s"got request for block headers with invalid block hash/number")
-          F.pure(None)
+          F.pure(Nil)
       }
 
-    case GetNodeData(nodeHashes, id) =>
+    case Request(peer, peerSet, GetNodeData(nodeHashes, id)) =>
       val nodeData = nodeHashes
         .traverse[F, Option[ByteVector]] {
-          case NodeHash.StateMptNodeHash(v)           => history.getAccountNode(v)
-          case NodeHash.StorageRootHash(v)            => history.getStorageNode(v)
-          case NodeHash.ContractStorageMptNodeHash(v) => history.getStorageNode(v)
+          case NodeHash.StateMptNodeHash(v)           => history.getMptNode(v)
+          case NodeHash.StorageRootHash(v)            => history.getMptNode(v)
+          case NodeHash.ContractStorageMptNodeHash(v) => history.getMptNode(v)
           case NodeHash.EvmCodeHash(v)                => history.getCode(v)
         }
         .map(_.flatten)
 
-      nodeData.map(values => Some(NodeData(values, id)))
+      nodeData.map(values => peer -> NodeData(values, id) :: Nil)
   }
-
-  val pipe: Pipe[F, Message, Message] = _.evalMap[F, Option[Message]] {
-    case request: SyncRequest => handle(request).map(_.map(_.asInstanceOf[Message]))
-    case _                    => F.pure(None)
-  }.unNone
 }

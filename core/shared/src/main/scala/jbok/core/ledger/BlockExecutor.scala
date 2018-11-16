@@ -1,15 +1,18 @@
 package jbok.core.ledger
 
 import cats.Foldable
-import cats.effect.{ConcurrentEffect, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.consensus.{Consensus, ConsensusResult}
 import jbok.core.models.UInt256._
 import jbok.core.models._
+import jbok.core.store.namespaces
 import jbok.core.validators.{BlockValidator, CommonHeaderValidator, TransactionValidator}
 import jbok.evm._
 import scodec.bits.ByteVector
+
+import scala.concurrent.duration._
 
 case class BlockResult[F[_]](worldState: WorldState[F], gasUsed: BigInt = 0, receipts: List[Receipt] = Nil)
 case class TxResult[F[_]](
@@ -34,7 +37,7 @@ class BlockExecutor[F[_]](
     val commonBlockValidator: BlockValidator[F],
     val txValidator: TransactionValidator[F],
     val vm: VM
-)(implicit F: ConcurrentEffect[F]) {
+)(implicit F: Concurrent[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger("BlockExecutor")
 
   val history   = consensus.history
@@ -52,11 +55,11 @@ class BlockExecutor[F[_]](
       _       <- txValidator.validateSimulateTx(stx)
       world1  <- history.getWorldState(config.accountStartNonce, Some(stateRoot))
       world2  <- updateSenderAccountBeforeExecution(senderAddress, stx, world1)
-      context <- prepareProgramContext(stx, blockHeader, world2, vmConfig)
+      context <- prepareProgramContext(stx, senderAddress, blockHeader, world2, vmConfig)
       result  <- runVM(stx, context, vmConfig)
       totalGasToRefund = calcTotalGasToRefund(stx, result)
     } yield {
-      log.info(
+      log.debug(
         s"""SimulateTransaction(${stx.hash.toHex.take(7)}) execution end with ${result.error} error.
            |result.returnData: ${result.returnData.toHex}
            |gas refund: ${totalGasToRefund}""".stripMargin
@@ -101,13 +104,13 @@ class BlockExecutor[F[_]](
       consensusResult <- consensus.run(parent, block)
       importResult <- consensusResult match {
         case ConsensusResult.BlockInvalid(e) =>
-          log.info(s"import block failed")
+          log.debug(s"import block failed")
           F.pure(BlockImportResult.Failed(e))
         case ConsensusResult.ImportToTop =>
-          log.info(s"should import to top")
+          log.debug(s"should import to top")
           importBlockToTop(block, parent.header.number, currentTd)
         case ConsensusResult.Pooled =>
-          log.info(s"should import to pool")
+          log.debug(s"should import to pool")
           blockPool.addBlock(block, parent.header.number).map(_ => BlockImportResult.Pooled)
       }
     } yield importResult
@@ -116,7 +119,7 @@ class BlockExecutor[F[_]](
     for {
       topBlockHash <- blockPool.addBlock(block, bestBlockNumber).map(_.get.hash)
       topBlocks    <- blockPool.getBranch(topBlockHash, dequeue = true)
-      _ = log.info(s"execute top blocks: ${topBlocks.map(_.tag)}")
+      _ = log.debug(s"execute top blocks: ${topBlocks.map(_.tag)}")
       result <- executeBlocks(topBlocks, currentTd).attempt.map {
         case Left(e) =>
           BlockImportResult.Failed(e)
@@ -165,12 +168,9 @@ class BlockExecutor[F[_]](
 
   def executeBlock(block: Block, alreadyValidated: Boolean = false): F[List[Receipt]] =
     for {
-      (result, _) <- executeBlockTransactions(block)
-      _ = log.debug(s"execute block result ${result.worldState.stateRootHash}")
+      (result, _) <- executeBlockTransactions(block, shortCircuit = true)
       worldToPersist <- payReward(block, result.worldState)
-      _ = log.debug(s"to persist ${worldToPersist.stateRootHash}")
       worldPersisted <- worldToPersist.persisted
-      _ = log.debug(s"persisted ${worldPersisted.stateRootHash}")
       _ <- commonBlockValidator.postExecuteValidate(
         block.header,
         worldPersisted.stateRootHash,
@@ -179,8 +179,7 @@ class BlockExecutor[F[_]](
       )
     } yield result.receipts
 
-  def executeBlockTransactions(block: Block,
-                               shortCircuit: Boolean = true): F[(BlockResult[F], List[SignedTransaction])] =
+  def executeBlockTransactions(block: Block, shortCircuit: Boolean): F[(BlockResult[F], List[SignedTransaction])] =
     for {
       parentStateRoot <- history.getBlockHeaderByHash(block.header.parentHash).map(_.map(_.stateRoot))
       world <- history.getWorldState(
@@ -188,7 +187,10 @@ class BlockExecutor[F[_]](
         parentStateRoot,
         false
       )
-      result <- executeTransactions(block.body.transactionList, block.header, world, shortCircuit = shortCircuit)
+      start  <- T.clock.realTime(MILLISECONDS)
+      result <- executeTransactions(block.body.transactionList, block.header, world, shortCircuit)
+      end    <- T.clock.realTime(MILLISECONDS)
+      _ = log.debug(s"execute ${block.body.transactionList.length} transactions in ${end - start}ms")
     } yield result
 
   def executeBlocks(blocks: List[Block], parentTd: BigInt): F[List[Block]] =
@@ -196,11 +198,11 @@ class BlockExecutor[F[_]](
       case block :: tail =>
         executeBlock(block, alreadyValidated = true).attempt.flatMap {
           case Right(receipts) =>
-            log.info(s"${block.tag} execution succeed")
+            log.debug(s"${block.tag} execution succeed")
             val td = parentTd + block.header.difficulty
             for {
               _ <- history.putBlockAndReceipts(block, receipts, td, asBestBlock = true)
-              _ = log.info(s"${block.tag} saved as the best block")
+              _ = log.debug(s"${block.tag} saved as the best block")
               executedBlocks <- executeBlocks(tail, td)
             } yield block :: executedBlocks
 
@@ -217,28 +219,17 @@ class BlockExecutor[F[_]](
       stxs: List[SignedTransaction],
       header: BlockHeader,
       world: WorldState[F],
+      shortCircuit: Boolean,
       accGas: BigInt = 0,
       accReceipts: List[Receipt] = Nil,
       executed: List[SignedTransaction] = Nil,
-      shortCircuit: Boolean = true
   ): F[(BlockResult[F], List[SignedTransaction])] = stxs match {
     case Nil =>
       F.pure(BlockResult(worldState = world, gasUsed = accGas, receipts = accReceipts), executed)
 
     case stx :: tail =>
-      val senderAddress = getSenderAddress(stx, header.number)
-      log.info(s"execute tx from ${senderAddress} to ${stx.receivingAddress}")
       for {
-        (senderAccount, worldForTx) <- world
-          .getAccountOpt(senderAddress)
-          .map(a => (a, world))
-          .getOrElse((Account.empty(UInt256.Zero), world.putAccount(senderAddress, Account.empty(UInt256.Zero))))
-
-        upfrontCost = calculateUpfrontCost(stx)
-        _ = log.info(
-          s"stx: ${stx}, senderAccount: ${senderAccount}, header: ${header}, upfrontCost: ${upfrontCost}, accGas ${accGas}")
-        _ <- txValidator.validate(stx, senderAccount, header, upfrontCost, accGas)
-        result <- executeTransaction(stx, header, worldForTx).attempt.flatMap {
+        result <- executeTransaction(stx, header, world, accGas).attempt.flatMap {
           case Left(e) =>
             if (shortCircuit) {
               F.raiseError[(BlockResult[F], List[SignedTransaction])](e)
@@ -246,7 +237,8 @@ class BlockExecutor[F[_]](
               executeTransactions(
                 tail,
                 header,
-                worldForTx,
+                world,
+                shortCircuit,
                 accGas,
                 accReceipts,
                 executed
@@ -265,29 +257,35 @@ class BlockExecutor[F[_]](
               tail,
               header,
               txResult.world,
+              shortCircuit,
               accGas + txResult.gasUsed,
               accReceipts :+ receipt,
               executed :+ stx
             )
         }
-
       } yield result
   }
 
   def executeTransaction(
       stx: SignedTransaction,
       header: BlockHeader,
-      world: WorldState[F]
+      world: WorldState[F],
+      accGas: BigInt = 0
   ): F[TxResult[F]] = {
-    log.info(s"Transaction(${stx.hash.toHex.take(7)}) execution start")
     val gasPrice      = UInt256(stx.gasPrice)
     val gasLimit      = stx.gasLimit
     val vmConfig      = EvmConfig.forBlock(header.number, config)
     val senderAddress = getSenderAddress(stx, header.number)
 
     for {
-      checkpointWorldState <- updateSenderAccountBeforeExecution(senderAddress, stx, world)
-      context              <- prepareProgramContext(stx, header, checkpointWorldState, vmConfig)
+      (senderAccount, worldForTx) <- world
+        .getAccountOpt(senderAddress)
+        .map(a => (a, world))
+        .getOrElse((Account.empty(UInt256.Zero), world.putAccount(senderAddress, Account.empty(UInt256.Zero))))
+      upfrontCost = calculateUpfrontCost(stx)
+      _                    <- txValidator.validate(stx, senderAccount, header, upfrontCost, accGas)
+      checkpointWorldState <- updateSenderAccountBeforeExecution(senderAddress, stx, worldForTx)
+      context              <- prepareProgramContext(stx, senderAddress, header, checkpointWorldState, vmConfig)
       result               <- runVM(stx, context, vmConfig)
       resultWithErrorHandling = if (result.error.isDefined) {
         //Rollback to the world before transfer was done if an error happened
@@ -305,12 +303,11 @@ class BlockExecutor[F[_]](
       worldAfterPayments <- refundGasFn(resultWithErrorHandling.world) >>= payMinerForGasFn
       world2             <- (deleteAccountsFn(worldAfterPayments) >>= deleteTouchedAccountsFn).flatMap(_.persisted)
     } yield {
-      log.info(
+      log.trace(
         s"""Transaction(${stx.hash.toHex.take(7)}) execution end with ${result.error} error.
-           |returndata: ${result.returnData.toHex}
+           |return data: ${result.returnData.toHex}
            |gas refund: ${totalGasToRefund}, gas paid to miner: ${executionGasToPayToMiner}""".stripMargin
       )
-
       TxResult(world2, executionGasToPayToMiner, resultWithErrorHandling.logs, result.returnData, result.error)
     }
   }
@@ -329,28 +326,27 @@ class BlockExecutor[F[_]](
 
   private def prepareProgramContext(
       stx: SignedTransaction,
+      sender: Address,
       blockHeader: BlockHeader,
       world: WorldState[F],
       config: EvmConfig
-  ): F[ProgramContext[F]] = {
-    val senderAddress = getSenderAddress(stx, blockHeader.number)
+  ): F[ProgramContext[F]] =
     if (stx.isContractInit) {
       for {
-        address <- world.createAddress(senderAddress)
+        address <- world.createAddress(sender)
         _ = log.debug(s"contract address: ${address}")
         conflict <- world.nonEmptyCodeOrNonceAccount(address)
         code = if (conflict) ByteVector(INVALID.code) else stx.payload
         world1 <- world
           .initialiseAccount(address)
-          .flatMap(_.transfer(senderAddress, address, UInt256(stx.value)))
-      } yield ProgramContext(stx, address, Program(code), blockHeader, world1, config)
+          .flatMap(_.transfer(sender, address, UInt256(stx.value)))
+      } yield ProgramContext(stx, sender, address, Program(code), blockHeader, world1, config)
     } else {
       for {
-        world1 <- world.transfer(senderAddress, stx.receivingAddress, UInt256(stx.value))
+        world1 <- world.transfer(sender, stx.receivingAddress, UInt256(stx.value))
         code   <- world1.getCode(stx.receivingAddress)
-      } yield ProgramContext(stx, stx.receivingAddress, Program(code), blockHeader, world1, config)
+      } yield ProgramContext(stx, sender, stx.receivingAddress, Program(code), blockHeader, world1, config)
     }
-  }
 
   private def runVM(stx: SignedTransaction, context: ProgramContext[F], config: EvmConfig): F[ProgramResult[F]] =
     for {
@@ -432,7 +428,6 @@ class BlockExecutor[F[_]](
 
   private def binaryChop[Error](min: BigInt, max: BigInt)(f: BigInt => F[Option[Error]]): F[BigInt] = {
     assert(min <= max)
-
     if (min == max)
       F.pure(max)
     else {
@@ -444,10 +439,10 @@ class BlockExecutor[F[_]](
 }
 
 object BlockExecutor {
-  def apply[F[_]: ConcurrentEffect](
+  def apply[F[_]](
       config: BlockChainConfig,
       consensus: Consensus[F]
-  ): BlockExecutor[F] =
+  )(implicit F: Concurrent[F], T: Timer[F]): BlockExecutor[F] =
     new BlockExecutor[F](
       config,
       consensus,

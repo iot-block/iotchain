@@ -2,7 +2,7 @@ package jbok.core.models
 
 import scodec.bits._
 
-case class Receipt(
+final case class Receipt(
     postTransactionStateHash: ByteVector,
     cumulativeGasUsed: BigInt,
     logsBloomFilter: ByteVector,
