@@ -6,8 +6,10 @@ import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.network.client.{Client, WSClientBuilderPlatform}
+import jbok.network.client.WsClient
 import jbok.network.server.Server
+
+import scala.concurrent.duration._
 
 class RpcSpec extends JbokSpec {
   trait API2 {
@@ -23,35 +25,27 @@ class RpcSpec extends JbokSpec {
 
   import RpcServer._
   val bind                                 = new InetSocketAddress("localhost", 9002)
-  val uri = new URI("ws://localhost:9002")
+  val uri                                  = new URI("ws://localhost:9002")
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
-  val server: Server[IO]           = Server.websocket(bind, serverPipe).unsafeRunSync()
-  val client: Client[IO, String]           = Client(WSClientBuilderPlatform[IO, String], uri).unsafeRunSync()
-  val api: TestAPI                         = RpcClient[IO](client).useAPI[TestAPI]
 
   "RPC Client & Server" should {
     "mount and use API" in {
-      rpcServer.handlers.size shouldBe 5
-      api.foo.unsafeRunSync() shouldBe impl.foo.unsafeRunSync()
-      api.bar.unsafeRunSync() shouldBe impl.bar.unsafeRunSync()
-      api.qux("oho", 42).unsafeRunSync() shouldBe impl.qux("oho", 42).unsafeRunSync()
-      api.error.attempt.unsafeRunSync().isLeft shouldBe true
+      val p = for {
+        server <- Server.websocket(bind, serverPipe)
+        _      <- T.sleep(1.second)
+        _      <- server.start
+        client <- WsClient[IO, String](uri)
+        api = RpcClient[IO](client).useAPI[TestAPI]
+        fiber <- client.start
+        _ = rpcServer.handlers.size shouldBe 5
+        _ = api.foo.unsafeRunSync() shouldBe impl.foo.unsafeRunSync()
+        _ = api.bar.unsafeRunSync() shouldBe impl.bar.unsafeRunSync()
+        _ = api.qux("oho", 42).unsafeRunSync() shouldBe impl.qux("oho", 42).unsafeRunSync()
+        _ = api.error.attempt.unsafeRunSync().isLeft shouldBe true
+        _ <- server.stop
+        _ <- fiber.cancel
+      } yield ()
+      p.unsafeRunSync()
     }
-
-    "client subscribe" in {
-      val push = Stream(0 until 10: _*).covary[IO].evalMap[IO, Unit](i => rpcServer.notify("events", i))
-      api.events.take(10).concurrently(push).compile.toList.unsafeRunSync() shouldBe (0 until 10).toList
-    }
-  }
-
-  override protected def beforeAll(): Unit = {
-    server.start.unsafeRunSync()
-    Thread.sleep(3000)
-    client.start.unsafeRunSync()
-  }
-
-  override protected def afterAll(): Unit = {
-    client.stop.unsafeRunSync()
-    server.stop.unsafeRunSync()
   }
 }

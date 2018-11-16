@@ -18,7 +18,7 @@ class RpcServer(
     val handlers: Map[String, String => IO[String]],
     val queue: Queue[IO, String]
 )(implicit F: Concurrent[IO]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("RpcServer")
 
   def mountAPI[API](api: API): RpcServer = macro RpcServerMacro.mountAPI[RpcServer, API]
 
@@ -62,8 +62,8 @@ class RpcServer(
 
 object RpcServer {
   implicit val requestId: RequestId[String] = new RequestId[String] {
-    override def id(a: String): Option[String] =
-      parse(a).flatMap(_.hcursor.downField("id").as[String]).toOption
+    override def id(a: String): String =
+      parse(a).flatMap(_.hcursor.downField("id").as[String]).toOption.getOrElse("")
   }
 
   implicit val requestMethod: RequestMethod[String] = new RequestMethod[String] {

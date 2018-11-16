@@ -85,24 +85,24 @@ object JsonRPCResponse {
 
   def ok[A](id: String, result: A): JsonRPCResult[A] = JsonRPCResult(id, result)
 
-  def internalError(message: String, id: Option[String] = None): JsonRPCError =
-    JsonRPCError(id.getOrElse(""), ErrorObject(ErrorCode.InternalError, message, None))
+  def internalError(message: String, id: String = ""): JsonRPCError =
+    JsonRPCError(id, ErrorObject(ErrorCode.InternalError, message, None))
 
-  def invalidParams(message: String, id: Option[String] = None): JsonRPCError =
-    JsonRPCError(id.getOrElse(""), ErrorObject(ErrorCode.InvalidParams, message, None))
+  def invalidParams(message: String, id: String = ""): JsonRPCError =
+    JsonRPCError(id, ErrorObject(ErrorCode.InvalidParams, message, None))
 
-  def invalidRequest(message: String, id: Option[String] = None): JsonRPCError =
-    JsonRPCError(id.getOrElse(""), ErrorObject(ErrorCode.InvalidRequest, message, None))
+  def invalidRequest(message: String, id: String = ""): JsonRPCError =
+    JsonRPCError(id, ErrorObject(ErrorCode.InvalidRequest, message, None))
 
   def cancelled(id: String): JsonRPCError =
     JsonRPCError(id, ErrorObject(ErrorCode.RequestCancelled, "", None))
 
-  def parseError(message: String, id: Option[String] = None): JsonRPCError =
-    JsonRPCError(id.getOrElse(""), ErrorObject(ErrorCode.ParseError, message, None))
+  def parseError(message: String, id: String = ""): JsonRPCError =
+    JsonRPCError(id, ErrorObject(ErrorCode.ParseError, message, None))
 
-  def methodNotFound(method: String, id: Option[String] = None): JsonRPCError =
+  def methodNotFound(method: String, id: String = ""): JsonRPCError =
     JsonRPCError(
-      id.getOrElse(""),
+      id,
       ErrorObject(ErrorCode.MethodNotFound, s"""method ($method) does not exist""", None)
     )
 }

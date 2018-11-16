@@ -1,20 +1,15 @@
 package jbok.network.common
 
-import java.net.InetSocketAddress
-import java.nio.channels.InterruptedByTimeoutException
-
 import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.implicits._
 import cats.implicits._
 import fs2._
+import fs2.concurrent.{Queue, SignallingRef}
 import fs2.io.tcp.Socket
-import jbok.network.{Connection, NetworkErr}
+import jbok.network.Connection
 import scodec.Codec
 import scodec.bits.BitVector
 import scodec.stream.decode
-
-import scala.concurrent.duration.FiniteDuration
 
 private[jbok] object TcpUtil {
   def decodeChunk[F[_]: Sync, A: Codec](chunk: Chunk[Byte]): F[A] =
@@ -35,92 +30,43 @@ private[jbok] object TcpUtil {
       s     <- Stream.chunk(chunk).covary[F]
     } yield s
 
-  def socketToConnection[F[_]](
-      socket: Socket[F],
-      incoming: Boolean
-  )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[Connection[F]] =
+  def socketToConnection[F[_], A: Codec: RequestId](
+      resource: Resource[F, Socket[F]],
+      incoming: Boolean,
+      maxBytes: Int = 256 * 1024,
+      maxQueued: Int = 64
+  )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[Connection[F, A]] =
     for {
-      local    <- socket.localAddress.map(_.asInstanceOf[InetSocketAddress])
-      remote   <- socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
-      promises <- Ref.of[F, Map[String, Deferred[F, Any]]](Map.empty)
-    } yield
-      new Connection[F] {
-        override def write[A: Codec](a: A, timeout: Option[FiniteDuration]): F[Unit] =
-          encode[F, A](a)
-            .flatMap(chunk => socket.write(chunk, timeout))
-            .adaptError {
-              case _: InterruptedByTimeoutException => NetworkErr.Timeout
+      in           <- Queue.bounded[F, A](maxQueued)
+      out          <- Queue.bounded[F, A](maxQueued)
+      promises     <- Ref.of[F, Map[String, Deferred[F, A]]](Map.empty)
+      haltWhenTrue <- SignallingRef[F, Boolean](true)
+    } yield {
+      val sink: Sink[F, A] = { input =>
+        input
+          .evalMap[F, Unit] { a =>
+            RequestId[A].id(a) match {
+              case "" => in.enqueue1(a)
+              case id =>
+                promises.get.flatMap(_.get(id) match {
+                  case Some(p) => p.complete(a)
+                  case None    => in.enqueue1(a)
+                })
             }
-
-        override def writes[A: Codec](timeout: Option[FiniteDuration]): Sink[F, A] =
-          _.flatMap(encodeStream[F, A]).to(socket.writes(timeout))
-
-        override def read[A: Codec](timeout: Option[FiniteDuration], maxBytes: Int): F[A] =
-          for {
-            chunk <- socket.read(maxBytes, timeout).flatMap[Chunk[Byte]] {
-              case Some(chunk) => F.pure(chunk)
-              case None        => F.raiseError(NetworkErr.AlreadyClosed)
-            }
-            a <- decodeChunk[F, A](chunk)
-          } yield a
-
-        override def reads[A: Codec](timeout: Option[FiniteDuration], maxBytes: Int): Stream[F, A] =
-          decodeStream[F, A](socket.reads(maxBytes, timeout))
-
-        override def readsAndResolve[A: Codec: RequestId](timeout: Option[FiniteDuration],
-                                                          maxBytes: Int): Stream[F, A] =
-          decodeStream[F, A](socket.reads(maxBytes, timeout))
-            .evalMap { a =>
-              for {
-                idOpt <- Sync[F].delay(RequestId[A].id(a))
-                _ <- idOpt match {
-                  case None => Sync[F].unit
-                  case Some(id) =>
-                    promises.get.map(_.get(id)).flatMap {
-                      case Some(p) => p.complete(a).attempt.void
-                      case None    => Sync[F].unit
-                    }
-                }
-              } yield a
-            }
-
-        override def request[A: Codec: RequestId, B: Codec: RequestId](a: A, timeoutOpt: Option[FiniteDuration] = None): F[B] = {
-          val acquire =
-            for {
-              id      <- F.delay(RequestId[A].id(a).getOrElse(""))
-              promise <- Deferred[F, Any]
-              _       <- promises.update(_ + (id -> promise))
-            } yield (id, promise)
-
-          def use(t: (String, Deferred[F, Any])): F[B] =
-            write(a, timeoutOpt) *>
-              timeoutOpt
-                .fold(t._2.get)(timeout => t._2.get.timeout(timeout))
-                .flatMap(x => F.delay(x.asInstanceOf[B]))
-
-          def release(t: (String, Deferred[F, Any])): F[Unit] =
-            promises.update(_ - t._1)
-
-          F.bracket[(String, Deferred[F, Any]), B](acquire)(use)(release)
-        }
-
-        override def close: F[Unit] =
-          socket.close
-
-        override def isIncoming: Boolean =
-          incoming
-
-        override val localAddress: InetSocketAddress =
-          local
-
-        override val remoteAddress: InetSocketAddress =
-          remote
-
-        override def toString: String =
-          if (incoming) {
-            s"tcp incoming ${localAddress} <- ${remoteAddress}"
-          } else {
-            s"tcp outgoing ${localAddress} -> ${remoteAddress}"
           }
       }
+
+      val stream = Stream
+        .resource(resource)
+        .flatMap { socket =>
+          out.dequeue
+            .flatMap(encodeStream[F, A])
+            .to(socket.writes(None))
+            .mergeHaltBoth(decodeStream[F, A](socket.reads(maxBytes, None)).to(sink))
+            .onFinalize(haltWhenTrue.set(true))
+        }
+        .interruptWhen(haltWhenTrue)
+
+      Connection(stream, in, out, promises, incoming, haltWhenTrue)
+    }
 }

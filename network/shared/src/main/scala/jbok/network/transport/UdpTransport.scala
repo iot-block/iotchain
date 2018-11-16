@@ -16,7 +16,7 @@ case class UdpTransport[F[_]](
     bind: InetSocketAddress,
     timeout: Option[FiniteDuration] = None
 )(implicit F: ConcurrentEffect[F]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("UdpTransport")
 
   implicit val AG = AsynchronousSocketGroup()
 
