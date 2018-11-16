@@ -87,11 +87,11 @@ class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit
     } else {
       for {
         snap <- clique.snapshot(block.header.number - 1, block.header.parentHash, Nil)
-        _ = log.trace(s"get previous snapshot(${snap.number})")
+        _ = log.debug(s"get previous snapshot(${snap.number}, ${snap.hash})")
         mined <- if (!snap.signers.contains(clique.signer)) {
           F.raiseError(new Exception("unauthorized"))
         } else {
-          log.trace(
+          log.debug(
             s"${clique.signer} consensus snap.recents: ${snap.recents}, ${snap.recents.find(_._2 == clique.signer)}")
           snap.recents.find(_._2 == clique.signer) match {
             case Some((seen, _)) if amongstRecent(block.header.number, seen, snap.signers.size) =>

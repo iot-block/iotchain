@@ -27,7 +27,7 @@ case class GenesisConfig(
     0,
     BigInt(Integer.parseInt(gasLimit.replace("0x", ""), 16)),
     0,
-    System.currentTimeMillis(),
+    0,
     extraData,
     mixHash.getOrElse(ByteVector.empty),
     nonce

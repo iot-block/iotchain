@@ -27,7 +27,7 @@ class Clique[F[_]](
 
   def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
     // try to read snapshot from cache or db
-    log.trace(s"try to read snapshot(${number}) from cache")
+    log.trace(s"try to read snapshot(${number}, ${hash}) from cache")
     OptionT
       .fromOption[F](recents.get(hash)) // If an in-memory snapshot was found, use that
       .orElseF(
@@ -67,14 +67,16 @@ class Clique[F[_]](
       case Some(s) =>
         // Previous snapshot found, apply any pending headers on top of it
         log.trace(s"applying ${headers.length} headers")
-        val newSnap = Snapshot.applyHeaders(s, headers)
-        recents.put(newSnap.hash, newSnap)
-        // If we've generated a new checkpoint snapshot, save to disk
-        if (newSnap.number % checkpointInterval == 0 && headers.nonEmpty) {
-          Snapshot.storeSnapshot[F](newSnap, history.db).map(_ => newSnap)
-        } else {
-          F.pure(newSnap)
-        }
+        for {
+          newSnap <- Snapshot.applyHeaders[F](s, headers)
+          _ = recents.put(newSnap.hash, newSnap)
+          // If we've generated a new checkpoint snapshot, save to disk
+          _ <- if (newSnap.number % checkpointInterval == 0 && headers.nonEmpty) {
+            Snapshot.storeSnapshot[F](newSnap, history.db).map(_ => newSnap)
+          } else {
+            F.pure(newSnap)
+          }
+        } yield newSnap
       case None => // No snapshot for this header, gather the header and move backward(recur)
         for {
           (h, p) <- if (parents.nonEmpty) {

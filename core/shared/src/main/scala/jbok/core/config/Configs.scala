@@ -109,6 +109,11 @@ object Configs {
       mineRounds: Int = 100000
   )
 
+  final case class TxPoolConfig(
+      poolSize: Int = 4096,
+      transactionTimeout: FiniteDuration = 10.minutes
+  )
+
   case class FilterConfig(
       filterTimeout: FiniteDuration = 10.minutes,
       filterManagerQueryTimeout: FiniteDuration = 3.minutes
@@ -121,6 +126,7 @@ object Configs {
       maxReceiptsPerRequest: Int = 60,
       maxNodesPerRequest: Int = 200,
       minPeersToChooseTargetBlock: Int = 2,
+      minBroadcastPeers: Int = 4,
       targetBlockOffset: Int = 500,
       retryInterval: FiniteDuration = 5.seconds,
       checkForNewBlockInterval: FiniteDuration = 5.seconds,
