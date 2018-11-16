@@ -125,7 +125,7 @@ class VMTest extends WordSpec with Matchers {
   }
 
   def check(label: String, vmJson: VMJson) =
-    s"test pass test suite ${label}" in {
+    s"pass test suite ${label}" in {
       val config    = EvmConfig.HomesteadConfigBuilder(None)
       val preState  = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
       val postState = loadMockWorldState(vmJson.post, vmJson.env.currentNumber)

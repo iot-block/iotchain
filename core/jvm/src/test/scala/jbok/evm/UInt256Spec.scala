@@ -1,8 +1,8 @@
 package jbok.evm
 
-import jbok.common.testkit._
 import jbok.core.models.UInt256
 import jbok.core.models.UInt256._
+import jbok.common.testkit._
 import jbok.evm.testkit._
 import org.scalatest.FunSuite
 import org.scalatest.prop.PropertyChecks

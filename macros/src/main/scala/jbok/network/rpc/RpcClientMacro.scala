@@ -80,33 +80,6 @@ object RpcClientMacro {
         }
       """
     }
-
-    def notification = {
-      val resultType: Type = method.returnType
-      val nestedType       = resultType.typeArgs(1)
-      q"""
-        override def $methodName: ${resultType} = {
-          def enc(x: $nestedType): String = {
-            val notification = JsonRPCNotification(${methodName.toString}, x)
-            notification.asJson.noSpaces
-          }
-
-          def dec(s: String): $nestedType = {
-            decode[JsonRPCNotification[$nestedType]](s).right.get.params
-          }
-
-          for {
-            queue <- Stream.eval(${c.prefix.tree}.client.getOrCreateQueue(Some(${methodName.toString})))
-            s <- queue.dequeue.imap[$nestedType](s => dec(s))(x => enc(x))
-          } yield s
-        }
-      """
-    }
-
-    if (macroUtils.isRequest(c)(member)) {
-      request
-    } else {
-      notification
-    }
+    request
   }
 }

@@ -2,15 +2,12 @@ package jbok.core.validators
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.HistoryFixture
+import jbok.codec.rlp.implicits._
 import jbok.core.Fixtures.Blocks._
 import jbok.core.models._
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.{ByteVector, _}
-import jbok.codec.rlp.implicits._
 
-class MPTValidatorFixture extends HistoryFixture {
+class MPTValidatorFixture {
   val validBlockHeader = BlockHeader(
     parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
     ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",

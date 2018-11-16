@@ -2,15 +2,15 @@ package jbok.core.validators
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.core.Fixtures
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.models._
 import jbok.core.validators.TransactionInvalid._
-import jbok.core.{Fixtures, HistoryFixture}
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.common.testkit._
 import scodec.bits._
 
-class TransactionValidatorFixture extends HistoryFixture {
+class TransactionValidatorFixture {
   val keyPair = SecP256k1.generateKeyPair().unsafeRunSync()
   val txBeforeHomestead = Transaction(
     nonce = 81,

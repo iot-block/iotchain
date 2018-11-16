@@ -1,14 +1,21 @@
 package jbok.core.consensus.pow.ethash
 
+import cats.effect.IO
 import jbok.JbokSpec
+import jbok.core.History
 import jbok.core.config.Configs.{BlockChainConfig, DaoForkConfig}
-import jbok.core.HistoryFixture
 import jbok.core.consensus.pow.ethash.OmmersError._
 import jbok.core.models.{Block, BlockBody, BlockHeader}
 import jbok.core.validators.CommonHeaderInvalid.HeaderNumberInvalid
 import scodec.bits._
+import jbok.common.testkit._
+import jbok.core.testkit._
 
-class OmmersValidatorFixture extends HistoryFixture {
+class OmmersValidatorFixture {
+  implicit val fixture = defaultFixture(algo = "ethash")
+
+  val history = random[History[IO]]
+
   val ommer1 = BlockHeader(
     parentHash = hex"fd07e36cfaf327801e5696134b36678f6a89fb1e8f017f2411a29d0ae810ab8b",
     ommersHash = hex"7766c4251396a6833ccbe4be86fbda3a200dccbe6a15d80ae3de5378b1540e04",

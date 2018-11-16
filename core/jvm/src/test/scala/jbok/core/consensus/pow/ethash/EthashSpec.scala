@@ -46,7 +46,7 @@ class EthashSpec extends JbokSpec {
         0x84).map(_.toByte)
 
       val blockNumber = 486382
-      val cache = makeCache(epoch(blockNumber))
+      val cache       = makeCache(epoch(blockNumber))
       val proofOfWork = hashimotoLight(hash, nonce, dagSize(epoch(blockNumber)), cache)
 
       proofOfWork.mixHash shouldBe ByteVector(mixHash)

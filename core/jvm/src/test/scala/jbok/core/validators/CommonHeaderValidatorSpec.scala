@@ -2,13 +2,17 @@ package jbok.core.validators
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.HistoryFixture
+import jbok.core.History
 import jbok.core.models.BlockHeader
 import jbok.core.validators.CommonHeaderInvalid._
-import jbok.common.testkit._
 import scodec.bits._
+import jbok.common.testkit._
+import jbok.core.testkit._
 
-class CommonHeaderValidatorFixture extends HistoryFixture {
+class CommonHeaderValidatorFixture {
+  implicit val fixture = defaultFixture()
+  val history          = random[History[IO]]
+
   val validBlockHeader = BlockHeader(
     parentHash = hex"d882d5c210bab4cb7ef0b9f3dc2130cb680959afcd9a8f9bf83ee6f13e2f9da3",
     ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",

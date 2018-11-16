@@ -4,13 +4,13 @@ import jbok.codec.HexPrefix
 import jbok.common.testkit._
 import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
 import jbok.crypto.authds.mpt.{MerklePatriciaTrie, MptNode}
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.persistent.KeyValueDB
 import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits.ByteVector
 
-object testkit extends testkit
-trait testkit {
+object testkit {
   implicit def arbMerkleTrie: Arbitrary[MerklePatriciaTrie[IO]] = Arbitrary {
     for {
       namespace <- arbitrary[ByteVector]
@@ -42,6 +42,13 @@ trait testkit {
   }
 
   implicit val arbMptNode: Arbitrary[MptNode] = Arbitrary {
-      Gen.oneOf[MptNode](arbLeafNode.arbitrary, arbExtensionNode.arbitrary, arbBranchNode.arbitrary)
-    }
+    Gen.oneOf[MptNode](arbLeafNode.arbitrary, arbExtensionNode.arbitrary, arbBranchNode.arbitrary)
+  }
+
+  def genKeyPair: Gen[KeyPair] =
+    Signature[ECDSA].generateKeyPair().unsafeRunSync()
+
+  implicit val arbKeyPair: Arbitrary[KeyPair] = Arbitrary {
+    genKeyPair
+  }
 }

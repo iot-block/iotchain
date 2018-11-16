@@ -20,14 +20,12 @@ class SignedTransactionSpec extends JbokSpec {
 
     "correctly set pointSign for chainId with general signing schema" in {
       forAll { tx: Transaction =>
-        val keyPair               = SecP256k1.generateKeyPair().unsafeRunSync()
-        val chainId: Option[Byte] = Some(0x3d.toByte)
-        val address               = Address(keyPair.public.bytes.kec256)
-        val result                = SignedTransaction.sign(tx, keyPair, None)
-        val senderAddress         = result.senderAddress(None).getOrElse(Address.empty)
+        val keyPair       = SecP256k1.generateKeyPair().unsafeRunSync()
+        val address       = Address(keyPair.public.bytes.kec256)
+        val result        = SignedTransaction.sign(tx, keyPair, None)
+        val senderAddress = result.senderAddress(None).getOrElse(Address.empty)
         address shouldBe senderAddress
       }
     }
-
   }
 }

@@ -4,7 +4,6 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.common.GraphUtil
-import jbok.common.testkit.Cast
 import jbok.persistent.KeyValueDB
 import scalax.collection.io.dot.DotAttr
 import scalax.collection.io.dot.implicits._

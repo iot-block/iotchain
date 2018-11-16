@@ -47,7 +47,7 @@ object RpcServerMacro {
                 case Right(req) =>
                   $run.attempt.map {
                     case Left(e: JsonRPCError) => e.copy(id = req.id).asJson.noSpaces
-                    case Left(e) => JsonRPCResponse.internalError(e.toString, Some(req.id)).asJson.noSpaces
+                    case Left(e) => JsonRPCResponse.internalError(e.toString, req.id).asJson.noSpaces
                     case Right(x) => JsonRPCResponse.ok(req.id, x).asJson.noSpaces
                   }
               }

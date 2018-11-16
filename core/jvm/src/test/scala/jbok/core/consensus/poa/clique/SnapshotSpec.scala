@@ -2,15 +2,14 @@ package jbok.core.consensus.poa.clique
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.common.execution._
 import jbok.core.History
-import jbok.core.Fixtures.Blocks.Genesis
+import jbok.core.config.GenesisConfig
 import jbok.core.models.{Address, BlockHeader}
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import jbok.common.execution._
-import jbok.core.config.GenesisConfig
 
 import scala.collection.mutable
 

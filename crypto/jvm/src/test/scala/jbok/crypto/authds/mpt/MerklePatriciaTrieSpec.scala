@@ -3,8 +3,8 @@ package jbok.crypto.authds.mpt
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.codec.rlp.implicits._
-import jbok.common.testkit._
 import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
+import jbok.common.testkit._
 import jbok.crypto.testkit._
 import jbok.persistent.KeyValueDB
 import org.scalacheck.Gen
@@ -27,11 +27,11 @@ class MerklePatriciaTrieSpec extends JbokSpec {
 
     val extNode = ExtensionNode("babe", leafNode.entry)
     Codec.decode[MptNode](extNode.bytes.bits).require.value shouldBe extNode
-    Codec.decode[MptNode](extNode.bytes.bits).require.asInstanceOf[ExtensionNode].child shouldBe Right(leafNode)
+    Codec.decode[MptNode](extNode.bytes.bits).require.value.asInstanceOf[ExtensionNode].child shouldBe Right(leafNode)
     extNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + leafNode.bytes.length)
 
     val branchNode = BranchNode.withSingleBranch('a', extNode.entry, Some(hex"c0de"))
-    val bn         = Codec.decode[MptNode](branchNode.bytes.bits).require.asInstanceOf[BranchNode]
+    val bn         = Codec.decode[MptNode](branchNode.bytes.bits).require.value.asInstanceOf[BranchNode]
     bn shouldBe branchNode
     bn.branchAt('a') shouldBe Some(extNode.entry)
     bn.bytes.length shouldBe 1 + (15 * 1) + (1 + extNode.bytes.length) + (1 + 2)

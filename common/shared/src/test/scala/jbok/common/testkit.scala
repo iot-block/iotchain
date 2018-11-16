@@ -7,6 +7,12 @@ import org.scalacheck.Arbitrary._
 import scodec.bits.ByteVector
 
 object testkit {
+  def random[A](implicit arbA: Arbitrary[A]): A =
+    arbA.arbitrary.sample.get
+
+  def random[A](genA: Gen[A]): A =
+    genA.sample.get
+
   def intGen(min: Int, max: Int): Gen[Int] = Gen.choose(min, max)
 
   implicit val arbInt: Arbitrary[Int] = Arbitrary { intGen(Int.MinValue, Int.MaxValue) }

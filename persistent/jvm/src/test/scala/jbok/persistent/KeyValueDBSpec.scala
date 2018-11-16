@@ -3,9 +3,9 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.codec.rlp.implicits._
-import jbok.common.testkit._
 import jbok.persistent.testkit._
 import scodec.bits.ByteVector
+import jbok.common.testkit._
 
 class KeyValueDBSpec extends JbokSpec {
   "KeyValueDB" should {

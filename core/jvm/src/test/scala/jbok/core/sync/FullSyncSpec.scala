@@ -1,28 +1,44 @@
 package jbok.core.sync
+
+import cats.effect.IO
+import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.core.consensus.poa.clique.CliqueFixture
-import jbok.core.mining.BlockMinerFixture
+import jbok.common.testkit._
+import jbok.core.mining.BlockMiner
+import jbok.core.testkit._
+
+import scala.concurrent.duration._
 
 class FullSyncSpec extends JbokSpec {
   "FullSync" should {
-    val fix1 = new BlockMinerFixture(new CliqueFixture {}, 20000)
-    val fix2 = new BlockMinerFixture(new CliqueFixture {}, 20001)
-    fix1.history.init(fix1.genesisConfig).unsafeRunSync()
-    fix2.history.init(fix1.genesisConfig).unsafeRunSync()
+    implicit val fixture = defaultFixture()
 
     "sync all nodes to a single highest state" in {
-      fix1.peerManager.start.unsafeRunSync()
+      val sm1   = random[SyncManager[IO]](arbSyncManager(fixture))
+      val sm2   = random[SyncManager[IO]](arbSyncManager(fixture.copy(port = fixture.port + 1)))
+      val sm3   = random[SyncManager[IO]](arbSyncManager(fixture.copy(port = fixture.port + 2)))
+      val miner = random[BlockMiner[IO]](arbBlockMiner(fixture))
 
-      val N = 3
-      fix1.miner.miningStream.take(N).compile.toList.unsafeRunSync()
+      // let miner mine 10 blocks first
+      val blocks = miner.miningStream().take(10).compile.toList.unsafeRunSync()
+      sm1.executor.importBlocks(blocks).unsafeRunSync()
+      println(sm1.executor.history.getBestBlockNumber.unsafeRunSync())
 
-      fix2.peerManager.addPeerNode(fix1.peerManager.peerNode).unsafeRunSync()
-      Thread.sleep(2000)
+      val p = for {
+        fiber <- Stream(sm1, sm2, sm3).map(_.peerManager.start).parJoinUnbounded.compile.drain.start
+        _     <- T.sleep(1.second)
+        _     <- sm1.runService.compile.drain.start
+        _     <- T.sleep(1.second)
+        _     <- sm2.peerManager.addPeerNode(sm1.peerManager.peerNode)
+        _     <- sm3.peerManager.addPeerNode(sm1.peerManager.peerNode)
+        _     <- T.sleep(1.second)
 
-      // miner2 sync to miner1
-      fix2.fullSync.stream.take(1).compile.drain.unsafeRunSync()
-      fix1.peerManager.stop.unsafeRunSync()
+        _ <- sm2.runFullSync.unNone.take(1).compile.drain
+        _ <- fiber.cancel
+      } yield ()
+
+      p.unsafeRunSync()
     }
   }
 }
