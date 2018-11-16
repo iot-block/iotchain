@@ -1,4 +1,5 @@
 package jbok.benchmark
+
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.models.BlockHeader

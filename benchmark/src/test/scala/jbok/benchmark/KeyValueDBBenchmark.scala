@@ -2,7 +2,6 @@ package jbok.benchmark
 import better.files._
 import cats.effect.IO
 import jbok.common.execution._
-import jbok.common.testkit._
 import jbok.persistent.KeyValueDB
 import jbok.persistent.leveldb.LevelDB
 import jbok.core.testkit._
