@@ -18,10 +18,10 @@ class FastSyncSpec extends JbokSpec {
     "download accounts, storages, and code" ignore {
       val config = SyncConfig(targetBlockOffset = 0)
 
-      val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
-      val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
-      val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
-      val miner  = random[BlockMiner[IO]](arbBlockMiner(fixture))
+      val sm1   = random[SyncManager[IO]](genSyncManager(config)(fixture))
+      val sm2   = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
+      val sm3   = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
+      val miner = random[BlockMiner[IO]](arbBlockMiner(fixture))
 
       val N = 10
       // let miner mine N blocks

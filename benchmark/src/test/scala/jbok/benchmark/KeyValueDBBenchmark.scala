@@ -1,9 +1,11 @@
 package jbok.benchmark
+
 import better.files._
 import cats.effect.IO
 import jbok.common.execution._
 import jbok.persistent.KeyValueDB
 import jbok.persistent.leveldb.LevelDB
+import jbok.common.testkit._
 import jbok.core.testkit._
 import org.openjdk.jmh.annotations.{Benchmark, OperationsPerInvocation, TearDown}
 import org.scalacheck.Gen

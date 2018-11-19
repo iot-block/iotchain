@@ -1,4 +1,5 @@
 package jbok.benchmark
+
 import org.openjdk.jmh.annotations.Benchmark
 import jbok.crypto._
 

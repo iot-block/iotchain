@@ -24,9 +24,7 @@ final case class SyncManager[F[_]](
   // (requestHandler.service <+> blockHandler.service).orNil
   // make intellij happy
   val service: PeerService[F] =
-    SemigroupK[Kleisli[OptionT[F, ?], Request[F], ?]]
-      .combineK(requestHandler.service, blockHandler.service)
-      .orNil
+    (requestHandler.service <+> blockHandler.service <+> txPool.service).orNil
 
   def run(stream: Stream[F, Request[F]]): Stream[F, Unit] =
     stream.evalMap { req =>

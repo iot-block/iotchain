@@ -48,6 +48,13 @@ class HistorySpec extends JbokSpec {
       history.getHashByBlockNumber(0).unsafeRunSync() shouldBe history.genesisHeader.unsafeRunSync().hash.some
     }
 
-    "put block body should update tx location mapping" ignore {}
+    "put block body should update tx location mapping" in {
+      val history = random[History[IO]]
+      val txs = random[List[SignedTransaction]](genTxs(1, 1))
+      val block= random[Block](genBlock(stxsOpt = txs.some))
+      history.putBlockBody(block.header.hash, block.body).unsafeRunSync()
+      val location = history.getTransactionLocation(txs.head.hash).unsafeRunSync()
+      location shouldBe Some(TransactionLocation(block.header.hash, 0))
+    }
   }
 }

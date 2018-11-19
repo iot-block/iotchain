@@ -7,7 +7,7 @@ import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import cats.implicits._
 import fs2._
-import fs2.concurrent.Queue
+import fs2.concurrent.{Queue, SignallingRef}
 import jbok.network.Connection
 import jbok.network.common.RequestId
 import scodec.Codec
@@ -26,9 +26,10 @@ object WsClient {
       AG: AsynchronousChannelGroup
   ): F[Connection[F, A]] =
     for {
-      in       <- Queue.bounded[F, A](maxQueued)
-      out      <- Queue.bounded[F, A](maxQueued)
-      promises <- Ref.of[F, Map[String, Deferred[F, A]]](Map.empty)
+      in           <- Queue.bounded[F, A](maxQueued)
+      out          <- Queue.bounded[F, A](maxQueued)
+      promises     <- Ref.of[F, Map[String, Deferred[F, A]]](Map.empty)
+      haltWhenTrue <- SignallingRef[F, Boolean](true)
     } yield {
       val pipe: Pipe[F, A, A] = { input =>
         out.dequeue.concurrently(
@@ -54,6 +55,6 @@ object WsClient {
 
       val stream = spinoco.fs2.http.websocket.WebSocket.client[F, A, A](request, framePipe).drain
 
-      Client[F, A](stream, in, out, promises, uri)
+      Client[F, A](stream, in, out, promises, uri, haltWhenTrue)
     }
 }

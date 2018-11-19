@@ -1,4 +1,5 @@
 package jbok.benchmark
+
 import cats.effect.IO
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, Signature}

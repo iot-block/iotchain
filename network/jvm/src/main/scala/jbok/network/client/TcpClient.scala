@@ -22,6 +22,6 @@ object TcpClient {
     val to = new InetSocketAddress(uri.getHost, uri.getPort)
     TcpUtil
       .socketToConnection[F, A](fs2.io.tcp.client[F](to, keepAlive = true, noDelay = true), false)
-      .map(conn => Client(conn.stream, conn.in, conn.out, conn.promises, uri))
+      .map(conn => Client(conn.stream, conn.in, conn.out, conn.promises, uri, conn.haltWhenTrue))
   }
 }

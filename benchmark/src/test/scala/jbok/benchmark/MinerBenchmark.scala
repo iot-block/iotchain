@@ -2,6 +2,7 @@ package jbok.benchmark
 
 import cats.effect.IO
 import jbok.core.mining.BlockMiner
+import jbok.common.testkit._
 import jbok.core.testkit._
 import org.openjdk.jmh.annotations._
 
