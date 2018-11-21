@@ -7,7 +7,7 @@ import org.scalajs.dom.Element
 
 object TxView {
   @binding.dom
-  def render(tx: SignedTransaction): Binding[Element] = {
+  def render(tx: SignedTransaction): Binding[Element] =
     <div>
       <h3>{s"Transaction (${tx.hash.toHex})"}</h3>
 
@@ -35,5 +35,4 @@ object TxView {
         </tbody>
       </table>
     </div>
-  }
 }
