@@ -28,9 +28,7 @@ object UInt256 {
 
   def apply(bytes: ByteVector): UInt256 = {
     require(bytes.length <= Size, s"Input byte array cannot be longer than $Size: ${bytes.length}")
-    UInt256(bytes.foldLeft(BigInt(0)) { (n, b) =>
-      (n << 8) + (b & 0xff)
-    })
+    UInt256(BigInt(1, bytes.toArray))
   }
 
   def apply(array: Array[Byte]): UInt256 =
@@ -152,6 +150,19 @@ class UInt256 private (private val n: BigInt) extends Ordered[UInt256] {
   def slt(that: UInt256): Boolean = this.signedN < that.signedN
 
   def sgt(that: UInt256): Boolean = this.signedN > that.signedN
+
+  def <<(that: UInt256): UInt256 = if (that.n >= 256) UInt256.Zero else UInt256(this.n << that.n.toInt)
+
+  def >>(that: UInt256): UInt256 =
+    if (that.n >= 256)
+      if (this.signedN < 0)
+        UInt256.MaxValue
+      else
+        UInt256.Zero
+    else
+      UInt256(this.signedN >> that.n.toInt)
+
+  def >>>(that: UInt256): UInt256 = if (that.n >= 256) UInt256.Zero else UInt256(this.n >> that.n.toInt)
 
   def signExtend(that: UInt256): UInt256 =
     if (that.n < 0 || that.n > 31) {
