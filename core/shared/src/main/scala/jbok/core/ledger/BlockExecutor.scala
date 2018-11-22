@@ -7,7 +7,7 @@ import cats.implicits._
 import fs2._
 import fs2.concurrent.Queue
 import jbok.core.config.Configs.{BlockChainConfig, TxPoolConfig}
-import jbok.core.consensus.Consensus2
+import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
 import jbok.core.models.UInt256._
 import jbok.core.models._
@@ -48,7 +48,7 @@ object BlockImportResult {
 
 case class BlockExecutor[F[_]](
     config: BlockChainConfig,
-    consensus: Consensus2[F],
+    consensus: Consensus[F],
     blockQueue: Queue[F, TypedBlock],
     vm: VM,
     txValidator: TransactionValidator[F],
@@ -78,9 +78,9 @@ case class BlockExecutor[F[_]](
       currentTd       <- history.getTotalDifficultyByHash(best.header.hash).map(_.get)
       consensusResult <- consensus.verifyHeader(block.header)
       importResult <- consensusResult match {
-        case Consensus2.Commit     => importBlockToTop(block, best.header.number, currentTd)
-        case Consensus2.Stash      => blockPool.addBlock(block, best.header.number).map(_ => BlockImportResult.Pooled)
-        case Consensus2.Discard(e) => F.pure(BlockImportResult.Failed(e))
+        case Consensus.Commit     => importBlockToTop(block, best.header.number, currentTd)
+        case Consensus.Stash      => blockPool.addBlock(block, best.header.number).map(_ => BlockImportResult.Pooled)
+        case Consensus.Discard(e) => F.pure(BlockImportResult.Failed(e))
       }
     } yield importResult
 
@@ -96,13 +96,13 @@ case class BlockExecutor[F[_]](
       currentTd       <- history.getTotalDifficultyByHash(best.header.hash).map(_.get)
       consensusResult <- consensus.verifyHeader(mined.block.header)
       _ <- consensusResult match {
-        case Consensus2.Commit =>
+        case Consensus.Commit =>
           history.putBlockAndReceipts(mined.block, mined.receipts, currentTd + mined.block.header.difficulty, true)
 
-        case Consensus2.Stash =>
+        case Consensus.Stash =>
           blockPool.addBlock(mined.block, best.header.number)
 
-        case Consensus2.Discard(reasons) =>
+        case Consensus.Discard(reasons) =>
           F.delay(log.warn(s"discard reasons: ${reasons.map(_.getMessage).toList.mkString("\n")}"))
       }
     } yield ()
@@ -516,7 +516,7 @@ case class BlockExecutor[F[_]](
 object BlockExecutor {
   def apply[F[_]](
       config: BlockChainConfig,
-      consensus: Consensus2[F],
+      consensus: Consensus[F],
   )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[BlockExecutor[F]] =
     for {
       queue <- Queue.bounded[F, TypedBlock](128)

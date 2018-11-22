@@ -5,7 +5,7 @@ import cats.implicits._
 import fs2._
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.MiningConfig
-import jbok.core.consensus.Consensus2
+import jbok.core.consensus.Consensus
 import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.TypedBlock._
 import jbok.core.models.{SignedTransaction, _}
@@ -20,7 +20,7 @@ import scodec.bits.ByteVector
   * [[BlockMiner]] is in charge of
   * 1. preparing a [[PendingBlock]] with [[BlockHeader]] prepared by consensus and [[BlockBody]] contains transactions
   * 2. call [[BlockExecutor]] to execute this [[PendingBlock]] into a [[ExecutedBlock]]
-  * 3. call [[Consensus2]] to seal this [[ExecutedBlock]] into a [[MinedBlock]]
+  * 3. call [[Consensus]] to seal this [[ExecutedBlock]] into a [[MinedBlock]]
   * 4. submit the [[MinedBlock]] to [[BlockExecutor]]
   */
 case class BlockMiner[F[_]](

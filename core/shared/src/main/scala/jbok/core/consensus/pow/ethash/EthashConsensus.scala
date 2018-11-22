@@ -1,12 +1,14 @@
 package jbok.core.consensus.pow.ethash
 
+import cats.data.NonEmptyList
 import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.ledger.History
 import jbok.core.config.Configs.{BlockChainConfig, MiningConfig, MonetaryPolicyConfig}
-import jbok.core.consensus.{Consensus, ConsensusResult}
+import jbok.core.consensus.Consensus
+import jbok.core.ledger.TypedBlock.MinedBlock
+import jbok.core.ledger.{History, TypedBlock}
 import jbok.core.models.{Block, BlockHeader}
 import jbok.core.pool.BlockPool
 import jbok.crypto._
@@ -20,37 +22,13 @@ class EthashConsensus[F[_]](
     miner: EthashMiner[F],
     ommersValidator: EthashOmmersValidator[F],
     headerValidator: EthashHeaderValidator[F]
-)(implicit F: Sync[F]) extends Consensus[F](history, blockPool) {
-  val difficultyCalculator = new EthDifficultyCalculator(blockChainConfig)
-  val rewardCalculator     = new EthRewardCalculator(MonetaryPolicyConfig())
+)(implicit F: Sync[F])
+    extends Consensus[F](history, blockPool) {
 
-  override def semanticValidate(parentHeader: BlockHeader, block: Block): F[Unit] =
+  override def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader]): F[BlockHeader] =
     for {
-      _ <- headerValidator.validate(parentHeader, block.header)
-      _ <- ommersValidator.validate(
-        block.header.parentHash,
-        block.header.number,
-        block.body.uncleNodesList,
-        blockPool.getHeader,
-        blockPool.getNBlocks
-      )
-    } yield ()
-
-  override def calcDifficulty(blockTime: Long, parentHeader: BlockHeader): F[BigInt] =
-    F.pure(difficultyCalculator.calculateDifficulty(blockTime, parentHeader))
-
-  override def calcBlockMinerReward(blockNumber: BigInt, ommersCount: Int): F[BigInt] =
-    F.pure(rewardCalculator.calcBlockMinerReward(blockNumber, ommersCount))
-
-  override def calcOmmerMinerReward(blockNumber: BigInt, ommerNumber: BigInt): F[BigInt] =
-    F.pure(rewardCalculator.calcOmmerMinerReward(blockNumber, ommerNumber))
-
-  override def getTimestamp: F[Long] =
-    F.pure(System.currentTimeMillis())
-
-  override def prepareHeader(parent: Block, ommers: List[BlockHeader]): F[BlockHeader] = {
-    val number = parent.header.number + 1
-    for {
+      parent <- parentOpt.fold(history.getBestBlock)(F.pure)
+      number = parent.header.number + 1
       timestamp  <- getTimestamp
       difficulty <- calcDifficulty(timestamp, parent.header)
     } yield
@@ -74,21 +52,61 @@ class EthashConsensus[F[_]](
         mixHash = ByteVector.empty,
         nonce = ByteVector.empty
       )
+
+  override def postProcess(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.ExecutedBlock[F]] = ???
+
+  override def mine(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.MinedBlock] =
+    miner.mine(executed.block).map(block => MinedBlock(block, executed.receipts))
+
+  override def verifyHeader(header: BlockHeader): F[Consensus.Result] =
+    history.getBestBlock.flatMap { parent =>
+      F.ifM(blockPool.isDuplicate(header.hash))(
+        ifTrue = F.pure(Consensus.Discard(NonEmptyList.of(new Exception("duplicate")))),
+        ifFalse = for {
+          currentTd <- history.getTotalDifficultyByHash(parent.header.hash).map(_.get)
+          isTopOfChain = header.parentHash == parent.header.hash
+          result = if (isTopOfChain) {
+            Consensus.Commit
+          } else {
+            Consensus.Stash
+          }
+        } yield result
+      )
+    }
+
+  ////////////////////////////////////
+  ////////////////////////////////////
+
+  private val difficultyCalculator = new EthDifficultyCalculator(blockChainConfig)
+  private val rewardCalculator     = new EthRewardCalculator(MonetaryPolicyConfig())
+
+  private def semanticValidate(parentHeader: BlockHeader, block: Block): F[Unit] =
+    for {
+      _ <- headerValidator.validate(parentHeader, block.header)
+      _ <- ommersValidator.validate(
+        block.header.parentHash,
+        block.header.number,
+        block.body.uncleNodesList,
+        blockPool.getHeader,
+        blockPool.getNBlocks
+      )
+    } yield ()
+
+  private def calcDifficulty(blockTime: Long, parentHeader: BlockHeader): F[BigInt] =
+    F.pure(difficultyCalculator.calculateDifficulty(blockTime, parentHeader))
+
+  private def calcBlockMinerReward(blockNumber: BigInt, ommersCount: Int): F[BigInt] =
+    F.pure(rewardCalculator.calcBlockMinerReward(blockNumber, ommersCount))
+
+  private def calcOmmerMinerReward(blockNumber: BigInt, ommerNumber: BigInt): F[BigInt] =
+    F.pure(rewardCalculator.calcOmmerMinerReward(blockNumber, ommerNumber))
+
+  private def getTimestamp: F[Long] =
+    F.pure(System.currentTimeMillis())
+
+  private def calcGasLimit(parentGas: BigInt): BigInt = {
+    val GasLimitBoundDivisor: Int = 1024
+    val gasLimitDifference        = parentGas / GasLimitBoundDivisor
+    parentGas + gasLimitDifference - 1
   }
-
-  override def run(parent: Block, current: Block): F[ConsensusResult] =
-    F.ifM(blockPool.isDuplicate(current.header.hash))(
-      ifTrue = F.pure(ConsensusResult.BlockInvalid(new Exception("duplicate"))),
-      ifFalse = for {
-        currentTd <- history.getTotalDifficultyByHash(parent.header.hash).map(_.get)
-        isTopOfChain = current.header.parentHash == parent.header.hash
-        result = if (isTopOfChain) {
-          ConsensusResult.ImportToTop
-        } else {
-          ConsensusResult.Pooled
-        }
-      } yield result
-    )
-
-  override def mine(block: Block): F[Block] = miner.mine(block)
 }

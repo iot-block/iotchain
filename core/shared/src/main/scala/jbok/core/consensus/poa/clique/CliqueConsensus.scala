@@ -1,43 +1,28 @@
 package jbok.core.consensus.poa.clique
 
+import cats.data.NonEmptyList
 import cats.effect.ConcurrentEffect
 import cats.implicits._
-import jbok.core.consensus.{Consensus, ConsensusResult}
+import jbok.core.consensus.Consensus
+import jbok.core.ledger.TypedBlock._
 import jbok.core.models.{Address, Block, BlockHeader}
 import jbok.core.pool.BlockPool
 import scodec.bits.ByteVector
 
 import scala.util.Random
 
-class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit F: ConcurrentEffect[F])
+case class CliqueConsensus[F[_]](
+    clique: Clique[F],
+    blockPool: BlockPool[F]
+)(implicit F: ConcurrentEffect[F])
     extends Consensus[F](clique.history, blockPool) {
   private[this] val log = org.log4s.getLogger("CliqueConsensus")
 
-  override def semanticValidate(parentHeader: BlockHeader, block: Block): F[Unit] =
+  override def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader]): F[BlockHeader] =
     for {
-      snap <- clique.snapshot(block.header.number - 1, block.header.hash, Nil)
-      _ = if (!snap.inturn(block.header.number, clique.signer))
-        F.raiseError(new Exception("invalid turn in block.difficulty"))
-      else F.pure(Unit)
-    } yield ()
-
-  override def calcDifficulty(blockTime: Long, parentHeader: BlockHeader): F[BigInt] =
-    F.pure(BigInt(0))
-
-  override def calcBlockMinerReward(blockNumber: BigInt, ommersCount: Int): F[BigInt] =
-    F.pure(BigInt(0))
-
-  override def calcOmmerMinerReward(blockNumber: BigInt, ommerNumber: BigInt): F[BigInt] =
-    F.pure(BigInt(0))
-
-  override def getTimestamp: F[Long] =
-    F.pure(System.currentTimeMillis())
-
-  override def prepareHeader(parent: Block, ommers: List[BlockHeader]): F[BlockHeader] = {
-    val blockNumber = parent.header.number + 1
-    val beneficiary = ByteVector.empty
-    val timestamp   = parent.header.unixTimestamp + clique.config.period.toMillis
-    for {
+      parent <- parentOpt.fold(history.getBestBlock)(_.pure[F])
+      blockNumber = parent.header.number + 1
+      timestamp   = parent.header.unixTimestamp + clique.config.period.toMillis
       snap <- clique.snapshot(blockNumber - 1, parent.header.hash, Nil)
       _ = log.trace(s"loaded snap from block(${blockNumber - 1})")
       _ = log.trace(s"timestamp: ${timestamp}, stime: ${System.currentTimeMillis()}")
@@ -45,7 +30,7 @@ class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit
       BlockHeader(
         parentHash = parent.header.hash,
         ommersHash = ByteVector.empty,
-        beneficiary = beneficiary,
+        beneficiary = ByteVector.empty,
         stateRoot = ByteVector.empty,
         //we are not able to calculate transactionsRoot here because we do not know if they will fail
         transactionsRoot = ByteVector.empty,
@@ -60,56 +45,37 @@ class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit
         mixHash = ByteVector.empty,
         nonce = Clique.nonceDropVote
       )
-  }
 
-  private def calcDifficulty(snapshot: Snapshot, signer: Address, number: BigInt): BigInt =
-    if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn
+  override def postProcess(executed: ExecutedBlock[F]): F[ExecutedBlock[F]] =
+    F.pure(executed)
 
-  override def run(parent: Block, current: Block): F[ConsensusResult] =
-    for {
-      snap <- clique.snapshot(parent.header.number, parent.header.hash, Nil)
-      number     = current.header.number
-      difficulty = calcDifficulty(snap, Clique.ecrecover(current.header), number)
-      isDuplicate <- blockPool.isDuplicate(current.header.hash)
-    } yield
-      if (isDuplicate) {
-        ConsensusResult.BlockInvalid(new Exception(s"Duplicated Block: ${current.tag}"))
-      } else if (number == parent.header.number + 1 &&
-                 current.header.unixTimestamp == parent.header.unixTimestamp + clique.config.period.toMillis &&
-                 current.header.difficulty == difficulty) {
-        ConsensusResult.ImportToTop
-      } else { ConsensusResult.Pooled }
-
-  override def mine(block: Block): F[Block] = {
-    log.trace(s"${clique.signer} start mining ${block.tag}")
-    if (block.header.number == 0) {
+  override def mine(executed: ExecutedBlock[F]): F[MinedBlock] = {
+    log.trace(s"${clique.signer} start mining ${executed.block.tag}")
+    if (executed.block.header.number == 0) {
       F.raiseError(new Exception("mining the genesis block is not supported"))
     } else {
       for {
-        snap <- clique.snapshot(block.header.number - 1, block.header.parentHash, Nil)
-        _ = log.debug(s"get previous snapshot(${snap.number}, ${snap.hash})")
+        snap <- clique.snapshot(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
         mined <- if (!snap.signers.contains(clique.signer)) {
           F.raiseError(new Exception("unauthorized"))
         } else {
-          log.debug(
-            s"${clique.signer} consensus snap.recents: ${snap.recents}, ${snap.recents.find(_._2 == clique.signer)}")
           snap.recents.find(_._2 == clique.signer) match {
-            case Some((seen, _)) if amongstRecent(block.header.number, seen, snap.signers.size) =>
+            case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.signers.size) =>
               // If we're amongst the recent signers, wait for the next block
 
-              val wait = (snap.signers.size / 2 + 1 - (block.header.number - seen).toInt)
+              val wait = (snap.signers.size / 2 + 1 - (executed.block.header.number - seen).toInt)
                 .max(0) * clique.config.period.toMillis
-              val delay = 0L.max(block.header.unixTimestamp - System.currentTimeMillis()) + wait
+              val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
               log.trace(s"signed recently, sleep (${delay}) seconds")
               Thread.sleep(delay)
               F.raiseError(new Exception(
-                s"${clique.signer} signed recently, must wait for others: ${block.header.number}, ${seen}, ${snap.signers.size / 2 + 1}, ${snap.recents}"))
+                s"${clique.signer} signed recently, must wait for others: ${executed.block.header.number}, ${seen}, ${snap.signers.size / 2 + 1}, ${snap.recents}"))
 
             case _ =>
-              val wait = 0L.max(block.header.unixTimestamp - System.currentTimeMillis())
+              val wait = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis())
               log.trace(s"wait: ${wait}")
               val delay: Long = wait +
-                (if (block.header.difficulty == Clique.diffNoTurn) {
+                (if (executed.block.header.difficulty == Clique.diffNoTurn) {
                    // It's not our turn explicitly to sign, delay it a bit
                    val wiggle: Long = Random.nextLong().abs % ((snap.signers.size / 2 + 1) * Clique.wiggleTime.toMillis)
                    log.trace(s"${clique.signer} it is not our turn, delay ${wiggle}")
@@ -121,17 +87,44 @@ class CliqueConsensus[F[_]](blockPool: BlockPool[F], clique: Clique[F])(implicit
 
               for {
                 _ <- F.delay(Thread.sleep(delay))
-                bytes = Clique.sigHash(block.header)
+                bytes = Clique.sigHash(executed.block.header)
                 signed <- clique.sign(bytes)
-                _ = log.trace(s"${clique.signer} mined block(${block.header.number})")
-              } yield
-                block.copy(
-                  header = block.header.copy(
-                    extraData = block.header.extraData.dropRight(Clique.extraSeal) ++ ByteVector(signed.bytes)))
+                _ = log.trace(s"${clique.signer} mined block(${executed.block.header.number})")
+                header = executed.block.header.copy(
+                  extraData = executed.block.header.extraData.dropRight(Clique.extraSeal) ++ ByteVector(signed.bytes))
+              } yield MinedBlock(executed.block.copy(header = header), executed.receipts)
           }
         }
       } yield mined
     }
+  }
+
+  override def verifyHeader(header: BlockHeader): F[Consensus.Result] =
+    for {
+      parent <- history.getBestBlock
+      snap   <- clique.snapshot(parent.header.number, parent.header.hash, Nil)
+      number     = header.number
+      difficulty = calcDifficulty(snap, Clique.ecrecover(header), number)
+      isDuplicate <- blockPool.isDuplicate(header.hash)
+    } yield
+      if (isDuplicate) {
+        Consensus.Discard(NonEmptyList.one(new Exception(s"Duplicated Block: ${header.tag}")))
+      } else if (number == parent.header.number + 1 &&
+                 header.unixTimestamp == parent.header.unixTimestamp + clique.config.period.toMillis &&
+                 header.difficulty == difficulty) {
+        Consensus.Commit
+      } else { Consensus.Stash }
+
+  //////////////////////////////////
+  //////////////////////////////////
+
+  private def calcDifficulty(snapshot: Snapshot, signer: Address, number: BigInt): BigInt =
+    if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn
+
+  private def calcGasLimit(parentGas: BigInt): BigInt = {
+    val GasLimitBoundDivisor: Int = 1024
+    val gasLimitDifference        = parentGas / GasLimitBoundDivisor
+    parentGas + gasLimitDifference - 1
   }
 
   private def amongstRecent(currentNumber: BigInt, seen: BigInt, N: Int): Boolean = {

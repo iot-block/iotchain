@@ -5,9 +5,8 @@ import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
 import jbok.core.config.GenesisConfig
-import jbok.core.consensus.{Consensus, Consensus2}
-import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus, CliqueConsensus2}
-import jbok.core.consensus.pow.ethash._
+import jbok.core.consensus.Consensus
+import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.messages._
 import jbok.core.mining.{BlockMiner, SimAccount, TxGenerator}
@@ -15,7 +14,6 @@ import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerSet}
 import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
 import jbok.core.sync._
-import jbok.core.validators.BlockValidator
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.crypto.testkit._
@@ -32,7 +30,7 @@ final case class Fixture(
     genesisConfig: GenesisConfig,
     consensusAlgo: String
 ) {
-  def consensus: IO[Consensus2[IO]] = consensusAlgo match {
+  def consensus: IO[Consensus[IO]] = consensusAlgo match {
     case "clique" =>
       for {
         db        <- KeyValueDB.inmem[IO]
@@ -42,7 +40,7 @@ final case class Fixture(
         cliqueConfig = CliqueConfig(period = 1.seconds)
         sign         = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, miner.keyPair) }
         clique       = Clique[IO](cliqueConfig, history, miner.address, sign)
-      } yield new CliqueConsensus2[IO](clique, blockPool)
+      } yield new CliqueConsensus[IO](clique, blockPool)
 //
 //    case "ethash" =>
 //      for {
