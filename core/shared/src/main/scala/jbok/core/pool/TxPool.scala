@@ -18,15 +18,6 @@ final case class TxPool[F[_]](
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger("TxPool")
 
-  val service: PeerRoutes[F] = PeerRoutes.of[F] {
-    case Request(peer, peerSet, SignedTransactions(txs)) =>
-      log.debug(s"received ${txs.length} stxs from ${peer.id}")
-      for {
-        _      <- txs.traverse(stx => peer.markTx(stx.hash))
-        result <- addTransactions(txs, peerSet)
-      } yield result
-  }
-
   def addTransactions(signedTransactions: List[SignedTransaction],
                       peerSet: PeerSet[F] = PeerSet.empty[F]): F[List[(Peer[F], Message)]] =
     for {
@@ -40,9 +31,8 @@ final case class TxPool[F[_]](
   def addOrUpdateTransaction(newStx: SignedTransaction, peerSet: PeerSet[F] = PeerSet.empty[F]): F[Unit] =
     for {
       p <- pending.get
-      (a, b) = p.partition(
-        tx =>
-          tx.stx.senderAddress(None) == newStx.senderAddress(None) && tx.stx.nonce == newStx.nonce)
+      (a, b) = p.partition(tx =>
+        tx.stx.senderAddress(None) == newStx.senderAddress(None) && tx.stx.nonce == newStx.nonce)
       current <- T.clock.realTime(MILLISECONDS)
       _       <- pending.set((PendingTransaction(newStx, current) +: b).take(config.poolSize))
       _       <- peerSet.connected.flatMap(_.traverse(peer => notification(peer, newStx :: Nil)))
