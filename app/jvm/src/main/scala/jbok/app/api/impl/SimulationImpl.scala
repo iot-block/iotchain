@@ -10,7 +10,7 @@ import jbok.app.FullNode
 import jbok.app.simulations.SimulationImpl.NodeId
 import jbok.common.ExecutionPlatform.mkThreadFactory
 import jbok.common.execution._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.GenesisConfig
 import jbok.core.consensus.Consensus

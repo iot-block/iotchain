@@ -9,7 +9,7 @@ import jbok.core.mining.TxGen
 import jbok.core.pool.BlockPool
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.common.execution._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 

@@ -5,7 +5,7 @@ import cats.effect.ConcurrentEffect
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.models._
 import jbok.crypto._

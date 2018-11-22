@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.Configs.{BlockChainConfig, MiningConfig, MonetaryPolicyConfig}
 import jbok.core.consensus.{Consensus, ConsensusResult}
 import jbok.core.models.{Block, BlockHeader}

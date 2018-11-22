@@ -5,7 +5,7 @@ import cats.effect.ConcurrentEffect
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.models.{Block, BlockHeader}
 import jbok.core.pool.BlockPool._
 import scodec.bits.ByteVector

@@ -7,7 +7,7 @@ import cats.effect._
 import cats.implicits._
 import jbok.app.api.FilterManager
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.Configs.{FilterConfig, FullNodeConfig, SyncConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}

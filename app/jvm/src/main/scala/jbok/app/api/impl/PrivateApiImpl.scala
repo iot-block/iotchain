@@ -3,7 +3,7 @@ package jbok.app.api.impl
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import jbok.app.api.{PrivateAPI, TransactionRequest}
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.keystore.{KeyStorePlatform, Wallet}
 import jbok.core.models.Address

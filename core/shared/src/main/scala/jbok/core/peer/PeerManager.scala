@@ -11,8 +11,8 @@ import fs2.Stream._
 import fs2._
 import fs2.concurrent.Queue
 import jbok.common.concurrent.PriorityQueue
-import jbok.core.History
 import jbok.core.config.Configs.PeerManagerConfig
+import jbok.core.ledger.History
 import jbok.core.messages._
 import jbok.crypto.signature.KeyPair
 import jbok.network.Connection

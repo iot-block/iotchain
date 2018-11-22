@@ -7,7 +7,7 @@ import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.common._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.store.namespaces
 import jbok.crypto._

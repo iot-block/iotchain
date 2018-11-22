@@ -9,7 +9,7 @@ import cats.effect.{ConcurrentEffect, IO, Timer}
 import cats.implicits._
 import fs2.concurrent.Queue
 import jbok.common.concurrent.PriorityQueue
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.Configs.PeerManagerConfig
 import jbok.core.messages.{Message, Status}
 import jbok.core.rlpx.handshake.AuthHandshaker

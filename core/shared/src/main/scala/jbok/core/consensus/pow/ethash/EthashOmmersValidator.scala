@@ -2,7 +2,7 @@ package jbok.core.consensus.pow.ethash
 
 import cats.effect.Effect
 import cats.implicits._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.Configs.{BlockChainConfig, DaoForkConfig}
 import jbok.core.consensus.pow.ethash.OmmersError._
 import jbok.core.models.{Block, BlockHeader}

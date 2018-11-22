@@ -1,6 +1,6 @@
 package jbok.core.consensus
 
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.core.pool.BlockPool
 

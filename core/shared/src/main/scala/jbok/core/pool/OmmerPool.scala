@@ -3,7 +3,7 @@ package jbok.core.pool
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.models.BlockHeader
 
 final case class OmmerPool[F[_]: Sync](history: History[F], poolSize: Int, ommersList: Ref[F, List[BlockHeader]]) {

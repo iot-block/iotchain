@@ -10,7 +10,7 @@ import cats.implicits._
 import jbok.app.api._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.Configs.{BlockChainConfig, MiningConfig}
 import jbok.core.keystore.KeyStore
 import jbok.core.mining.BlockMiner
