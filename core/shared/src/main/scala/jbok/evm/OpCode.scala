@@ -95,6 +95,9 @@ object OpCodes {
       XOR,
       NOT,
       BYTE,
+      SHL,
+      SHR,
+      SAR,
       SHA3,
       ADDRESS,
       BALANCE,
@@ -109,6 +112,8 @@ object OpCodes {
       GASPRICE,
       EXTCODESIZE,
       EXTCODECOPY,
+//      RETURNDATASIZE,
+//      RETURNDATACOPY,
       BLOCKHASH,
       COINBASE,
       TIMESTAMP,
@@ -296,6 +301,12 @@ case object XOR extends BinaryOp(0x18, _.G_verylow)(_ ^ _) with ConstGas
 case object NOT extends UnaryOp(0x19, _.G_verylow)(~_) with ConstGas
 
 case object BYTE extends BinaryOp(0x1a, _.G_verylow)((a, b) => b getByte a) with ConstGas
+
+case object SHL extends BinaryOp(0x1b, _.G_verylow)((a, b) => b << a) with ConstGas
+
+case object SHR extends BinaryOp(0x1c, _.G_verylow)((a, b) => b >>> a) with ConstGas
+
+case object SAR extends BinaryOp(0x1d, _.G_verylow)((a, b) => b >> a) with ConstGas
 
 /////////////////////
 // SHA3

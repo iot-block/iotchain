@@ -6,7 +6,7 @@ import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.api.{BlockParam, TransactionRequest}
 import jbok.app.AppState
-import jbok.core.models.{Account, Address}
+import jbok.core.models.{Account, Address, UInt256}
 import org.scalajs.dom.raw.HTMLButtonElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
@@ -19,8 +19,12 @@ case class SendTxView(state: AppState) {
   val account: Var[Option[Account]] = Var(None)
   val moreOption: Var[Boolean]      = Var(false)
 
-  val fromInput = AddressOptionInput(nodeAccounts)
-  val toInput   = CustomInput("To", "address", None, (addr: String) => InputValidator.isValidAddress(addr))
+  val fromInput = AddressOptionInput(nodeAccounts, (addr: String) => {
+    val r = InputValidator.isValidAddress(addr)
+    if (r) updateAccount(addr)
+    r
+  })
+  val toInput = CustomInput("To", "address", None, (addr: String) => InputValidator.isValidAddress(addr))
   val valueInput = CustomInput(
     "Value",
     "0.0",
@@ -43,6 +47,7 @@ case class SendTxView(state: AppState) {
 
   def allReady: Boolean =
     fromInput.isValid &&
+      account.value.nonEmpty &&
       toInput.isValid &&
       valueInput.isValid &&
       passphaseInput.isValid &&
@@ -51,25 +56,23 @@ case class SendTxView(state: AppState) {
 
   def submit() =
     if (allReady) {
-      val fromSubmit = Address(ByteVector.fromValidHex(fromInput.value))
-      val toSubmit   = Some(Address(ByteVector.fromValidHex(toInput.value)))
-      val value      = BigInt(valueInput.value)
+      val fromSubmit  = Address(ByteVector.fromValidHex(fromInput.value))
+      val toSubmit    = Some(Address(ByteVector.fromValidHex(toInput.value)))
+      val valueSubmit = Some(BigInt(valueInput.value))
       val (gasLimitSubmit, dataSubmit) =
-        if (!moreOption.value || (moreOption.value && dataInput.value == "")) Some(regularGasLimit) -> None
-        else Some(callGasLimit)                                                                     -> Some(ByteVector.fromValidHex(dataInput.value))
+        if (!moreOption.value || (moreOption.value && dataInput.value == ""))
+          Some(regularGasLimit) -> None
+        else
+          Some(callGasLimit) -> Some(ByteVector.fromValidHex(dataInput.value))
+      val nonceSubmit = account.value.map(_.nonce.toBigInt)
       val txRequest =
-        TransactionRequest(fromSubmit, toSubmit, None, gasLimitSubmit, None, None, dataSubmit)
+        TransactionRequest(fromSubmit, toSubmit, valueSubmit, gasLimitSubmit, None, nonceSubmit, dataSubmit)
       val password = Some(passphaseInput.value)
 
       val p = for {
-        account  <- client.get.public.getAccount(fromSubmit, BlockParam.Latest)
         gasPrice <- client.get.public.getGasPrice
-        hash <- client.get.admin
-          .sendTransaction(txRequest.copy(value = Some(account.balance.min(value)),
-                                          nonce = Some(account.nonce),
-                                          gasPrice = Some(gasPrice)),
-                           password)
-        stx <- client.get.public.getTransactionByHash(hash)
+        hash     <- client.get.admin.sendTransaction(txRequest.copy(gasPrice = Some(gasPrice)), password)
+        stx      <- client.get.public.getTransactionByHash(hash)
         _ = stx.map(state.stxs.value(currentId.get).value += _)
         _ = state.receipts.value(currentId.get).value += (hash -> Var(None))
       } yield ()
@@ -83,6 +86,7 @@ case class SendTxView(state: AppState) {
     val p = for {
       a <- client.traverse(_.public.getAccount(Address(ByteVector.fromValidHex(address)), BlockParam.Latest))
       _ = account.value = a
+      _ = println(s"upadte account: ${a.get}")
     } yield ()
     p.unsafeToFuture()
   }

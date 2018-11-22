@@ -57,12 +57,13 @@ case class CustomInput(name: String,
     </div>
 }
 
-case class AddressOptionInput(candidates: Vars[Address]) {
+case class AddressOptionInput(candidates: Vars[Address],
+                              validator: String => Boolean = (addr: String) => InputValidator.isValidAddress(addr)) {
   val address: Var[String]              = Var("")
   val otherAddressDisable: Var[Boolean] = Var(false)
-  val addressInput                      = CustomInput("address", "address", None, InputValidator.isValidAddress)
+  val addressInput                      = CustomInput("address", "address", None, validator)
 
-  def isValid: Boolean = InputValidator.isValidAddress(address.value)
+  def isValid: Boolean = validator(address.value)
   def value: String    = address.value
 
   private val addressOnChange = { event: Event =>
@@ -74,7 +75,7 @@ case class AddressOptionInput(candidates: Vars[Address]) {
           false
         } else {
           address.value = v.substring(2)
-          println(s"addressopt: ${address.value}, ${isValid}, ${InputValidator.isValidAddress(address.value)}")
+          println(s"addressopt: ${address.value}, ${isValid}, ${validator(address.value)}")
           true
         }
       case _ =>
