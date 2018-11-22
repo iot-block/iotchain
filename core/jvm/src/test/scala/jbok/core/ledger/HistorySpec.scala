@@ -1,4 +1,4 @@
-package jbok.core
+package jbok.core.ledger
 
 import cats.effect.IO
 import cats.implicits._
@@ -50,8 +50,8 @@ class HistorySpec extends JbokSpec {
 
     "put block body should update tx location mapping" in {
       val history = random[History[IO]]
-      val txs = random[List[SignedTransaction]](genTxs(1, 1))
-      val block= random[Block](genBlock(stxsOpt = txs.some))
+      val txs     = random[List[SignedTransaction]](genTxs(1, 1))
+      val block   = random[Block](genBlock(stxsOpt = txs.some))
       history.putBlockBody(block.header.hash, block.body).unsafeRunSync()
       val location = history.getTransactionLocation(txs.head.hash).unsafeRunSync()
       location shouldBe Some(TransactionLocation(block.header.hash, 0))

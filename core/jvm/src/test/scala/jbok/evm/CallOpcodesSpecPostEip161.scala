@@ -2,7 +2,7 @@ package jbok.evm
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.models.UInt256
 import jbok.persistent.KeyValueDB
 

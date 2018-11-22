@@ -7,7 +7,7 @@ import io.circe.parser._
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
 import jbok.core.store.namespaces
 import jbok.crypto._

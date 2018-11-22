@@ -3,7 +3,7 @@ package jbok.core.consensus.poa.clique
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.GenesisConfig
 import jbok.core.models.{Address, BlockHeader}
 import jbok.crypto.signature.KeyPair

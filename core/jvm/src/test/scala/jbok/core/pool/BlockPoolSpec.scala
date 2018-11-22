@@ -52,10 +52,10 @@ class BlockPoolSpec extends JbokSpec {
     "enqueue a block with queued ancestors rooted to the main chain updating its total difficulty" in {
       val pool    = random[BlockPool[IO]]
       val miner   = random[BlockMiner[IO]]
-      val block1  = miner.mineAndSubmit().unsafeRunSync().get
-      val block2a = miner.mineAndSubmit(block1.some).unsafeRunSync().get
-      val block2b = miner.mineAndSubmit(block1.some).unsafeRunSync().get
-      val block3  = miner.mineAndSubmit(block2a.some).unsafeRunSync().get
+      val block1  = miner.mine1().unsafeRunSync().block
+      val block2a = miner.mine1(block1.some).unsafeRunSync().block
+      val block2b = miner.mine1(block1.some).unsafeRunSync().block
+      val block3  = miner.mine1(block2a.some).unsafeRunSync().block
 
       pool.addBlock(block1, 1).unsafeRunSync()
       pool.addBlock(block2a, 1).unsafeRunSync()
@@ -78,12 +78,12 @@ class BlockPoolSpec extends JbokSpec {
       val miner = random[BlockMiner[IO]]
       val txs   = random[List[SignedTransaction]](genTxs(2, 2))
 
-      val block1 = miner.mineAndSubmit().unsafeRunSync().get
+      val block1 = miner.mine1().unsafeRunSync().block
 
-      val block2a = miner.mineAndSubmit(block1.some, txs.take(1).some).unsafeRunSync().get
-      val block2b = miner.mineAndSubmit(block1.some, txs.takeRight(1).some).unsafeRunSync().get
-      val block2c = miner.mineAndSubmit(block1.some).unsafeRunSync().get
-      val block3  = miner.mineAndSubmit(block2a.some).unsafeRunSync().get
+      val block2a = miner.mine1(block1.some, txs.take(1).some).unsafeRunSync().block
+      val block2b = miner.mine1(block1.some, txs.takeRight(1).some).unsafeRunSync().block
+      val block2c = miner.mine1(block1.some).unsafeRunSync().block
+      val block3  = miner.mine1(block2a.some).unsafeRunSync().block
 
       pool.addBlock(block1, 1).unsafeRunSync()
       pool.addBlock(block2a, 1).unsafeRunSync()
@@ -103,11 +103,11 @@ class BlockPoolSpec extends JbokSpec {
       val miner    = random[BlockMiner[IO]]
       val genesis  = miner.history.getBestBlock.unsafeRunSync()
       def randomTx = random[List[SignedTransaction]](genTxs(1, 1)).some
-      val block1a  = miner.mineAndSubmit(genesis.some, randomTx).unsafeRunSync().get
-      val block1b  = miner.mineAndSubmit(genesis.some, randomTx).unsafeRunSync().get
-      val block2a  = miner.mineAndSubmit(block1a.some, randomTx).unsafeRunSync().get
-      val block2b  = miner.mineAndSubmit(block1a.some, randomTx).unsafeRunSync().get
-      val block3   = miner.mineAndSubmit(block2a.some, randomTx).unsafeRunSync().get
+      val block1a  = miner.mine1(genesis.some, randomTx).unsafeRunSync().block
+      val block1b  = miner.mine1(genesis.some, randomTx).unsafeRunSync().block
+      val block2a  = miner.mine1(block1a.some, randomTx).unsafeRunSync().block
+      val block2b  = miner.mine1(block1a.some, randomTx).unsafeRunSync().block
+      val block3   = miner.mine1(block2a.some, randomTx).unsafeRunSync().block
 
       pool.addBlock(block1a, 1).unsafeRunSync()
       pool.addBlock(block1b, 1).unsafeRunSync()

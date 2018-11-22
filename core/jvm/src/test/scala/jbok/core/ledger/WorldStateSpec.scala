@@ -2,10 +2,9 @@ package jbok.core.ledger
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.History
+import jbok.common.testkit._
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.evm.WorldState
-import jbok.common.testkit._
 import jbok.evm.testkit._
 import jbok.persistent.KeyValueDB
 import scodec.bits._

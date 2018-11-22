@@ -2,7 +2,7 @@ package jbok.core.validators
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.models.BlockHeader
 import jbok.core.validators.CommonHeaderInvalid._
 import scodec.bits._

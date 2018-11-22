@@ -5,16 +5,17 @@ import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
 import jbok.core.config.GenesisConfig
-import jbok.core.consensus.Consensus
-import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
+import jbok.core.consensus.{Consensus, Consensus2}
+import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus, CliqueConsensus2}
 import jbok.core.consensus.pow.ethash._
-import jbok.core.ledger.BlockExecutor
+import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.messages._
 import jbok.core.mining.{BlockMiner, SimAccount, TxGenerator}
 import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerSet}
 import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
 import jbok.core.sync._
+import jbok.core.validators.BlockValidator
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.crypto.testkit._
@@ -31,7 +32,7 @@ final case class Fixture(
     genesisConfig: GenesisConfig,
     consensusAlgo: String
 ) {
-  def consensus: IO[Consensus[IO]] = consensusAlgo match {
+  def consensus: IO[Consensus2[IO]] = consensusAlgo match {
     case "clique" =>
       for {
         db        <- KeyValueDB.inmem[IO]
@@ -41,20 +42,20 @@ final case class Fixture(
         cliqueConfig = CliqueConfig(period = 1.seconds)
         sign         = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, miner.keyPair) }
         clique       = Clique[IO](cliqueConfig, history, miner.address, sign)
-      } yield new CliqueConsensus[IO](blockPool, clique)
-
-    case "ethash" =>
-      for {
-        db      <- KeyValueDB.inmem[IO]
-        history <- History[IO](db)
-        blockChainConfig = BlockChainConfig()
-        miningConfig     = MiningConfig()
-        daoForkConfig    = DaoForkConfig()
-        ethashMiner <- EthashMinerPlatform[IO](miningConfig)
-        blockPool   <- BlockPool[IO](history)
-        ov = new EthashOmmersValidator[IO](history, blockChainConfig, daoForkConfig)
-        hv = new EthashHeaderValidator[IO](blockChainConfig, daoForkConfig)
-      } yield new EthashConsensus[IO](blockChainConfig, miningConfig, history, blockPool, ethashMiner, ov, hv)
+      } yield new CliqueConsensus2[IO](clique, blockPool)
+//
+//    case "ethash" =>
+//      for {
+//        db      <- KeyValueDB.inmem[IO]
+//        history <- History[IO](db)
+//        blockChainConfig = BlockChainConfig()
+//        miningConfig     = MiningConfig()
+//        daoForkConfig    = DaoForkConfig()
+//        ethashMiner <- EthashMinerPlatform[IO](miningConfig)
+//        blockPool   <- BlockPool[IO](history)
+//        ov = new EthashOmmersValidator[IO](history, blockChainConfig, daoForkConfig)
+//        hv = new EthashHeaderValidator[IO](blockChainConfig, daoForkConfig)
+//      } yield new EthashConsensus[IO](blockChainConfig, miningConfig, history, blockPool, ethashMiner, ov, hv)
   }
 }
 
@@ -237,21 +238,21 @@ object testkit {
 
   implicit val arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-  def genBlockHandler(port: Int = 1000)(implicit fixture: Fixture): Gen[BlockHandler[IO]] = {
-    val consensus        = fixture.consensus.unsafeRunSync()
-    val blockChainConfig = BlockChainConfig()
-    val history          = consensus.history
-    val executor         = BlockExecutor[IO](blockChainConfig, consensus)
-    val syncConfig       = SyncConfig()
-    val txPool           = TxPool[IO](TxPoolConfig()).unsafeRunSync()
-    val ommerPool        = OmmerPool[IO](history).unsafeRunSync()
-    val blockHandler     = BlockHandler[IO](syncConfig, executor, txPool, ommerPool)
-    blockHandler
-  }
-
-  implicit def arbBlockHandler(implicit fixture: Fixture): Arbitrary[BlockHandler[IO]] = Arbitrary {
-    genBlockHandler()
-  }
+//  def genBlockHandler(port: Int = 1000)(implicit fixture: Fixture): Gen[BlockHandler[IO]] = {
+//    val consensus        = fixture.consensus.unsafeRunSync()
+//    val blockChainConfig = BlockChainConfig()
+//    val history          = consensus.history
+//    val executor         = BlockExecutor[IO](blockChainConfig, consensus)
+//    val syncConfig       = SyncConfig()
+//    val txPool           = TxPool[IO](TxPoolConfig()).unsafeRunSync()
+//    val ommerPool        = OmmerPool[IO](history).unsafeRunSync()
+//    val blockHandler     = BlockHandler[IO](syncConfig, executor, txPool, ommerPool)
+//    blockHandler
+//  }
+//
+//  implicit def arbBlockHandler(implicit fixture: Fixture): Arbitrary[BlockHandler[IO]] = Arbitrary {
+//    genBlockHandler()
+//  }
 
   def genTxs(min: Int = 0, max: Int = 1024)(implicit fixture: Fixture): Gen[List[SignedTransaction]] =
     for {
@@ -267,22 +268,9 @@ object testkit {
   def genBlockMiner(implicit fixture: Fixture): Gen[BlockMiner[IO]] = {
     val consensus        = fixture.consensus.unsafeRunSync()
     val blockChainConfig = BlockChainConfig()
-    val history          = consensus.history
-    val executor         = BlockExecutor[IO](blockChainConfig, consensus)
-
-    val syncConfig        = SyncConfig()
-    val peerManagerConfig = PeerManagerConfig(fixture.port)
-    val keyPair           = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-    val peerManager =
-      PeerManagerPlatform[IO](peerManagerConfig, Some(keyPair), history).unsafeRunSync()
-    val txPool         = TxPool[IO](TxPoolConfig()).unsafeRunSync()
-    val ommerPool      = OmmerPool[IO](history).unsafeRunSync()
-    val blockHandler   = BlockHandler[IO](syncConfig, executor, txPool, ommerPool)
-    val fastSync       = FastSync[IO](syncConfig, peerManager).unsafeRunSync()
-    val fullSync       = FullSync[IO](syncConfig, peerManager, executor, txPool)
-    val requestHandler = RequestHandler[IO](syncConfig, history)
-    val syncManager    = SyncManager[IO](peerManager, requestHandler, blockHandler, txPool, fastSync, fullSync)
-    val miner          = BlockMiner[IO](blockHandler).unsafeRunSync()
+    val executor         = BlockExecutor[IO](blockChainConfig, consensus).unsafeRunSync()
+    val miningConfig     = MiningConfig()
+    val miner            = BlockMiner[IO](miningConfig, executor)
     miner
   }
 
@@ -294,8 +282,8 @@ object testkit {
     for {
       miner <- genBlockMiner
       size  <- Gen.chooseNum(min, max)
-      blocks = miner.miningStream().take(size).compile.toList.unsafeRunSync()
-    } yield blocks
+      blocks = miner.stream.take(size).compile.toList.unsafeRunSync()
+    } yield blocks.map(_.block)
 
   def genBlock(
       parentOpt: Option[Block] = None,
@@ -304,8 +292,8 @@ object testkit {
   )(implicit fixture: Fixture): Gen[Block] =
     for {
       miner <- genBlockMiner
-      block = miner.mineAndSubmit(parentOpt, stxsOpt, ommersOpt).unsafeRunSync().get
-    } yield block
+      mined = miner.mine1(parentOpt, stxsOpt, ommersOpt).unsafeRunSync()
+    } yield mined.block
 
   def genPeerManager(config: PeerManagerConfig)(implicit fixture: Fixture): Gen[PeerManager[IO]] = {
     val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
@@ -337,15 +325,15 @@ object testkit {
     genOmmerPool()
   }
 
-  def genRequestHandler(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[RequestHandler[IO]] = {
-    val consensus = fixture.consensus.unsafeRunSync()
-    val history   = consensus.history
-    RequestHandler[IO](config, history)
-  }
-
-  implicit def arbRequestHandler(implicit fixture: Fixture): Arbitrary[RequestHandler[IO]] = Arbitrary {
-    genRequestHandler()
-  }
+//  def genRequestHandler(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[RequestHandler[IO]] = {
+//    val consensus = fixture.consensus.unsafeRunSync()
+//    val history   = consensus.history
+//    RequestHandler[IO](config, history)
+//  }
+//
+//  implicit def arbRequestHandler(implicit fixture: Fixture): Arbitrary[RequestHandler[IO]] = Arbitrary {
+//    genRequestHandler()
+//  }
 
   implicit def arbHistory(implicit fixture: Fixture): Arbitrary[History[IO]] = Arbitrary {
     val consensus = fixture.consensus.unsafeRunSync()
@@ -355,26 +343,31 @@ object testkit {
   implicit def arbBlockExecutor(implicit fixture: Fixture): Arbitrary[BlockExecutor[IO]] = Arbitrary {
     val consensus        = fixture.consensus.unsafeRunSync()
     val blockChainConfig = BlockChainConfig()
-    BlockExecutor[IO](blockChainConfig, consensus)
+    BlockExecutor[IO](blockChainConfig, consensus).unsafeRunSync()
+  }
+
+  def genFullSync(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[FullSync[IO]] = {
+    val consensus         = fixture.consensus.unsafeRunSync()
+    val blockChainConfig  = BlockChainConfig()
+    val history           = consensus.history
+    val executor          = BlockExecutor[IO](blockChainConfig, consensus).unsafeRunSync()
+    val peerManagerConfig = PeerManagerConfig(fixture.port)
+    val keyPair           = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val peerManager       = PeerManagerPlatform[IO](peerManagerConfig, Some(keyPair), history).unsafeRunSync()
+
+    FullSync[IO](config, peerManager, executor)
   }
 
   def genSyncManager(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[SyncManager[IO]] = {
-    val consensus        = fixture.consensus.unsafeRunSync()
-    val blockChainConfig = BlockChainConfig()
-    val history          = consensus.history
-    val executor         = BlockExecutor[IO](blockChainConfig, consensus)
-
+    val consensus         = fixture.consensus.unsafeRunSync()
+    val blockChainConfig  = BlockChainConfig()
+    val history           = consensus.history
+    val executor          = BlockExecutor[IO](blockChainConfig, consensus).unsafeRunSync()
     val peerManagerConfig = PeerManagerConfig(fixture.port)
     val keyPair           = Signature[ECDSA].generateKeyPair().unsafeRunSync()
     val peerManager =
       PeerManagerPlatform[IO](peerManagerConfig, Some(keyPair), history).unsafeRunSync()
-    val txPool         = TxPool[IO](TxPoolConfig()).unsafeRunSync()
-    val ommerPool      = OmmerPool[IO](history).unsafeRunSync()
-    val blockHandler   = BlockHandler[IO](config, executor, txPool, ommerPool)
-    val fastSync       = FastSync[IO](config, peerManager).unsafeRunSync()
-    val fullSync       = FullSync[IO](config, peerManager, executor, txPool)
-    val requestHandler = RequestHandler[IO](config, history)
-    SyncManager[IO](peerManager, requestHandler, blockHandler, txPool, fastSync, fullSync)
+    SyncManager[IO](config, peerManager, executor).unsafeRunSync()
   }
 
   implicit def arbSyncManager(implicit fixture: Fixture): Arbitrary[SyncManager[IO]] = Arbitrary {

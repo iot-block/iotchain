@@ -2,7 +2,7 @@ package jbok.core.genesis
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.History
+import jbok.core.ledger.History
 import jbok.core.config.GenesisConfig
 import jbok.core.models.Address
 import jbok.persistent.KeyValueDB
