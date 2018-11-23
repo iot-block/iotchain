@@ -7,7 +7,7 @@ import cats.implicits._
 import jbok.core.config.Configs.MiningConfig
 import jbok.core.consensus.pow.ProofOfWork
 import jbok.core.models.Block
-import jbok.core.utils.ByteUtils
+import jbok.common.ByteUtils
 import scodec.bits.ByteVector
 
 import scala.util.Random

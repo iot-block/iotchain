@@ -3,7 +3,7 @@ package jbok.core.consensus.pow.ethash
 import java.math.BigInteger
 
 import jbok.core.consensus.pow.ProofOfWork
-import jbok.core.utils.ByteUtils._
+import jbok.common.ByteUtils._
 import jbok.crypto._
 import org.bouncycastle.util.BigIntegers
 import scodec.bits._

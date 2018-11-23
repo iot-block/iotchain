@@ -4,7 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
-import fs2.concurrent.{InspectableQueue, Queue, SignallingRef}
+import fs2.concurrent.{InspectableQueue, SignallingRef}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.common.concurrent.PriorityQueue
@@ -114,11 +114,11 @@ final class FastSync[F[_]](
         T.sleep(retryInterval) *> getPeersStatus
       }
 
-    peerManager.peerSet.connected >>= go
+    peerManager.connected >>= go
   }
 
   private[jbok] def randomPeer: F[Peer[F]] =
-    peerManager.peerSet.connected.map(peers => Random.shuffle(peers).head)
+    peerManager.connected.map(peers => Random.shuffle(peers).head)
 
   /**
     * download with [[maxConcurrentRequests]]

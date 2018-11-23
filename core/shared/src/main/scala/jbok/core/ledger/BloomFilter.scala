@@ -1,7 +1,7 @@
 package jbok.core.ledger
 
 import jbok.core.models.TxLogEntry
-import jbok.core.utils.ByteUtils
+import jbok.common.ByteUtils
 import scodec.bits.ByteVector
 import jbok.crypto._
 

@@ -14,6 +14,7 @@ import jbok.common.concurrent.PriorityQueue
 import jbok.core.config.Configs.PeerManagerConfig
 import jbok.core.ledger.History
 import jbok.core.messages._
+import jbok.core.peer.PeerSelectStrategy.PeerSelectStrategy
 import jbok.crypto.signature.KeyPair
 import jbok.network.Connection
 import jbok.network.common.TcpUtil
@@ -50,14 +51,14 @@ abstract class PeerManager[F[_]](
 
         case Right(res) =>
           val stream = for {
-            conn  <- eval(TcpUtil.socketToConnection[F, Message](res, true))
-            _ <- eval(conn.start)
+            conn <- eval(TcpUtil.socketToConnection[F, Message](res, true))
+            _    <- eval(conn.start)
             peer <- eval(
               handshakeIncoming(conn).timeoutTo(config.handshakeTimeout, F.raiseError(PeerErr.HandshakeTimeout)))
             _ = log.debug(s"${peer.id} handshaked")
             _ <- eval(incoming.update(_ + (peer.pk -> peer)))
             _ <- peer.conn.reads
-              .map(msg => Request(peer, peerSet, msg))
+              .map(msg => Request(peer, msg))
               .to(messageQueue.enqueue)
               .onFinalize(incoming.update(_ - peer.pk) *> F.delay(log.debug(s"${peer.id} disconnected")))
           } yield ()
@@ -83,14 +84,14 @@ abstract class PeerManager[F[_]](
     val connect0 = {
       val res = io.tcp.client[F](to.addr, keepAlive = true, noDelay = true)
       val stream = for {
-        conn  <- eval(TcpUtil.socketToConnection[F, Message](res, false))
-        _ <- eval(conn.start)
+        conn <- eval(TcpUtil.socketToConnection[F, Message](res, false))
+        _    <- eval(conn.start)
         peer <- eval(
           handshakeOutgoing(conn, to.pk).timeoutTo(config.handshakeTimeout, F.raiseError(PeerErr.HandshakeTimeout)))
         _ = log.debug(s"${peer.id} handshaked")
         _ <- eval(outgoing.update(_ + (peer.pk -> peer)))
         _ <- peer.conn.reads
-          .map(msg => Request(peer, peerSet, msg))
+          .map(msg => Request(peer, msg))
           .to(messageQueue.enqueue)
           .onFinalize(outgoing.update(_ - peer.pk) *> F.delay(log.debug(s"${peer.id} disconnected")))
       } yield ()
@@ -113,7 +114,7 @@ abstract class PeerManager[F[_]](
     }
   }
 
-  def start: Stream[F, Unit] =
+  def stream: Stream[F, Unit] =
     listen().concurrently(connect())
 
   def addPeerNode(nodes: PeerNode*): F[Unit] =
@@ -126,12 +127,18 @@ abstract class PeerManager[F[_]](
   def close(pk: KeyPair.Public): F[Unit] =
     getPeer(pk).semiflatMap(_.conn.close).getOrElseF(F.unit)
 
-  def peerSet: PeerSet[F] = PeerSet[F] {
+  def connected: F[List[Peer[F]]] =
     for {
       in  <- incoming.get
       out <- outgoing.get
     } yield (in ++ out).values.toList
-  }
+
+  def distribute(strategy: PeerSelectStrategy[F], message: Message): F[Unit] =
+    for {
+      peers    <- connected
+      selected <- strategy.run(peers)
+      _        <- selected.traverse(_.conn.write(message))
+    } yield ()
 
   private[jbok] def localStatus: F[Status] =
     for {

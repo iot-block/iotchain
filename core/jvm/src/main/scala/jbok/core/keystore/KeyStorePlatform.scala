@@ -71,7 +71,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
     } yield true
 
   override def clear: F[Boolean] = {
-    log.info(s"delete keyStoreDir ${keyStoreDir.pathAsString}")
+    log.debug(s"delete keyStoreDir ${keyStoreDir.pathAsString}")
     deleteFile(keyStoreDir)
   }
 
@@ -85,7 +85,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       _ <- if (alreadyInKeyStore) {
         F.unit
       } else {
-        log.info(s"saving key into ${file.pathAsString}")
+        log.debug(s"saving key into ${file.pathAsString}")
         F.delay(file.createIfNotExists(createParents = true).writeText(json)).attempt.flatMap {
           case Left(e)  => F.raiseError[Unit](KeyStoreError.IOError(e.toString))
           case Right(_) => F.unit

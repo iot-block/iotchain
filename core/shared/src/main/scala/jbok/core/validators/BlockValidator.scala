@@ -6,7 +6,7 @@ import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.ledger.BloomFilter
 import jbok.core.models._
-import jbok.core.utils.ByteUtils
+import jbok.common.ByteUtils
 import jbok.core.validators.BlockInvalid._
 import jbok.crypto._
 import scodec.bits.ByteVector

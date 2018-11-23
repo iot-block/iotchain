@@ -12,6 +12,10 @@ import scodec.bits.ByteVector
 import jbok.crypto._
 
 object abi {
+  sealed trait AbiError
+  case class InvalidType(reason: String)  extends AbiError
+  case class InvalidParam(reason: String) extends AbiError
+  case class InvalidValue(reason: String) extends AbiError
 
   case class Param(
       name: String, // the name of the parameter

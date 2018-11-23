@@ -31,8 +31,8 @@ case class Peer[F[_]](
   def markBlock(blockHash: ByteVector): F[Unit] =
     knownBlocks.update(s => if (s.size >= MaxKnownBlocks) s.take(MaxKnownBlocks - 1) + blockHash else s + blockHash)
 
-  def markTx(txHash: ByteVector): F[Unit] =
-    knownTxs.update(s => if (s.size >= MaxKnownTxs) s.take(MaxKnownTxs - 1) + txHash else s + txHash)
+  def markTxs(txHashes: List[ByteVector]): F[Unit] =
+    knownTxs.update(known => known.take(MaxKnownTxs - txHashes.length) ++ txHashes)
 }
 
 object Peer {

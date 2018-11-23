@@ -14,7 +14,7 @@ import scala.concurrent.duration._
 class PeerManagerSpec extends JbokSpec {
   def startAll(pms: PeerManager[IO]*): IO[Fiber[IO, Unit]] =
     for {
-      fiber <- Stream.emits(pms).map(_.start).parJoinUnbounded.compile.drain.start
+      fiber <- Stream.emits(pms).map(_.stream).parJoinUnbounded.compile.drain.start
       _     <- T.sleep(1.second)
       _     <- pms.tail.toList.traverse(_.addPeerNode(pms.head.peerNode))
       _     <- T.sleep(1.second)

@@ -4,19 +4,21 @@ import java.net.InetSocketAddress
 import java.security.SecureRandom
 
 import cats.effect._
-import cats.implicits._
-import jbok.app.api.FilterManager
+import cats.effect.implicits._
+import fs2._
+import fs2.concurrent.SignallingRef
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
-import jbok.core.ledger.History
-import jbok.core.config.Configs.{FilterConfig, FullNodeConfig, SyncConfig}
+import jbok.common.execution._
+import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
-import jbok.core.ledger.BlockExecutor
+import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.mining.BlockMiner
 import jbok.core.models.Address
 import jbok.core.peer.PeerManagerPlatform
-import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool}
+import jbok.core.pool.{BlockPool, BlockPoolConfig}
+import jbok.core.sync.SyncManager
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.rpc.RpcServer
@@ -24,45 +26,45 @@ import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 import jbok.persistent.leveldb.LevelDB
 import scodec.bits.ByteVector
+import cats.implicits._
 
 case class FullNode[F[_]](
     config: FullNodeConfig,
+    syncManager: SyncManager[F],
     miner: BlockMiner[F],
     keyStore: KeyStore[F],
     rpc: RpcServer,
     server: Server[F],
+    haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  val synchronizer = miner.synchronizer
-  val peerManager  = synchronizer.peerManager
-  val txPool       = synchronizer.txPool
-  val keyPair      = peerManager.keyPair
-  val peerNode     = peerManager.peerNode
-  val id           = peerNode.id.toHex
+  val executor    = syncManager.executor
+  val history     = executor.history
+  val peerManager = syncManager.peerManager
+  val txPool      = executor.txPool
+  val keyPair     = peerManager.keyPair
+  val peerNode    = peerManager.peerNode
+  val id          = peerNode.id.toHex
 
   val peerBindAddress: InetSocketAddress =
     config.peer.bindAddr
 
-  def start: F[Unit] =
-    for {
-      _ <- peerManager.start
-      _ <- synchronizer.start
-      _ <- txPool.start
-      _ <- if (config.rpc.enabled) server.start else F.unit
-      _ <- if (config.mining.enabled) miner.start else F.unit
-    } yield ()
+  def stream: Stream[F, Unit] =
+    Stream(
+      peerManager.stream,
+      syncManager.stream,
+      server.stream
+    ).parJoinUnbounded
+      .interruptWhen(haltWhenTrue)
+      .onFinalize(haltWhenTrue.set(true))
+
+  def start: F[Fiber[F, Unit]] =
+    haltWhenTrue.set(false) *> stream.compile.drain.start
 
   def stop: F[Unit] =
-    for {
-      _ <- txPool.stop
-      _ <- synchronizer.stop
-      _ <- server.stop
-      _ <- miner.stop
-      _ <- peerManager.stop
-    } yield ()
+    haltWhenTrue.set(true)
 }
 
 object FullNode {
-  import jbok.common.execution._
   def forConfig(config: FullNodeConfig)(
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
@@ -78,67 +80,54 @@ object FullNode {
       blockPool <- BlockPool(history, BlockPoolConfig())
       sign      = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, keyPair) }
       clique    = Clique(CliqueConfig(), history, Address(keyPair), sign)
-      consensus = new CliqueConsensus[IO](blockPool, clique)
-      peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), SyncConfig(), history)
-      executor = BlockExecutor[IO](config.blockchain, consensus)
-      txPool    <- TxPool[IO](peerManager)
-      ommerPool <- OmmerPool[IO](history)
-      broadcaster = Broadcaster[IO](peerManager)
-      synchronizer <- Synchronizer[IO](peerManager, executor, txPool, ommerPool, broadcaster)
-      keyStore     <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
-      miner        <- BlockMiner[IO](synchronizer)
+      consensus = new CliqueConsensus[IO](clique, blockPool)
+      peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), history)
+      executor    <- BlockExecutor[IO](config.blockchain, consensus)
+      syncManager <- SyncManager(config.sync, peerManager, executor)
+      keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
+      miner       <- BlockMiner[IO](config.mining, executor)
 
       // mount rpc
-      filterManager <- FilterManager.apply(miner, keyStore, FilterConfig())
       publicAPI <- PublicApiImpl(
         history,
         config.blockchain,
         config.mining,
         miner,
         keyStore,
-        filterManager,
         1
       )
-
-      privateAPI <- PrivateApiImpl(keyStore, history, config.blockchain, txPool)
-      rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
-      server     <- Server.websocket(config.rpc.addr, rpc.pipe)
-    } yield FullNode[IO](config, miner, keyStore, rpc, server)
+      privateAPI   <- PrivateApiImpl(keyStore, history, config.blockchain, executor.txPool)
+      rpc          <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
+      server       <- Server.websocket(config.rpc.addr, rpc.pipe)
+      haltWhenTrue <- SignallingRef[IO, Boolean](true)
+    } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
   }
 
-  def apply(config: FullNodeConfig, consensus: Consensus[IO])(
+  def forConfigAndConsensus(config: FullNodeConfig, consensus: Consensus[IO])(
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
       CS: ContextShift[IO]
-  ): IO[FullNode[IO]] = {
-    val random  = new SecureRandom()
-    val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-    val history = consensus.history
+  ): IO[FullNode[IO]] =
     for {
-      peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), SyncConfig(), history)
-      executor = BlockExecutor[IO](config.blockchain, consensus)
-      txPool    <- TxPool[IO](peerManager)
-      ommerPool <- OmmerPool[IO](history)
-      broadcaster = Broadcaster[IO](peerManager)
-      synchronizer <- Synchronizer[IO](peerManager, executor, txPool, ommerPool, broadcaster)
-      keyStore     <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
-      miner        <- BlockMiner[IO](synchronizer)
+      nodeKey     <- Signature[ECDSA].generateKeyPair()
+      peerManager <- PeerManagerPlatform[IO](config.peer, Some(nodeKey), consensus.history)
+      executor    <- BlockExecutor[IO](config.blockchain, consensus)
+      syncManager <- SyncManager(config.sync, peerManager, executor)
+      keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
+      miner       <- BlockMiner[IO](config.mining, executor)
 
       // mount rpc
-      filterManager <- FilterManager.apply(miner, keyStore, FilterConfig())
       publicAPI <- PublicApiImpl(
-        history,
+        consensus.history,
         config.blockchain,
         config.mining,
         miner,
         keyStore,
-        filterManager,
         1
       )
-
-      privateAPI <- PrivateApiImpl(keyStore, history, config.blockchain, txPool)
-      rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
-      server     <- Server.websocket(config.rpc.addr, rpc.pipe)
-    } yield FullNode[IO](config, miner, keyStore, rpc, server)
-  }
+      privateAPI   <- PrivateApiImpl(keyStore, consensus.history, config.blockchain, executor.txPool)
+      rpc          <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
+      server       <- Server.websocket(config.rpc.addr, rpc.pipe)
+      haltWhenTrue <- SignallingRef[IO, Boolean](true)
+    } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
 }

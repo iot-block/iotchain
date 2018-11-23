@@ -3,6 +3,7 @@ package jbok.core.mining
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
+import fs2.concurrent.SignallingRef
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.MiningConfig
 import jbok.core.consensus.Consensus
@@ -26,6 +27,7 @@ import scodec.bits.ByteVector
 case class BlockMiner[F[_]](
     config: MiningConfig,
     executor: BlockExecutor[F],
+    haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger("BlockMiner")
 
@@ -68,12 +70,15 @@ case class BlockMiner[F[_]](
     } yield mined
 
   def stream: Stream[F, MinedBlock] =
-    Stream.repeatEval(mine1())
+    Stream
+      .repeatEval(mine1())
+      .onFinalize(haltWhenTrue.set(true))
 
   /////////////////////////////////////
   /////////////////////////////////////
 
-  private[jbok] def prepareTransactions(stxs: List[SignedTransaction], blockGasLimit: BigInt): F[List[SignedTransaction]] = {
+  private[jbok] def prepareTransactions(stxs: List[SignedTransaction],
+                                        blockGasLimit: BigInt): F[List[SignedTransaction]] = {
     log.debug(s"prepare transaction, available: ${stxs.length}")
     val sortedByPrice = stxs
       .groupBy(stx => SignedTransaction.getSender(stx).getOrElse(Address.empty))
@@ -105,7 +110,6 @@ case class BlockMiner[F[_]](
       .takeWhile { case (gas, _) => gas <= blockGasLimit }
       .map { case (_, stx) => stx }
 
-
     log.debug(s"prepare transaction, truncated: ${transactionsForBlock.length}")
     F.pure(transactionsForBlock)
   }
@@ -117,4 +121,10 @@ case class BlockMiner[F[_]](
       _    <- entities.zipWithIndex.map { case (v, k) => mpt.put[Int, V](k, v, namespaces.empty) }.sequence
       root <- mpt.getRootHash
     } yield root
+}
+
+object BlockMiner {
+  def apply[F[_]](config: MiningConfig, executor: BlockExecutor[F])(implicit F: ConcurrentEffect[F],
+                                                                    T: Timer[F]): F[BlockMiner[F]] =
+    SignallingRef[F, Boolean](true).map(halt => BlockMiner(config, executor, halt))
 }

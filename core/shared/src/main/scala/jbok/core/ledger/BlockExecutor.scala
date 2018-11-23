@@ -4,24 +4,23 @@ import cats.Foldable
 import cats.data.NonEmptyList
 import cats.effect.{ConcurrentEffect, Sync, Timer}
 import cats.implicits._
-import fs2._
-import fs2.concurrent.Queue
+import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.{BlockChainConfig, TxPoolConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
+import jbok.core.messages.{BlockHash, NewBlock, NewBlockHashes}
 import jbok.core.models.UInt256._
 import jbok.core.models._
+import jbok.core.peer.{Peer, PeerManager, PeerSelectStrategy, Response}
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.store.namespaces
-import jbok.core.utils.ByteUtils
+import jbok.common.ByteUtils
 import jbok.core.validators.{BlockValidator, TransactionValidator}
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
 import jbok.persistent.KeyValueDB
 import scodec.Codec
 import scodec.bits.ByteVector
-import jbok.codec.rlp.implicits._
-import jbok.core.peer.PeerSet
 
 import scala.concurrent.duration._
 
@@ -49,7 +48,7 @@ object BlockImportResult {
 case class BlockExecutor[F[_]](
     config: BlockChainConfig,
     consensus: Consensus[F],
-    blockQueue: Queue[F, TypedBlock],
+    peerManager: PeerManager[F],
     vm: VM,
     txValidator: TransactionValidator[F],
     blockValidator: BlockValidator[F],
@@ -62,7 +61,7 @@ case class BlockExecutor[F[_]](
 
   val blockPool: BlockPool[F] = consensus.pool
 
-  def stream: Stream[F, Unit] = blockQueue.dequeue.evalMap {
+  def handleBlock(typedBlock: TypedBlock) = typedBlock match {
     case received: ReceivedBlock[F]    => handleReceivedBlock(received)
     case requested: RequestedBlocks[F] => handleRequestedBlocks(requested)
     case mined: MinedBlock             => handleMinedBlock(mined)
@@ -84,11 +83,23 @@ case class BlockExecutor[F[_]](
       }
     } yield importResult
 
-  def handleReceivedBlock(received: ReceivedBlock[F]): F[Unit] =
-    importBlock(received.block).void
+  def handleReceivedBlock(received: ReceivedBlock[F]): F[List[Block]] =
+    for {
+      _ <- received.peer.markBlock(received.block.header.hash)
+      result <- importBlock(received.block).flatMap[List[Block]] {
+        case BlockImportResult.Succeed(imported, _) =>
+          updateTxAndOmmerPools(imported, Nil).as(imported)
+
+        case BlockImportResult.Failed(e) =>
+          F.delay(log.warn(e.toList.mkString("\n"))).as(Nil)
+
+        case BlockImportResult.Pooled =>
+          updateTxAndOmmerPools(List(received.block), Nil).as(List(received.block))
+      }
+    } yield result
 
   private[jbok] def handleRequestedBlocks(requested: RequestedBlocks[F]): F[Unit] =
-    requested.blocks.traverse(importBlock).void
+    importBlocks(requested.blocks)
 
   private[jbok] def handleMinedBlock(mined: MinedBlock): F[Unit] =
     for {
@@ -498,32 +509,28 @@ case class BlockExecutor[F[_]](
       root <- mpt.getRootHash
     } yield root
 
-  private[jbok] def updateTxAndOmmerPools(peerSet: PeerSet[F],
-                                          blocksAdded: List[Block],
-                                          blocksRemoved: List[Block]): F[Unit] = {
-    log.debug(s"update txPool and ommerPool with ${blocksAdded.length} ADDs and ${blocksRemoved.length} REMOVEs")
+  private[jbok] def updateTxAndOmmerPools(blocksAdded: List[Block], blocksRemoved: List[Block]): F[Unit] =
     for {
       _ <- ommerPool.addOmmers(blocksRemoved.headOption.toList.map(_.header))
-      _ <- blocksRemoved.map(_.body.transactionList).traverse(txs => txPool.addTransactions(txs, peerSet))
+      _ <- blocksRemoved.map(_.body.transactionList).traverse(txs => txPool.addTransactions(txs))
       _ <- blocksAdded.map { block =>
         ommerPool.removeOmmers(block.header :: block.body.uncleNodesList) *>
           txPool.removeTransactions(block.body.transactionList)
       }.sequence
     } yield ()
-  }
 }
 
 object BlockExecutor {
   def apply[F[_]](
       config: BlockChainConfig,
       consensus: Consensus[F],
+      peerManager: PeerManager[F],
   )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[BlockExecutor[F]] =
     for {
-      queue <- Queue.bounded[F, TypedBlock](128)
+      txPool    <- TxPool[F](TxPoolConfig(), peerManager)
+      ommerPool <- OmmerPool[F](consensus.history)
       vm             = new VM
       txValidator    = new TransactionValidator[F](config)
       blockValidator = new BlockValidator[F]
-      txPool    <- TxPool[F](TxPoolConfig())
-      ommerPool <- OmmerPool[F](consensus.history)
-    } yield BlockExecutor(config, consensus, queue, vm, txValidator, blockValidator, txPool, ommerPool)
+    } yield BlockExecutor(config, consensus, peerManager, vm, txValidator, blockValidator, txPool, ommerPool)
 }

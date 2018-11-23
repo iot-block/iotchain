@@ -8,7 +8,7 @@ import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.TypedBlock.RequestedBlocks
 import jbok.core.messages._
 import jbok.core.models._
-import jbok.core.peer.{Peer, PeerManager}
+import jbok.core.peer.{Peer, PeerSelectStrategy}
 
 import scala.concurrent.duration._
 
@@ -18,14 +18,16 @@ import scala.concurrent.duration._
   */
 case class FullSync[F[_]](
     config: SyncConfig,
-    peerManager: PeerManager[F],
     executor: BlockExecutor[F],
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger("FullSync")
 
+  val peerManager = executor.peerManager
+
   def stream: Stream[F, Option[Unit]] = {
     val check = for {
-      bestPeerOpt <- peerManager.peerSet.bestPeer
+      connected   <- peerManager.connected
+      bestPeerOpt <- PeerSelectStrategy.bestPeer[F].run(connected).map(_.headOption)
       result <- bestPeerOpt match {
         case Some(peer) =>
           requestPeer(peer).map(_.some)
