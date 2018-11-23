@@ -26,7 +26,6 @@ import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 import jbok.persistent.leveldb.LevelDB
 import scodec.bits.ByteVector
-import cats.implicits._
 
 case class FullNode[F[_]](
     config: FullNodeConfig,
@@ -49,16 +48,17 @@ case class FullNode[F[_]](
     config.peer.bindAddr
 
   def stream: Stream[F, Unit] =
-    Stream(
-      peerManager.stream,
-      syncManager.stream,
-      server.stream
-    ).parJoinUnbounded
-      .interruptWhen(haltWhenTrue)
-      .onFinalize(haltWhenTrue.set(true))
+    Stream.eval(haltWhenTrue.set(false)) ++
+      Stream(
+        peerManager.stream,
+        syncManager.stream,
+        server.stream
+      ).parJoinUnbounded
+        .interruptWhen(haltWhenTrue)
+        .onFinalize(haltWhenTrue.set(true))
 
   def start: F[Fiber[F, Unit]] =
-    haltWhenTrue.set(false) *> stream.compile.drain.start
+    stream.compile.drain.start
 
   def stop: F[Unit] =
     haltWhenTrue.set(true)
@@ -82,8 +82,8 @@ object FullNode {
       clique    = Clique(CliqueConfig(), history, Address(keyPair), sign)
       consensus = new CliqueConsensus[IO](clique, blockPool)
       peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), history)
-      executor    <- BlockExecutor[IO](config.blockchain, consensus)
-      syncManager <- SyncManager(config.sync, peerManager, executor)
+      executor    <- BlockExecutor[IO](config.blockchain, consensus, peerManager)
+      syncManager <- SyncManager(config.sync, executor)
       keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
       miner       <- BlockMiner[IO](config.mining, executor)
 
@@ -111,8 +111,8 @@ object FullNode {
     for {
       nodeKey     <- Signature[ECDSA].generateKeyPair()
       peerManager <- PeerManagerPlatform[IO](config.peer, Some(nodeKey), consensus.history)
-      executor    <- BlockExecutor[IO](config.blockchain, consensus)
-      syncManager <- SyncManager(config.sync, peerManager, executor)
+      executor    <- BlockExecutor[IO](config.blockchain, consensus, peerManager)
+      syncManager <- SyncManager(config.sync, executor)
       keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
       miner       <- BlockMiner[IO](config.mining, executor)
 

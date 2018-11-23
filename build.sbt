@@ -256,6 +256,7 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.2.4"),
   addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
+//  addCompilerPlugin("ch.epfl.scala"   %% "scalac-profiling"   % "1.0.0"),
 //  addCompilerPlugin(scalafixSemanticdb),
   fork := true,
   fork in Test := false,
@@ -290,7 +291,9 @@ lazy val scalacOpts = scalacOptions := Seq(
   "-Ypartial-unification",
   "-language:higherKinds",
   "-language:implicitConversions",
-  "-language:postfixOps"
+  "-language:postfixOps",
+//  "-P:scalac-profiling:generate-macro-flamegraph",
+//  "-P:scalac-profiling:no-profiledb"
 //  "-Yrangepos", // required by SemanticDB compiler plugin
 //  "-Ywarn-unused-import" // required by `RemoveUnused` rule
 )

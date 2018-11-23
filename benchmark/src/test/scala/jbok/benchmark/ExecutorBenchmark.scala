@@ -3,6 +3,7 @@ package jbok.benchmark
 import cats.effect.IO
 import jbok.core.ledger.BlockExecutor
 import jbok.core.models.{Block, SignedTransaction}
+import jbok.common.testkit._
 import jbok.core.testkit._
 import org.openjdk.jmh.annotations._
 import ch.qos.logback.classic.LoggerContext
@@ -21,5 +22,5 @@ class ExecutorBenchmark extends JbokBenchmark {
 
   @Benchmark
   def executeBlockTransactions() =
-    executor.executeBlockTransactions(block, shortCircuit = true).unsafeRunSync()
+    executor.executeBlocks(block :: Nil, 0, shortCircuit = true).unsafeRunSync()
 }

@@ -18,7 +18,7 @@ case class JbokClient(uri: URI, client: Client[IO, String], admin: PrivateAPI, p
   def status: Stream[IO, Boolean] =
     for {
       _    <- Stream.awakeEvery[IO](5.seconds)
-      isUp <- Stream.eval(client.isUp)
+      isUp <- Stream.eval(client.haltWhenTrue.get.map(!_))
     } yield isUp
 }
 

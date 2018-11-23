@@ -6,7 +6,7 @@ import jbok.evm.CreateOpFixture.initWorld
 import jbok.evm._
 import org.openjdk.jmh.annotations.Benchmark
 import scodec.bits._
-import jbok.testkit.VMGens.{callerAddr, exampleBlockHeader, ownerAddr}
+import jbok.evm.testkit._
 
 class OpCodeBenchmark extends JbokBenchmark {
   val config = EvmConfig.PostEIP161ConfigBuilder(None)
