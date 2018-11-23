@@ -163,7 +163,7 @@ object MainApp extends IOApp {
         for {
           fullNode <- FullNode.forConfig(conf.config)
           server   <- Server.http[IO](bind, fullNode.rpc.handle)
-          code     <- server.serve.compile.drain.as(ExitCode.Success)
+          code     <- server.stream.compile.drain.as(ExitCode.Success)
         } yield code
 
       case _ =>

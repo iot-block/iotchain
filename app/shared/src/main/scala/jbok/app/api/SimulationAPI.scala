@@ -27,8 +27,6 @@ trait SimulationAPI {
 
   def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]]
 
-  def createNodes(n: Int): IO[List[NodeInfo]]
-
   def deleteNode(id: String): IO[Unit]
 
   def startNetwork: IO[Unit]
@@ -51,21 +49,11 @@ trait SimulationAPI {
 
   def connect(topology: String): IO[Unit]
 
-  def events: Stream[IO, SimulationEvent]
-
   // simulation txs
   def submitStxsToNetwork(nStx: Int, t: String): IO[Unit]
 
   def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit]
 
   // get status of blocks
-  def getBestBlock: IO[List[Block]]
-
-  def getBlocksByNumber(number: BigInt): IO[List[Block]]
-
-  def getShakedPeerID: IO[List[List[String]]]
-
-  def getPendingTx: IO[List[List[SignedTransaction]]]
-
   def getCoin(address: Address, value: BigInt): IO[Unit]
 }

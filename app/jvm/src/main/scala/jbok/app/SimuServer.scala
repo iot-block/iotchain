@@ -1,24 +1,20 @@
 package jbok.app
 
-import java.net.{InetSocketAddress, URI}
+import java.net.InetSocketAddress
 import java.security.SecureRandom
 
 import better.files.File
-import cats.effect.IO
-import jbok.JbokSpec
+import cats.effect.{ExitCode, IO, IOApp}
 import jbok.app.simulations.{SimulationAPI, SimulationImpl}
 import jbok.common.execution._
-import jbok.core.consensus.poa.clique.CliqueFixture
 import jbok.core.keystore.KeyStorePlatform
-import jbok.core.mining.BlockMinerFixture
-import jbok.network.client.{Client, WSClientBuilderPlatform}
-import jbok.network.rpc.{RpcClient, RpcServer}
+import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 
 import scala.io.StdIn
 
-class SimuServer extends BlockMinerFixture(new CliqueFixture {}) with JbokSpec {
+object SimuServer {
   val bind = new InetSocketAddress("localhost", 8888)
 
   // keystore
@@ -39,19 +35,21 @@ class SimuServer extends BlockMinerFixture(new CliqueFixture {}) with JbokSpec {
     _ = Thread.sleep(5000)
     _ <- impl.submitStxsToNetwork(10, "valid")
   } yield ()
-  init.unsafeRunSync()
 
-  server.start.unsafeRunSync()
-  println("simulation start")
+  def main(args: Array[String]): Unit = {
+    init.unsafeRunSync()
+    server.start.unsafeRunSync()
+    println("simulation start")
 
-  println(s"server listen on ${bind}, press any key to quit")
-  StdIn.readLine()
+    println(s"server listen on ${bind}, press any key to quit")
+    StdIn.readLine()
 
-  println("stop simulation")
-  val cleanUp = for {
-    _ <- impl.stopNetwork
-  } yield ()
-  cleanUp.unsafeRunSync()
+    println("stop simulation")
+    val cleanUp = for {
+      _ <- impl.stopNetwork
+    } yield ()
+    cleanUp.unsafeRunSync()
 
-  server.stop.unsafeRunSync()
+    server.stop.unsafeRunSync()
+  }
 }

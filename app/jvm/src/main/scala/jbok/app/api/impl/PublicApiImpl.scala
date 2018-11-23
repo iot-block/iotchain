@@ -23,16 +23,15 @@ class PublicApiImpl(
     miningConfig: MiningConfig,
     miner: BlockMiner[IO],
     keyStore: KeyStore[IO],
-    filterManager: FilterManager[IO],
     version: Int,
     hashRate: Ref[IO, Map[ByteVector, (BigInt, Date)]],
     lastActive: Ref[IO, Option[Date]]
 ) extends PublicAPI {
 
   val history   = miner.history
-  val txPool    = miner.synchronizer.txPool
-  val ommerPool = miner.synchronizer.ommerPool
-  val blockPool = miner.synchronizer.executor.blockPool
+  val txPool    = miner.executor.txPool
+  val ommerPool = miner.executor.ommerPool
+  val blockPool = miner.executor.blockPool
 
   override def protocolVersion: IO[String] =
     IO.pure(f"0x${version}%x")
@@ -122,7 +121,7 @@ class PublicApiImpl(
     } yield gasPrice
   }
 
-  override def getMining: IO[Boolean] = miner.isMining
+  override def getMining: IO[Boolean] = miner.haltWhenTrue.get.map(!_)
 
   override def getHashRate: IO[BigInt] =
     ???
@@ -176,9 +175,8 @@ class PublicApiImpl(
   override def getCode(address: Address, blockParam: BlockParam): IO[ByteVector] =
     for {
       block <- resolveBlock(blockParam)
-      world <- history.getWorldState(blockChainConfig.accountStartNonce,
-                                          Some(block.header.stateRoot))
-      code <- world.getCode(address)
+      world <- history.getWorldState(blockChainConfig.accountStartNonce, Some(block.header.stateRoot))
+      code  <- world.getCode(address)
     } yield code
 
   override def getUncleCountByBlockNumber(blockParam: BlockParam): IO[Int] =
@@ -223,39 +221,6 @@ class PublicApiImpl(
     for {
       account <- resolveAccount(address, blockParam)
     } yield account.nonce.toBigInt
-
-  override def newFilter(
-      fromBlock: Option[BlockParam],
-      toBlock: Option[BlockParam],
-      address: Option[Address],
-      topics: List[List[ByteVector]]
-  ): IO[BigInt] =
-    filterManager.newLogFilter(fromBlock, toBlock, address, topics)
-
-  override def newBlockFilter: IO[BigInt] =
-    filterManager.newBlockFilter
-
-  override def newPendingTransactionFilter: IO[BigInt] =
-    filterManager.newPendingTxFilter
-
-  override def uninstallFilter(filterId: BigInt): IO[Boolean] =
-    filterManager.uninstallFilter(filterId).map(_ => true)
-
-  override def getFilterChanges(filterId: BigInt): IO[FilterChanges] =
-    filterManager.getFilterChanges(filterId)
-
-  override def getFilterLogs(filterId: BigInt): IO[FilterLogs] =
-    filterManager.getFilterLogs(filterId)
-
-  override def getLogs(
-      fromBlock: Option[BlockParam],
-      toBlock: Option[BlockParam],
-      address: Option[Address],
-      topics: List[List[ByteVector]]
-  ): IO[LogFilterLogs] =
-    filterManager
-      .getLogs(LogFilter(0, fromBlock, toBlock, address, topics))
-      .map(LogFilterLogs)
 
   override def getAccountTransactions(address: Address,
                                       fromBlock: BigInt,
@@ -342,7 +307,6 @@ object PublicApiImpl {
       miningConfig: MiningConfig,
       miner: BlockMiner[IO],
       keyStore: KeyStore[IO],
-      filterManager: FilterManager[IO],
       version: Int,
   ): IO[PublicAPI] =
     for {
@@ -354,7 +318,6 @@ object PublicApiImpl {
         miningConfig: MiningConfig,
         miner,
         keyStore,
-        filterManager,
         version: Int,
         hashRate,
         lastActive

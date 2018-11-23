@@ -5,7 +5,7 @@ import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.implicits._
 import fs2._
-import fs2.concurrent.Queue
+import fs2.concurrent.{Queue, SignallingRef}
 import jbok.network.common.RequestId
 import org.scalajs.dom
 import org.scalajs.dom._
@@ -21,9 +21,10 @@ object WsClient {
       maxBytes: Int = 256 * 1024
   )(implicit F: ConcurrentEffect[F]): F[Client[F, A]] =
     for {
-      in       <- Queue.bounded[F, A](maxQueued)
-      out      <- Queue.bounded[F, A](maxQueued)
-      promises <- Ref.of[F, Map[String, Deferred[F, A]]](Map.empty)
+      in           <- Queue.bounded[F, A](maxQueued)
+      out          <- Queue.bounded[F, A](maxQueued)
+      promises     <- Ref.of[F, Map[String, Deferred[F, A]]](Map.empty)
+      haltWhenTrue <- SignallingRef[F, Boolean](true)
     } yield {
       val pipe: Pipe[F, A, A] = { input =>
         out.dequeue.concurrently(
@@ -80,6 +81,6 @@ object WsClient {
         } yield ()
       }
 
-      Client[F, A](stream, in, out, promises, uri)
+      Client[F, A](stream, in, out, promises, uri, haltWhenTrue)
     }
 }

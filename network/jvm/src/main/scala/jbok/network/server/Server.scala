@@ -27,12 +27,12 @@ trait Server[F[_]] {
 
   def haltWhenTrue: SignallingRef[F, Boolean]
 
-  def serve: Stream[F, Unit]
+  def stream: Stream[F, Unit]
 
   def start(implicit F: Concurrent[F]): F[Unit] =
     haltWhenTrue.get.flatMap {
       case false => F.unit
-      case true  => haltWhenTrue.set(false) *> serve.interruptWhen(haltWhenTrue).compile.drain.start.void
+      case true  => haltWhenTrue.set(false) *> stream.interruptWhen(haltWhenTrue).compile.drain.start.void
     }
 
   def stop(implicit F: Concurrent[F]): F[Unit] =
@@ -54,7 +54,7 @@ object Server {
 
         override val haltWhenTrue: SignallingRef[F, Boolean] = signal
 
-        override val serve: Stream[F, Unit] =
+        override val stream: Stream[F, Unit] =
           fs2.io.tcp
             .serverWithLocalAddress[F](bind)
             .map {
@@ -87,7 +87,7 @@ object Server {
 
         override val haltWhenTrue: SignallingRef[F, Boolean] = signal
 
-        override val serve: Stream[F, Unit] = {
+        override val stream: Stream[F, Unit] = {
           val dsl = Http4sDsl[F]
           import dsl._
           val service = HttpRoutes.of[F] {
@@ -141,7 +141,7 @@ object Server {
 
         override val haltWhenTrue: SignallingRef[F, Boolean] = signal
 
-        override val serve: Stream[F, Unit] = {
+        override val stream: Stream[F, Unit] = {
           val dsl = Http4sDsl[F]
           import dsl._
 

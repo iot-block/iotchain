@@ -85,29 +85,5 @@ trait PublicAPI {
 
   def getTransactionCount(address: Address, blockParam: BlockParam): IO[BigInt]
 
-  def newFilter(
-      fromBlock: Option[BlockParam],
-      toBlock: Option[BlockParam],
-      address: Option[Address],
-      topics: List[List[ByteVector]]
-  ): IO[BigInt]
-
-  def newBlockFilter: IO[BigInt]
-
-  def newPendingTransactionFilter: IO[BigInt]
-
-  def uninstallFilter(filterId: BigInt): IO[Boolean]
-
-  def getFilterChanges(filterId: BigInt): IO[FilterChanges]
-
-  def getFilterLogs(filterId: BigInt): IO[FilterLogs]
-
-  def getLogs(
-      fromBlock: Option[BlockParam],
-      toBlock: Option[BlockParam],
-      address: Option[Address],
-      topics: List[List[ByteVector]]
-  ): IO[LogFilterLogs]
-
   def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): IO[List[SignedTransaction]]
 }
