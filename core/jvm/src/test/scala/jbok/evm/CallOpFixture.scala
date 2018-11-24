@@ -154,7 +154,7 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
       outOffset: UInt256 = inputData.size,
       outSize: UInt256 = inputData.size / 2
   ) {
-    private val params = Seq(UInt256(gas), to.toUInt256, value, inOffset, inSize, outOffset, outSize).reverse
+    private val params = List(UInt256(gas), to.toUInt256, value, inOffset, inSize, outOffset, outSize).reverse
     private val paramsForDelegate = params.take(4) ++ params.drop(5)
     private val stack = Stack.empty().push(if (op == DELEGATECALL) paramsForDelegate else params)
     private val mem = Memory.empty.store(UInt256.Zero, inputData)

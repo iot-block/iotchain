@@ -287,7 +287,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     )
 
     forAll(table) { (size, expectedGas) =>
-      val stackIn  = Stack.empty().push(Seq(size, Zero, Zero, Zero))
+      val stackIn  = Stack.empty().push(List(size, Zero, Zero, Zero))
       val memIn    = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
       val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
@@ -411,7 +411,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
                                        (13, G_log + G_logtopic * op.i + G_logdata * 13))
 
     forAll(table) { (size, expectedGas) =>
-      val topics   = Seq.fill(op.delta - 2)(Zero)
+      val topics   = List.fill(op.delta - 2)(Zero)
       val stackIn  = Stack.empty().push(topics).push(size).push(Zero)
       val memIn    = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
       val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)

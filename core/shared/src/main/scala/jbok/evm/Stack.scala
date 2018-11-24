@@ -2,101 +2,65 @@ package jbok.evm
 
 import jbok.core.models.UInt256
 
-object Stack {
-
-  /**
-    * Stack max size as defined in the YP (9.1)
-    */
-  val DefaultMaxSize = 1024
-
-  def empty(maxSize: Int = DefaultMaxSize): Stack =
-    new Stack(Vector(), maxSize)
-}
-
-//TODO: consider a List with head being top of the stack (DUP,SWAP go at most the depth of 16) [EC-251]
 /**
-  * Stack for the EVM. Instruction pop their arguments from it and push their results to it.
-  * The Stack doesn't handle overflow and underflow errors. Any operations that trascend given stack bounds will
-  * return the stack unchanged. Pop will always return zeroes in such case.
+  * [[Stack]] for the EVM.
+  *
+  * It doesn't handle overflow and underflow errors.
+  * Any operations that transcend given stack bounds will return the stack unchanged.
+  * Pop will always return zeroes in such case.
   */
-class Stack private (private val underlying: Vector[UInt256], val maxSize: Int) {
-
-  def pop: (UInt256, Stack) = underlying.lastOption match {
+class Stack private (private val underlying: List[UInt256], val maxSize: Int) {
+  def pop: (UInt256, Stack) = underlying.headOption match {
     case Some(word) =>
-      val updated = underlying.dropRight(1)
-      (word, copy(updated))
+      (word, copy(underlying.tail))
 
     case None =>
       (UInt256.Zero, this)
   }
 
-  /**
-    * Pop n elements from the stack. The first element in the resulting sequence will be the top-most element
-    * in the current stack
-    */
-  def pop(n: Int): (Seq[UInt256], Stack) = {
-    val (updated, popped) = underlying.splitAt(underlying.length - n)
+  def pop(n: Int): (List[UInt256], Stack) = {
+    val (popped, left) = underlying.splitAt(n)
     if (popped.length == n)
-      (popped.reverse, copy(updated))
+      (popped, copy(left))
     else
-      (Seq.fill(n)(UInt256.Zero), this)
+      (List.fill(n)(UInt256.Zero), this)
   }
 
-  def push(word: UInt256): Stack = {
-    val updated = underlying :+ word
-    if (updated.length <= maxSize)
-      copy(updated)
-    else
+  def push(word: UInt256): Stack =
+    if (underlying.length < maxSize) {
+      copy(word :: underlying)
+    } else {
       this
-  }
+    }
 
-  /**
-    * Push a sequence of elements to the stack. That last element of the sequence will be the top-most element
-    * in the resulting stack
-    */
-  def push(words: Seq[UInt256]): Stack = {
-    val updated = underlying ++ words
-    if (updated.length > maxSize)
+  def push(words: List[UInt256]): Stack =
+    if (words.length + underlying.length <= maxSize) {
+      copy(words.reverse.toList ++ underlying)
+    } else {
       this
-    else
-      copy(updated)
-  }
+    }
 
-  /**
-    * Duplicate i-th element of the stack, pushing it to the top. i=0 is the top-most element.
-    */
-  def dup(i: Int): Stack = {
-    val j = underlying.length - i - 1
-
+  def dup(i: Int): Stack =
     if (i < 0 || i >= underlying.length || underlying.length >= maxSize)
       this
     else
-      copy(underlying :+ underlying(j))
-  }
+      copy(underlying(i) :: underlying)
 
   /**
     * Swap i-th and the top-most elements of the stack. i=0 is the top-most element (and that would be a no-op)
     */
-  def swap(i: Int): Stack = {
-    val j = underlying.length - i - 1
-
-    if (i <= 0 || i >= underlying.length)
+  def swap(i: Int): Stack =
+    if (i <= 0 || i >= underlying.length) {
       this
-    else {
-      val a = underlying.last
-      val b = underlying(j)
-      val updated = underlying.updated(j, a).init :+ b
-      copy(updated)
+    } else {
+      copy(underlying(i) :: underlying.updated(i, underlying.head).tail)
     }
-  }
 
-  def size: Int = underlying.size
+  def size: Int =
+    underlying.size
 
-  /**
-    * @return the elements of the stack as a sequence, with the top-most element of the stack
-    *         as the first element in the sequence
-    */
-  def toSeq: Seq[UInt256] = underlying.reverse
+  def toList: List[UInt256] =
+    underlying
 
   override def equals(that: Any): Boolean = that match {
     case that: Stack => this.underlying == that.underlying
@@ -108,6 +72,13 @@ class Stack private (private val underlying: Vector[UInt256], val maxSize: Int) 
   override def toString: String =
     underlying.reverse.mkString("Stack(", ",", ")")
 
-  private def copy(updated: Vector[UInt256]): Stack =
-    new Stack(updated, maxSize)
+  private def copy(words: List[UInt256]): Stack =
+    new Stack(words, maxSize)
+}
+
+object Stack {
+  val DefaultMaxSize = 1024
+
+  def empty(maxSize: Int = DefaultMaxSize): Stack =
+    new Stack(Nil, maxSize)
 }

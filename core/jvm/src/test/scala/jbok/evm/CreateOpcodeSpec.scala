@@ -99,7 +99,7 @@ class CreateOpcodeSpec extends JbokSpec {
       createCode: ByteVector = CreateOpFixture.createCode.code
   ) {
     val mem      = Memory.empty.store(0, createCode)
-    val stack    = Stack.empty().push(Seq[UInt256](createCode.size, 0, value))
+    val stack    = Stack.empty().push(List[UInt256](createCode.size, 0, value))
     val stateIn  = ProgramState(context).withStack(stack).withMemory(mem)
     val stateOut = CREATE.execute(stateIn).unsafeRunSync()
 
