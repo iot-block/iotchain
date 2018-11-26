@@ -147,7 +147,8 @@ case class BlockExecutor[F[_]](
         blockPool.addBlock(block) *> ommerPool.addOmmers(List(block.header)) as Nil
 
       case Consensus.Discard(e) =>
-        F.raiseError(e)
+        log.warn(s"discard ${block.tag} because ${e}")
+        F.pure(Nil)
     }
 
   private def executeTransactions(block: Block,

@@ -1,10 +1,15 @@
 package jbok.app.api
 
 import cats.effect.IO
+import io.circe.generic.JsonCodec
 import jbok.core.models._
 import scodec.bits.ByteVector
+import jbok.codec.json.implicits._
 
+@JsonCodec
 case class GetWorkResponse(powHeaderHash: ByteVector, dagSeed: ByteVector, target: ByteVector)
+
+@JsonCodec
 sealed trait BlockParam
 object BlockParam {
   case class WithNumber(n: BigInt) extends BlockParam
@@ -13,6 +18,7 @@ object BlockParam {
   case object Earliest             extends BlockParam
 }
 
+@JsonCodec
 case class CallTx(
     from: Option[Address],
     to: Option[Address],
@@ -22,6 +28,7 @@ case class CallTx(
     data: ByteVector
 )
 
+@JsonCodec
 case class SyncingStatus(startingBlock: BigInt, currentBlock: BigInt, highestBlock: BigInt)
 
 trait PublicAPI {

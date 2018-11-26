@@ -3,6 +3,7 @@ package jbok.evm.testsuite
 import better.files._
 import cats.effect.IO
 import io.circe._
+import io.circe.generic.auto._
 import io.circe.parser._
 import jbok.JbokSpec
 import jbok.codec.json.implicits._

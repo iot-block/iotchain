@@ -1,6 +1,6 @@
 package jbok.core.consensus.poa.clique
 
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
@@ -10,11 +10,12 @@ import jbok.core.pool.BlockPool.Leaf
 import scodec.bits.ByteVector
 
 import scala.util.Random
+import scala.concurrent.duration._
 
 case class CliqueConsensus[F[_]](
     clique: Clique[F],
     blockPool: BlockPool[F]
-)(implicit F: ConcurrentEffect[F])
+)(implicit F: ConcurrentEffect[F], T: Timer[F])
     extends Consensus[F](clique.history, blockPool) {
   private[this] val log = org.log4s.getLogger("CliqueConsensus")
 
@@ -67,7 +68,8 @@ case class CliqueConsensus[F[_]](
                 .max(0) * clique.config.period.toMillis
               val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
               log.trace(s"signed recently, sleep (${delay}) seconds")
-              Thread.sleep(delay)
+
+              T.sleep(delay.millis) *>
               F.raiseError(new Exception(
                 s"${clique.signer} signed recently, must wait for others: ${executed.block.header.number}, ${seen}, ${snap.signers.size / 2 + 1}, ${snap.recents}"))
 
@@ -86,7 +88,7 @@ case class CliqueConsensus[F[_]](
                  })
 
               for {
-                _ <- F.delay(Thread.sleep(delay))
+                _ <- T.sleep(delay.millis)
                 bytes = Clique.sigHash(executed.block.header)
                 signed <- clique.sign(bytes)
                 _ = log.trace(s"${clique.signer} mined block(${executed.block.header.number})")

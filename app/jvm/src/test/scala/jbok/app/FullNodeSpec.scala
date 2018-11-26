@@ -6,6 +6,7 @@ import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.testkit._
+import fs2._
 
 import scala.concurrent.duration._
 
@@ -23,7 +24,7 @@ class FullNodeSpec extends JbokSpec {
       val fullNode       = newFullNode(fullNodeConfig)
       val p = for {
         _ <- fullNode.start
-        _ <- T.sleep(2.second)
+        _ <- T.sleep(3.second)
         _ <- fullNode.stop
       } yield ()
 
@@ -37,7 +38,7 @@ class FullNodeSpec extends JbokSpec {
       println(nodes.map(_.peerManager.peerNode.uri).mkString("\n"))
 
       val p = for {
-        _ <- nodes.traverse(_.start)
+        fiber <- Stream.emits(nodes).map(_.stream).parJoinUnbounded.compile.drain.start
         _ <- T.sleep(3.seconds)
         _ <- (nodes :+ nodes.head).sliding(2).toList.traverse[IO, Unit] {
           case a :: b :: Nil =>
@@ -46,8 +47,8 @@ class FullNodeSpec extends JbokSpec {
             IO.unit
         }
         _ <- T.sleep(3.seconds)
-        _ = nodes.foreach(_.peerManager.peerSet.connected.unsafeRunSync().size shouldBe 2)
-        _ <- nodes.traverse(_.stop)
+        _ = nodes.foreach(_.peerManager.connected.unsafeRunSync().size shouldBe 2)
+        _ <- fiber.cancel
       } yield ()
 
       p.unsafeRunSync()
@@ -59,14 +60,14 @@ class FullNodeSpec extends JbokSpec {
       val nodes   = configs.map(config => newFullNode(config))
 
       val p = for {
-        _             <- nodes.traverse(_.start)
+        fiber <- Stream.emits(nodes).map(_.stream).parJoinUnbounded.compile.drain.start
         _             <- T.sleep(3.seconds)
         _             <- nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode))
         _             <- T.sleep(3.seconds)
-        headConnected <- nodes.head.peerManager.peerSet.connected
+        headConnected <- nodes.head.peerManager.connected
         _ = headConnected.size shouldBe N - 1
-        _ = nodes.tail.foreach(_.peerManager.peerSet.connected.unsafeRunSync().size shouldBe 1)
-        _ <- nodes.traverse(_.stop)
+        _ = nodes.tail.foreach(_.peerManager.connected.unsafeRunSync().size shouldBe 1)
+        _ <- fiber.cancel
       } yield ()
 
       p.unsafeRunSync()
@@ -79,15 +80,15 @@ class FullNodeSpec extends JbokSpec {
 
       val miner = nodes.head.miner
       val p = for {
-        _ <- nodes.traverse(_.start)
+        fiber <- Stream.emits(nodes).map(_.stream).parJoinUnbounded.compile.drain.start
         _ <- T.sleep(3.seconds)
         _ <- nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode))
         _ <- T.sleep(3.seconds)
-        _     = nodes.head.peerManager.peerSet.connected.unsafeRunSync().size shouldBe N - 1
+        _     = nodes.head.peerManager.connected.unsafeRunSync().size shouldBe N - 1
         mined = miner.stream.take(1).compile.toList.unsafeRunSync().head
         _ <- T.sleep(3.seconds)
-        _ = nodes.head.history.getBestBlock.unsafeRunSync() shouldBe mined
-        _ <- nodes.traverse(_.stop)
+        _ = nodes.head.history.getBestBlock.unsafeRunSync() shouldBe mined.block
+        _ <- fiber.cancel
       } yield ()
       p.unsafeRunSync()
     }

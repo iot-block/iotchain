@@ -74,13 +74,9 @@ case class BlockMiner[F[_]](
     } yield mined
 
   def stream: Stream[F, MinedBlock] =
-    if (config.enabled) {
       Stream
         .repeatEval(mine1())
         .onFinalize(haltWhenTrue.set(true))
-    } else {
-      Stream.empty
-    }
 
   /////////////////////////////////////
   /////////////////////////////////////

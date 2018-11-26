@@ -1,5 +1,8 @@
 package jbok.core.models
 
+import io.circe._
+import io.circe.generic.semiauto._
+import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.crypto._
@@ -31,6 +34,10 @@ case class BlockHeader(
 }
 
 object BlockHeader {
+  implicit val headerJsonEncoder: Encoder[BlockHeader] = deriveEncoder[BlockHeader]
+
+  implicit val headerJsonDecoder: Decoder[BlockHeader] = deriveDecoder[BlockHeader]
+
   def encodeWithoutNonce(header: BlockHeader): ByteVector = {
     val hlist = Generic[BlockHeader].to(header).take(13)
     RlpCodec.encode(hlist).require.bytes

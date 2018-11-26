@@ -41,14 +41,13 @@ object RpcServerMacro {
 
           q"""
             (json: String) => {
-              decode[JsonRPCRequest[$parameterType]](json) match {
+              decode[JsonRpcRequest[$parameterType]](json) match {
                 case Left(e) =>
-                  IO.pure(JsonRPCResponse.invalidRequest(e.toString()).asJson.noSpaces)
+                  IO.pure(JsonRpcErrors.invalidRequest.asJson.noSpaces)
                 case Right(req) =>
                   $run.attempt.map {
-                    case Left(e: JsonRPCError) => e.copy(id = req.id).asJson.noSpaces
-                    case Left(e) => JsonRPCResponse.internalError(e.toString, req.id).asJson.noSpaces
-                    case Right(x) => JsonRPCResponse.ok(req.id, x).asJson.noSpaces
+                    case Left(e) => JsonRpcErrorResponse(req.id, JsonRpcErrors.internalError).asJson.noSpaces
+                    case Right(x) => JsonRpcResultResponse(req.id, x).asJson.noSpaces
                   }
               }
             }
@@ -60,12 +59,10 @@ object RpcServerMacro {
 
     val expr = c.Expr[RpcServer] {
       q"""
-        import fs2._
         import _root_.io.circe.syntax._
         import _root_.io.circe.parser._
-        import cats.implicits._
-        import jbok.network.json._
         import jbok.codec.json.implicits._
+        import jbok.network.json._
 
         ${c.prefix.tree}.addHandlers($handlers)
        """

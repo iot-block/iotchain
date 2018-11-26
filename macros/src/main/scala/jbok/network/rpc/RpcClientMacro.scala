@@ -13,13 +13,11 @@ object RpcClientMacro {
     val expr = c.Expr[API] {
       q"""
         new $returnType {
-          import fs2._
           import _root_.io.circe.syntax._
           import _root_.io.circe.parser._
-          import cats.effect.IO
-          import cats.implicits._
-          import jbok.network.json._
           import jbok.codec.json.implicits._
+          import jbok.network.json._
+          import cats.effect.IO
 
           ..$members
         }
@@ -55,22 +53,16 @@ object RpcClientMacro {
 
       val body =
         q"""
-          val request =
-            JsonRPCRequest[$parameterType](
+          val request: JsonRpcRequest[$parameterType] =
+            JsonRpcRequest[$parameterType](
               id = java.util.UUID.randomUUID().toString,
               method = ${methodName.toString},
               params = $parametersAsTuple
             )
 
-          client.request(request.asJson.noSpaces).map(x => decode[JsonRPCResponse[$resultType]](x)).flatMap {
-            case Left(e) =>
-              IO.raiseError(JsonRPCResponse.parseError("parsing JsonRPCResponse failed"))
-            case Right(x) => x match {
-              case e: JsonRPCError =>
-                IO.raiseError(e)
-              case r: JsonRPCResult[${TypeName(resultType.toString)}] =>
-                IO.pure(r.result)
-            }
+          client.request(request.asJson.noSpaces).map(x => decode[JsonRpcResultResponse[$resultType]](x)).flatMap {
+            case Left(e) => IO.raiseError(new Exception("parsing JsonRpcResponse failed"))
+            case Right(x) => IO.pure(x.result)
           }
        """
 

@@ -4,6 +4,7 @@ import java.security.SecureRandom
 import java.util.UUID
 
 import cats.effect.IO
+import io.circe.generic.JsonCodec
 import jbok.core.models.Address
 import jbok.crypto._
 import jbok.crypto.password.SCrypt
@@ -11,10 +12,15 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import tsec.cipher.symmetric._
 import tsec.cipher.symmetric.jca._
+import jbok.codec.json.implicits._
 
+@JsonCodec
 case class KdfParams(salt: ByteVector, n: Int, r: Int, p: Int, dklen: Int)
 
+@JsonCodec
 case class CipherParams(iv: ByteVector)
+
+@JsonCodec
 case class CryptoSpec(
     cipher: String,
     ciphertext: ByteVector,
@@ -26,6 +32,7 @@ case class CryptoSpec(
 
 import jbok.core.keystore.EncryptedKey._
 
+@JsonCodec
 case class EncryptedKey(
     id: UUID,
     address: Address,

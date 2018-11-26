@@ -26,6 +26,7 @@ import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 import jbok.persistent.leveldb.LevelDB
 import scodec.bits.ByteVector
+import cats.implicits._
 
 case class FullNode[F[_]](
     config: FullNodeConfig,
@@ -36,6 +37,8 @@ case class FullNode[F[_]](
     server: Server[F],
     haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
+  private[this] val log = org.log4s.getLogger("FullNode")
+
   val executor    = syncManager.executor
   val history     = executor.history
   val peerManager = syncManager.peerManager
@@ -53,10 +56,11 @@ case class FullNode[F[_]](
         peerManager.stream,
         syncManager.stream,
         server.stream,
-        miner.stream.drain
+        if (config.mining.enabled) miner.stream.drain else Stream.empty
       ).parJoinUnbounded
         .interruptWhen(haltWhenTrue)
-        .onFinalize(haltWhenTrue.set(true))
+        .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)("FullNode error"))))
+        .onFinalize(haltWhenTrue.set(true) *> F.delay(log.debug("FullNode finalized")))
 
   def start: F[Fiber[F, Unit]] =
     stream.compile.drain.start
@@ -86,7 +90,7 @@ object FullNode {
       executor    <- BlockExecutor[IO](config.blockchain, consensus, peerManager)
       syncManager <- SyncManager(config.sync, executor)
       keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, random)
-      miner       <- BlockMiner[IO](config.mining, executor)
+      miner       <- BlockMiner[IO](config.mining, syncManager)
 
       // mount rpc
       publicAPI <- PublicApiImpl(
@@ -115,7 +119,7 @@ object FullNode {
       executor    <- BlockExecutor[IO](config.blockchain, consensus, peerManager)
       syncManager <- SyncManager(config.sync, executor)
       keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
-      miner       <- BlockMiner[IO](config.mining, executor)
+      miner       <- BlockMiner[IO](config.mining, syncManager)
 
       // mount rpc
       publicAPI <- PublicApiImpl(

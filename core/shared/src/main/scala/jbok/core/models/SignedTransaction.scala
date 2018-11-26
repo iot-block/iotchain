@@ -1,8 +1,11 @@
 package jbok.core.models
 
 import cats.effect.IO
+import io.circe.{Decoder, Encoder}
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
+import jbok.codec.json.implicits._
 import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
@@ -29,6 +32,10 @@ case class SignedTransaction(
 }
 
 object SignedTransaction {
+  implicit val txJsonEncoder: Encoder[SignedTransaction] = deriveEncoder[SignedTransaction]
+
+  implicit val txJsonDecoder: Decoder[SignedTransaction] = deriveDecoder[SignedTransaction]
+
   def apply(
       tx: Transaction,
       pointSign: Byte,
@@ -100,7 +107,7 @@ object SignedTransaction {
     )
     val bytes = bytesToSign(stx, chainId)
     for {
-      sig   <- Signature[ECDSA].sign(bytes.toArray, keyPair, chainId)
+      sig <- Signature[ECDSA].sign(bytes.toArray, keyPair, chainId)
     } yield stx.copy(v = BigInt(1, Array(sig.v)), r = sig.r, s = sig.s)
   }
 

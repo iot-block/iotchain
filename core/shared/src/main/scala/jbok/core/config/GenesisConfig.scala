@@ -1,9 +1,12 @@
 package jbok.core.config
 
+import io.circe.generic.JsonCodec
+import jbok.codec.json.implicits._
 import jbok.core.models._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
 
+@JsonCodec
 case class GenesisConfig(
     nonce: ByteVector,
     mixHash: Option[ByteVector],

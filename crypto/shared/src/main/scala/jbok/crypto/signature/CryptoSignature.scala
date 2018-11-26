@@ -2,8 +2,10 @@ package jbok.crypto.signature
 
 import java.math.BigInteger
 
+import io.circe.generic.JsonCodec
 import scodec.bits.ByteVector
 
+@JsonCodec
 final case class CryptoSignature(r: BigInteger, s: BigInteger, v: Byte) {
   def bytes: Array[Byte] =
     CryptoSignature.unsigned(r) ++ CryptoSignature.unsigned(s) ++ Array(v)

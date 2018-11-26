@@ -1,14 +1,13 @@
 package jbok.codec.json
 
 import io.circe._
-import io.circe.generic.AutoDerivation
 import scodec.bits.{BitVector, ByteVector}
 import io.circe.syntax._
 import shapeless._
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
-object implicits extends AutoDerivation {
+object implicits {
   implicit val bytesDecoder: Decoder[ByteVector] = Decoder[String].emap(ByteVector.fromHexDescriptive(_))
 
   implicit val bytesEncoder: Encoder[ByteVector] = Encoder.instance(bv => Json.fromString(bv.toHex))

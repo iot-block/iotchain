@@ -3,14 +3,14 @@ package jbok.app.api.impl
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import jbok.app.api.{PrivateAPI, TransactionRequest}
-import jbok.core.ledger.History
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.keystore.{KeyStorePlatform, Wallet}
+import jbok.core.ledger.History
 import jbok.core.models.Address
 import jbok.core.pool.TxPool
 import jbok.crypto._
 import jbok.crypto.signature._
-import jbok.network.json.JsonRPCResponse
+import jbok.network.json.JsonRpcErrors
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.Duration
@@ -79,7 +79,7 @@ object PrivateApiImpl {
                 case Some(wallet) =>
                   sendTransaction(tx, wallet)
                 case None =>
-                  IO.raiseError(JsonRPCResponse.invalidRequest("account is locked"))
+                  IO.raiseError(JsonRpcErrors.invalidRequest)
               }
           }
 

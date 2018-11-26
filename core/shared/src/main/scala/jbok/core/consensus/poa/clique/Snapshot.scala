@@ -3,6 +3,8 @@ package jbok.core.consensus.poa.clique
 import cats.effect.Sync
 import cats.implicits._
 import io.circe._
+import io.circe.generic.JsonCodec
+import io.circe.generic.semiauto._
 import io.circe.parser._
 import io.circe.syntax._
 import jbok.codec.json.implicits._
@@ -13,6 +15,7 @@ import jbok.core.models.{Address, BlockHeader}
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 
+@JsonCodec
 case class Vote(
     signer: Address, // Authorized signer that cast this vote
     block: BigInt, // Block number the vote was cast in (expire old votes)
@@ -20,6 +23,7 @@ case class Vote(
     authorize: Boolean // Whether to authorize or deauthorize the voted account
 )
 
+@JsonCodec
 case class Tally(
     authorize: Boolean, // Whether the vote is about authorizing or kicking someone
     votes: Int // Number of votes until now wanting to pass the proposal
@@ -42,7 +46,8 @@ case class Snapshot(
   // should clear previous votes from signer -> beneficiary
   def cast(signer: Address, beneficiary: Address, authorize: Boolean): Snapshot = {
     val dedup: Snapshot =
-      votes.filter(x => x.signer == signer && x.address == beneficiary)
+      votes
+        .filter(x => x.signer == signer && x.address == beneficiary)
         .foldLeft(this)((snap, v) => snap.uncast(v.address, v.authorize))
         .copy(votes = votes.filterNot(x => x.signer == signer && x.address == beneficiary))
 
@@ -135,47 +140,21 @@ case class Snapshot(
 object Snapshot {
   val namespace = ByteVector("clique".getBytes)
 
-  implicit private val addressKeyEncoder =
+  implicit val addressKeyEncoder =
     KeyEncoder.instance[Address](_.bytes.asJson.noSpaces)
-  implicit private val addressKeyDecoder =
+
+  implicit val addressKeyDecoder =
     KeyDecoder.instance[Address](s => decode[ByteVector](s).map(bytes => Address(bytes)).right.toOption)
-  implicit private val bigIntKeyEncoder =
+
+  implicit val bigIntKeyEncoder =
     KeyEncoder.instance[BigInt](_.asJson.noSpaces)
-  implicit private val bigIntKeyDecoder =
+
+  implicit val bigIntKeyDecoder =
     KeyDecoder.instance[BigInt](s => decode[BigInt](s).right.toOption)
-//  implicit private val encoder: io.circe.Encoder[Snapshot] = new Encoder[Snapshot] {
-//    override def apply(a: Snapshot): Json = Json.obj(
-//      "config"  -> a.config.asJson,
-//      "number"  -> a.number.asJson,
-//      "hash"    -> a.hash.asJson,
-//      "signers" -> a.signers.toList.asJson,
-//      "recents" -> a.recents.asJson,
-//      "votes"   -> a.votes.asJson,
-//      "tally"   -> a.tally.asJson
-//    )
-//  }
-//  implicit private val decoder: io.circe.Decoder[Snapshot] = new Decoder[Snapshot] {
-//    override def apply(c: HCursor): Result[Snapshot] =
-//      for {
-//        config  <- c.downField("config").as[CliqueConfig]
-//        number  <- c.downField("number").as[BigInt]
-//        hash    <- c.downField("hash").as[ByteVector]
-//        signers <- c.downField("signers").as[List[Address]]
-//        recents <- c.downField("recents").as[Map[BigInt, Address]]
-//        votes   <- c.downField("votes").as[List[Vote]]
-//        tally   <- c.downField("tally").as[Map[Address, Tally]]
-//      } yield {
-//        Snapshot(
-//          config,
-//          number,
-//          hash,
-//          signers.toSet,
-//          recents,
-//          votes,
-//          tally
-//        )
-//      }
-//  }
+
+  implicit val snapshotJsonEncoder: Encoder[Snapshot] = deriveEncoder[Snapshot]
+
+  implicit val snapshotJsonDecoder: Decoder[Snapshot] = deriveDecoder[Snapshot]
 
   implicit private[jbok] val byteArrayOrd: Ordering[Array[Byte]] = new Ordering[Array[Byte]] {
     def compare(a: Array[Byte], b: Array[Byte]): Int =

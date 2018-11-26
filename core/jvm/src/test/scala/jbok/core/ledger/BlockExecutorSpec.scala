@@ -60,7 +60,6 @@ class BlockExecutorSpec extends JbokSpec {
       val executor = random[BlockExecutor[IO]]
       val block    = random[List[Block]](genBlocks(1, 1)).head
       val result   = executor.handleSyncBlocks(SyncBlocks(block :: Nil, None)).unsafeRunSync()
-      result shouldBe ()
     }
 
     "create sender account if it does not exists" in {

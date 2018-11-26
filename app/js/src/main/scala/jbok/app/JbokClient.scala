@@ -34,16 +34,6 @@ object JbokClient {
       _ <- client.start
     } yield JbokClient(uri, client, admin, public)
 
-//  def http(ip: String): IO[JbokClient] = {
-//    val uri = new URI(ip)
-//    for {
-//      client <- Client(TcpClientBuilder[IO, String], uri)
-//      admin  = RpcClient(client).useAPI[PrivateAPI]
-//      public = RpcClient(client).useAPI[PublicAPI]
-//      _ <- client.start
-//    } yield JbokClient(uri, client, admin, public)
-//  }
-
   def webSocket(url: String): IO[JbokClient] = {
     val uri = new URI(url)
     apply(uri)

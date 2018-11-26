@@ -27,7 +27,12 @@ lazy val V = new {
 
 lazy val jbok = project
   .in(file("."))
-  .aggregate(core.jvm, core.js)
+  .aggregate(
+    crypto.jvm,
+    persistent.jvm,
+    core.jvm,
+    core.js
+  )
   .settings(noPublishSettings)
 
 lazy val common = crossProject(JSPlatform, JVMPlatform)

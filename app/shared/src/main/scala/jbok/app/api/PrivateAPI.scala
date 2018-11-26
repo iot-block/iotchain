@@ -1,12 +1,15 @@
 package jbok.app.api
 
 import cats.effect.IO
+import io.circe.generic.JsonCodec
+import jbok.codec.json.implicits._
 import jbok.core.models.{Address, Transaction}
 import jbok.crypto.signature._
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.Duration
 
+@JsonCodec
 case class TransactionRequest(
     from: Address,
     to: Option[Address] = None,
