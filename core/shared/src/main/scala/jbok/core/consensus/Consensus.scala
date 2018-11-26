@@ -1,5 +1,4 @@
 package jbok.core.consensus
-import cats.data.NonEmptyList
 import jbok.core.consensus.Consensus._
 import jbok.core.ledger.History
 import jbok.core.ledger.TypedBlock.{ExecutedBlock, MinedBlock}
@@ -11,8 +10,9 @@ import jbok.core.pool.BlockPool
   * 1. prepareHeader: generate a [[BlockHeader]] with protocol-specific consensus fields
   * 2. postProcess: post process a [[ExecutedBlock]] such as paying reward
   * 3. mine: seal a [[ExecutedBlock]] into a [[MinedBlock]]
-  * 4. verifyHeader: run a consensus upon a received [[BlockHeader]] and yield 3 possible [[Result]]s
-  *   - [[Commit]]  we should commit this block to our blockchain branch tip
+  * 4. run: run a consensus upon a received [[BlockHeader]] and yield 3 possible [[Result]]s
+  *   - [[Forward]] we should apply blocks and forward
+  *   - [[Resolve]] we should resolve to a new branch
   *   - [[Stash]]   we should stash this block since it is not decided yet
   *   - [[Discard]] we should discard this block
   *
@@ -24,12 +24,21 @@ abstract class Consensus[F[_]](val history: History[F], val pool: BlockPool[F]) 
 
   def mine(executed: ExecutedBlock[F]): F[MinedBlock]
 
-  def verifyHeader(header: BlockHeader): F[Result]
+  def run(block: Block): F[Result]
+
+  def resolveBranch(headers: List[BlockHeader]): F[BranchResult]
 }
 
 object Consensus {
   sealed trait Result
-  case object Commit                                   extends Result
-  case object Stash                                    extends Result
-  case class Discard(reasons: NonEmptyList[Throwable]) extends Result
+  case class Forward(blocks: List[Block])                            extends Result
+  case class Resolve(oldBranch: List[Block], newBranch: List[Block]) extends Result
+  case class Stash(block: Block)                                     extends Result
+  case class Discard(reason: Throwable)                              extends Result
+
+  sealed trait BranchResult
+  case class NewBetterBranch(oldBranch: List[Block]) extends BranchResult
+  case object NoChainSwitch                          extends BranchResult
+  case object UnknownBranch                          extends BranchResult
+  case object InvalidBranch                          extends BranchResult
 }

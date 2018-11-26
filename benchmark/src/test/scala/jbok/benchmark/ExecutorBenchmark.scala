@@ -22,5 +22,5 @@ class ExecutorBenchmark extends JbokBenchmark {
 
   @Benchmark
   def executeBlockTransactions() =
-    executor.executeBlocks(block :: Nil, 0, shortCircuit = true).unsafeRunSync()
+    executor.executeBlock(block).unsafeRunSync()
 }

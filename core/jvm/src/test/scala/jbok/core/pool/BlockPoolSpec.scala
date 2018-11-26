@@ -13,14 +13,16 @@ class BlockPoolSpec extends JbokSpec {
   "BlockPool" should {
     implicit val fixture = defaultFixture()
 
+    def randomTx = random[List[SignedTransaction]](genTxs(1, 1)).some
+
     "ignore block if it's already in" in {
       val pool              = random[BlockPool[IO]]
       val block             = random[List[Block]](genBlocks(1, 1)).head
       val genesisDifficulty = pool.history.genesisHeader.unsafeRunSync().difficulty
 
-      pool.addBlock(block, 1).unsafeRunSync() shouldBe Some(
+      pool.addBlock(block).unsafeRunSync() shouldBe Some(
         Leaf(block.header.hash, genesisDifficulty + block.header.difficulty))
-      pool.addBlock(block, 1).unsafeRunSync() shouldBe None
+      pool.addBlock(block).unsafeRunSync() shouldBe None
       pool.contains(block.header.hash).unsafeRunSync() shouldBe true
     }
 
@@ -28,10 +30,10 @@ class BlockPoolSpec extends JbokSpec {
       val pool   = random[BlockPool[IO]]
       val blocks = random[List[Block]](genBlocks(30, 30))
       pool.history.putBestBlockNumber(15).unsafeRunSync()
-      pool.addBlock(blocks.head, 15).unsafeRunSync()
+      pool.addBlock(blocks.head).unsafeRunSync()
       pool.contains(blocks.head.header.hash).unsafeRunSync() shouldBe false
 
-      pool.addBlock(blocks.last, 15).unsafeRunSync()
+      pool.addBlock(blocks.last).unsafeRunSync()
       pool.contains(blocks.last.header.hash).unsafeRunSync() shouldBe false
     }
 
@@ -39,12 +41,12 @@ class BlockPoolSpec extends JbokSpec {
       val pool   = random[BlockPool[IO]]
       val blocks = random[List[Block]](genBlocks(20, 20))
 
-      pool.addBlock(blocks.head, 1).unsafeRunSync()
+      pool.addBlock(blocks.head).unsafeRunSync()
       pool.contains(blocks.head.header.hash).unsafeRunSync() shouldBe true
 
-      pool.history.putBestBlockNumber(20)
+      pool.history.putBestBlockNumber(20).unsafeRunSync()
 
-      pool.addBlock(blocks.last, 20).unsafeRunSync()
+      pool.addBlock(blocks.last).unsafeRunSync()
       pool.contains(blocks.last.header.hash).unsafeRunSync() shouldBe true
       pool.contains(blocks.head.header.hash).unsafeRunSync() shouldBe false
     }
@@ -53,44 +55,41 @@ class BlockPoolSpec extends JbokSpec {
       val pool    = random[BlockPool[IO]]
       val miner   = random[BlockMiner[IO]]
       val block1  = miner.mine1().unsafeRunSync().block
-      val block2a = miner.mine1(block1.some).unsafeRunSync().block
-      val block2b = miner.mine1(block1.some).unsafeRunSync().block
+      val block2a = miner.mine1(block1.some, randomTx).unsafeRunSync().block
+      val block2b = miner.mine1(block1.some, randomTx).unsafeRunSync().block
       val block3  = miner.mine1(block2a.some).unsafeRunSync().block
 
-      pool.addBlock(block1, 1).unsafeRunSync()
-      pool.addBlock(block2a, 1).unsafeRunSync()
-      pool.addBlock(block2b, 1).unsafeRunSync()
+      pool.addBlock(block1).unsafeRunSync()
+      pool.addBlock(block2a).unsafeRunSync()
+      pool.addBlock(block2b).unsafeRunSync()
 
       val expectedTd = 1024 + List(block1, block2a, block3).map(_.header.difficulty).sum
-      pool.addBlock(block3, 1).unsafeRunSync() shouldBe Some(Leaf(block3.header.hash, expectedTd))
+      pool.addBlock(block3).unsafeRunSync() shouldBe Some(Leaf(block3.header.hash, expectedTd))
     }
 
     "pool an orphaned block" in {
       val pool  = random[BlockPool[IO]]
       val block = random[List[Block]](genBlocks(2, 2)).last
 
-      pool.addBlock(block, 1).unsafeRunSync() shouldBe None
+      pool.addBlock(block).unsafeRunSync() shouldBe None
       pool.contains(block.header.hash).unsafeRunSync() shouldBe true
     }
 
     "remove a branch from a leaf up to the first shared ancestor" in {
-      val pool  = random[BlockPool[IO]]
-      val miner = random[BlockMiner[IO]]
-      val txs   = random[List[SignedTransaction]](genTxs(2, 2))
-
-      val block1 = miner.mine1().unsafeRunSync().block
-
-      val block2a = miner.mine1(block1.some, txs.take(1).some).unsafeRunSync().block
-      val block2b = miner.mine1(block1.some, txs.takeRight(1).some).unsafeRunSync().block
+      val pool    = random[BlockPool[IO]]
+      val miner   = random[BlockMiner[IO]]
+      val block1  = miner.mine1().unsafeRunSync().block
+      val block2a = miner.mine1(block1.some, randomTx).unsafeRunSync().block
+      val block2b = miner.mine1(block1.some, randomTx).unsafeRunSync().block
       val block2c = miner.mine1(block1.some).unsafeRunSync().block
       val block3  = miner.mine1(block2a.some).unsafeRunSync().block
 
-      pool.addBlock(block1, 1).unsafeRunSync()
-      pool.addBlock(block2a, 1).unsafeRunSync()
-      pool.addBlock(block2b, 1).unsafeRunSync()
-      pool.addBlock(block3, 1).unsafeRunSync()
+      pool.addBlock(block1).unsafeRunSync()
+      pool.addBlock(block2a).unsafeRunSync()
+      pool.addBlock(block2b).unsafeRunSync()
+      pool.addBlock(block3).unsafeRunSync()
 
-      pool.getBranch(block3.header.hash, dequeue = true).unsafeRunSync() shouldBe List(block1, block2a, block3)
+      pool.getBranch(block3.header.hash, delete = true).unsafeRunSync() shouldBe List(block1, block2a, block3)
 
       pool.contains(block3.header.hash).unsafeRunSync() shouldBe false
       pool.contains(block2a.header.hash).unsafeRunSync() shouldBe false
@@ -99,21 +98,22 @@ class BlockPoolSpec extends JbokSpec {
     }
 
     "remove a whole subtree down from an ancestor to all its leaves" in {
-      val pool     = random[BlockPool[IO]]
-      val miner    = random[BlockMiner[IO]]
-      val genesis  = miner.history.getBestBlock.unsafeRunSync()
-      def randomTx = random[List[SignedTransaction]](genTxs(1, 1)).some
-      val block1a  = miner.mine1(genesis.some, randomTx).unsafeRunSync().block
-      val block1b  = miner.mine1(genesis.some, randomTx).unsafeRunSync().block
-      val block2a  = miner.mine1(block1a.some, randomTx).unsafeRunSync().block
-      val block2b  = miner.mine1(block1a.some, randomTx).unsafeRunSync().block
-      val block3   = miner.mine1(block2a.some, randomTx).unsafeRunSync().block
+      val pool    = random[BlockPool[IO]]
+      val miner   = random[BlockMiner[IO]]
+      val genesis = miner.history.getBestBlock.unsafeRunSync()
+      val txs = random[List[SignedTransaction]](genTxs(2, 2))
 
-      pool.addBlock(block1a, 1).unsafeRunSync()
-      pool.addBlock(block1b, 1).unsafeRunSync()
-      pool.addBlock(block2a, 1).unsafeRunSync()
-      pool.addBlock(block2b, 1).unsafeRunSync()
-      pool.addBlock(block3, 1).unsafeRunSync()
+      val block1a = miner.mine1(genesis.some, txs.take(1).some).unsafeRunSync().block
+      val block1b = miner.mine1(genesis.some).unsafeRunSync().block
+      val block2a = miner.mine1(block1a.some, txs.takeRight(1).some).unsafeRunSync().block
+      val block2b = miner.mine1(block1a.some).unsafeRunSync().block
+      val block3  = miner.mine1(block2a.some).unsafeRunSync().block
+
+      pool.addBlock(block1a).unsafeRunSync()
+      pool.addBlock(block1b).unsafeRunSync()
+      pool.addBlock(block2a).unsafeRunSync()
+      pool.addBlock(block2b).unsafeRunSync()
+      pool.addBlock(block3).unsafeRunSync()
 
       pool.contains(block3.header.hash).unsafeRunSync() shouldBe true
       pool.contains(block2a.header.hash).unsafeRunSync() shouldBe true

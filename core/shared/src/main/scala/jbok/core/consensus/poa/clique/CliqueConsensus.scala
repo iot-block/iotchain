@@ -1,12 +1,12 @@
 package jbok.core.consensus.poa.clique
 
-import cats.data.NonEmptyList
 import cats.effect.ConcurrentEffect
 import cats.implicits._
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
-import jbok.core.models.{Address, Block, BlockHeader}
+import jbok.core.models.{Address, Block, BlockHeader, Receipt}
 import jbok.core.pool.BlockPool
+import jbok.core.pool.BlockPool.Leaf
 import scodec.bits.ByteVector
 
 import scala.util.Random
@@ -99,24 +99,95 @@ case class CliqueConsensus[F[_]](
     }
   }
 
-  override def verifyHeader(header: BlockHeader): F[Consensus.Result] =
+  override def run(block: Block): F[Consensus.Result] =
     for {
-      parent <- history.getBestBlock
-      snap   <- clique.snapshot(parent.header.number, parent.header.hash, Nil)
-      number     = header.number
-      difficulty = calcDifficulty(snap, Clique.ecrecover(header), number)
-      isDuplicate <- blockPool.isDuplicate(header.hash)
-    } yield
-      if (isDuplicate) {
-        Consensus.Discard(NonEmptyList.one(new Exception(s"Duplicated Block: ${header.tag}")))
-      } else if (number == parent.header.number + 1 &&
-                 header.unixTimestamp == parent.header.unixTimestamp + clique.config.period.toMillis &&
-                 header.difficulty == difficulty) {
-        Consensus.Commit
-      } else { Consensus.Stash }
+      best        <- history.getBestBlock
+      parentTd    <- history.getTotalDifficultyByHash(best.header.hash).map(_.get)
+      snap        <- clique.snapshot(best.header.number, best.header.hash, Nil)
+      isDuplicate <- blockPool.isDuplicate(block.header.hash)
+      result <- if (isDuplicate) {
+        Consensus.Discard(new Exception(s"Duplicated Block: ${block.tag}")).pure[F]
+      } else if (block.header.number == best.header.number + 1) {
+        for {
+          topBlockHash <- blockPool.addBlock(block).map(_.get.hash)
+          topBlocks    <- blockPool.getBranch(topBlockHash, delete = true)
+        } yield Consensus.Forward(topBlocks)
+      } else {
+        blockPool.addBlock(block).flatMap[Consensus.Result] {
+          case Some(Leaf(leafHash, leafTd)) if leafTd > parentTd =>
+            for {
+              newBranch <- blockPool.getBranch(leafHash, delete = true)
+              staleBlocksWithReceiptsAndTDs <- removeBlocksUntil(newBranch.head.header.parentHash, best.header.number)
+                .map(_.reverse)
+              staleBlocks = staleBlocksWithReceiptsAndTDs.map(_._1)
+              _ <- staleBlocks.traverse(block => blockPool.addBlock(block))
+            } yield Consensus.Resolve(staleBlocks, newBranch)
+
+          case _ =>
+            F.pure(Consensus.Stash(block))
+        }
+      }
+    } yield result
+
+  override def resolveBranch(headers: List[BlockHeader]): F[Consensus.BranchResult] =
+    if (!checkHeaders(headers)) {
+      F.pure(Consensus.InvalidBranch)
+    } else {
+      val parentIsKnown = history.getBlockHeaderByHash(headers.head.parentHash).map(_.isDefined)
+      parentIsKnown.ifM(
+        ifTrue = {
+          // find blocks with same numbers in the current chain, removing any common prefix
+          headers.map(_.number).traverse(history.getBlockByNumber).map {
+            blocks =>
+              val (oldBranch, _) = blocks.flatten
+                .zip(headers)
+                .dropWhile {
+                  case (oldBlock, header) =>
+                    oldBlock.header == header
+                }
+                .unzip
+              val newHeaders              = headers.dropWhile(h => oldBranch.headOption.exists(_.header.number > h.number))
+              val currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
+              val newBranchDifficulty     = newHeaders.map(_.difficulty).sum
+              if (currentBranchDifficulty < newBranchDifficulty) {
+                Consensus.NewBetterBranch(oldBranch)
+              } else {
+                Consensus.NoChainSwitch
+              }
+          }
+        },
+        ifFalse = F.pure(Consensus.InvalidBranch)
+      )
+    }
 
   //////////////////////////////////
   //////////////////////////////////
+
+  private def removeBlocksUntil(parent: ByteVector, fromNumber: BigInt): F[List[(Block, List[Receipt], BigInt)]] =
+    history.getBlockByNumber(fromNumber).flatMap[List[(Block, List[Receipt], BigInt)]] {
+      case Some(block) if block.header.hash == parent =>
+        F.pure(Nil)
+
+      case Some(block) =>
+        for {
+          receipts <- history.getReceiptsByHash(block.header.hash).map(_.get)
+          td       <- history.getTotalDifficultyByHash(block.header.hash).map(_.get)
+          _        <- history.delBlock(block.header.hash, false)
+          removed  <- removeBlocksUntil(parent, fromNumber - 1)
+        } yield (block, receipts, td) :: removed
+
+      case None =>
+        log.error(s"Unexpected missing block number: $fromNumber")
+        F.pure(Nil)
+    }
+
+  private def checkHeaders(headers: List[BlockHeader]): Boolean =
+    if (headers.length > 1)
+      headers.zip(headers.tail).forall {
+        case (parent, child) =>
+          parent.hash == child.parentHash && parent.number + 1 == child.number
+      } else
+      headers.nonEmpty
 
   private def calcDifficulty(snapshot: Snapshot, signer: Address, number: BigInt): BigInt =
     if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn

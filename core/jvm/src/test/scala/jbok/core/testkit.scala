@@ -266,8 +266,8 @@ object testkit {
   }
 
   def genBlockMiner(implicit fixture: Fixture): Gen[BlockMiner[IO]] = {
-    val executor = random[BlockExecutor[IO]]
-    val miner    = BlockMiner[IO](MiningConfig(), executor).unsafeRunSync()
+    val sm = random[SyncManager[IO]]
+    val miner    = BlockMiner[IO](MiningConfig(), sm).unsafeRunSync()
     miner
   }
 

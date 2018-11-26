@@ -12,7 +12,7 @@ object TransactionInvalid {
   case class TransactionSyntaxInvalid(reason: String) extends Exception(s"TransactionSyntaxInvalid: ${reason}")
   case class TransactionNonceInvalid(txNonce: UInt256, senderNonce: UInt256)
       extends Exception(
-        s"TransactionNonceInvalid(got tx nonce $txNonce but sender in mpt is: $senderNonce)"
+        s"TransactionNonceInvalid(got tx nonce $txNonce but sender nonce in mpt is: $senderNonce)"
       )
   case class TransactionNotEnoughGasForIntrinsicInvalid(txGasLimit: BigInt, txIntrinsicGas: BigInt)
       extends Exception(
@@ -89,10 +89,9 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
     *
     * @param nonce       Transaction.nonce to validate
     * @param senderNonce Nonce of the sender of the transaction
-    * @return Either the validated transaction or a TransactionNonceError
     */
-  private def validateNonce(nonce: BigInt, senderNonce: UInt256): F[BigInt] =
-    if (senderNonce == UInt256(nonce)) F.pure(nonce)
+  private def validateNonce(nonce: BigInt, senderNonce: UInt256): F[Unit] =
+    if (senderNonce == UInt256(nonce)) F.unit
     else F.raiseError(TransactionNonceInvalid(UInt256(nonce), senderNonce))
 
   /**

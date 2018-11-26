@@ -15,6 +15,7 @@ import jbok.crypto.authds.mpt.MptNode
 import jbok.crypto.testkit._
 import scodec.bits.ByteVector
 import cats.implicits._
+import jbok.core.ledger.TypedBlock.SyncBlocks
 
 import scala.concurrent.duration._
 
@@ -122,7 +123,7 @@ class SyncManagerSpec extends JbokSpec {
       val sm1   = random[SyncManager[IO]](genSyncManager()(fixture))
       val sm2   = random[SyncManager[IO]](genSyncManager()(fixture.copy(port = fixture.port + 1)))
       val sm3   = random[SyncManager[IO]](genSyncManager()(fixture.copy(port = fixture.port + 2)))
-      val miner = BlockMiner[IO](MiningConfig(), sm1.executor).unsafeRunSync()
+      val miner = BlockMiner[IO](MiningConfig(), sm1).unsafeRunSync()
 
       // let miner mine 10 blocks first
       val blocks = miner.stream.take(10).compile.toList.unsafeRunSync()
@@ -162,8 +163,8 @@ class SyncManagerSpec extends JbokSpec {
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))
-      sm1.executor.importBlocks(blocks).unsafeRunSync()
-      sm2.executor.importBlocks(blocks).unsafeRunSync()
+      sm1.executor.handleSyncBlocks(SyncBlocks(blocks, None)).unsafeRunSync()
+      sm2.executor.handleSyncBlocks(SyncBlocks(blocks, None)).unsafeRunSync()
 
       val p = for {
         fiber <- Stream(sm1, sm2, sm3).map(_.peerManager.stream).parJoinUnbounded.compile.drain.start

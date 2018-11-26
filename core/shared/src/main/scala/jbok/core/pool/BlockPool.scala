@@ -15,11 +15,15 @@ case class BlockPoolConfig(
     maxBlockBehind: Int = 10
 )
 
+/**
+  * [[BlockPool]] is responsible for stashing blocks with unknown ancestors
+  * or candidate branches of blocks in consensus protocols with some finality criteria
+  */
 case class BlockPool[F[_]](
     history: History[F],
-    blockPoolConfig: BlockPoolConfig,
-    blocks: Ref[F, Map[ByteVector, QueuedBlock]],
-    parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]],
+    config: BlockPoolConfig,
+    blocks: Ref[F, Map[ByteVector, PooledBlock]], // blockHash -> block
+    parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]] // blockHash -> childrenHashes
 )(implicit F: ConcurrentEffect[F]) {
   private[this] val log = org.log4s.getLogger("BlockPool")
 
@@ -29,29 +33,29 @@ case class BlockPool[F[_]](
   def isDuplicate(blockHash: ByteVector): F[Boolean] =
     history.getBlockByHash(blockHash).map(_.isDefined) || contains(blockHash)
 
-  def addBlock(block: Block, bestBlockNumber: BigInt): F[Option[Leaf]] = {
-    import block.header._
-
+  def addBlock(block: Block): F[Option[Leaf]] =
     for {
-      _ <- cleanUp(bestBlockNumber)
-      m <- blocks.get
-      leaf <- m.get(hash) match {
+      bestBlockNumber <- history.getBestBlockNumber
+      _               <- cleanUp(bestBlockNumber)
+      m               <- blocks.get
+      leaf <- m.get(block.header.hash) match {
         case Some(_) =>
-          log.debug(s"${block.tag} already in, ignore")
+          log.debug(s"${block.tag} already pooled, ignore")
           F.pure(None)
 
-        case None if isNumberOutOfRange(number, bestBlockNumber) =>
-          log.debug(s"${block.tag} is outside accepted range. Current best block number is: $bestBlockNumber")
+        case None if isNumberOutOfRange(block.header.number, bestBlockNumber) =>
+          log.debug(
+            s"${block.tag} is outside accepted range [${bestBlockNumber} - ${config.maxBlockAhead}, ${bestBlockNumber} + ${config.maxBlockBehind}]")
           F.pure(None)
 
         case None =>
           for {
-            parentTd <- history.getTotalDifficultyByHash(parentHash)
+            parentTd <- history.getTotalDifficultyByHash(block.header.parentHash)
             l <- {
               parentTd match {
                 case Some(_) =>
                   log.debug(s"${block.tag} will be on the main chain")
-                  addBlock(block, parentTd) *> updateTotalDifficulties(hash)
+                  addBlock(block, parentTd) *> updateTotalDifficulties(block.header.hash)
 
                 case None =>
                   val p: F[Option[Leaf]] = findClosestChainedAncestor(block).flatMap {
@@ -70,39 +74,39 @@ case class BlockPool[F[_]](
           } yield l
       }
     } yield leaf
-  }
 
-  def getBranch(descendant: ByteVector, dequeue: Boolean): F[List[Block]] = {
-    def getBranch0(hash: ByteVector, childShared: Boolean): F[List[Block]] =
-      for {
-        m <- blocks.get
-        blocks <- m.get(hash) match {
-          case Some(QueuedBlock(block, _)) =>
-            import block.header.parentHash
+  /**
+    * get a branch from the newest descendant block upwards to its oldest ancestor
+    * @param blockHash the newest block hash
+    * @param delete should the branch be removed. shared block(with other children) won't be removed
+    * @return the full branch from oldest ancestor to descendant, no matter `delete`
+    */
+  def getBranch(blockHash: ByteVector, delete: Boolean): F[List[Block]] = {
+    def go(blockMap: Map[ByteVector, PooledBlock], hash: ByteVector, childShared: Boolean): F[List[Block]] =
+      blockMap.get(hash) match {
+        case Some(PooledBlock(block, _)) =>
+          for {
+            isShared <- childShared.pure[F] || parentToChildren.get.map(_.get(hash).exists(_.nonEmpty))
+            _ <- if (!isShared && delete) {
+              for {
+                siblingsOpt <- parentToChildren.get.map(_.get(block.header.parentHash))
+                _ <- siblingsOpt match {
+                  case Some(siblings) => parentToChildren.update(_ + (block.header.parentHash -> (siblings - hash)))
+                  case None           => F.unit
+                }
+                _ <- blocks.update(_ - hash)
+              } yield ()
+            } else {
+              F.unit
+            }
+            blocks <- go(blockMap, block.header.parentHash, isShared)
+          } yield block :: blocks
 
-            for {
-              isShared <- childShared.pure[F] || parentToChildren.get.map(_.get(hash).exists(_.nonEmpty))
-              _ <- if (!isShared && dequeue) {
-                for {
-                  siblings <- parentToChildren.get.map(_.get(parentHash))
-                  _ <- siblings match {
-                    case Some(sbls) => parentToChildren.update(_ + (parentHash -> (sbls - hash)))
-                    case None       => F.unit
-                  }
-                  _ <- blocks.update(_ - hash)
-                } yield ()
-              } else {
-                F.unit
-              }
-              blocks <- getBranch0(parentHash, isShared)
-            } yield block :: blocks
+        case None =>
+          F.pure(Nil)
+      }
 
-          case None =>
-            F.pure(Nil)
-        }
-      } yield blocks
-
-    getBranch0(descendant, childShared = false).map(_.reverse)
+    blocks.get.flatMap(blockMap => go(blockMap, blockHash, childShared = false).map(_.reverse))
   }
 
   def getBlockByHash(blockHash: ByteVector): F[Option[Block]] =
@@ -115,7 +119,7 @@ case class BlockPool[F[_]](
 
   def getNBlocks(hash: ByteVector, n: Int): F[List[Block]] =
     for {
-      pooledBlocks <- getBranch(hash, dequeue = false).map(_.take(n))
+      pooledBlocks <- getBranch(hash, delete = false).map(_.take(n))
       result <- if (pooledBlocks.length == n) {
         pooledBlocks.pure[F]
       } else {
@@ -132,16 +136,12 @@ case class BlockPool[F[_]](
       }
     } yield result
 
-  /**
-    * Removes a whole subtree begining with the ancestor. To be used when ancestor fails to execute
-    *
-    * @param ancestor hash of the ancestor block
-    */
+  /** Removes a whole subtree starts with the ancestor. To be used when ancestor fails to execute */
   def removeSubtree(ancestor: ByteVector): F[Unit] =
     for {
       m <- blocks.get
       _ <- m.get(ancestor) match {
-        case Some(QueuedBlock(block, _)) =>
+        case Some(PooledBlock(block, _)) =>
           for {
             children <- parentToChildren.get.map(_.getOrElse(ancestor, Set.empty))
             _        <- children.toList.traverse(x => removeSubtree(x))
@@ -160,11 +160,11 @@ case class BlockPool[F[_]](
     for {
       m <- blocks.get
       staleHashes = m.values.toList.collect {
-        case QueuedBlock(b, _) if isNumberOutOfRange(b.header.number, bestBlockNumber) =>
+        case PooledBlock(b, _) if isNumberOutOfRange(b.header.number, bestBlockNumber) =>
           b.header.hash
       }
       _ <- if (staleHashes.nonEmpty) {
-        log.debug(s"clean up ${staleHashes.length} staleHashes")
+        log.debug(s"clean up ${staleHashes.length} pooled blocks")
         blocks.update(_ -- staleHashes) *> parentToChildren.update(_ -- staleHashes)
       } else {
         F.unit
@@ -197,48 +197,51 @@ case class BlockPool[F[_]](
   }
 
   /**
-    * Find a closest (youngest) chained ancestor. Chained means being part of a known chain, thus having total
-    * difficulty defined
+    * Find a closest (youngest) chained ancestor.
+    * Chained means being part of a known chain, thus having total difficulty defined
     *
-    * @param descendant the block we start the search from
+    * @param block the block we start the search from
     * @return hash of the ancestor, if found
     */
-  private def findClosestChainedAncestor(descendant: Block): F[Option[ByteVector]] =
-    blocks.get.flatMap(_.get(descendant.header.parentHash) match {
-      case Some(QueuedBlock(block, Some(_))) =>
-        F.pure(Some(block.header.hash))
+  private def findClosestChainedAncestor(block: Block): F[Option[ByteVector]] = {
+    def go(blockMap: Map[ByteVector, PooledBlock], block: Block): F[Option[ByteVector]] =
+      blockMap.get(block.header.parentHash) match {
+        case Some(PooledBlock(block, Some(_))) =>
+          F.pure(Some(block.header.hash))
 
-      case Some(QueuedBlock(block, None)) =>
-        findClosestChainedAncestor(block)
+        case Some(PooledBlock(block, None)) =>
+          go(blockMap, block)
 
-      case None =>
-        F.pure(None)
-    })
+        case None =>
+          F.pure(None)
+      }
+
+    blocks.get.flatMap(blockMap => go(blockMap, block))
+  }
 
   private def addBlock(block: Block, parentTd: Option[BigInt]): F[Unit] = {
-    import block.header._
-    val td = parentTd.map(_ + difficulty)
+    val td = parentTd.map(_ + block.header.difficulty)
 
     for {
-      _        <- blocks.update(_ + (hash -> QueuedBlock(block, td)))
-      siblings <- parentToChildren.get.map(_.getOrElse(parentHash, Set.empty))
-      _        <- parentToChildren.update(_ + (parentHash -> (siblings + hash)))
+      _        <- blocks.update(_ + (block.header.hash -> PooledBlock(block, td)))
+      siblings <- parentToChildren.get.map(_.getOrElse(block.header.parentHash, Set.empty))
+      _        <- parentToChildren.update(_ + (block.header.parentHash -> (siblings + block.header.hash)))
     } yield ()
   }
 
   private def isNumberOutOfRange(blockNumber: BigInt, bestBlockNumber: BigInt): Boolean =
-    (blockNumber - bestBlockNumber > blockPoolConfig.maxBlockAhead) ||
-      (bestBlockNumber - blockNumber > blockPoolConfig.maxBlockBehind)
+    (blockNumber - bestBlockNumber > config.maxBlockAhead) ||
+      (bestBlockNumber - blockNumber > config.maxBlockBehind)
 }
 
 object BlockPool {
-  case class QueuedBlock(block: Block, totalDifficulty: Option[BigInt])
+  case class PooledBlock(block: Block, totalDifficulty: Option[BigInt])
   case class Leaf(hash: ByteVector, totalDifficulty: BigInt)
 
   def apply[F[_]: ConcurrentEffect](history: History[F],
                                     blockPoolConfig: BlockPoolConfig = BlockPoolConfig()): F[BlockPool[F]] =
     for {
-      blocks           <- Ref.of[F, Map[ByteVector, QueuedBlock]](Map.empty)
+      blocks           <- Ref.of[F, Map[ByteVector, PooledBlock]](Map.empty)
       parentToChildren <- Ref.of[F, Map[ByteVector, Set[ByteVector]]](Map.empty)
     } yield BlockPool(history, blockPoolConfig, blocks, parentToChildren)
 }

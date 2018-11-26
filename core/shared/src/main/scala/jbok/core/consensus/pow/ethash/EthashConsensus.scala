@@ -58,24 +58,63 @@ class EthashConsensus[F[_]](
   override def mine(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.MinedBlock] =
     miner.mine(executed.block).map(block => MinedBlock(block, executed.receipts))
 
-  override def verifyHeader(header: BlockHeader): F[Consensus.Result] =
-    history.getBestBlock.flatMap { parent =>
-      F.ifM(blockPool.isDuplicate(header.hash))(
-        ifTrue = F.pure(Consensus.Discard(NonEmptyList.of(new Exception("duplicate")))),
-        ifFalse = for {
-          currentTd <- history.getTotalDifficultyByHash(parent.header.hash).map(_.get)
-          isTopOfChain = header.parentHash == parent.header.hash
-          result = if (isTopOfChain) {
-            Consensus.Commit
-          } else {
-            Consensus.Stash
+  override def run(block: Block): F[Consensus.Result] = ???
+//    history.getBestBlock.flatMap { parent =>
+//      F.ifM(blockPool.isDuplicate(header.hash))(
+//        ifTrue = F.pure(Consensus.Discard(new Exception("duplicate"))),
+//        ifFalse = for {
+//          currentTd <- history.getTotalDifficultyByHash(parent.header.hash).map(_.get)
+//          isTopOfChain = header.parentHash == parent.header.hash
+//          result = if (isTopOfChain) {
+//            Consensus.Forward
+//          } else {
+//            Consensus.Stash
+//          }
+//        } yield result
+//      )
+//    }
+
+  override def resolveBranch(headers: List[BlockHeader]): F[Consensus.BranchResult] =
+    if (!checkHeaders(headers)) {
+      F.pure(Consensus.InvalidBranch)
+    } else {
+      val parentIsKnown = history.getBlockHeaderByHash(headers.head.parentHash).map(_.isDefined)
+      parentIsKnown.ifM(
+        ifTrue = {
+          // find blocks with same numbers in the current chain, removing any common prefix
+          headers.map(_.number).traverse(history.getBlockByNumber).map {
+            blocks =>
+              val (oldBranch, _) = blocks.flatten
+                .zip(headers)
+                .dropWhile {
+                  case (oldBlock, header) =>
+                    oldBlock.header == header
+                }
+                .unzip
+              val newHeaders              = headers.dropWhile(h => oldBranch.headOption.exists(_.header.number > h.number))
+              val currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
+              val newBranchDifficulty     = newHeaders.map(_.difficulty).sum
+              if (currentBranchDifficulty < newBranchDifficulty) {
+                Consensus.NewBetterBranch(oldBranch)
+              } else {
+                Consensus.NoChainSwitch
+              }
           }
-        } yield result
+        },
+        ifFalse = F.pure(Consensus.InvalidBranch)
       )
     }
 
   ////////////////////////////////////
   ////////////////////////////////////
+
+  private def checkHeaders(headers: List[BlockHeader]): Boolean =
+    if (headers.length > 1)
+      headers.zip(headers.tail).forall {
+        case (parent, child) =>
+          parent.hash == child.parentHash && parent.number + 1 == child.number
+      } else
+      headers.nonEmpty
 
   private val difficultyCalculator = new EthDifficultyCalculator(blockChainConfig)
   private val rewardCalculator     = new EthRewardCalculator(MonetaryPolicyConfig())

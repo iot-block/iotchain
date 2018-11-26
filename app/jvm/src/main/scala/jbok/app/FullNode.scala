@@ -52,7 +52,8 @@ case class FullNode[F[_]](
       Stream(
         peerManager.stream,
         syncManager.stream,
-        server.stream
+        server.stream,
+        miner.stream.drain
       ).parJoinUnbounded
         .interruptWhen(haltWhenTrue)
         .onFinalize(haltWhenTrue.set(true))

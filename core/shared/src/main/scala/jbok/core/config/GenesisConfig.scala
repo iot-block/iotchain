@@ -27,7 +27,7 @@ case class GenesisConfig(
     0,
     BigInt(Integer.parseInt(gasLimit.replace("0x", ""), 16)),
     0,
-    0,
+    timestamp,
     extraData,
     mixHash.getOrElse(ByteVector.empty),
     nonce
@@ -46,7 +46,7 @@ object GenesisConfig {
     extraData = hex"0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa",
     gasLimit = "0xff1388",
     coinbase = hex"0x0000000000000000000000000000000000000000",
-    timestamp = 0,
+    timestamp = System.currentTimeMillis(),
     alloc = Map(
       "d7a681378321f472adffb9fdded2712f677e0ba9" -> BigInt("1000000000000000000000000000000000000000000")
     ),

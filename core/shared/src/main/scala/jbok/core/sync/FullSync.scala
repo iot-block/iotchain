@@ -4,8 +4,9 @@ import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import jbok.core.config.Configs.SyncConfig
+import jbok.core.consensus.Consensus
 import jbok.core.ledger.BlockExecutor
-import jbok.core.ledger.TypedBlock.RequestedBlocks
+import jbok.core.ledger.TypedBlock.SyncBlocks
 import jbok.core.messages._
 import jbok.core.models._
 import jbok.core.peer.{Peer, PeerSelectStrategy}
@@ -66,39 +67,15 @@ case class FullSync[F[_]](
     } yield ()
 
   private def handleBlockHeaders(peer: Peer[F], currentNumber: BigInt, headers: List[BlockHeader]): F[Unit] =
-    if (!checkHeaders(headers) || headers.last.number < currentNumber) {
-      log.warn(s"got invalid block headers from ${peer.id}")
-      F.unit
-    } else {
-      val parentIsKnown = executor.consensus.history.getBlockHeaderByHash(headers.head.parentHash).map(_.isDefined)
-
-      parentIsKnown.ifM(
-        ifTrue = {
-          // find blocks with same numbers in the current chain, removing any common prefix
-          for {
-            blocks <- headers.map(_.number).traverse(executor.consensus.history.getBlockByNumber)
-            (oldBranch, _) = blocks.flatten
-              .zip(headers)
-              .dropWhile {
-                case (oldBlock, header) =>
-                  oldBlock.header == header
-              }
-              .unzip
-            newHeaders              = headers.dropWhile(h => oldBranch.headOption.exists(_.header.number > h.number))
-            currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
-            newBranchDifficulty     = newHeaders.map(_.difficulty).sum
-            _ <- if (currentBranchDifficulty < newBranchDifficulty) {
-              handleBetterBranch(peer, oldBranch, headers)
-            } else {
-              F.unit
-            }
-          } yield ()
-        },
-        ifFalse = {
-          log.warn(s"the parent of the headers is unknown")
-          F.unit
-        }
-      )
+    executor.consensus.resolveBranch(headers).flatMap {
+      case Consensus.NewBetterBranch(oldBranch) =>
+        handleBetterBranch(peer, oldBranch, headers)
+      case Consensus.NoChainSwitch =>
+        F.delay(log.warn("no better branch"))
+      case Consensus.UnknownBranch =>
+        F.delay(log.warn(s"the parent of the headers is unknown"))
+      case Consensus.InvalidBranch =>
+        F.delay(log.warn(s"invalid branch"))
     }
 
   private def handleBetterBranch(peer: Peer[F], oldBranch: List[Block], headers: List[BlockHeader]): F[Unit] = {
@@ -106,7 +83,7 @@ case class FullSync[F[_]](
     val hashes            = headers.take(config.maxBlockBodiesPerRequest).map(_.hash)
     log.debug(s"request BlockBody [${headers.head.number}, ${headers.head.number + hashes.length}]")
     for {
-//      _ <- executor.txPool.addTransactions(transactionsToAdd)
+      _     <- executor.txPool.addTransactions(transactionsToAdd)
       start <- T.clock.monotonic(MILLISECONDS)
       _ <- peer.conn.request(GetBlockBodies(hashes)).attempt.flatMap {
         case Right(BlockBodies(bodies, _)) =>
@@ -124,16 +101,8 @@ case class FullSync[F[_]](
     } yield ()
   }
 
-  private def checkHeaders(headers: List[BlockHeader]): Boolean =
-    if (headers.length > 1)
-      headers.zip(headers.tail).forall {
-        case (parent, child) =>
-          parent.hash == child.parentHash && parent.number + 1 == child.number
-      } else
-      headers.nonEmpty
-
   private def handleBlockBodies(peer: Peer[F], headers: List[BlockHeader], bodies: List[BlockBody]): F[Unit] = {
     val blocks = headers.zip(bodies).map { case (header, body) => Block(header, body) }
-    executor.handleRequestedBlocks(RequestedBlocks(blocks, peer))
+    executor.handleSyncBlocks(SyncBlocks(blocks, Some(peer)))
   }
 }

@@ -118,10 +118,7 @@ final case class SyncManager[F[_]](
       .interruptWhen(haltWhenTrue)
       .onFinalize(haltWhenTrue.set(true))
 
-  //////////////////////////////////
-  //////////////////////////////////
-
-  private def broadcastBlock(block: Block): List[(PeerSelectStrategy[F], Message)] =
+  def broadcastBlock(block: Block): List[(PeerSelectStrategy[F], Message)] =
     List(
       PeerSelectStrategy.withoutBlock(block) -> NewBlockHashes(
         BlockHash(block.header.hash, block.header.number) :: Nil),
@@ -129,6 +126,9 @@ final case class SyncManager[F[_]](
         .withoutBlock(block)
         .andThen(PeerSelectStrategy.randomSelectSqrt(config.minBroadcastPeers)) -> NewBlock(block)
     )
+
+  def sendMessages(messages: List[(PeerSelectStrategy[F], Message)]): F[Unit] =
+    messages.traverse { case (strategy, message) => peerManager.distribute(strategy, message) }.void
 }
 
 object SyncManager {

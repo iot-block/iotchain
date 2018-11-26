@@ -7,6 +7,8 @@ import jbok.core.testkit._
 import jbok.common.execution._
 import jbok.core.models._
 import cats.implicits._
+import jbok.core.ledger.TypedBlock.{ReceivedBlock, SyncBlocks}
+import jbok.core.peer.Peer
 
 class BlockExecutorSpec extends JbokSpec {
   implicit val fixture = defaultFixture()
@@ -57,21 +59,22 @@ class BlockExecutorSpec extends JbokSpec {
     "executeBlock for a valid block without txs" in {
       val executor = random[BlockExecutor[IO]]
       val block    = random[List[Block]](genBlocks(1, 1)).head
-      val result   = executor.importBlock(block).unsafeRunSync()
-      result shouldBe a[BlockImportResult.Succeed]
+      val result   = executor.handleSyncBlocks(SyncBlocks(block :: Nil, None)).unsafeRunSync()
+      result shouldBe ()
     }
 
     "create sender account if it does not exists" in {
       val executor  = random[BlockExecutor[IO]]
       val txs       = random[List[SignedTransaction]](genTxs(10, 10))
       val block     = random[Block](genBlock(stxsOpt = Some(txs)))
+      val peer      = random[Peer[IO]]
       val number    = executor.history.getBestBlockNumber.unsafeRunSync()
       val receivers = block.body.transactionList.map(_.receivingAddress)
       val xs =
         receivers.traverse[IO, Option[Account]](addr => executor.history.getAccount(addr, number)).unsafeRunSync()
       xs.forall(_.isEmpty) shouldBe true
 
-      executor.importBlock(block).unsafeRunSync()
+      executor.handleReceivedBlock(ReceivedBlock(block, peer)).unsafeRunSync()
 
       val number2 = executor.history.getBestBlockNumber.unsafeRunSync()
       val xs2 =

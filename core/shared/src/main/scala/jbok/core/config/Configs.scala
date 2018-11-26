@@ -104,7 +104,7 @@ object Configs {
       activeTimeout: FiniteDuration = 5.seconds,
       ommerPoolQueryTimeout: FiniteDuration = 5.seconds,
       headerExtraData: ByteVector = ByteVector("jbok".getBytes),
-      enabled: Boolean = false,
+      enabled: Boolean = true,
       ethashDir: String = "~/.ethash",
       mineRounds: Int = 100000
   )

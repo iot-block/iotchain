@@ -21,7 +21,7 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]]) {
   def newAccount: IO[SimAccount] = Signature[ECDSA].generateKeyPair().map(kp => SimAccount(kp, 0, 0))
 
   def genValue(sender: SimAccount, receiver: SimAccount): BigInt =
-    sender.balance / BigInt(2)
+    BigInt("1000000")
 
   val gasPrice: BigInt = BigInt(1)
 
@@ -34,8 +34,8 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]]) {
       receiver <- newAccount
       value = genValue(sender, receiver)
       _ <- accounts.update(
-        _ ++ Map(sender.address   -> sender.balanceChanged(-value).nonceIncreased,
-                 receiver.address -> receiver.balanceChanged(value)))
+        _ ++ Map(sender.address   -> sender.balanceChanged(-value).nonceIncreased))
+//                 receiver.address -> receiver.balanceChanged(value)))
       tx = Transaction(
         sender.nonce,
         gasPrice,
@@ -52,9 +52,8 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]]) {
 }
 
 object TxGenerator {
-  def apply(miner: SimAccount): IO[TxGenerator] = {
+  def apply(miner: SimAccount): IO[TxGenerator] =
     for {
       accounts <- Ref.of[IO, Map[Address, SimAccount]](Map(miner.address -> miner))
     } yield new TxGenerator(accounts)
-  }
 }
