@@ -30,8 +30,8 @@ lazy val jbok = project
   .aggregate(
     crypto.jvm,
     persistent.jvm,
-    core.jvm,
-    core.js
+    core.js,
+    core.jvm
   )
   .settings(noPublishSettings)
 

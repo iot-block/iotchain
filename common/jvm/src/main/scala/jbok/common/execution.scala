@@ -1,23 +1,25 @@
 package jbok.common
-
 import java.lang.Thread.UncaughtExceptionHandler
 import java.nio.channels.AsynchronousChannelGroup
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executors, ThreadFactory}
 
+import cats.effect.{ContextShift, IO, Timer}
+
 import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
 
-trait ExecutionPlatform extends execution {
-  override def executionContext: ExecutionContext =
-    ExecutionContext.Implicits.global
+object execution {
+  implicit val EC: ExecutionContext = ExecutionContext.Implicits.global
 
-  override def asyncChannelGroup: AsynchronousChannelGroup =
+  implicit val T: Timer[IO] = IO.timer(EC)
+
+  implicit val CS: ContextShift[IO] = IO.contextShift(EC)
+
+  implicit val AG: AsynchronousChannelGroup =
     AsynchronousChannelGroup.withThreadPool(
-      Executors.newCachedThreadPool(ExecutionPlatform.mkThreadFactory("AG", daemon = true)))
-}
+      Executors.newCachedThreadPool(mkThreadFactory("JBOK-AG", daemon = true)))
 
-object ExecutionPlatform {
   def mkThreadFactory(name: String, daemon: Boolean, exitJvmOnFatalError: Boolean = true): ThreadFactory =
     new ThreadFactory {
       val idx            = new AtomicInteger(0)
