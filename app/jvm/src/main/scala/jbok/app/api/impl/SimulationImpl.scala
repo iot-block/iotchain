@@ -57,7 +57,7 @@ class SimulationImpl(
     val genesisConfig =
       GenesisConfig.default
         .copy(alloc = txGraphGen.alloc,
-              extraData = Clique.fillExtraData(minerSingers.map(Address(_))),
+              extraData = Clique.fillExtraData(minerSingers.map(Address(_))).toHex,
               timestamp = System.currentTimeMillis())
     log.info(s"create ${n} node(s)")
 

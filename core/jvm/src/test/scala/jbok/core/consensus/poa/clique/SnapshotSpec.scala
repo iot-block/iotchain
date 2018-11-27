@@ -24,7 +24,7 @@ case class Test(signers: List[String], votes: List[TestVote], results: List[Stri
 trait SnapshotFixture {
   def mkHistory(signers: List[Address]) = {
     val extra   = Clique.fillExtraData(signers)
-    val config = GenesisConfig.default.copy(extraData = extra)
+    val config = GenesisConfig.default.copy(extraData = extra.toHex)
     val db      = KeyValueDB.inmem[IO].unsafeRunSync()
     val history = History[IO](db).unsafeRunSync()
     history.init(config).unsafeRunSync()

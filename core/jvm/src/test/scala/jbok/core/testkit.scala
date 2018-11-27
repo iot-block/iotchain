@@ -63,9 +63,9 @@ object testkit {
   def cliqueFixture(port: Int): Fixture = {
     val chainId = 0
     val miner   = SimAccount(Signature[ECDSA].generateKeyPair().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
-    val alloc   = Map(miner.address.toString -> miner.balance)
+    val alloc   = Map(miner.address.toString -> miner.balance.toString())
     val genesisConfig =
-      GenesisConfig.default.copy(alloc = alloc, extraData = Clique.fillExtraData(miner.address :: Nil))
+      GenesisConfig.default.copy(alloc = alloc, extraData = Clique.fillExtraData(miner.address :: Nil).toHex)
 
     Fixture(chainId, port, miner, genesisConfig, "clique")
   }
@@ -73,7 +73,7 @@ object testkit {
   def fixture(port: Int): Fixture = {
     val chainId       = 0
     val miner         = SimAccount(Signature[ECDSA].generateKeyPair().unsafeRunSync(), BigInt("100000000000000000000"), 0)
-    val alloc         = Map(miner.address.toString -> miner.balance)
+    val alloc         = Map(miner.address.toString -> miner.balance.toString())
     val genesisConfig = GenesisConfig.default.copy(alloc = alloc)
     Fixture(chainId, port, miner, genesisConfig, "ethash")
   }

@@ -27,7 +27,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
     def address = Address(keyPair)
   }
 
-  val initBalance = BigInt("1000000000000000000000000000000")
+  val initBalance = "1000000000000000000000000000000"
 
   val keyPairs = (1 to nAddr)
     .map(_ => {
@@ -36,14 +36,14 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
     })
     .toVector
 
-  val alloc: Map[String, BigInt] = keyPairs.map(x => x.address.toString -> initBalance).toMap
+  val alloc: Map[String, String] = keyPairs.map(x => x.address.toString -> initBalance).toMap
 
   val genesisConfig = GenesisConfig.default.copy(alloc = alloc)
 
   val keyPairMap: Map[Address, KeyPair] = keyPairs.map(x => x.address -> x.keyPair).toMap
 
   val accountMap: MMap[Address, Account] =
-    MMap.apply(keyPairs.map(x => x.address -> Account(balance = UInt256(initBalance))): _*)
+    MMap.apply(keyPairs.map(x => x.address -> Account(balance = UInt256(BigInt(initBalance)))): _*)
 
   val lastTx: MMap[Address, SimTransaction] = MMap.empty
 

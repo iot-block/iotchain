@@ -1,4 +1,5 @@
 package jbok.core.config
+
 import jbok.JbokSpec
 import io.circe.syntax._
 import io.circe.parser._

@@ -13,6 +13,48 @@ object Configs {
 
   val defaultRootDir: String = s"${home}/.jbok"
 
+  case class FullNodeConfig(
+      datadir: String,
+      keystore: KeyStoreConfig,
+      peer: PeerManagerConfig,
+      sync: SyncConfig,
+      txPool: TxPoolConfig,
+      mining: MiningConfig,
+      rpc: RpcConfig,
+      blockchain: BlockChainConfig,
+      daofork: DaoForkConfig
+  )
+
+  object FullNodeConfig {
+    def apply(suffix: String, port: Int): FullNodeConfig = {
+      val datadir                      = s"${defaultRootDir}/${suffix}"
+      val keystore                     = KeyStoreConfig(s"${datadir}/keystore")
+      val peer                         = PeerManagerConfig(port, timeout = 0.seconds)
+      val sync                         = SyncConfig()
+      val txPool                       = TxPoolConfig()
+      val mining                       = MiningConfig()
+      val rpc                          = RpcConfig(true, "localhost", port + 100)
+      val blockchain: BlockChainConfig = BlockChainConfig()
+      val daofork: DaoForkConfig       = DaoForkConfig()
+      FullNodeConfig(
+        datadir,
+        keystore,
+        peer,
+        sync,
+        txPool,
+        mining,
+        rpc,
+        blockchain,
+        daofork,
+      )
+    }
+
+    def fill(size: Int): List[FullNodeConfig] =
+      (0 until size).toList.map(i => {
+        FullNodeConfig(s"test-${10000 + i}", 10000 + i)
+      })
+  }
+
   case class RpcConfig(
       enabled: Boolean = false,
       host: String,
@@ -41,17 +83,6 @@ object Configs {
     val bindAddr: InetSocketAddress = new InetSocketAddress(host, port)
     val bootNodes                   = bootUris.flatMap(s => PeerNode.fromStr(s).toOption)
   }
-
-  case class FullNodeConfig(
-      datadir: String,
-      rpc: RpcConfig,
-      keystore: KeyStoreConfig,
-      peer: PeerManagerConfig,
-      blockchain: BlockChainConfig,
-      daofork: DaoForkConfig,
-      sync: SyncConfig,
-      mining: MiningConfig
-  )
 
   case class BlockChainConfig(
       frontierBlockNumber: BigInt = 0,
@@ -98,25 +129,23 @@ object Configs {
   )
 
   case class MiningConfig(
+      enabled: Boolean = false,
       ommersPoolSize: Int = 30,
       blockCacheSize: Int = 30,
-      coinbase: Address = Address(42),
+      coinbaseStr: String = Address(42).bytes.toHex,
       activeTimeout: FiniteDuration = 5.seconds,
-      ommerPoolQueryTimeout: FiniteDuration = 5.seconds,
-      headerExtraData: ByteVector = ByteVector("jbok".getBytes),
-      enabled: Boolean = false,
+      headerExtraDataStr: String = ByteVector("jbok".getBytes).toHex,
       ethashDir: String = "~/.ethash",
       mineRounds: Int = 100000
-  )
+  ) {
+    val coinbase: Address = Address(ByteVector(coinbaseStr.getBytes))
+
+    val headerExtraData: ByteVector = ByteVector(headerExtraDataStr.getBytes)
+  }
 
   final case class TxPoolConfig(
       poolSize: Int = 4096,
       transactionTimeout: FiniteDuration = 10.minutes
-  )
-
-  case class FilterConfig(
-      filterTimeout: FiniteDuration = 10.minutes,
-      filterManagerQueryTimeout: FiniteDuration = 3.minutes
   )
 
   case class SyncConfig(
@@ -130,15 +159,7 @@ object Configs {
       targetBlockOffset: Int = 500,
       retryInterval: FiniteDuration = 5.seconds,
       checkForNewBlockInterval: FiniteDuration = 5.seconds,
-      banDuration: FiniteDuration = 200.seconds,
-      timeout: Option[FiniteDuration] = Some(10.seconds)
-  )
-
-  case class Timeouts(
-      shortTimeout: FiniteDuration = 500.millis,
-      normalTimeout: FiniteDuration = 3.seconds,
-      longTimeout: FiniteDuration = 10.seconds,
-      veryLongTimeout: FiniteDuration = 30.seconds
+      banDuration: FiniteDuration = 200.seconds
   )
 
   case class DiscoveryConfig(
@@ -151,32 +172,4 @@ object Configs {
       scanInterval: FiniteDuration = 10.seconds,
       messageExpiration: FiniteDuration = 10.seconds
   )
-
-  object FullNodeConfig {
-    def apply(suffix: String, port: Int): FullNodeConfig = {
-      val rootDir                            = s"${defaultRootDir}/${suffix}"
-      val rpcConfig                          = RpcConfig(true, "localhost", port + 100)
-      val walletConfig                       = KeyStoreConfig(s"${rootDir}/keystore")
-      val peerManagerConfig                  = PeerManagerConfig(port, timeout = 0.seconds)
-      val blockChainConfig: BlockChainConfig = BlockChainConfig()
-      val daoForkConfig: DaoForkConfig       = DaoForkConfig()
-      val syncConfig                         = SyncConfig()
-      val miningConfig                       = MiningConfig()
-      FullNodeConfig(
-        rootDir,
-        rpcConfig,
-        walletConfig,
-        peerManagerConfig,
-        blockChainConfig,
-        daoForkConfig,
-        syncConfig,
-        miningConfig
-      )
-    }
-
-    def fill(size: Int): List[FullNodeConfig] =
-      (0 until size).toList.map(i => {
-        FullNodeConfig(s"test-${10000 + i}", 10000 + i)
-      })
-  }
 }

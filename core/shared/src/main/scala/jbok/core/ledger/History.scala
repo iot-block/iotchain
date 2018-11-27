@@ -115,7 +115,7 @@ class HistoryImpl[F[_]](
       world <- config.alloc.toList
         .foldLeft(state) {
           case (acc, (addr, balance)) =>
-            acc.putAccount(Address(ByteVector.fromValidHex(addr)), Account(0, UInt256(balance)))
+            acc.putAccount(Address(ByteVector.fromValidHex(addr)), Account(0, UInt256(BigInt(balance))))
         }
         .persisted
       block = Block(config.header.copy(stateRoot = world.stateRootHash), config.body)
