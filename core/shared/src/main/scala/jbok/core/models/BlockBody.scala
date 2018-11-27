@@ -1,7 +1,7 @@
 package jbok.core.models
 
 import io.circe._
-import io.circe.generic.semiauto._
+import jbok.codec.json.implicits._
 
 case class BlockBody(transactionList: List[SignedTransaction], uncleNodesList: List[BlockHeader])
 object BlockBody {

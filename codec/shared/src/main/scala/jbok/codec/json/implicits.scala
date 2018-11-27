@@ -1,13 +1,27 @@
 package jbok.codec.json
 
 import io.circe._
-import scodec.bits.{BitVector, ByteVector}
+import io.circe.derivation.DerivationMacros
 import io.circe.syntax._
+import scodec.bits.{BitVector, ByteVector}
 import shapeless._
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.language.experimental.macros
 
 object implicits {
+  final def deriveDecoder[A]: Decoder[A] =
+    macro DerivationMacros.materializeDecoder[A]
+
+  final def deriveEncoder[A]: ObjectEncoder[A] =
+    macro DerivationMacros.materializeEncoder[A]
+
+  final def deriveDecoder[A](nameTransformation: String => String): Decoder[A] =
+    macro DerivationMacros.materializeDecoderWithNameTransformation[A]
+
+  final def deriveEncoder[A](nameTransformation: String => String): ObjectEncoder[A] =
+    macro DerivationMacros.materializeEncoderWithNameTransformation[A]
+
   implicit val bytesDecoder: Decoder[ByteVector] = Decoder[String].emap(ByteVector.fromHexDescriptive(_))
 
   implicit val bytesEncoder: Encoder[ByteVector] = Encoder.instance(bv => Json.fromString(bv.toHex))

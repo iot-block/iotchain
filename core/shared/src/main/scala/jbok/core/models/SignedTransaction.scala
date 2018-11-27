@@ -2,7 +2,6 @@ package jbok.core.models
 
 import cats.effect.IO
 import io.circe.{Decoder, Encoder}
-import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.codec.json.implicits._

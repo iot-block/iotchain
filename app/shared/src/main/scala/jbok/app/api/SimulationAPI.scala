@@ -2,9 +2,7 @@ package jbok.app.simulations
 
 import _root_.io.circe.generic.JsonCodec
 import cats.effect.IO
-import fs2._
-import jbok.core.models.{Block, SignedTransaction}
-import jbok.core.models.{Account, Address, Block, SignedTransaction}
+import jbok.core.models.{Account, Address}
 
 @JsonCodec
 case class SimulationEvent(source: String, target: String, message: String, time: Long = System.currentTimeMillis())

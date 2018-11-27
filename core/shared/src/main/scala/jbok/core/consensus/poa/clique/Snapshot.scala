@@ -4,7 +4,6 @@ import cats.effect.Sync
 import cats.implicits._
 import io.circe._
 import io.circe.generic.JsonCodec
-import io.circe.generic.semiauto._
 import io.circe.parser._
 import io.circe.syntax._
 import jbok.codec.json.implicits._

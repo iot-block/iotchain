@@ -1,7 +1,6 @@
 package jbok.core.models
 
 import io.circe._
-import io.circe.generic.semiauto._
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._

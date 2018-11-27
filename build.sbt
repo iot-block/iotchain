@@ -53,9 +53,10 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "eu.timepit" %%% "refined-scodec"    % V.refined,
       "eu.timepit" %%% "refined-shapeless" % V.refined,
       // json
-      "io.circe" %%% "circe-core"    % V.circe,
-      "io.circe" %%% "circe-generic" % V.circe,
-      "io.circe" %%% "circe-parser"  % V.circe,
+      "io.circe" %%% "circe-core"       % V.circe,
+      "io.circe" %%% "circe-generic"    % V.circe,
+      "io.circe" %%% "circe-parser"     % V.circe,
+      "io.circe" %%% "circe-derivation" % "0.9.0-M5",
       // binary
       "org.scodec" %%% "scodec-bits"  % "1.1.5",
       "org.scodec" %%% "scodec-core"  % "1.10.3",

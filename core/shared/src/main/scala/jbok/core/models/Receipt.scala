@@ -1,10 +1,8 @@
 package jbok.core.models
 
-import io.circe.generic.JsonCodec
 import jbok.codec.json.implicits._
 import scodec.bits._
 
-@JsonCodec
 final case class Receipt(
     postTransactionStateHash: ByteVector,
     cumulativeGasUsed: BigInt,
@@ -12,4 +10,8 @@ final case class Receipt(
     logs: List[TxLogEntry]
 )
 
+object Receipt {
+  implicit val receiptJsonEncoder = deriveEncoder[Receipt]
 
+  implicit val receiptJsonDecoder = deriveDecoder[Receipt]
+}
