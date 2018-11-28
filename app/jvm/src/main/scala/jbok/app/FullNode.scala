@@ -83,8 +83,7 @@ object FullNode {
       // load genesis if does not exist
       _         <- history.init()
       blockPool <- BlockPool(history, BlockPoolConfig())
-      sign      = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, keyPair) }
-      clique    = Clique(CliqueConfig(), history, Address(keyPair), sign)
+      clique    = Clique(CliqueConfig(), history, keyPair)
       consensus = new CliqueConsensus[IO](clique, blockPool)
       peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), history)
       executor    <- BlockExecutor[IO](config.blockchain, consensus, peerManager)

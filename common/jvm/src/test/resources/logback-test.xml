@@ -12,6 +12,7 @@
     <logger name="org.http4s" level="WARN" />
     <logger name="org.http4s.server" level="WARN" />
     <logger name="com.offbynull.portmapper" level="INFO" />
+    <logger name="scalacache" level="INFO" />
 
     <root level="DEBUG">
         <appender-ref ref="OUTPUT"/>

@@ -33,6 +33,9 @@ case class BlockPool[F[_]](
   def isDuplicate(blockHash: ByteVector): F[Boolean] =
     history.getBlockByHash(blockHash).map(_.isDefined) || contains(blockHash)
 
+  def raiseIfDuplicate(blockHash: ByteVector): F[Unit] =
+    isDuplicate(blockHash).ifM(F.raiseError(new Exception("duplicate")), F.unit)
+
   def addBlock(block: Block): F[Option[Leaf]] =
     for {
       bestBlockNumber <- history.getBestBlockNumber

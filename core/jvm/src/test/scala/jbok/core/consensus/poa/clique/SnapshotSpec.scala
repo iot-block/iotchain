@@ -10,6 +10,9 @@ import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
+import scalacache._
+import scalacache.caffeine._
+import com.github.benmanes.caffeine.cache.Caffeine
 
 import scala.collection.mutable
 
@@ -79,8 +82,7 @@ class SnapshotSpec extends JbokSpec {
     val head           = headers.last
     val db             = KeyValueDB.inmem[IO].unsafeRunSync()
     val keyPair        = SecP256k1.generateKeyPair().unsafeRunSync()
-    val sign           = (bv: ByteVector) => SecP256k1.sign(bv.toArray, keyPair)
-    val clique         = Clique[IO](config, history, Address(keyPair), sign)
+    val clique         = Clique[IO](config, history, keyPair).unsafeRunSync()
     val snap           = clique.snapshot(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd

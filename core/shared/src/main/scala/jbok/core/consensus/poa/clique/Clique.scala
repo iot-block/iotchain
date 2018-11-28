@@ -5,31 +5,48 @@ import cats.effect.ConcurrentEffect
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.ledger.History
 import jbok.core.consensus.poa.clique.Clique._
+import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, ECDSA, Signature}
-import jbok.persistent.LruMap
+import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
+import scalacache.CatsEffect.modes._
+import scalacache._
 import scodec.bits._
+import _root_.io.circe.generic.JsonCodec
+import jbok.codec.json.implicits._
+import jbok.persistent.CacheBuilder
 
 import scala.concurrent.duration._
+
+@JsonCodec
+case class CliqueConfig(
+    period: FiniteDuration = 15.seconds, // Number of seconds between blocks to enforce
+    epoch: BigInt = BigInt(30000), // Epoch length to reset votes and checkpoint
+    checkpointInterval: Int = 1024, // Number of blocks after which to save the vote snapshot to the database
+    inMemorySnapshots: Int = 128, // Number of recent vote snapshots to keep in memory
+    inMemorySignatures: Int = 1024, // Number of recent blocks to keep in memory
+    wiggleTime: FiniteDuration = 500.millis // Random delay (per signer) to allow concurrent signers
+)
 
 class Clique[F[_]](
     val config: CliqueConfig,
     val history: History[F],
-    val recents: LruMap[ByteVector, Snapshot],
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
-    val signer: Address,
-    val sign: ByteVector => F[CryptoSignature]
-)(implicit F: ConcurrentEffect[F]) {
+    val keyPair: KeyPair
+)(implicit F: ConcurrentEffect[F], C: Cache[Snapshot]) {
   private[this] val log = org.log4s.getLogger("Clique")
+
+  import config._
+
+  val signer: Address = Address(keyPair)
+
+  def sign(bv: ByteVector): F[CryptoSignature] = F.liftIO(Signature[ECDSA].sign(bv.toArray, keyPair))
 
   def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
     // try to read snapshot from cache or db
     log.trace(s"try to read snapshot(${number}, ${hash}) from cache")
-    OptionT
-      .fromOption[F](recents.get(hash)) // If an in-memory snapshot was found, use that
+    OptionT(C.get[F](hash))
       .orElseF(
         if (number % checkpointInterval == 0) {
           // If an on-disk checkpoint snapshot can be found, use that
@@ -69,7 +86,7 @@ class Clique[F[_]](
         log.trace(s"applying ${headers.length} headers")
         for {
           newSnap <- Snapshot.applyHeaders[F](s, headers)
-          _ = recents.put(newSnap.hash, newSnap)
+          _       <- C.put[F](newSnap.hash)(newSnap)
           // If we've generated a new checkpoint snapshot, save to disk
           _ <- if (newSnap.number % checkpointInterval == 0 && headers.nonEmpty) {
             Snapshot.storeSnapshot[F](newSnap, history.db).map(_ => newSnap)
@@ -95,33 +112,24 @@ class Clique[F[_]](
 object Clique {
   val extraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
   val extraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
-  val uncleHash   = RlpCodec.encode(()).require.bytes.kec256 // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
-  val diffInTurn  = BigInt(2) // Block difficulty for in-turn signatures
-  val diffNoTurn  = BigInt(1) // Block difficulty for out-of-turn signatures
-
-  val checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
-  val inMemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
-  val inMemorySignatures = 1024 // Number of recent blocks to keep in memory
-
-  val wiggleTime = 500.millis // Random delay (per signer) to allow concurrent signers
-
+  val ommersHash = RlpCodec
+    .encode(List.empty[BlockHeader])
+    .require
+    .bytes
+    .kec256 // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
+  val diffInTurn    = BigInt(2)               // Block difficulty for in-turn signatures
+  val diffNoTurn    = BigInt(1)               // Block difficulty for out-of-turn signatures
   val nonceAuthVote = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
   val nonceDropVote = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
 
-  def apply[F[_]: ConcurrentEffect](
+  def apply[F[_]](
       config: CliqueConfig,
       history: History[F],
-      signer: Address,
-      sign: ByteVector => F[CryptoSignature]
-  ): Clique[F] =
-    new Clique[F](
-      config,
-      history,
-      new LruMap[ByteVector, Snapshot](inMemorySnapshots),
-      Map.empty,
-      signer,
-      sign
-    )
+      keyPair: KeyPair
+  )(implicit F: ConcurrentEffect[F]): F[Clique[F]] =
+    for {
+      cache <- CacheBuilder.build[F, Snapshot](config.inMemorySnapshots)
+    } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache)
 
   def fillExtraData(signers: List[Address]): ByteVector =
     ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(

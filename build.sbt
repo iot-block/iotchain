@@ -22,6 +22,7 @@ lazy val V = new {
   val fs2             = "1.0.0"
   val catsEffect      = "1.0.0"
   val catsCollections = "0.7.0"
+  val scalacache      = "0.26.0"
 }
 
 lazy val jbok = project
@@ -208,8 +209,11 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-persistent",
     libraryDependencies ++= Seq(
-      "org.iq80.leveldb"          % "leveldb"        % "0.10",
-      "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8"
+      "org.iq80.leveldb"          % "leveldb"                 % "0.10",
+      "org.fusesource.leveldbjni" % "leveldbjni-all"          % "1.8",
+      "com.github.cb372"          %%% "scalacache-core"       % V.scalacache,
+      "com.github.cb372"          %% "scalacache-cats-effect" % V.scalacache,
+      "com.github.cb372"          %% "scalacache-caffeine"    % V.scalacache
     )
   )
   .dependsOn(common % CompileAndTest, codec)

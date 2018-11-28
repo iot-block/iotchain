@@ -30,7 +30,7 @@ case class Tally(
 
 /**
   * [[Snapshot]] is the state of the authorization voting at a given point(block hash and number).
-  * the snapshot should be immutable once it has been created
+  * the snapshot should be `immutable` once it has been created
   */
 case class Snapshot(
     config: CliqueConfig,
@@ -41,8 +41,8 @@ case class Snapshot(
     votes: List[Vote], // List of votes cast in chronological order
     tally: Map[Address, Tally] // Current vote tally to avoid recalculating
 ) {
-  // cast adds a new vote into the tally.
-  // should clear previous votes from signer -> beneficiary
+
+  /** cast adds a new vote into the tally. should clear previous votes from signer -> beneficiary */
   def cast(signer: Address, beneficiary: Address, authorize: Boolean): Snapshot = {
     val dedup: Snapshot =
       votes
@@ -70,7 +70,7 @@ case class Snapshot(
     }
   }
 
-  // uncast removes a previously cast vote from the tally.
+  /** uncast removes a previously cast vote from the tally. */
   def uncast(address: Address, authorize: Boolean): Snapshot =
     tally.get(address) match {
       case None                                => this // If there's no tally, it's a dangling vote, just drop
@@ -83,10 +83,10 @@ case class Snapshot(
         }
     }
 
-  // signers retrieves the list of authorized signers in ascending order.
+  /** signers retrieves the list of authorized signers in ascending order. */
   def getSigners: List[Address] = signers.toList.sorted
 
-  // inturn returns if a signer at a given block height is in-turn or not.
+  /** inturn returns if a signer at a given block height is in-turn or not. */
   def inturn(number: BigInt, signer: Address): Boolean = {
     val signers = getSigners
     val offset = signers.zipWithIndex.collectFirst {
@@ -102,7 +102,7 @@ case class Snapshot(
       this
     }
 
-  // Delete the oldest signer from the recent list to allow it signing again
+  /** Delete the oldest signer from the recent list to allow it signing again */
   def deleteOldestRecent(number: BigInt): Snapshot = {
     val limit = BigInt(signers.size / 2 + 1)
     if (number >= limit) {
@@ -155,7 +155,7 @@ object Snapshot {
 
   implicit val snapshotJsonDecoder: Decoder[Snapshot] = deriveDecoder[Snapshot]
 
-  implicit private[jbok] val byteArrayOrd: Ordering[Array[Byte]] = new Ordering[Array[Byte]] {
+  implicit val byteArrayOrd: Ordering[Array[Byte]] = new Ordering[Array[Byte]] {
     def compare(a: Array[Byte], b: Array[Byte]): Int =
       if (a eq null) {
         if (b eq null) 0
@@ -175,7 +175,7 @@ object Snapshot {
       }
   }
 
-  implicit private[jbok] val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
+  implicit val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
   def storeSnapshot[F[_]: Sync](snapshot: Snapshot, db: KeyValueDB[F]): F[Unit] =
     db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace)
@@ -186,8 +186,7 @@ object Snapshot {
   def apply(config: CliqueConfig, number: BigInt, hash: ByteVector, signers: Set[Address]): Snapshot =
     new Snapshot(config, number, hash, signers, Map.empty, List.empty, Map.empty)
 
-  // apply creates a new authorization snapshot by
-  // applying the given headers to the original one.
+  /** apply creates a new authorization snapshot by applying the given headers to the original one */
   def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader])(implicit F: Sync[F]): F[Snapshot] =
     if (headers.isEmpty) {
       snapshot.pure[F]
@@ -210,7 +209,7 @@ object Snapshot {
       })
     }
 
-  // create a new snapshot by applying a given header
+  /** create a new snapshot by applying a given header */
   private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F]): F[Snapshot] = F.delay {
     val number      = header.number
     val beneficiary = Address(header.beneficiary)
