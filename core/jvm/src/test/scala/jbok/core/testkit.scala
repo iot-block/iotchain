@@ -38,8 +38,7 @@ final case class Fixture(
         _         <- history.init(genesisConfig)
         blockPool <- BlockPool[IO](history, BlockPoolConfig())
         cliqueConfig = CliqueConfig(period = 1.seconds)
-        sign         = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, miner.keyPair) }
-        clique       = Clique[IO](cliqueConfig, history, miner.address, sign)
+        clique <- Clique[IO](cliqueConfig, history, miner.keyPair)
       } yield new CliqueConsensus[IO](clique, blockPool)
 //
 //    case "ethash" =>
@@ -221,7 +220,7 @@ object testkit {
 
   def genPeers(min: Int, max: Int): Gen[List[Peer[IO]]] =
     for {
-      size <- Gen.chooseNum(min, max)
+      size  <- Gen.chooseNum(min, max)
       peers <- Gen.listOfN(size, genPeer)
     } yield peers
 
@@ -266,8 +265,8 @@ object testkit {
   }
 
   def genBlockMiner(implicit fixture: Fixture): Gen[BlockMiner[IO]] = {
-    val sm = random[SyncManager[IO]]
-    val miner    = BlockMiner[IO](MiningConfig(), sm).unsafeRunSync()
+    val sm    = random[SyncManager[IO]]
+    val miner = BlockMiner[IO](MiningConfig(), sm).unsafeRunSync()
     miner
   }
 

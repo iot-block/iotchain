@@ -84,7 +84,7 @@ class PublicApiImpl(
   override def getUncleByBlockHashAndIndex(blockHash: ByteVector, uncleIndex: Int): IO[Option[BlockHeader]] = {
     val x = for {
       block <- OptionT(history.getBlockByHash(blockHash))
-      uncle <- OptionT.fromOption[IO](block.body.uncleNodesList.lift(uncleIndex))
+      uncle <- OptionT.fromOption[IO](block.body.ommerList.lift(uncleIndex))
     } yield uncle
 
     x.value
@@ -93,7 +93,7 @@ class PublicApiImpl(
   override def getUncleByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): IO[Option[BlockHeader]] = {
     val x = for {
       block <- OptionT.liftF(resolveBlock(blockParam))
-      uncle <- OptionT.fromOption[IO](block.body.uncleNodesList.lift(uncleIndex))
+      uncle <- OptionT.fromOption[IO](block.body.ommerList.lift(uncleIndex))
     } yield uncle
 
     x.value
@@ -182,12 +182,12 @@ class PublicApiImpl(
   override def getUncleCountByBlockNumber(blockParam: BlockParam): IO[Int] =
     for {
       block <- resolveBlock(blockParam)
-    } yield block.body.uncleNodesList.length
+    } yield block.body.ommerList.length
 
   override def getUncleCountByBlockHash(blockHash: ByteVector): IO[Int] =
     for {
       body <- history.getBlockBodyByHash(blockHash)
-    } yield body.map(_.uncleNodesList.length).getOrElse(-1)
+    } yield body.map(_.ommerList.length).getOrElse(-1)
 
   override def getBlockTransactionCountByNumber(blockParam: BlockParam): IO[Int] =
     resolveBlock(blockParam).map(_.body.transactionList.length)

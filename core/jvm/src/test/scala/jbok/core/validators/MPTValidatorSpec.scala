@@ -7,7 +7,8 @@ import jbok.core.Fixtures.Blocks._
 import jbok.core.models._
 import scodec.bits.{ByteVector, _}
 
-class MPTValidatorFixture {
+class MPTValidatorSpec extends JbokSpec {
+
   val validBlockHeader = BlockHeader(
     parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
     ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
@@ -25,6 +26,7 @@ class MPTValidatorFixture {
     mixHash = hex"be90ac33b3f6d0316e60eef505ff5ec7333c9f3c85c1a36fc2523cd6b75ddb8a",
     nonce = hex"2b0fb0c002946392"
   )
+
   val validBlockBody = BlockBody(
     transactionList = List[SignedTransaction](
       SignedTransaction(
@@ -84,19 +86,17 @@ class MPTValidatorFixture {
         chainId = 0x3d.toByte
       )
     ),
-    uncleNodesList = List[BlockHeader]()
+    ommerList = List[BlockHeader]()
   )
-}
 
-class MPTValidatorSpec extends JbokSpec {
   "MPTValidator" should {
-    "return true if valid transaction and root" in new MPTValidatorFixture {
-      val mptValidator = new MPTValidator[IO]()
-      mptValidator
-        .isValid(Block3125369.header.transactionsRoot, Block3125369.body.transactionList)
+    "return true if valid transaction and root" in {
+      MPTValidator
+        .isValid[IO, SignedTransaction](Block3125369.header.transactionsRoot, Block3125369.body.transactionList)
         .unsafeRunSync() shouldBe true
-      mptValidator
-        .isValid(validBlockHeader.transactionsRoot, validBlockBody.transactionList)
+
+      MPTValidator
+        .isValid[IO, SignedTransaction](validBlockHeader.transactionsRoot, validBlockBody.transactionList)
         .unsafeRunSync() shouldBe true
     }
   }

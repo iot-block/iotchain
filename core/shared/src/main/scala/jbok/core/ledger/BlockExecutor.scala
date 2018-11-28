@@ -13,7 +13,7 @@ import jbok.core.models._
 import jbok.core.peer.PeerManager
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.store.namespaces
-import jbok.core.validators.{BlockValidator, TransactionValidator}
+import jbok.core.validators.{BlockValidator, BodyValidator, HeaderValidator, TransactionValidator}
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
 import jbok.persistent.KeyValueDB
@@ -28,7 +28,6 @@ case class BlockExecutor[F[_]](
     peerManager: PeerManager[F],
     vm: VM,
     txValidator: TransactionValidator[F],
-    blockValidator: BlockValidator[F],
     txPool: TxPool[F],
     ommerPool: OmmerPool[F]
 )(implicit F: Sync[F], T: Timer[F]) {
@@ -126,7 +125,7 @@ case class BlockExecutor[F[_]](
       executed = ExecutedBlock(block, result.world, result.gasUsed, result.receipts, parentTd + block.header.difficulty)
       postProcessed <- consensus.postProcess(executed)
       persisted     <- postProcessed.world.persisted
-      _ <- blockValidator.postExecuteValidate(
+      _ <- HeaderValidator.postExecValidate[F](
         postProcessed.block.header,
         persisted.stateRootHash,
         postProcessed.receipts,
@@ -140,7 +139,7 @@ case class BlockExecutor[F[_]](
       case Consensus.Forward(blocks) =>
         blocks.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(Nil, blocks)
 
-      case Consensus.Resolve(oldBranch, newBranch) =>
+      case Consensus.Fork(oldBranch, newBranch) =>
         newBranch.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(oldBranch, newBranch)
 
       case Consensus.Stash(block) =>
@@ -399,7 +398,7 @@ case class BlockExecutor[F[_]](
       _ <- ommerPool.addOmmers(blocksRemoved.headOption.toList.map(_.header))
       _ <- blocksRemoved.map(_.body.transactionList).traverse(txs => txPool.addTransactions(txs))
       _ <- blocksAdded.map { block =>
-        ommerPool.removeOmmers(block.header :: block.body.uncleNodesList) *>
+        ommerPool.removeOmmers(block.header :: block.body.ommerList) *>
           txPool.removeTransactions(block.body.transactionList)
       }.sequence
     } yield ()
@@ -428,8 +427,7 @@ object BlockExecutor {
     for {
       txPool    <- TxPool[F](TxPoolConfig(), peerManager)
       ommerPool <- OmmerPool[F](consensus.history)
-      vm             = new VM
-      txValidator    = new TransactionValidator[F](config)
-      blockValidator = new BlockValidator[F]
-    } yield BlockExecutor(config, consensus, peerManager, vm, txValidator, blockValidator, txPool, ommerPool)
+      vm          = new VM
+      txValidator = new TransactionValidator[F](config)
+    } yield BlockExecutor(config, consensus, peerManager, vm, txValidator, txPool, ommerPool)
 }

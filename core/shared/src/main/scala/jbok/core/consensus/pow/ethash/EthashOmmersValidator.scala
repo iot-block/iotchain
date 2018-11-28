@@ -6,7 +6,7 @@ import jbok.core.ledger.History
 import jbok.core.config.Configs.{BlockChainConfig, DaoForkConfig}
 import jbok.core.consensus.pow.ethash.OmmersError._
 import jbok.core.models.{Block, BlockHeader}
-import jbok.core.validators.CommonHeaderValidator
+import jbok.core.validators.HeaderValidator
 import scodec.bits.ByteVector
 
 object OmmersError {
@@ -20,8 +20,7 @@ object OmmersError {
 class EthashOmmersValidator[F[_]](history: History[F], blockChainConfig: BlockChainConfig, daoForkConfig: DaoForkConfig)(
     implicit F: Effect[F]) {
 
-  val commonHeaderValidator = new CommonHeaderValidator[F](history)
-  val headerValidator       = new EthashHeaderValidator(blockChainConfig, daoForkConfig)
+  val headerValidator = new EthashHeaderValidator(blockChainConfig, daoForkConfig)
 
   private def validateLength(length: Int): F[Unit] =
     if (length <= 2) F.unit else F.raiseError(OmmersLengthInvalid)
@@ -36,28 +35,24 @@ class EthashOmmersValidator[F[_]](history: History[F], blockChainConfig: BlockCh
     val numberOfBlocks = blockNumber.min(6).toInt
 
     def isSibling(ommerHeader: BlockHeader, parent: Block): Boolean =
-      ommerHeader.parentHash == parent.header.parentHash && !ommerHeader.equals(parent.header) && !parent.body.uncleNodesList
+      ommerHeader.parentHash == parent.header.parentHash && !ommerHeader.equals(parent.header) && !parent.body.ommerList
         .contains(ommerHeader)
 
     def isKen(ommer: BlockHeader) =
       for {
         ancestors <- getNBlocksBack(parentHash, numberOfBlocks)
         b = ancestors.foldRight(false)((block, z) =>
-          z || (isSibling(ommer, block) && ancestors.forall(!_.body.uncleNodesList.contains(ommer))))
+          z || (isSibling(ommer, block) && ancestors.forall(!_.body.ommerList.contains(ommer))))
       } yield b
 
     val r = ommers.foldLeftM(true)((z, header) => isKen(header).map(z && _))
     F.ifM(r)(ifTrue = F.unit, ifFalse = F.raiseError(OmmersAncestorsInvalid))
   }
 
-  private def validateOmmerHeader(ommers: List[BlockHeader]): F[Unit] = {
-    val r = ommers.foldLeftM(true)((z, header) =>
-      for {
-        parentHeader <- commonHeaderValidator.validate(header)
-        r            <- headerValidator.validate(parentHeader, header).attemptT.isRight.map(_ && z)
-      } yield r)
-    F.ifM(r)(ifTrue = F.unit, ifFalse = F.raiseError(OmmersNotValid))
-  }
+  private def validateOmmerHeader(ommers: List[BlockHeader]): F[Unit] =
+    ommers
+      .traverse(ommer => HeaderValidator.preExecValidate[F](history.getBlockHeaderByHash(ommer.parentHash), ommer))
+      .void
 
   def validate(
       parentHash: ByteVector,

@@ -31,6 +31,29 @@ object TransactionInvalid {
 class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F: Sync[F]) {
   val secp256k1n: BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337")
 
+  def validate(
+      stx: SignedTransaction,
+      senderAccount: Account,
+      blockHeader: BlockHeader,
+      upfrontGasCost: UInt256,
+      accGasUsed: BigInt
+  ): F[Unit] =
+    for {
+      _ <- checkSyntacticValidity(stx)
+      _ <- validateSignatureFormat(stx, blockHeader.number)
+      _ <- validateNonce(stx.nonce, senderAccount.nonce)
+      _ <- validateGasLimitEnoughForIntrinsicGas(stx, blockHeader.number)
+      _ <- validateAccountHasEnoughGasToPayUpfrontCost(senderAccount.balance, upfrontGasCost)
+      _ <- validateBlockHasEnoughGasLimitForTx(stx.gasLimit, accGasUsed, blockHeader.gasLimit)
+    } yield ()
+
+  def validateSimulateTx(
+      stx: SignedTransaction,
+  ): F[Unit] =
+    for {
+      _ <- checkSyntacticValidity(stx)
+    } yield ()
+
   /**
     * Validates if the transaction is syntactically valid (lengths of the transaction fields are correct)
     *
@@ -133,27 +156,4 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
                                                   blockGasLimit: BigInt): F[BigInt] =
     if (gasLimit + accGasUsed <= blockGasLimit) F.pure(gasLimit)
     else F.raiseError(TransactionGasLimitTooBigInvalid(gasLimit, accGasUsed, blockGasLimit))
-
-  def validate(
-      stx: SignedTransaction,
-      senderAccount: Account,
-      blockHeader: BlockHeader,
-      upfrontGasCost: UInt256,
-      accGasUsed: BigInt
-  ): F[Unit] =
-    for {
-      _ <- checkSyntacticValidity(stx)
-      _ <- validateSignatureFormat(stx, blockHeader.number)
-      _ <- validateNonce(stx.nonce, senderAccount.nonce)
-      _ <- validateGasLimitEnoughForIntrinsicGas(stx, blockHeader.number)
-      _ <- validateAccountHasEnoughGasToPayUpfrontCost(senderAccount.balance, upfrontGasCost)
-      _ <- validateBlockHasEnoughGasLimitForTx(stx.gasLimit, accGasUsed, blockHeader.gasLimit)
-    } yield ()
-
-  def validateSimulateTx(
-      stx: SignedTransaction,
-  ): F[Unit] =
-    for {
-      _ <- checkSyntacticValidity(stx)
-    } yield ()
 }

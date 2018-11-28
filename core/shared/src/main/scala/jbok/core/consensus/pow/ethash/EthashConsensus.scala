@@ -11,6 +11,7 @@ import jbok.core.ledger.TypedBlock.MinedBlock
 import jbok.core.ledger.{History, TypedBlock}
 import jbok.core.models.{Block, BlockHeader}
 import jbok.core.pool.BlockPool
+import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
 import jbok.crypto._
 import scodec.bits.ByteVector
 
@@ -57,6 +58,20 @@ class EthashConsensus[F[_]](
 
   override def mine(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.MinedBlock] =
     miner.mine(executed.block).map(block => MinedBlock(block, executed.receipts))
+
+  override def verify(block: Block): F[Unit] =
+    history.getBlockHeaderByHash(block.header.parentHash).flatMap {
+      case Some(parent) =>
+        headerValidator.validate(parent, block.header) *> ommersValidator.validate(
+          block.header.parentHash,
+          block.header.number,
+          block.body.ommerList,
+          blockPool.getHeader,
+          blockPool.getNBlocks
+        )
+
+      case None => F.raiseError(HeaderParentNotFoundInvalid)
+    }
 
   override def run(block: Block): F[Consensus.Result] = ???
 //    history.getBestBlock.flatMap { parent =>
@@ -118,18 +133,6 @@ class EthashConsensus[F[_]](
 
   private val difficultyCalculator = new EthDifficultyCalculator(blockChainConfig)
   private val rewardCalculator     = new EthRewardCalculator(MonetaryPolicyConfig())
-
-  private def semanticValidate(parentHeader: BlockHeader, block: Block): F[Unit] =
-    for {
-      _ <- headerValidator.validate(parentHeader, block.header)
-      _ <- ommersValidator.validate(
-        block.header.parentHash,
-        block.header.number,
-        block.body.uncleNodesList,
-        blockPool.getHeader,
-        blockPool.getNBlocks
-      )
-    } yield ()
 
   private def calcDifficulty(blockTime: Long, parentHeader: BlockHeader): F[BigInt] =
     F.pure(difficultyCalculator.calculateDifficulty(blockTime, parentHeader))

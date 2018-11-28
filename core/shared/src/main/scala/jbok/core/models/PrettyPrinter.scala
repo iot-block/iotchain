@@ -26,7 +26,7 @@ object PrettyPrinter {
 
   implicit val showBlockBody: Show[BlockBody] = new Show[BlockBody] {
     override def show(t: BlockBody): String =
-      s"""BlockBody(${t.transactionList.length} txs, ${t.uncleNodesList.length} ommers)"""
+      s"""BlockBody(${t.transactionList.length} txs, ${t.ommerList.length} ommers)"""
   }
 
   implicit val showBlock: Show[Block] = new Show[Block] {

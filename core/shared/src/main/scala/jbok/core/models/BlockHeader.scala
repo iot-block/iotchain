@@ -9,21 +9,21 @@ import scodec.bits._
 import shapeless._
 
 case class BlockHeader(
-    parentHash: ByteVector,
-    ommersHash: ByteVector,
-    beneficiary: ByteVector,
-    stateRoot: ByteVector,
-    transactionsRoot: ByteVector,
-    receiptsRoot: ByteVector,
-    logsBloom: ByteVector,
-    difficulty: BigInt,
-    number: BigInt,
-    gasLimit: BigInt,
-    gasUsed: BigInt,
-    unixTimestamp: Long,
-    extraData: ByteVector,
-    mixHash: ByteVector,
-    nonce: ByteVector
+    parentHash: ByteVector, // B32 pre
+    ommersHash: ByteVector, // B32 body
+    beneficiary: ByteVector, // B20 pre
+    stateRoot: ByteVector, // B32 exec
+    transactionsRoot: ByteVector, // B32 body
+    receiptsRoot: ByteVector, // B32 exec
+    logsBloom: ByteVector, // B256 post exec
+    difficulty: BigInt, // consensus
+    number: BigInt, // pre
+    gasLimit: BigInt, // consensus field
+    gasUsed: BigInt, // post
+    unixTimestamp: Long, // pre
+    extraData: ByteVector, // consensus field
+    mixHash: ByteVector, // B32 consensus field
+    nonce: ByteVector // B8 consensus field
 ) {
   lazy val hash: ByteVector = RlpCodec.encode(this).require.bytes.kec256
 

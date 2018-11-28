@@ -6,7 +6,7 @@ import jbok.core.ledger.History
 import jbok.core.config.Configs.{BlockChainConfig, DaoForkConfig}
 import jbok.core.consensus.pow.ethash.OmmersError._
 import jbok.core.models.{Block, BlockBody, BlockHeader}
-import jbok.core.validators.CommonHeaderInvalid.HeaderNumberInvalid
+import jbok.core.validators.HeaderInvalid.HeaderNumberInvalid
 import scodec.bits._
 import jbok.common.testkit._
 import jbok.core.testkit._
@@ -308,7 +308,7 @@ class EthashOmmersValidatorSpec extends JbokSpec {
 
     "report a invalid if there is an ommer that was previously used" in new OmmersValidatorFixture {
       ommersValidator
-        .validate(ommersBlockParentHash, ommersBlockNumber, List(block93.body.uncleNodesList.head, ommer2))
+        .validate(ommersBlockParentHash, ommersBlockNumber, List(block93.body.ommerList.head, ommer2))
         .attempt
         .unsafeRunSync() shouldBe Left(OmmersAncestorsInvalid)
     }
