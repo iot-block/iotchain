@@ -3,16 +3,13 @@ package jbok.core.consensus.poa.clique
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.core.ledger.History
 import jbok.core.config.GenesisConfig
+import jbok.core.ledger.History
 import jbok.core.models.{Address, BlockHeader}
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import scalacache._
-import scalacache.caffeine._
-import com.github.benmanes.caffeine.cache.Caffeine
 
 import scala.collection.mutable
 

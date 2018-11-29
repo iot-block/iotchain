@@ -1,5 +1,6 @@
 package jbok.core.consensus.poa.clique
 
+import cats.data.NonEmptyList
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import jbok.core.consensus.Consensus
@@ -10,6 +11,7 @@ import jbok.core.pool.BlockPool.Leaf
 import jbok.core.validators.BlockValidator
 import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
 import scodec.bits.ByteVector
+import jbok.common._
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -81,7 +83,8 @@ case class CliqueConsensus[F[_]](
               val delay: Long = wait +
                 (if (executed.block.header.difficulty == Clique.diffNoTurn) {
                    // It's not our turn explicitly to sign, delay it a bit
-                   val wiggle: Long = Random.nextLong().abs % ((snap.signers.size / 2 + 1) * clique.config.wiggleTime.toMillis)
+                   val wiggle
+                     : Long = Random.nextLong().abs % ((snap.signers.size / 2 + 1) * clique.config.wiggleTime.toMillis)
                    log.trace(s"${clique.signer} it is not our turn, delay ${wiggle}")
                    wiggle
                  } else {
@@ -117,8 +120,8 @@ case class CliqueConsensus[F[_]](
       case None => F.raiseError(HeaderParentNotFoundInvalid)
     }
 
-  override def run(block: Block): F[Consensus.Result] =
-    for {
+  override def run(block: Block): F[Consensus.Result] = {
+    val result: F[Consensus.Result] = for {
       _ <- blockPool.raiseIfDuplicate(block.header.hash)
       _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap {
         case Some(parent) =>
@@ -151,36 +154,42 @@ case class CliqueConsensus[F[_]](
       }
     } yield result
 
+    result.attempt.map {
+      case Left(e)  => Consensus.Discard(e)
+      case Right(x) => x
+    }
+  }
+
   override def resolveBranch(headers: List[BlockHeader]): F[Consensus.BranchResult] =
-    if (!checkHeaders(headers)) {
-      F.pure(Consensus.InvalidBranch)
-    } else {
-      val parentIsKnown = history.getBlockHeaderByHash(headers.head.parentHash).map(_.isDefined)
-      parentIsKnown.ifM(
-        ifTrue = {
-          // find blocks with same numbers in the current chain, removing any common prefix
-          headers.map(_.number).traverse(history.getBlockByNumber).map {
-            blocks =>
-              val (oldBranch, _) = blocks.flatten
-                .zip(headers)
-                .dropWhile {
-                  case (oldBlock, header) =>
-                    oldBlock.header == header
-                }
-                .unzip
-              val newHeaders              = headers.dropWhile(h => oldBranch.headOption.exists(_.header.number > h.number))
-              val currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
-              val newBranchDifficulty     = newHeaders.map(_.difficulty).sum
-              if (currentBranchDifficulty < newBranchDifficulty) {
-                Consensus.NewBetterBranch(oldBranch)
-              } else {
-                Consensus.NoChainSwitch
-              }
+    checkHeaders(headers).ifM(
+      ifTrue = headers
+        .map(_.number)
+        .traverse(history.getBlockByNumber)
+        .map { blocks =>
+          val (oldBranch, _) = blocks.flatten
+            .zip(headers)
+            .dropWhile {
+              case (oldBlock, header) =>
+                oldBlock.header == header
+            }
+            .unzip
+
+          val forkNumber = oldBranch.headOption
+            .map(_.header.number)
+            .getOrElse(headers.head.number)
+
+          val newBranch               = headers.filter(_.number >= forkNumber)
+          val currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
+          val newBranchDifficulty     = newBranch.map(_.difficulty).sum
+          if (currentBranchDifficulty < newBranchDifficulty) {
+            log.debug(s"resolved better branch ${newBranch.map(_.tag)}")
+            Consensus.BetterBranch(NonEmptyList.fromListUnsafe(newBranch))
+          } else {
+            Consensus.NoChainSwitch
           }
         },
-        ifFalse = F.pure(Consensus.InvalidBranch)
-      )
-    }
+      ifFalse = F.pure(Consensus.InvalidBranch)
+    )
 
   //////////////////////////////////
   //////////////////////////////////
@@ -203,13 +212,20 @@ case class CliqueConsensus[F[_]](
         F.pure(Nil)
     }
 
-  private def checkHeaders(headers: List[BlockHeader]): Boolean =
-    if (headers.length > 1)
-      headers.zip(headers.tail).forall {
-        case (parent, child) =>
-          parent.hash == child.parentHash && parent.number + 1 == child.number
-      } else
-      headers.nonEmpty
+  /**
+    * 1. head's parent is known
+    * 2. headers form a chain
+    */
+  private def checkHeaders(headers: List[BlockHeader]): F[Boolean] =
+    headers.nonEmpty.pure[F] &&
+      ((headers.head.number == 0).pure[F] || history.getBlockHeaderByHash(headers.head.parentHash).map(_.isDefined)) &&
+      headers
+        .zip(headers.tail)
+        .forall {
+          case (parent, child) =>
+            parent.hash == child.parentHash && parent.number + 1 == child.number
+        }
+        .pure[F]
 
   private def calcDifficulty(snapshot: Snapshot, signer: Address, number: BigInt): BigInt =
     if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn

@@ -37,7 +37,7 @@ final case class Fixture(
         history   <- History[IO](db, chainId)
         _         <- history.init(genesisConfig)
         blockPool <- BlockPool[IO](history, BlockPoolConfig())
-        cliqueConfig = CliqueConfig(period = 1.seconds)
+        cliqueConfig = CliqueConfig(period = 100.millis)
         clique <- Clique[IO](cliqueConfig, history, miner.keyPair)
       } yield new CliqueConsensus[IO](clique, blockPool)
 //
@@ -331,7 +331,7 @@ object testkit {
 
   def genFullSync(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[FullSync[IO]] = {
     val executor = random[BlockExecutor[IO]]
-    FullSync[IO](config, executor)
+    FullSync[IO](config, executor).unsafeRunSync()
   }
 
   def genSyncManager(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[SyncManager[IO]] = {

@@ -108,12 +108,12 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager Transaction Service" should {
     "broadcast received transactions to all peers do not know yet" in {
-      val sm      = random[SyncManager[IO]]
-      val txs     = random[List[SignedTransaction]](genTxs(1, 10))
-      val peer    = random[Peer[IO]]
-      val peers   = random[List[Peer[IO]]](genPeers(1, 10))
-      val request = Request(peer, SignedTransactions(txs))
-      val List(result)  = sm.service.run(request).unsafeRunSync()
+      val sm           = random[SyncManager[IO]]
+      val txs          = random[List[SignedTransaction]](genTxs(1, 10))
+      val peer         = random[Peer[IO]]
+      val peers        = random[List[Peer[IO]]](genPeers(1, 10))
+      val request      = Request(peer, SignedTransactions(txs))
+      val List(result) = sm.service.run(request).unsafeRunSync()
       result._1.run(peer :: peers).unsafeRunSync() shouldBe peers
     }
   }
@@ -142,7 +142,7 @@ class SyncManagerSpec extends JbokSpec {
         _     <- sm3.fullSync.stream.unNone.take(1).compile.drain
         best1 <- sm1.history.getBestBlock
         best2 <- sm2.history.getBestBlock
-        best3 <- sm2.history.getBestBlock
+        best3 <- sm3.history.getBestBlock
         _ = best1 shouldBe blocks.last.block
         _ = best1 shouldBe best2
         _ = best1 shouldBe best3
@@ -154,12 +154,12 @@ class SyncManagerSpec extends JbokSpec {
   }
 
   "SyncManager FastSync" should {
-    val config = SyncConfig(targetBlockOffset = 0)
 
-    "sync to the median state" in {
-      val sm1 = random[SyncManager[IO]](genSyncManager(config)(fixture))
-      val sm2 = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
-      val sm3 = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
+    "fast sync to median state if best peer number - offset >= current best number" in {
+      val config = SyncConfig(fastSyncOffset = 0)
+      val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
+      val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
+      val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))
@@ -176,6 +176,67 @@ class SyncManagerSpec extends JbokSpec {
         _     <- T.sleep(1.second)
 
         _ <- sm3.fastSync.stream.compile.drain
+        _ <- fiber.cancel
+      } yield ()
+
+      p.unsafeRunSync()
+    }
+
+    "skip fast sync if best peer number - offset < current best number" in {
+      val config = SyncConfig()
+      val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
+      val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
+      val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
+
+      val N      = 10
+      val blocks = random[List[Block]](genBlocks(N, N))
+      sm1.executor.handleSyncBlocks(SyncBlocks(blocks, None)).unsafeRunSync()
+      sm2.executor.handleSyncBlocks(SyncBlocks(blocks, None)).unsafeRunSync()
+
+      val p = for {
+        fiber <- Stream(sm1, sm2, sm3).map(_.peerManager.stream).parJoinUnbounded.compile.drain.start
+        _     <- T.sleep(1.second)
+        _     <- Stream(sm1, sm2).map(_.serve).parJoinUnbounded.compile.drain.start
+        _     <- T.sleep(1.second)
+        _     <- sm3.peerManager.addPeerNode(sm1.peerManager.peerNode)
+        _     <- sm3.peerManager.addPeerNode(sm2.peerManager.peerNode)
+        _     <- T.sleep(1.second)
+
+        _     <- sm3.fastSync.stream.compile.drain
+        best3 <- sm3.history.getBestBlock
+        _ = best3.header.number shouldBe 0
+        _ <- fiber.cancel
+      } yield ()
+
+      p.unsafeRunSync()
+    }
+  }
+
+  "SyncManager" should {
+    "start with FastSync then switch to FullSync" in {
+      val config = SyncConfig(fastSyncOffset = 5)
+      val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
+      val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
+      val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
+
+      val N      = 10
+      val blocks = random[List[Block]](genBlocks(N, N))
+      sm1.executor.handleSyncBlocks(SyncBlocks(blocks, None)).unsafeRunSync()
+      sm2.executor.handleSyncBlocks(SyncBlocks(blocks, None)).unsafeRunSync()
+
+      val p = for {
+        fiber <- Stream(sm1, sm2, sm3).map(_.peerManager.stream).parJoinUnbounded.compile.drain.start
+        _     <- T.sleep(1.second)
+        _     <- Stream(sm1, sm2).map(_.serve).parJoinUnbounded.compile.drain.start
+        _     <- T.sleep(1.second)
+        _     <- sm3.peerManager.addPeerNode(sm1.peerManager.peerNode)
+        _     <- sm3.peerManager.addPeerNode(sm2.peerManager.peerNode)
+        _     <- T.sleep(1.second)
+
+        _     <- sm3.sync.unNone.take(1).compile.drain
+        best1 <- sm1.history.getBestBlock
+        best3 <- sm3.history.getBestBlock
+        _ = best3 shouldBe best1
         _ <- fiber.cancel
       } yield ()
 

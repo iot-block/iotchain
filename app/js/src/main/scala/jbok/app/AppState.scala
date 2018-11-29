@@ -83,7 +83,7 @@ case class AppState(
     val p = for {
       bestBlockNumber <- client.public.bestBlockNumber
       block           <- client.public.getBlockByNumber(bestBlockNumber)
-      isMining        <- client.public.getMining
+      isMining        <- client.public.isMining
       gasPrice        <- client.public.getGasPrice
       miningStatus = if (isMining) "Mining" else "idle"
       gasLimit = block

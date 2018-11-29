@@ -149,17 +149,20 @@ object Configs {
   )
 
   case class SyncConfig(
-      maxConcurrentRequests: Int = 50,
-      maxBlockHeadersPerRequest: Int = 200,
-      maxBlockBodiesPerRequest: Int = 128,
-      maxReceiptsPerRequest: Int = 60,
-      maxNodesPerRequest: Int = 200,
-      minPeersToChooseTargetBlock: Int = 2,
+      maxConcurrentRequests: Int = 50, // fast sync
+      maxBlockHeadersPerRequest: Int = 128, // fast/full sync
+      maxBlockBodiesPerRequest: Int = 128, // fast/full sync
+      maxReceiptsPerRequest: Int = 60, // fast sync
+      maxNodesPerRequest: Int = 200, // fast sync
+      minPeersToChooseTargetBlock: Int = 2, // fast sync
       minBroadcastPeers: Int = 4,
-      targetBlockOffset: Int = 500,
-      retryInterval: FiniteDuration = 5.seconds,
+      fullSyncOffset: Int = 10, // the actual full sync number = min(1, current + 1 - offset)
+      fastSyncOffset: Int = 64, // fast sync
+      fastEnabled: Boolean = true,
+      retryInterval: FiniteDuration = 15.seconds,
       checkForNewBlockInterval: FiniteDuration = 5.seconds,
-      banDuration: FiniteDuration = 200.seconds
+      banDuration: FiniteDuration = 200.seconds,
+      requestTimeout: FiniteDuration = 10.seconds,
   )
 
   case class DiscoveryConfig(

@@ -14,7 +14,6 @@ sealed trait BlockParam
 object BlockParam {
   case class WithNumber(n: BigInt) extends BlockParam
   case object Latest               extends BlockParam
-  case object Pending              extends BlockParam
   case object Earliest             extends BlockParam
 }
 
@@ -56,15 +55,9 @@ trait PublicAPI {
 
   def getGasPrice: IO[BigInt]
 
-  def getMining: IO[Boolean]
-
-  def getHashRate: IO[BigInt]
-
-  def getWork: IO[GetWorkResponse]
+  def isMining: IO[Boolean]
 
   def getCoinbase: IO[Address]
-
-  def submitWork(nonce: ByteVector, powHeaderHash: ByteVector, mixHash: ByteVector): IO[Boolean]
 
   def syncing: IO[Option[SyncingStatus]]
 

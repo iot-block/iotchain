@@ -21,7 +21,7 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
 
   def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]]
 
-  def putBlockHeader(blockHeader: BlockHeader): F[Unit]
+  def putBlockHeader(blockHeader: BlockHeader, updateTD: Boolean = false): F[Unit]
 
   // body
   def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]]
@@ -37,8 +37,6 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
   def getBlockByHash(hash: ByteVector): F[Option[Block]]
 
   def getBlockByNumber(number: BigInt): F[Option[Block]]
-
-  def putBlock(block: Block): F[Unit]
 
   def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: BigInt, asBestBlock: Boolean): F[Unit]
 
@@ -68,8 +66,6 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
 
   def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]]
 
-  def putDifficulty(blockHash: ByteVector, totalDifficulty: BigInt): F[Unit]
-
   def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]]
 
   def getBestBlockNumber: F[BigInt]
@@ -77,6 +73,8 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
   def getEstimatedHighestBlock: F[BigInt]
 
   def getSyncStartingBlock: F[BigInt]
+
+  def getBestHeader: F[BlockHeader]
 
   def getBestBlock: F[Block]
 
@@ -97,11 +95,7 @@ object History {
     }
 }
 
-class HistoryImpl[F[_]](
-    db: KeyValueDB[F],
-    chainId: Int
-)(implicit F: Sync[F])
-    extends History[F](db, chainId) {
+class HistoryImpl[F[_]](db: KeyValueDB[F], chainId: Int)(implicit F: Sync[F]) extends History[F](db, chainId) {
 
   private val appStateStore = new AppStateStore[F](db)
 
@@ -134,10 +128,28 @@ class HistoryImpl[F[_]](
     p.value
   }
 
-  override def putBlockHeader(blockHeader: BlockHeader): F[Unit] = {
-    val hash = blockHeader.hash
-    db.put(hash, blockHeader, namespaces.BlockHeader) *> db.put(blockHeader.number, hash, namespaces.NumberHash)
-  }
+  override def putBlockHeader(blockHeader: BlockHeader, updateTD: Boolean): F[Unit] =
+    if (updateTD) {
+      if (blockHeader.number == 0) {
+        db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) *>
+          db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash) *>
+          db.put(blockHeader.hash, blockHeader.difficulty, namespaces.TotalDifficulty)
+      } else {
+        getTotalDifficultyByHash(blockHeader.parentHash).flatMap {
+          case Some(td) =>
+            db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) *>
+              db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash) *>
+              db.put(blockHeader.hash, td + blockHeader.difficulty, namespaces.TotalDifficulty)
+
+          case None =>
+            db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) *>
+              db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash)
+        }
+      }
+    } else {
+      db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) *>
+        db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash)
+    }
 
   // body
   override def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]] =
@@ -182,17 +194,14 @@ class HistoryImpl[F[_]](
                                    receipts: List[Receipt],
                                    totalDifficulty: BigInt,
                                    asBestBlock: Boolean): F[Unit] =
-    putBlock(block) *>
+    putBlockHeader(block.header, updateTD = true) *>
+      putBlockBody(block.header.hash, block.body) *>
       putReceipts(block.header.hash, receipts) *>
-      putDifficulty(block.header.hash, totalDifficulty) *>
       (if (asBestBlock) {
          putBestBlockNumber(block.header.number)
        } else {
          F.unit
        })
-
-  override def putBlock(block: Block): F[Unit] =
-    putBlockHeader(block.header) *> putBlockBody(block.header.hash, block.body)
 
   override def delBlock(blockHash: ByteVector, parentAsBestBlock: Boolean): F[Unit] = {
     val maybeBlockHeader = getBlockHeaderByHash(blockHash)
@@ -284,9 +293,6 @@ class HistoryImpl[F[_]](
   override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]] =
     db.getOpt[ByteVector, BigInt](blockHash, namespaces.TotalDifficulty)
 
-  override def putDifficulty(blockhash: ByteVector, totalDifficulty: BigInt): F[Unit] =
-    db.put(blockhash, totalDifficulty, namespaces.TotalDifficulty)
-
   override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
     db.getOpt[BigInt, ByteVector](number, namespaces.NumberHash)
 
@@ -298,6 +304,12 @@ class HistoryImpl[F[_]](
 
   override def getSyncStartingBlock: F[BigInt] =
     appStateStore.getSyncStartingBlock
+
+  override def getBestHeader: F[BlockHeader] =
+    (getBestBlockNumber >>= getBlockHeaderByNumber).flatMap {
+      case Some(header) => F.pure(header)
+      case None         => F.raiseError(new Exception(s"best header does not exist"))
+    }
 
   override def getBestBlock: F[Block] =
     getBestBlockNumber.flatMap(bn =>

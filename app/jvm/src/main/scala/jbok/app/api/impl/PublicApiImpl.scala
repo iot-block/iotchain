@@ -121,18 +121,9 @@ class PublicApiImpl(
     } yield gasPrice
   }
 
-  override def getMining: IO[Boolean] = miner.haltWhenTrue.get.map(!_)
+  override def isMining: IO[Boolean] = miner.haltWhenTrue.get.map(!_)
 
-  override def getHashRate: IO[BigInt] =
-    ???
-//    hashRate.update(m => removeObsoleteHashrates(new Date, m)).map(_.now.map(_._2._1).sum)
-
-  override def getWork: IO[GetWorkResponse] = ???
-
-  override def getCoinbase: IO[Address] =
-    miningConfig.coinbase.pure[IO]
-
-  override def submitWork(nonce: ByteVector, powHeaderHash: ByteVector, mixHash: ByteVector): IO[Boolean] = ???
+  override def getCoinbase: IO[Address] = miningConfig.coinbase.pure[IO]
 
   override def syncing: IO[Option[SyncingStatus]] =
     for {
@@ -225,7 +216,6 @@ class PublicApiImpl(
   override def getAccountTransactions(address: Address,
                                       fromBlock: BigInt,
                                       toBlock: BigInt): IO[List[SignedTransaction]] = {
-    val numBlocksToSearch = toBlock - fromBlock
     def collectTxs: PartialFunction[SignedTransaction, SignedTransaction] = {
       case stx if SignedTransaction.getSender(stx).nonEmpty && SignedTransaction.getSender(stx).get == address => stx
       case stx if stx.receivingAddress == address                                                              => stx
@@ -252,12 +242,8 @@ class PublicApiImpl(
   private[jbok] def prepareTransaction(callTx: CallTx, blockParam: BlockParam): IO[SignedTransaction] =
     for {
       gasLimit <- getGasLimit(callTx, blockParam)
-      from <- OptionT
-        .fromOption[IO](callTx.from)
-        .getOrElseF(keyStore.listAccounts.map(_.head))
-      tx            = Transaction(0, callTx.gasPrice, gasLimit, callTx.to, callTx.value, callTx.data)
-      fakeSignature = CryptoSignature(0, 0, 0.toByte)
-    } yield SignedTransaction(tx, 0.toByte, ByteVector(0), ByteVector(0), from)
+      tx = Transaction(0, callTx.gasPrice, gasLimit, callTx.to, callTx.value, callTx.data)
+    } yield SignedTransaction(tx, 0.toByte, ByteVector(0), ByteVector(0))
 
   private[jbok] def getGasLimit(callTx: CallTx, blockParam: BlockParam): IO[BigInt] =
     if (callTx.gas.isDefined) {
@@ -293,9 +279,6 @@ class PublicApiImpl(
       case BlockParam.WithNumber(blockNumber) => getBlock(blockNumber)
       case BlockParam.Earliest                => getBlock(0)
       case BlockParam.Latest                  => history.getBestBlockNumber >>= getBlock
-      case BlockParam.Pending =>
-        ???
-//        OptionT(blockGenerator.getUnconfirmed.map(_.map(_.block))).getOrElseF(resolveBlock(BlockParam.Latest))
     }
   }
 }

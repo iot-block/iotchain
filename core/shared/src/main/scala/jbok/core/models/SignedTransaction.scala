@@ -1,6 +1,5 @@
 package jbok.core.models
 
-import cats.effect.IO
 import io.circe.{Decoder, Encoder}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
@@ -27,7 +26,7 @@ case class SignedTransaction(
   def senderAddress(chainId: Option[Byte]): Option[Address] =
     SignedTransaction.getSender(this, chainId)
 
-  def isContractInit: Boolean = receivingAddress.equals(Address.empty)
+  def isContractInit: Boolean = receivingAddress == Address.empty
 }
 
 object SignedTransaction {
@@ -37,43 +36,27 @@ object SignedTransaction {
 
   def apply(
       tx: Transaction,
-      pointSign: Byte,
-      signatureRandom: ByteVector,
-      signature: ByteVector,
-      chainId: Byte
-  ): SignedTransaction =
-    new SignedTransaction(
-      tx.nonce,
-      tx.gasPrice,
-      tx.gasLimit,
-      tx.receivingAddress.getOrElse(Address.empty),
-      tx.value,
-      tx.payload,
-      BigInt(1, Array(pointSign)),
-      BigInt(1, signatureRandom.toArray),
-      BigInt(1, signature.toArray)
-    )
+      v: BigInt,
+      r: BigInt,
+      s: BigInt
+  ): SignedTransaction = SignedTransaction(
+    tx.nonce,
+    tx.gasPrice,
+    tx.gasLimit,
+    tx.receivingAddress.getOrElse(Address.empty),
+    tx.value,
+    tx.payload,
+    v,
+    r,
+    s
+  )
 
   def apply(
       tx: Transaction,
-      pointSign: Byte,
-      signatureRandom: ByteVector,
-      signature: ByteVector,
-      address: Address
-  ): SignedTransaction = {
-    val txSig = CryptoSignature(BigInt(1, signatureRandom.toArray), BigInt(1, signature.toArray), pointSign)
-    new SignedTransaction(
-      tx.nonce,
-      tx.gasPrice,
-      tx.gasLimit,
-      tx.receivingAddress.getOrElse(Address(ByteVector.empty)),
-      tx.value,
-      tx.payload,
-      BigInt(1, Array(pointSign)),
-      BigInt(1, signatureRandom.toArray),
-      BigInt(1, signature.toArray)
-    )
-  }
+      v: Byte,
+      r: ByteVector,
+      s: ByteVector
+  ): SignedTransaction = apply(tx, BigInt(1, Array(v)), BigInt(1, r.toArray), BigInt(1, s.toArray))
 
   def sign(tx: Transaction, keyPair: KeyPair, chainId: Option[Byte] = None): SignedTransaction = {
     val stx = new SignedTransaction(
@@ -90,29 +73,6 @@ object SignedTransaction {
     val bytes = bytesToSign(stx, chainId)
     val sig   = Signature[ECDSA].sign(bytes.toArray, keyPair, chainId).unsafeRunSync()
     stx.copy(v = BigInt(1, Array(sig.v)), r = sig.r, s = sig.s)
-  }
-
-  def signIO(tx: Transaction, keyPair: KeyPair, chainId: Option[Byte] = None): IO[SignedTransaction] = {
-    val stx = new SignedTransaction(
-      tx.nonce,
-      tx.gasPrice,
-      tx.gasLimit,
-      tx.receivingAddress.getOrElse(Address(ByteVector.empty)),
-      tx.value,
-      tx.payload,
-      BigInt(0),
-      BigInt(0),
-      BigInt(0)
-    )
-    val bytes = bytesToSign(stx, chainId)
-    for {
-      sig <- Signature[ECDSA].sign(bytes.toArray, keyPair, chainId)
-    } yield stx.copy(v = BigInt(1, Array(sig.v)), r = sig.r, s = sig.s)
-  }
-
-  def verify(stx: SignedTransaction, chainId: Option[Byte], sender: Address): Boolean = {
-    val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)
-    SignedTransaction.getSender(stx, chainId).contains(sender)
   }
 
   private def bytesToSign(stx: SignedTransaction, chainId: Option[Byte]): ByteVector =

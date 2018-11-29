@@ -9,10 +9,9 @@ sealed trait NodeHash {
 }
 
 object NodeHash {
-  case class StateMptNodeHash(v: ByteVector)           extends NodeHash
-  case class StorageRootHash(v: ByteVector)            extends NodeHash
-  case class ContractStorageMptNodeHash(v: ByteVector) extends NodeHash
-  case class EvmCodeHash(v: ByteVector)                extends NodeHash
+  case class StateMptNodeHash(v: ByteVector)   extends NodeHash
+  case class StorageMptNodeHash(v: ByteVector) extends NodeHash
+  case class EvmCodeHash(v: ByteVector)        extends NodeHash
 
   implicit val codec: RlpCodec[NodeHash] = RlpCodec.item(
     discriminated[NodeHash]
@@ -22,16 +21,12 @@ object NodeHash {
         case _                   => None
       }(bytes.as[StateMptNodeHash])
       .subcaseO(2) {
-        case t: ContractStorageMptNodeHash => Some(t)
-        case _                             => None
-      }(bytes.as[ContractStorageMptNodeHash])
+        case t: StorageMptNodeHash => Some(t)
+        case _                     => None
+      }(bytes.as[StorageMptNodeHash])
       .subcaseO(3) {
         case t: EvmCodeHash => Some(t)
         case _              => None
       }(bytes.as[EvmCodeHash])
-      .subcaseO(4) {
-        case t: StorageRootHash => Some(t)
-        case _                  => None
-      }(bytes.as[StorageRootHash])
   )
 }
