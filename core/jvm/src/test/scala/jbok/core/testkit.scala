@@ -116,7 +116,7 @@ object testkit {
     for {
       tx <- arbTransaction.arbitrary
       keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-      stx     = SignedTransaction.sign(tx, keyPair)
+      stx     = SignedTransaction.sign(tx, keyPair, 0)
     } yield stx
   }
 

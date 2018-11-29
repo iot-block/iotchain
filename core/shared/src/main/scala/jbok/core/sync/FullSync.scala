@@ -53,11 +53,12 @@ case class FullSync[F[_]](
     for {
       current <- executor.consensus.history.getBestBlockNumber
       requestNumber = BigInt(1).max(current + 1 - config.fullSyncOffset)
-
-      _ = log.debug(s"request BlockHeader [${requestNumber}, ${requestNumber + config.maxBlockHeadersPerRequest}]")
+      status <- peer.status.get
+      limit = config.maxBlockHeadersPerRequest min (status.bestNumber - requestNumber + 1).toInt
+      _ = log.debug(s"request BlockHeader [${requestNumber}, ${requestNumber + limit})")
       start <- T.clock.monotonic(MILLISECONDS)
       _ <- peer.conn
-        .request(GetBlockHeaders(Left(requestNumber), config.maxBlockHeadersPerRequest, 0, false))
+        .request(GetBlockHeaders(Left(requestNumber), limit, 0, false))
         .timeout(config.requestTimeout)
         .attempt
         .flatMap {
@@ -91,7 +92,7 @@ case class FullSync[F[_]](
 
   private def handleBetterBranch(peer: Peer[F], betterBranch: List[BlockHeader]): F[Unit] = {
     val hashes = betterBranch.take(config.maxBlockBodiesPerRequest).map(_.hash)
-    log.debug(s"request BlockBody [${betterBranch.head.number}, ${betterBranch.head.number + hashes.length}]")
+    log.debug(s"request BlockBody [${betterBranch.head.number}, ${betterBranch.head.number + hashes.length})")
     for {
       start <- T.clock.monotonic(MILLISECONDS)
       _ <- peer.conn.request(GetBlockBodies(hashes)).timeout(config.requestTimeout).attempt.flatMap {

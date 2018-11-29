@@ -31,7 +31,7 @@ final case class TxPool[F[_]](
   def addTransactions(signedTransactions: List[SignedTransaction]): F[Unit] =
     for {
       p <- pending.get
-      added = signedTransactions.filterNot(t => p.map(_.stx).contains(t))
+      added = signedTransactions.filterNot(t => p.map(_.stx).contains(t)).distinct
       current <- T.clock.realTime(MILLISECONDS)
       _       <- pending.update(xs => (added.map(PendingTransaction(_, current)) ++ xs).take(config.poolSize))
       _       <- notify(added)
@@ -40,8 +40,10 @@ final case class TxPool[F[_]](
   def addOrUpdateTransaction(newStx: SignedTransaction): F[Unit] =
     for {
       p <- pending.get
-      (a, b) = p.partition(tx =>
-        tx.stx.senderAddress(None) == newStx.senderAddress(None) && tx.stx.nonce == newStx.nonce)
+      (a, b) = p.partition(
+        tx =>
+          tx.stx.senderAddress == newStx.senderAddress &&
+            tx.stx.nonce == newStx.nonce)
       current <- T.clock.realTime(MILLISECONDS)
       _       <- pending.set((PendingTransaction(newStx, current) +: b).take(config.poolSize))
       _       <- notify(newStx :: Nil)

@@ -91,7 +91,7 @@ object Configs {
       eip155BlockNumber: BigInt = BigInt("3000000"),
       eip160BlockNumber: BigInt = BigInt("3000000"),
       eip161BlockNumber: BigInt = BigInt("1000000000000000000"),
-      maxCodeSize: Option[BigInt] = None,
+      maxCodeSize: Option[BigInt] = Some(24 * 1024),
       difficultyBombPauseBlockNumber: BigInt = BigInt("3000000"),
       difficultyBombContinueBlockNumber: BigInt = BigInt("5000000"),
       customGenesisFileOpt: Option[String] = None,
@@ -158,7 +158,7 @@ object Configs {
       minBroadcastPeers: Int = 4,
       fullSyncOffset: Int = 10, // the actual full sync number = min(1, current + 1 - offset)
       fastSyncOffset: Int = 64, // fast sync
-      fastEnabled: Boolean = true,
+      fastEnabled: Boolean = false,
       retryInterval: FiniteDuration = 15.seconds,
       checkForNewBlockInterval: FiniteDuration = 5.seconds,
       banDuration: FiniteDuration = 200.seconds,

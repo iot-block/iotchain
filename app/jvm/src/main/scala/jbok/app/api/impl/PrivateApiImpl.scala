@@ -102,17 +102,13 @@ object PrivateApiImpl {
           for {
             pending <- txPool.getPendingTransactions
             latestNonceOpt = Try(pending.collect {
-              case ptx if ptx.stx.senderAddress(Some(0x3d.toByte)).get == wallet.address => ptx.stx.nonce
+              case ptx if ptx.stx.senderAddress.get == wallet.address => ptx.stx.nonce
             }.max).toOption
             bn              <- history.getBestBlockNumber
             currentNonceOpt <- history.getAccount(request.from, bn).map(_.map(_.nonce.toBigInt))
             maybeNextTxNonce = latestNonceOpt.map(_ + 1).orElse(currentNonceOpt)
             tx               = request.toTransaction(maybeNextTxNonce.getOrElse(blockChainConfig.accountStartNonce))
-            stx = if (bn >= blockChainConfig.eip155BlockNumber) {
-              wallet.signTx(tx, Some(blockChainConfig.chainId))
-            } else {
-              wallet.signTx(tx, None)
-            }
+            stx              = wallet.signTx(tx, blockChainConfig.chainId)
             _ <- txPool.addOrUpdateTransaction(stx)
           } yield stx.hash
       }

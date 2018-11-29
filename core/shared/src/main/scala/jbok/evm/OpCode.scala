@@ -831,7 +831,7 @@ abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
         for {
           (newAddress, world1) <- state.world.createAddressWithOpCode(state.env.ownerAddr)
           world2               <- world1.initialiseAccount(newAddress).flatMap(_.transfer(state.env.ownerAddr, newAddress, endowment))
-          conflict             <- state.world.nonEmptyCodeOrNonceAccount(newAddress)
+          conflict             <- state.world.nonEmptyCodeOrNonce(newAddress)
           code = if (conflict) ByteVector(INVALID.code) else initCode
           newEnv = state.env.copy(
             callerAddr = state.env.ownerAddr,

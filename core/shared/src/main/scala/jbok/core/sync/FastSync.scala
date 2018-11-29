@@ -120,7 +120,9 @@ final class FastSync[F[_]](
             getHeader
           ).map(_.covaryOutput[Message]).parJoinUnbounded.map(_.some) to jobQueue.enqueue
 
-        download(state.goodPeers, jobQueue.dequeue.unNoneTerminate).concurrently(enqueue)
+        download(state.goodPeers, jobQueue.dequeue.unNoneTerminate)
+          .concurrently(enqueue)
+          .evalMap(_ => history.putBestBlockNumber(state.target.number))
       }
     } yield ()
 
@@ -133,7 +135,7 @@ final class FastSync[F[_]](
       if (peers.length >= minPeersToChooseTargetBlock) {
         peers.map(peer => peer.status.get.map(status => peer -> status)).sequence
       } else {
-        log.warn(s"fast sync did not started , peers not enough ${peers.length}/${minPeersToChooseTargetBlock}")
+        log.warn(s"fast sync did not started, peers not enough ${peers.length}/${minPeersToChooseTargetBlock}")
         T.sleep(retryInterval) *> getPeersStatus
       }
 

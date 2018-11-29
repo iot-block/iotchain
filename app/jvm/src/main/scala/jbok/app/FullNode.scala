@@ -5,6 +5,7 @@ import java.security.SecureRandom
 
 import cats.effect._
 import cats.effect.implicits._
+import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
@@ -15,18 +16,14 @@ import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.mining.BlockMiner
-import jbok.core.models.Address
 import jbok.core.peer.PeerManagerPlatform
 import jbok.core.pool.{BlockPool, BlockPoolConfig}
 import jbok.core.sync.SyncManager
-import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 import jbok.persistent.leveldb.LevelDB
-import scodec.bits.ByteVector
-import cats.implicits._
 
 case class FullNode[F[_]](
     config: FullNodeConfig,
@@ -83,7 +80,7 @@ object FullNode {
       // load genesis if does not exist
       _         <- history.init()
       blockPool <- BlockPool(history, BlockPoolConfig())
-      clique    = Clique(CliqueConfig(), history, keyPair)
+      clique    <- Clique(CliqueConfig(), history, keyPair)
       consensus = new CliqueConsensus[IO](clique, blockPool)
       peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), history)
       executor    <- BlockExecutor[IO](config.blockchain, consensus, peerManager)

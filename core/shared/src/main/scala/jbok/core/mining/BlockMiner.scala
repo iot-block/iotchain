@@ -74,9 +74,9 @@ case class BlockMiner[F[_]](
     } yield mined
 
   def stream: Stream[F, MinedBlock] =
-      Stream
-        .repeatEval(mine1())
-        .onFinalize(haltWhenTrue.set(true))
+    Stream
+      .repeatEval(mine1())
+      .onFinalize(haltWhenTrue.set(true))
 
   /////////////////////////////////////
   /////////////////////////////////////
@@ -85,7 +85,7 @@ case class BlockMiner[F[_]](
                                         blockGasLimit: BigInt): F[List[SignedTransaction]] = {
     log.trace(s"prepare transaction, available: ${stxs.length}")
     val sortedByPrice = stxs
-      .groupBy(stx => SignedTransaction.getSender(stx).getOrElse(Address.empty))
+      .groupBy(_.senderAddress.getOrElse(Address.empty))
       .values
       .toList
       .flatMap { txsFromSender =>

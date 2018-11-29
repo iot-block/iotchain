@@ -24,6 +24,8 @@ object Fixtures {
       override val size: Long                          = Block3125369.size
     }
 
+    private val chainId: Byte = 0x3d.toByte
+
     object Block3125369 extends FixtureBlock {
       val header = BlockHeader(
         parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
@@ -54,6 +56,7 @@ object Fixtures {
               value = BigInt("1265230129703017984"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x9d.toByte,
             hex"5b496e526a65eac3c4312e683361bfdb873741acd3714c3bf1bcd7f01dd57ccb",
             hex"3a30af5f529c7fc1d43cfed773275290475337c5e499f383afd012edcc8d7299"
@@ -67,6 +70,7 @@ object Fixtures {
               value = BigInt("656010196207162880"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x9d.toByte,
             hex"377e542cd9cd0a4414752a18d0862a5d6ced24ee6dba26b583cd85bc435b0ccf",
             hex"579fee4fd96ecf9a92ec450be3c9a139a687aa3c72c7e43cfac8c1feaf65c4ac"
@@ -80,6 +84,7 @@ object Fixtures {
               value = BigInt("3725976610361427456"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x9d.toByte,
             hex"a70267341ba0b33f7e6f122080aa767d52ba4879776b793c35efec31dc70778d",
             hex"3f66ed7f0197627cbedfe80fd8e525e8bc6c5519aae7955e7493591dcdf1d6d2"
@@ -93,6 +98,7 @@ object Fixtures {
               value = BigInt("108516826677274384"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x9d.toByte,
             hex"beb8226bdb90216ca29967871a6663b56bdd7b86cf3788796b52fd1ea3606698",
             hex"2446994156bc1780cb5806e730b171b38307d5de5b9b0d9ad1f9de82e00316b5",
@@ -166,6 +172,7 @@ object Fixtures {
               value = BigInt("10046680000000000000"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x1b.toByte,
             hex"8d94a55c7ac7adbfa2285ef7f4b0c955ae1a02647452cd4ead03ee6f449675c6",
             hex"67149821b74208176d78fc4dffbe37c8b64eecfd47532406b9727c4ae8eb7c9a",
@@ -179,6 +186,7 @@ object Fixtures {
               value = BigInt("20093780000000000000"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x1c.toByte,
             hex"6d31e3d59bfea97a34103d8ce767a8fe7a79b8e2f30af1e918df53f9e78e69ab",
             hex"098e5b80e1cc436421aa54eb17e96b08fe80d28a2fbd46451b56f2bca7a321e7",
@@ -192,6 +200,7 @@ object Fixtures {
               value = BigInt("1502561962583879700"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x1b.toByte,
             hex"fdbbc462a8a60ac3d8b13ee236b45af9b7991cf4f0f556d3af46aa5aeca242ab",
             hex"5de5dc03fdcb6cf6d14609dbe6f5ba4300b8ff917c7d190325d9ea2144a7a2fb",
@@ -205,6 +214,7 @@ object Fixtures {
               value = BigInt("1022338440000000000"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x1b.toByte,
             hex"bafb9f71cef873b9e0395b9ed89aac4f2a752e2a4b88ba3c9b6c1fea254eae73",
             hex"1cef688f6718932f7705d9c1f0dd5a8aad9ddb196b826775f6e5703fdb997706",
@@ -251,6 +261,7 @@ object Fixtures {
               value = BigInt("1502561962583879700"),
               payload = ByteVector.empty
             ),
+            0x3d.toByte,
             0x1b.toByte,
             hex"fdbbc462a8a60ac3d8b13ee236b45af9b7991cf4f0f556d3af46aa5aeca242ab",
             hex"5de5dc03fdcb6cf6d14609dbe6f5ba4300b8ff917c7d190325d9ea2144a7a2fb",
@@ -264,6 +275,7 @@ object Fixtures {
               value = BigInt("10046680000000000000"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x1b.toByte,
             hex"8d94a55c7ac7adbfa2285ef7f4b0c955ae1a02647452cd4ead03ee6f449675c6",
             hex"67149821b74208176d78fc4dffbe37c8b64eecfd47532406b9727c4ae8eb7c9a",
@@ -277,6 +289,7 @@ object Fixtures {
               value = BigInt("20093780000000000000"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x1c.toByte,
             hex"6d31e3d59bfea97a34103d8ce767a8fe7a79b8e2f30af1e918df53f9e78e69ab",
             hex"098e5b80e1cc436421aa54eb17e96b08fe80d28a2fbd46451b56f2bca7a321e7",
@@ -290,6 +303,7 @@ object Fixtures {
               value = BigInt("1022338440000000000"),
               payload = ByteVector.empty
             ),
+            chainId,
             0x1b.toByte,
             hex"bafb9f71cef873b9e0395b9ed89aac4f2a752e2a4b88ba3c9b6c1fea254eae73",
             hex"1cef688f6718932f7705d9c1f0dd5a8aad9ddb196b826775f6e5703fdb997706",

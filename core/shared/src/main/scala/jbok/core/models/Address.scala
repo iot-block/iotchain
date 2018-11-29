@@ -17,6 +17,8 @@ final class Address private (val bytes: ByteVector) extends AnyVal {
 object Address {
   val numBytes = 20
 
+  val empty: Address = Address(ByteVector.empty)
+
   implicit val codec: RlpCodec[Address] = rbytes.xmap[Address](Address.apply, _.bytes)
 
   implicit val addressJsonEncoder: Encoder[Address] = bytesEncoder.contramap[Address](_.bytes)
@@ -34,6 +36,4 @@ object Address {
   def apply(bytes: ByteVector): Address = new Address(bytes.takeRight(numBytes).padLeft(numBytes))
 
   def apply(keyPair: KeyPair): Address = Address(keyPair.public.bytes.kec256)
-
-  def empty: Address = Address(ByteVector.empty)
 }

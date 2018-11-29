@@ -46,7 +46,7 @@ trait SnapshotFixture {
     }
     val sig       = SecP256k1.sign(Clique.sigHash(header).toArray, accounts(signer)).unsafeRunSync()
     val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
-    val recovered = Clique.ecrecover(signed)
+    val recovered = Clique.ecrecover(signed).get
     require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")
     signed
   }
@@ -80,7 +80,7 @@ class SnapshotSpec extends JbokSpec {
     val db             = KeyValueDB.inmem[IO].unsafeRunSync()
     val keyPair        = SecP256k1.generateKeyPair().unsafeRunSync()
     val clique         = Clique[IO](config, history, keyPair).unsafeRunSync()
-    val snap           = clique.snapshot(head.number, head.hash, headers).unsafeRunSync()
+    val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd
     val expectedSigners = test.results.map(address).sorted
@@ -99,7 +99,7 @@ class SnapshotSpec extends JbokSpec {
           extraData = extra
         )
       val signed = sign(header, "A")
-      Clique.ecrecover(signed) shouldBe signer
+      Clique.ecrecover(signed).get shouldBe signer
     }
 
     "single signer, no votes cast" in {

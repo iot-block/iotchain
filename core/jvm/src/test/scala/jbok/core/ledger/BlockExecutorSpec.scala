@@ -19,7 +19,7 @@ class BlockExecutorSpec extends JbokSpec {
       val executor = random[BlockExecutor[IO]]
       val txs      = random[List[SignedTransaction]](genTxs(1, 1))
       val stx      = txs.head
-      val sender   = SignedTransaction.getSender(stx).get
+      val sender   = stx.senderAddress.get
       val parent   = executor.history.getBestBlock.unsafeRunSync()
       val header   = executor.consensus.prepareHeader(Some(parent), Nil).unsafeRunSync()
       val world = executor.history
@@ -43,7 +43,7 @@ class BlockExecutorSpec extends JbokSpec {
       val executor = random[BlockExecutor[IO]]
       val txs      = random[List[SignedTransaction]](genTxs(1, 1))
       val stx      = txs.head
-      val sender   = SignedTransaction.getSender(stx).get
+      val sender   = stx.senderAddress.get
       val parent   = executor.history.getBestBlock.unsafeRunSync()
       val header   = executor.consensus.prepareHeader(Some(parent), Nil).unsafeRunSync()
       val world = executor.history
@@ -51,7 +51,7 @@ class BlockExecutorSpec extends JbokSpec {
         .unsafeRunSync()
       val preNonce  = world.getAccount(sender).unsafeRunSync().nonce
       val result    = executor.executeTransaction(stx, header, world, 0).unsafeRunSync()
-      val postNonce = result.world.getAccount(SignedTransaction.getSender(stx).get).unsafeRunSync().nonce
+      val postNonce = result.world.getAccount(stx.senderAddress.get).unsafeRunSync().nonce
 
       postNonce shouldBe preNonce + 1
     }

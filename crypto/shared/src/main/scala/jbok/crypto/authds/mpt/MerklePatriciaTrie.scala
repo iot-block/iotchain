@@ -555,6 +555,14 @@ object MerklePatriciaTrie {
       rootHash <- Ref.of[F, Option[ByteVector]](root)
     } yield new MerklePatriciaTrie[F](namespace, db, rootHash)
 
+  def calcMerkleRoot[F[_]: Sync, V: Codec](entities: List[V]): F[ByteVector] =
+    for {
+      db   <- KeyValueDB.inmem[F]
+      mpt  <- MerklePatriciaTrie[F](ByteVector.empty, db)
+      _    <- entities.zipWithIndex.map { case (v, k) => mpt.put[Int, V](k, v, ByteVector.empty) }.sequence
+      root <- mpt.getRootHash
+    } yield root
+
   val emptyRootHash: ByteVector = rempty.encode(()).require.bytes.kec256
 
   val alphabet: Vector[String] = "0123456789abcdef".map(_.toString).toVector

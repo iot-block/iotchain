@@ -10,7 +10,6 @@ import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
-import scalacache.CatsEffect.modes._
 import scalacache._
 import scodec.bits._
 import _root_.io.circe.generic.JsonCodec
@@ -43,42 +42,15 @@ class Clique[F[_]](
 
   def sign(bv: ByteVector): F[CryptoSignature] = F.liftIO(Signature[ECDSA].sign(bv.toArray, keyPair))
 
-  def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
-    // try to read snapshot from cache or db
-    log.trace(s"try to read snapshot(${number}, ${hash}) from cache")
-    OptionT(C.get[F](hash))
-      .orElseF(
-        if (number % checkpointInterval == 0) {
-          // If an on-disk checkpoint snapshot can be found, use that
-          log.trace(s"not found in cache, try to read snapshot(${number}) from db")
-          Snapshot.loadSnapshot[F](history.db, hash)
-        } else {
-          log.trace(s"snapshot(${number}) not found in cache and db")
-          F.pure(None)
-        }
-      )
-  }
-
-  def genesisSnapshot: F[Snapshot] = {
-    log.trace(s"making a genesis snapshot")
-    for {
-      genesis <- history.genesisHeader
-      n = (genesis.extraData.length - extraVanity - extraSeal).toInt / 20
-      signers: Set[Address] = (0 until n)
-        .map(i => Address(genesis.extraData.slice(i * 20 + extraVanity, i * 20 + extraVanity + 20)))
-        .toSet
-      snap = Snapshot(config, 0, genesis.hash, signers)
-      _ <- Snapshot.storeSnapshot[F](snap, history.db)
-      _ = log.trace(s"stored genesis with ${signers.size} signers")
-    } yield snap
-  }
-
-  private[jbok] def snapshot(number: BigInt,
-                             hash: ByteVector,
-                             parents: List[BlockHeader],
-                             headers: List[BlockHeader] = Nil): F[Snapshot] = {
-    val snap = readSnapshot(number, hash)
-      .orElseF(if (number == 0) genesisSnapshot.map(_.some) else F.pure(None))
+  def applyHeaders(
+      number: BigInt,
+      hash: ByteVector,
+      parents: List[BlockHeader],
+      headers: List[BlockHeader] = Nil
+  ): F[Snapshot] = {
+    val snap =
+      OptionT(Snapshot.loadSnapshot[F](history.db, hash))
+        .orElseF(if (number == 0) genesisSnapshot.map(_.some) else F.pure(None))
 
     snap.value flatMap {
       case Some(s) =>
@@ -86,15 +58,11 @@ class Clique[F[_]](
         log.trace(s"applying ${headers.length} headers")
         for {
           newSnap <- Snapshot.applyHeaders[F](s, headers)
-          _       <- C.put[F](newSnap.hash)(newSnap)
-          // If we've generated a new checkpoint snapshot, save to disk
-          _ <- if (newSnap.number % checkpointInterval == 0 && headers.nonEmpty) {
-            Snapshot.storeSnapshot[F](newSnap, history.db).map(_ => newSnap)
-          } else {
-            F.pure(newSnap)
-          }
+          _       <- Snapshot.storeSnapshot[F](newSnap, history.db, checkpointInterval)
         } yield newSnap
-      case None => // No snapshot for this header, gather the header and move backward(recur)
+
+      case None =>
+        // No snapshot for this header, gather the header and move backward(recur)
         for {
           (h, p) <- if (parents.nonEmpty) {
             // If we have explicit parents, pick from there (enforced)
@@ -103,9 +71,23 @@ class Clique[F[_]](
             // No explicit parents (or no more left), reach out to the database
             history.getBlockHeaderByHash(hash).map(header => header.get -> parents)
           }
-          snap <- snapshot(number - 1, h.parentHash, p, h :: headers)
+          snap <- applyHeaders(number - 1, h.parentHash, p, h :: headers)
         } yield snap
     }
+  }
+
+  private def genesisSnapshot: F[Snapshot] = {
+    log.trace(s"making a genesis snapshot")
+    for {
+      genesis <- history.genesisHeader
+      n = (genesis.extraData.length - extraVanity - extraSeal).toInt / 20
+      signers: Set[Address] = (0 until n)
+        .map(i => Address(genesis.extraData.slice(i * 20 + extraVanity, i * 20 + extraVanity + 20)))
+        .toSet
+      snap = Snapshot(config, 0, genesis.hash, signers)
+      _ <- Snapshot.storeSnapshot[F](snap, history.db, checkpointInterval)
+      _ = log.trace(s"stored genesis with ${signers.size} signers")
+    } yield snap
   }
 }
 
@@ -117,8 +99,8 @@ object Clique {
     .require
     .bytes
     .kec256 // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
-  val diffInTurn    = BigInt(2)               // Block difficulty for in-turn signatures
-  val diffNoTurn    = BigInt(1)               // Block difficulty for out-of-turn signatures
+  val diffInTurn    = BigInt(11)              // Block difficulty for in-turn signatures
+  val diffNoTurn    = BigInt(10)              // Block difficulty for out-of-turn signatures
   val nonceAuthVote = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
   val nonceDropVote = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
 
@@ -140,12 +122,13 @@ object Clique {
     bytes.kec256
   }
 
-  def ecrecover(header: BlockHeader): Address = {
+  def ecrecover(header: BlockHeader): Option[Address] = {
     // Retrieve the signature from the header extra-data
     val signature = header.extraData.takeRight(extraSeal)
     val hash      = sigHash(header)
     val sig       = CryptoSignature(signature.toArray)
-    val public    = Signature[ECDSA].recoverPublic(hash.toArray, sig, None).get
-    Address(public.bytes.kec256)
+    Signature[ECDSA]
+      .recoverPublic(hash.toArray, sig, None)
+      .map(pub => Address(pub.bytes.kec256))
   }
 }

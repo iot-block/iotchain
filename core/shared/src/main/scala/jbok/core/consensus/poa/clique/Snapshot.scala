@@ -1,11 +1,10 @@
 package jbok.core.consensus.poa.clique
 
-import cats.effect.Sync
-import cats.implicits._
-import io.circe._
-import io.circe.generic.JsonCodec
-import io.circe.parser._
-import io.circe.syntax._
+import cats.effect.{Async, Sync}
+import _root_.io.circe._
+import _root_.io.circe.generic.JsonCodec
+import _root_.io.circe.parser._
+import _root_.io.circe.syntax._
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.core.consensus.poa.clique.Clique._
@@ -13,6 +12,9 @@ import jbok.core.consensus.poa.clique.Snapshot._
 import jbok.core.models.{Address, BlockHeader}
 import jbok.persistent.KeyValueDB
 import scodec.bits._
+import scalacache.Cache
+import cats.implicits._
+import scalacache.CatsEffect.modes._
 
 @JsonCodec
 case class Vote(
@@ -37,9 +39,9 @@ case class Snapshot(
     number: BigInt, // Block number where the snapshot was created
     hash: ByteVector, // Block hash where the snapshot was created
     signers: Set[Address], // Set of authorized signers at this moment
-    recents: Map[BigInt, Address], // Set of recent signers for spam protections
-    votes: List[Vote], // List of votes cast in chronological order
-    tally: Map[Address, Tally] // Current vote tally to avoid recalculating
+    recents: Map[BigInt, Address] = Map.empty, // Set of recent signers for spam protections
+    votes: List[Vote] = Nil, // List of votes cast in chronological order
+    tally: Map[Address, Tally] = Map.empty // Current vote tally to avoid recalculating
 ) {
 
   /** cast adds a new vote into the tally. should clear previous votes from signer -> beneficiary */
@@ -177,14 +179,26 @@ object Snapshot {
 
   implicit val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
-  def storeSnapshot[F[_]: Sync](snapshot: Snapshot, db: KeyValueDB[F]): F[Unit] =
-    db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace)
+  def storeSnapshot[F[_]: Async](snapshot: Snapshot, db: KeyValueDB[F], checkpointInterval: Int)(
+      implicit C: Cache[Snapshot]): F[Unit] =
+    if (snapshot.number % checkpointInterval == 0) {
+      db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace) <* C.put[F](snapshot.hash)(snapshot)
+    } else {
+      C.put[F](snapshot.hash)(snapshot).void
+    }
 
-  def loadSnapshot[F[_]: Sync](db: KeyValueDB[F], hash: ByteVector): F[Option[Snapshot]] =
-    db.getOpt[ByteVector, String](hash, namespace).map(_.map(json => io.circe.parser.decode[Snapshot](json).right.get))
-
-  def apply(config: CliqueConfig, number: BigInt, hash: ByteVector, signers: Set[Address]): Snapshot =
-    new Snapshot(config, number, hash, signers, Map.empty, List.empty, Map.empty)
+  def loadSnapshot[F[_]](db: KeyValueDB[F], hash: ByteVector)(implicit F: Async[F],
+                                                              C: Cache[Snapshot]): F[Option[Snapshot]] =
+    C.get[F](hash).flatMap {
+      case Some(snap) => Sync[F].pure(snap.some)
+      case None =>
+        db.getOpt[ByteVector, String](hash, namespace)
+          .map(_.map(json => decode[Snapshot](json).right.get))
+          .flatMap {
+            case Some(snap) => C.put[F](hash)(snap).as(Some(snap))
+            case None       => Sync[F].pure(None)
+          }
+    }
 
   /** apply creates a new authorization snapshot by applying the given headers to the original one */
   def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader])(implicit F: Sync[F]): F[Snapshot] =
@@ -215,10 +229,12 @@ object Snapshot {
     val beneficiary = Address(header.beneficiary)
 
     // Resolve the authorization key and check against signers
-    val signer = Clique.ecrecover(header)
-    if (!snap.signers.contains(signer)) {
+    val signerOpt = Clique.ecrecover(header)
+    if (signerOpt.isEmpty || !snap.signers.contains(signerOpt.get)) {
       throw new Exception("unauthorized signer")
     }
+
+    val signer = signerOpt.get
 
     if (snap.recents.exists(_._2 == signer)) {
       throw new Exception("signer has signed recently")

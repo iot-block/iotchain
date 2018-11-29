@@ -40,27 +40,18 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
   ): F[Unit] =
     for {
       _ <- checkSyntacticValidity(stx)
-      _ <- validateSignatureFormat(stx, blockHeader.number)
+      _ <- validateSignatureFormat(stx)
       _ <- validateNonce(stx.nonce, senderAccount.nonce)
       _ <- validateGasLimitEnoughForIntrinsicGas(stx, blockHeader.number)
       _ <- validateAccountHasEnoughGasToPayUpfrontCost(senderAccount.balance, upfrontGasCost)
       _ <- validateBlockHasEnoughGasLimitForTx(stx.gasLimit, accGasUsed, blockHeader.gasLimit)
     } yield ()
 
-  def validateSimulateTx(
-      stx: SignedTransaction,
-  ): F[Unit] =
-    for {
-      _ <- checkSyntacticValidity(stx)
-    } yield ()
+  def validateSimulateTx(stx: SignedTransaction): F[Unit] =
+    checkSyntacticValidity(stx)
 
-  /**
-    * Validates if the transaction is syntactically valid (lengths of the transaction fields are correct)
-    *
-    * @param stx Transaction to validate
-    * @return Either the validated transaction or TransactionSyntaxError if an error was detected
-    */
-  private def checkSyntacticValidity(stx: SignedTransaction): F[SignedTransaction] = {
+  /** Validates if the transaction is syntactically valid (lengths of the transaction fields are correct) */
+  private def checkSyntacticValidity(stx: SignedTransaction): F[Unit] = {
     import stx._
 
     val maxNonceValue = BigInt(2).pow(8 * 32) - 1
@@ -82,28 +73,16 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
     else if (s > maxS)
       F.raiseError(TransactionSyntaxInvalid(s"Invalid signature: $s > $maxS"))
     else
-      F.pure(stx)
+      F.unit
   }
 
-  /**
-    * Validates if the transaction signature is valid as stated in appendix F in YP
-    *
-    * @param stx SignedTransaction to validate
-    * @param blockNumber Number of the block for this transaction
-    * @return Either the validated transaction or TransactionSignatureError if an error was detected
-    */
-  private def validateSignatureFormat(stx: SignedTransaction, blockNumber: BigInt): F[SignedTransaction] = {
+  /** Validates if the transaction signature is valid as stated in appendix F in YP */
+  private def validateSignatureFormat(stx: SignedTransaction): F[Unit] = {
     import stx._
 
-    val beforeHomestead = blockNumber < blockChainConfig.homesteadBlockNumber
-    val beforeEIP155    = blockNumber < blockChainConfig.eip155BlockNumber
-
     val validR = r > 0 && r < secp256k1n
-    val validS = s > 0 && s < (if (beforeHomestead) secp256k1n else secp256k1n / 2)
-//    val validSigningSchema = if (beforeEIP155) !stx.isChainSpecific else true
-    val validSigningSchema = true
-
-    if (validR && validS && validSigningSchema) F.pure(stx)
+    val validS = s > 0 && s < secp256k1n / 2
+    if (validR && validS) F.unit
     else F.raiseError(TransactionSignatureInvalid)
   }
 

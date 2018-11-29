@@ -217,8 +217,8 @@ class PublicApiImpl(
                                       fromBlock: BigInt,
                                       toBlock: BigInt): IO[List[SignedTransaction]] = {
     def collectTxs: PartialFunction[SignedTransaction, SignedTransaction] = {
-      case stx if SignedTransaction.getSender(stx).nonEmpty && SignedTransaction.getSender(stx).get == address => stx
-      case stx if stx.receivingAddress == address                                                              => stx
+      case stx if stx.senderAddress.nonEmpty && stx.senderAddress.get == address => stx
+      case stx if stx.receivingAddress == address                                => stx
     }
     for {
       blocks <- (fromBlock to toBlock).toList.traverse(history.getBlockByNumber)
@@ -243,7 +243,7 @@ class PublicApiImpl(
     for {
       gasLimit <- getGasLimit(callTx, blockParam)
       tx = Transaction(0, callTx.gasPrice, gasLimit, callTx.to, callTx.value, callTx.data)
-    } yield SignedTransaction(tx, 0.toByte, ByteVector(0), ByteVector(0))
+    } yield SignedTransaction(tx, history.chainId.toByte, 0.toByte, ByteVector(0), ByteVector(0))
 
   private[jbok] def getGasLimit(callTx: CallTx, blockParam: BlockParam): IO[BigInt] =
     if (callTx.gas.isDefined) {

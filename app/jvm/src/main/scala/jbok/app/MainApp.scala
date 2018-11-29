@@ -110,13 +110,14 @@ class Conf(arguments: List[String]) extends ScallopConf(arguments) {
   // assemble
   val config = FullNodeConfig(
     datadir = datadir(),
-    rpc = rpcConfig,
     keystore = keystoreConfig,
     peer = peerManagerConfig,
+    sync = syncConfig,
+    txPool = TxPoolConfig(),
+    mining = miningConfig,
+    rpc = rpcConfig,
     blockchain = blockChainConfig,
     daofork = daoForkConfig,
-    sync = syncConfig,
-    mining = miningConfig
   )
 }
 

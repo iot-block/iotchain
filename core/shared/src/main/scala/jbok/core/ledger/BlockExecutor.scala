@@ -1,7 +1,8 @@
 package jbok.core.ledger
 
 import cats.Foldable
-import cats.effect.{ConcurrentEffect, Sync, Timer}
+import cats.effect.concurrent.Semaphore
+import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common.ByteUtils
@@ -12,12 +13,9 @@ import jbok.core.models.UInt256._
 import jbok.core.models._
 import jbok.core.peer.PeerManager
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
-import jbok.core.store.namespaces
-import jbok.core.validators.{BlockValidator, BodyValidator, HeaderValidator, TransactionValidator}
+import jbok.core.validators.{HeaderValidator, TransactionValidator}
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
-import jbok.persistent.KeyValueDB
-import scodec.Codec
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
@@ -29,7 +27,8 @@ case class BlockExecutor[F[_]](
     vm: VM,
     txValidator: TransactionValidator[F],
     txPool: TxPool[F],
-    ommerPool: OmmerPool[F]
+    ommerPool: OmmerPool[F],
+    semaphore: Semaphore[F]
 )(implicit F: Sync[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger("BlockExecutor")
 
@@ -56,8 +55,8 @@ case class BlockExecutor[F[_]](
       best             <- history.getBestBlock
       currentTd        <- history.getTotalDifficultyByHash(best.header.hash).map(_.get)
       (result, txs)    <- executeTransactions(pending.block, shortCircuit = false)
-      transactionsRoot <- calcMerkleRoot(txs)
-      receiptsRoot     <- calcMerkleRoot(result.receipts)
+      transactionsRoot <- MerklePatriciaTrie.calcMerkleRoot[F, SignedTransaction](txs)
+      receiptsRoot     <- MerklePatriciaTrie.calcMerkleRoot[F, Receipt](result.receipts)
       header = pending.block.header.copy(
         transactionsRoot = transactionsRoot,
         stateRoot = result.world.stateRootHash,
@@ -80,11 +79,10 @@ case class BlockExecutor[F[_]](
     } yield executed.copy(block = block2, world = persisted)
 
   def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxExecResult[F]] = {
+    val senderAddress = Address.empty
     val stateRoot     = blockHeader.stateRoot
     val gasLimit      = stx.gasLimit
     val vmConfig      = EvmConfig.forBlock(blockHeader.number, config)
-    val senderAddress = getSenderAddress(stx, blockHeader.number)
-
     for {
       _       <- txValidator.validateSimulateTx(stx)
       world1  <- history.getWorldState(config.accountStartNonce, Some(stateRoot))
@@ -134,21 +132,26 @@ case class BlockExecutor[F[_]](
       _ <- history.putBlockAndReceipts(postProcessed.block, postProcessed.receipts, postProcessed.td, true)
     } yield postProcessed
 
-  private def importBlock(block: Block): F[List[Block]] =
-    consensus.run(block).flatMap[List[Block]] {
-      case Consensus.Forward(blocks) =>
-        blocks.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(Nil, blocks)
+  private def importBlock(block: Block): F[List[Block]] = {
+    val greenLight = Resource.make(semaphore.acquire)(_ => semaphore.release)
 
-      case Consensus.Fork(oldBranch, newBranch) =>
-        newBranch.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(oldBranch, newBranch)
+    greenLight.use { _ =>
+      consensus.run(block).flatMap[List[Block]] {
+        case Consensus.Forward(blocks) =>
+          blocks.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(Nil, blocks)
 
-      case Consensus.Stash(block) =>
-        blockPool.addBlock(block) *> ommerPool.addOmmers(List(block.header)) as Nil
+        case Consensus.Fork(oldBranch, newBranch) =>
+          newBranch.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(oldBranch, newBranch)
 
-      case Consensus.Discard(e) =>
-        log.warn(s"discard ${block.tag} because ${e}")
-        F.pure(Nil)
+        case Consensus.Stash(block) =>
+          blockPool.addBlock(block) *> ommerPool.addOmmers(List(block.header)) as Nil
+
+        case Consensus.Discard(e) =>
+          log.warn(s"discard ${block.tag} because ${e}")
+          F.pure(Nil)
+      }
     }
+  }
 
   private def executeTransactions(block: Block,
                                   shortCircuit: Boolean): F[(BlockExecResult[F], List[SignedTransaction])] =
@@ -222,13 +225,12 @@ case class BlockExecutor[F[_]](
       header: BlockHeader,
       world: WorldState[F],
       accGas: BigInt
-  ): F[TxExecResult[F]] = {
-    val gasPrice      = UInt256(stx.gasPrice)
-    val gasLimit      = stx.gasLimit
-    val vmConfig      = EvmConfig.forBlock(header.number, config)
-    val senderAddress = getSenderAddress(stx, header.number)
-
+  ): F[TxExecResult[F]] =
     for {
+      senderAddress <- stx.getSenderOrThrow[F]
+      gasPrice = UInt256(stx.gasPrice)
+      gasLimit = stx.gasLimit
+      vmConfig = EvmConfig.forBlock(header.number, config)
       (senderAccount, worldForTx) <- world
         .getAccountOpt(senderAddress)
         .map(a => (a, world))
@@ -261,7 +263,6 @@ case class BlockExecutor[F[_]](
       )
       TxExecResult(world2, executionGasToPayToMiner, resultWithErrorHandling.logs, result.returnData, result.error)
     }
-  }
 
   private def updateSenderAccountBeforeExecution(
       senderAddress: Address,
@@ -281,19 +282,22 @@ case class BlockExecutor[F[_]](
   ): F[ProgramContext[F]] =
     if (stx.isContractInit) {
       for {
-        address <- world.createAddress(sender)
-        _ = log.debug(s"contract address: ${address}")
-        conflict <- world.nonEmptyCodeOrNonceAccount(address)
-        code = if (conflict) ByteVector(INVALID.code) else stx.payload
-        world1 <- world
-          .initialiseAccount(address)
-          .flatMap(_.transfer(sender, address, UInt256(stx.value)))
-      } yield ProgramContext(stx, sender, address, Program(code), blockHeader, world1, config)
+        address  <- world.createContractAddress(sender)
+        conflict <- world.nonEmptyCodeOrNonce(address)
+        context <- if (conflict) {
+          F.pure(ProgramContext(stx, sender, address, Program(ByteVector(INVALID.code)), blockHeader, world, config))
+        } else {
+          world
+            .initialiseAccount(address)
+            .flatMap(_.transfer(sender, address, UInt256(stx.value)))
+            .map(world => ProgramContext(stx, sender, address, Program(stx.payload), blockHeader, world, config))
+        }
+      } yield context
     } else {
       for {
-        world1 <- world.transfer(sender, stx.receivingAddress, UInt256(stx.value))
-        code   <- world1.getCode(stx.receivingAddress)
-      } yield ProgramContext(stx, sender, stx.receivingAddress, Program(code), blockHeader, world1, config)
+        transferred <- world.transfer(sender, stx.receivingAddress, UInt256(stx.value))
+        code        <- transferred.getCode(stx.receivingAddress)
+      } yield ProgramContext(stx, sender, stx.receivingAddress, Program(code), blockHeader, transferred, config)
     }
 
   private def runVM(stx: SignedTransaction, context: ProgramContext[F], config: EvmConfig): F[ProgramResult[F]] =
@@ -317,32 +321,23 @@ case class BlockExecutor[F[_]](
       s"codeDepositCost: ${codeDepositCost}, maxCodeSizeExceeded: ${maxCodeSizeExceeded}, codeStoreOutOfGas: ${codeStoreOutOfGas}")
     if (maxCodeSizeExceeded || codeStoreOutOfGas) {
       // Code size too big or code storage causes out-of-gas with exceptionalFailedCodeDeposit enabled
-      log.debug("putcode outofgas")
       result.copy(error = Some(OutOfGas))
     } else {
       // Code storage succeeded
-      log.debug(s"address putcode: ${address}")
       result.copy(gasRemaining = result.gasRemaining - codeDepositCost,
                   world = result.world.putCode(address, result.returnData))
     }
   }
 
   private def pay(address: Address, value: UInt256)(world: WorldState[F]): F[WorldState[F]] =
-    F.ifM(world.isZeroValueTransferToNonExistentAccount(address, value))(
-      ifTrue = world.pure[F],
-      ifFalse = for {
-        account <- world.getAccountOpt(address).getOrElse(Account.empty(config.accountStartNonce))
-      } yield world.putAccount(address, account.increaseBalance(value)).touchAccounts(address)
-    )
-
-  private def getSenderAddress(stx: SignedTransaction, number: BigInt): Address = {
-    val addrOpt =
-      if (number >= config.eip155BlockNumber)
-        stx.senderAddress(Some(config.chainId))
-      else
-        stx.senderAddress(None)
-    addrOpt.getOrElse(Address.empty)
-  }
+    world
+      .isZeroValueTransferToNonExistentAccount(address, value)
+      .ifM(
+        ifTrue = world.pure[F],
+        ifFalse = for {
+          account <- world.getAccountOpt(address).getOrElse(Account.empty(config.accountStartNonce))
+        } yield world.putAccount(address, account.increaseBalance(value)).touchAccounts(address)
+      )
 
   private def calculateUpfrontCost(stx: SignedTransaction): UInt256 =
     UInt256(calculateUpfrontGas(stx) + stx.value)
@@ -385,15 +380,7 @@ case class BlockExecutor[F[_]](
     }
   }
 
-  private[jbok] def calcMerkleRoot[V: Codec](entities: List[V]): F[ByteVector] =
-    for {
-      db   <- KeyValueDB.inmem[F]
-      mpt  <- MerklePatriciaTrie[F](namespaces.empty, db)
-      _    <- entities.zipWithIndex.map { case (v, k) => mpt.put[Int, V](k, v, namespaces.empty) }.sequence
-      root <- mpt.getRootHash
-    } yield root
-
-  private[jbok] def updateTxAndOmmerPools(blocksRemoved: List[Block], blocksAdded: List[Block]): F[Unit] =
+  private def updateTxAndOmmerPools(blocksRemoved: List[Block], blocksAdded: List[Block]): F[Unit] =
     for {
       _ <- ommerPool.addOmmers(blocksRemoved.headOption.toList.map(_.header))
       _ <- blocksRemoved.map(_.body.transactionList).traverse(txs => txPool.addTransactions(txs))
@@ -427,7 +414,8 @@ object BlockExecutor {
     for {
       txPool    <- TxPool[F](TxPoolConfig(), peerManager)
       ommerPool <- OmmerPool[F](consensus.history)
+      semaphore <- Semaphore(1)
       vm          = new VM
       txValidator = new TransactionValidator[F](config)
-    } yield BlockExecutor(config, consensus, peerManager, vm, txValidator, txPool, ommerPool)
+    } yield BlockExecutor(config, consensus, peerManager, vm, txValidator, txPool, ommerPool, semaphore)
 }

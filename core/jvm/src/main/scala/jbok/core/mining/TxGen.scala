@@ -44,7 +44,7 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]]) {
         value,
         ByteVector.empty
       )
-      stx = SignedTransaction.sign(tx, sender.keyPair)
+      stx = SignedTransaction.sign(tx, sender.keyPair, 0)
     } yield stx
 
   def genTxs: Stream[IO, SignedTransaction] =

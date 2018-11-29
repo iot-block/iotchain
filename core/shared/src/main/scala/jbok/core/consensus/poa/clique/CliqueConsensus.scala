@@ -28,16 +28,13 @@ case class CliqueConsensus[F[_]](
       parent <- parentOpt.fold(history.getBestBlock)(_.pure[F])
       blockNumber = parent.header.number + 1
       timestamp   = parent.header.unixTimestamp + clique.config.period.toMillis
-      snap <- clique.snapshot(parent.header.number, parent.header.hash, Nil)
-      _ = log.trace(s"loaded snap from block(${blockNumber - 1})")
-      _ = log.trace(s"timestamp: ${timestamp}, stime: ${System.currentTimeMillis()}")
+      snap <- clique.applyHeaders(parent.header.number, parent.header.hash, Nil)
     } yield
       BlockHeader(
         parentHash = parent.header.hash,
         ommersHash = Clique.ommersHash,
         beneficiary = ByteVector.empty,
         stateRoot = ByteVector.empty,
-        //we are not able to calculate transactionsRoot here because we do not know if they will fail
         transactionsRoot = ByteVector.empty,
         receiptsRoot = ByteVector.empty,
         logsBloom = ByteVector.empty,
@@ -60,14 +57,13 @@ case class CliqueConsensus[F[_]](
       F.raiseError(new Exception("mining the genesis block is not supported"))
     } else {
       for {
-        snap <- clique.snapshot(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
+        snap <- clique.applyHeaders(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
         mined <- if (!snap.signers.contains(clique.signer)) {
           F.raiseError(new Exception("unauthorized"))
         } else {
           snap.recents.find(_._2 == clique.signer) match {
             case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.signers.size) =>
               // If we're amongst the recent signers, wait for the next block
-
               val wait = (snap.signers.size / 2 + 1 - (executed.block.header.number - seen).toInt)
                 .max(0) * clique.config.period.toMillis
               val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
@@ -126,7 +122,7 @@ case class CliqueConsensus[F[_]](
       _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap {
         case Some(parent) =>
           BlockValidator.preExecValidate[F](parent, block) *>
-            clique.snapshot(parent.number, parent.hash, List(block.header)).void
+            clique.applyHeaders(parent.number, parent.hash, List(block.header)).void
         case None =>
           F.raiseError[Unit](HeaderParentNotFoundInvalid)
       }
@@ -166,19 +162,18 @@ case class CliqueConsensus[F[_]](
         .map(_.number)
         .traverse(history.getBlockByNumber)
         .map { blocks =>
-          val (oldBranch, _) = blocks.flatten
+          log.debug(s"local blocks: ${blocks.flatten.map(_.tag)}")
+
+          val (a, newBranch) = blocks
             .zip(headers)
             .dropWhile {
-              case (oldBlock, header) =>
-                oldBlock.header == header
+              case (Some(block), header) if block.header == header => true
+              case _                                               => false
             }
             .unzip
 
-          val forkNumber = oldBranch.headOption
-            .map(_.header.number)
-            .getOrElse(headers.head.number)
+          val oldBranch = a.takeWhile(_.isDefined).map(_.get)
 
-          val newBranch               = headers.filter(_.number >= forkNumber)
           val currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
           val newBranchDifficulty     = newBranch.map(_.difficulty).sum
           if (currentBranchDifficulty < newBranchDifficulty) {

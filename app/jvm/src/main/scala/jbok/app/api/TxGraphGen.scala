@@ -16,7 +16,7 @@ import scodec.bits.ByteVector
 import scala.collection.mutable.{ListBuffer => MList, Map => MMap}
 import scala.util.Random
 
-class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
+class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000), chainId: Byte = 0) {
   case class SimTransaction(id: Int, sender: Address, receiver: Address)
 
   object SimTransaction {
@@ -124,7 +124,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
             node <- nextNodes
             if accounts.contains(node.sender)
             (transaction, account) = genTransaction(accounts(node.sender), node.receiver)
-            _                      = transactions += SignedTransaction.sign(transaction, keyPairMap(node.sender))
+            _                      = transactions += SignedTransaction.sign(transaction, keyPairMap(node.sender), chainId)
             _                      = mAccount += (node.sender -> account)
           } ()
           nextNodes.map(mg.remove(_))
@@ -168,6 +168,6 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
     val sender  = keyPair.address
     val tx      = Transaction(accountMap(sender).nonce, gasPrice, gasLimit, Some(address), value, ByteVector.empty)
     accountMap(sender).increaseNonce().increaseBalance(UInt256(-value))
-    SignedTransaction.sign(tx, keyPair.keyPair)
+    SignedTransaction.sign(tx, keyPair.keyPair, chainId)
   }
 }

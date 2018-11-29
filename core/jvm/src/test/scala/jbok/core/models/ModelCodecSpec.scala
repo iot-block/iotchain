@@ -47,12 +47,13 @@ class ModelCodecSpec extends JbokSpec {
         val v       = tx.v.encode[IO].unsafeRunSync()
         val p       = tx.payload.encode[IO].unsafeRunSync()
         val nonce   = tx.nonce.encode[IO].unsafeRunSync()
+        val chainId = tx.chainId.encode[IO].unsafeRunSync()
         val price   = tx.gasPrice.encode[IO].unsafeRunSync()
         val limit   = tx.gasLimit.encode[IO].unsafeRunSync()
         val value   = tx.value.encode[IO].unsafeRunSync()
         val address = tx.receivingAddress.encode[IO].unsafeRunSync()
         address.length shouldBe 21
-        val size     = nonce.length + price.length + limit.length + address.length + value.length + v.length + r.length + s.length + p.length
+        val size     = nonce.length + price.length + limit.length + address.length + value.length + v.length + chainId.length + r.length + s.length + p.length
         val listSize = size + RlpCodec.listLengthCodec.encode(size).require.bytes.length
         roundtrip(tx, listSize.toInt)
       }

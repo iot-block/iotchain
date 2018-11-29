@@ -20,7 +20,7 @@ object TxView {
 
           <tr>
             <th>from</th>
-            <td>{SignedTransaction.getSender(tx).get.toString}</td>
+            <td>{tx.senderAddress.get.toString}</td>
           </tr>
 
           <tr>

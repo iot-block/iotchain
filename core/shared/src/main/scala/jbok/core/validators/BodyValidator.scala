@@ -7,6 +7,7 @@ import jbok.codec.rlp.implicits._
 import jbok.core.models._
 import jbok.core.validators.BodyInvalid._
 import jbok.crypto._
+import jbok.crypto.authds.mpt.MerklePatriciaTrie
 
 object BodyInvalid {
   case object BlockTransactionsHashInvalid extends Exception("BlockTransactionsHashInvalid")
@@ -23,9 +24,10 @@ private[validators] object BodyValidator {
     } yield ()
 
   private def validateTransactionRoot[F[_]](block: Block)(implicit F: Sync[F]): F[Unit] =
-    MPTValidator
-      .isValid[F, SignedTransaction](block.header.transactionsRoot, block.body.transactionList)
-      .ifM(ifTrue = F.unit, ifFalse = F.raiseError(BlockTransactionsHashInvalid))
+    MerklePatriciaTrie.calcMerkleRoot[F, SignedTransaction](block.body.transactionList).flatMap { root =>
+      if (root == block.header.transactionsRoot) F.unit
+      else F.raiseError(BlockTransactionsHashInvalid)
+    }
 
   private def validateOmmersHash[F[_]](block: Block)(implicit F: Sync[F]): F[Unit] =
     if (RlpCodec.encode(block.body.ommerList).require.toByteVector.kec256 equals block.header.ommersHash) F.unit

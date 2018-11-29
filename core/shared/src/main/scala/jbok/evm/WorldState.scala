@@ -130,13 +130,8 @@ final case class WorldState[F[_]](
       debited <- getAccount(address)
     } yield putAccount(address, debited.copy(balance = 0)).touchAccounts(address)
 
-  /**
-    * Creates a new address based on the address and nonce of the creator. YP equation 82
-    *
-    * @param creatorAddr, the address of the creator of the new address
-    * @return the new address
-    */
-  def createAddress(creatorAddr: Address): F[Address] =
+  /** Creates a new address based on the address and nonce of the creator. YP equation 82 */
+  def createContractAddress(creatorAddr: Address): F[Address] =
     for {
       creatorAccount <- getAccount(creatorAddr)
     } yield {
@@ -154,7 +149,7 @@ final case class WorldState[F[_]](
     for {
       creatorAccount <- getAccount(creatorAddr)
       updatedWorld = putAccount(creatorAddr, creatorAccount.increaseNonce())
-      createdAddress <- updatedWorld.createAddress(creatorAddr)
+      createdAddress <- updatedWorld.createContractAddress(creatorAddr)
     } yield createdAddress -> updatedWorld
 
   /**
@@ -167,7 +162,7 @@ final case class WorldState[F[_]](
   def isAccountDead(address: Address): F[Boolean] =
     getAccountOpt(address).forall(_.isEmpty(accountStartNonce))
 
-  def nonEmptyCodeOrNonceAccount(address: Address): F[Boolean] =
+  def nonEmptyCodeOrNonce(address: Address): F[Boolean] =
     getAccountOpt(address).exists(_.nonEmptyCodeOrNonce(accountStartNonce))
 
   def isZeroValueTransferToNonExistentAccount(address: Address, value: UInt256): F[Boolean] =

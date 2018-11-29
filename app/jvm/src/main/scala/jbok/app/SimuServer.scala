@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 import java.security.SecureRandom
 
 import better.files.File
-import cats.effect.{ExitCode, IO, IOApp}
+import cats.effect.IO
 import jbok.app.simulations.{SimulationAPI, SimulationImpl}
 import jbok.common.execution._
 import jbok.core.keystore.KeyStorePlatform
@@ -12,6 +12,7 @@ import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 
+import scala.concurrent.duration._
 import scala.io.StdIn
 
 object SimuServer {
@@ -32,7 +33,7 @@ object SimuServer {
     _ <- impl.createNodesWithMiner(peerCount, minerCount)
     _ <- impl.startNetwork
     _ <- impl.connect("ring")
-    _ = Thread.sleep(5000)
+    _ = T.sleep(5000.millis)
     _ <- impl.submitStxsToNetwork(10, "valid")
   } yield ()
 

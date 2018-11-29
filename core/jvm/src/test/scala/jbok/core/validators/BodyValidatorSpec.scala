@@ -4,15 +4,19 @@ import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.models._
 import jbok.core.validators.BodyInvalid.{BlockOmmersHashInvalid, BlockTransactionsHashInvalid}
+import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
+import jbok.codec.rlp.implicits._
 
 class BodyValidatorSpec extends JbokSpec {
+  val chainId = 0x3d.toByte
+
   val validBlockHeader = BlockHeader(
     parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
     ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
     beneficiary = hex"df7d7e053933b5cc24372f878c90e62dadad5d42",
     stateRoot = hex"087f96537eba43885ab563227262580b27fc5e6516db79a6fc4d3bcd241dda67",
-    transactionsRoot = hex"8ae451039a8bf403b899dcd23252d94761ddd23b88c769d9b7996546edc47fac",
+    transactionsRoot = hex"0x8b9803fbd076f6262d3ae37a0e37a0a0e04ce3379b76e022278939ca66cec9d1",
     receiptsRoot = hex"8b472d8d4d39bae6a5570c2a42276ed2d6a56ac51a1a356d5b17c5564d01fd5d",
     logsBloom = ByteVector.fromValidHex("0" * 512),
     difficulty = BigInt("14005986920576"),
@@ -25,6 +29,7 @@ class BodyValidatorSpec extends JbokSpec {
     nonce = hex"2b0fb0c002946392"
   )
 
+
   val validBlockBody = BlockBody(
     transactionList = List[SignedTransaction](
       SignedTransaction(
@@ -36,6 +41,7 @@ class BodyValidatorSpec extends JbokSpec {
           value = BigInt("1265230129703017984"),
           payload = ByteVector.empty
         ),
+        chainId,
         0x9d.toByte,
         hex"5b496e526a65eac3c4312e683361bfdb873741acd3714c3bf1bcd7f01dd57ccb",
         hex"3a30af5f529c7fc1d43cfed773275290475337c5e499f383afd012edcc8d7299",
@@ -49,6 +55,7 @@ class BodyValidatorSpec extends JbokSpec {
           value = BigInt("656010196207162880"),
           payload = ByteVector.empty
         ),
+        chainId,
         0x9d.toByte,
         hex"377e542cd9cd0a4414752a18d0862a5d6ced24ee6dba26b583cd85bc435b0ccf",
         hex"579fee4fd96ecf9a92ec450be3c9a139a687aa3c72c7e43cfac8c1feaf65c4ac",
@@ -62,6 +69,7 @@ class BodyValidatorSpec extends JbokSpec {
           value = BigInt("3725976610361427456"),
           payload = ByteVector.empty
         ),
+        chainId,
         0x9d.toByte,
         hex"a70267341ba0b33f7e6f122080aa767d52ba4879776b793c35efec31dc70778d",
         hex"3f66ed7f0197627cbedfe80fd8e525e8bc6c5519aae7955e7493591dcdf1d6d2",
@@ -75,6 +83,7 @@ class BodyValidatorSpec extends JbokSpec {
           value = BigInt("108516826677274384"),
           payload = ByteVector.empty
         ),
+        chainId,
         0x9d.toByte,
         hex"beb8226bdb90216ca29967871a6663b56bdd7b86cf3788796b52fd1ea3606698",
         hex"2446994156bc1780cb5806e730b171b38307d5de5b9b0d9ad1f9de82e00316b5",
@@ -82,6 +91,10 @@ class BodyValidatorSpec extends JbokSpec {
     ),
     ommerList = List[BlockHeader]()
   )
+
+  val txRoot = MerklePatriciaTrie.calcMerkleRoot[IO, SignedTransaction](validBlockBody.transactionList)
+    .unsafeRunSync()
+  println(txRoot)
 
   val validReceipts = List(
     Receipt(

@@ -7,6 +7,7 @@ import jbok.common.ByteUtils
 import jbok.core.ledger.BloomFilter
 import jbok.core.models.{Address, BlockHeader, Receipt}
 import jbok.core.validators.HeaderInvalid._
+import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits.ByteVector
 
 object HeaderInvalid {
@@ -77,9 +78,10 @@ object HeaderValidator {
     * @return
     */
   private def validateReceipts[F[_]](blockHeader: BlockHeader, receipts: List[Receipt])(implicit F: Sync[F]): F[Unit] =
-    MPTValidator
-      .isValid[F, Receipt](blockHeader.receiptsRoot, receipts)
-      .ifM(ifTrue = F.unit, ifFalse = F.raiseError(HeaderReceiptsHashInvalid))
+    MerklePatriciaTrie.calcMerkleRoot[F, Receipt](receipts).flatMap { root =>
+      if (root == blockHeader.receiptsRoot) F.unit
+      else F.raiseError(HeaderReceiptsHashInvalid)
+    }
 
   /**
     * Validates [[BlockHeader.logsBloom]] against [[Receipt.logsBloomFilter]]

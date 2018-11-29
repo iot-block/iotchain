@@ -58,7 +58,7 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
   def getWorldState(
       accountStartNonce: UInt256 = UInt256.Zero,
       stateRootHash: Option[ByteVector] = None,
-      noEmptyAccounts: Boolean = false
+      noEmptyAccounts: Boolean = true
   ): F[WorldState[F]]
 
   // helpers

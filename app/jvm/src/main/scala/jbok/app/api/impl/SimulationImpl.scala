@@ -15,10 +15,8 @@ import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address}
 import jbok.core.pool.BlockPool
-import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.persistent.KeyValueDB
-import scodec.bits.ByteVector
 
 import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.ExecutionContext
@@ -65,12 +63,11 @@ class SimulationImpl(
         case (config, idx) =>
           implicit val ec =
             ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2, mkThreadFactory(s"EC${idx}", true)))
-          val sign = (bv: ByteVector) => { SecP256k1.sign(bv.toArray, signers(idx)) }
           for {
-            db      <- KeyValueDB.inmem[IO]
-            history <- History[IO](db)
-            _       <- history.init(genesisConfig)
-            clique = Clique[IO](cliqueConfig, history, Address(signers(idx)), sign)
+            db        <- KeyValueDB.inmem[IO]
+            history   <- History[IO](db)
+            _         <- history.init(genesisConfig)
+            clique    <- Clique[IO](cliqueConfig, history, signers(idx))
             blockPool <- BlockPool(history)
             consensus = new CliqueConsensus[IO](clique, blockPool)
             fullNode <- newFullNode(config, consensus)

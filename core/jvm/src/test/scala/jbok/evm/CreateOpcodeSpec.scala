@@ -308,7 +308,6 @@ class CreateOpcodeSpec extends JbokSpec {
   }
 
   "account with non-zero nonce already exists" should {
-
     "fail to create contract" in {
       val accountNonZeroNonce = Account(nonce = 1)
 
@@ -323,10 +322,8 @@ class CreateOpcodeSpec extends JbokSpec {
   }
 
   "account with non-zero balance, but empty code and zero nonce, already exists" should {
-
     "succeed in creating new contract" in {
       val accountNonZeroBalance = Account(balance = 1)
-
       val world   = CreateOpFixture.initWorld.putAccount(CreateOpFixture.newAddr, accountNonZeroBalance)
       val context = CreateOpFixture.context.copy(world = world)
       val result  = CreateResult(context = context)
@@ -335,7 +332,7 @@ class CreateOpcodeSpec extends JbokSpec {
 
       val newContract = result.world.getAccount(CreateOpFixture.newAddr).unsafeRunSync()
       newContract.balance shouldBe (accountNonZeroBalance.balance + CreateOpFixture.endowment)
-      newContract.nonce shouldBe accountNonZeroBalance.nonce
+      newContract.nonce shouldBe accountNonZeroBalance.nonce + 1
 
       result.world.getCode(CreateOpFixture.newAddr).unsafeRunSync() shouldBe CreateOpFixture.contractCode.code
     }
