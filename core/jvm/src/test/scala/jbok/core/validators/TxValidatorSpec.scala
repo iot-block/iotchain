@@ -6,11 +6,11 @@ import jbok.common.testkit._
 import jbok.core.Fixtures
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.models._
-import jbok.core.validators.TransactionInvalid._
+import jbok.core.validators.TxInvalid._
 import jbok.crypto.signature.ecdsa.SecP256k1
 import scodec.bits._
 
-class TransactionValidatorSpec extends JbokSpec {
+class TxValidatorSpec extends JbokSpec {
   val keyPair = SecP256k1.generateKeyPair().unsafeRunSync()
 
   val tx = Transaction(
@@ -34,7 +34,7 @@ class TransactionValidatorSpec extends JbokSpec {
 
   val upfrontGasCost: UInt256 = UInt256(senderBalance / 2)
 
-  val transactionValidator = new TransactionValidator[IO](BlockChainConfig())
+  val transactionValidator = new TxValidator[IO](BlockChainConfig())
 
   "TxValidator" should {
     "report as valid a tx from after EIP155" in {
@@ -55,7 +55,7 @@ class TransactionValidatorSpec extends JbokSpec {
                     accumGasUsed)
           .attempt
           .unsafeRunSync()
-        result.left.get shouldBe a[TransactionSyntaxInvalid]
+        result.left.get shouldBe a[TxSyntaxInvalid]
       }
     }
 
@@ -70,7 +70,7 @@ class TransactionValidatorSpec extends JbokSpec {
                     accumGasUsed)
           .attempt
           .unsafeRunSync()
-        result.left.get shouldBe a[TransactionSyntaxInvalid]
+        result.left.get shouldBe a[TxSyntaxInvalid]
       }
     }
 
@@ -85,7 +85,7 @@ class TransactionValidatorSpec extends JbokSpec {
                     accumGasUsed)
           .attempt
           .unsafeRunSync()
-        result.left.get shouldBe a[TransactionSyntaxInvalid]
+        result.left.get shouldBe a[TxSyntaxInvalid]
       }
     }
 
@@ -96,7 +96,7 @@ class TransactionValidatorSpec extends JbokSpec {
           .validate(invalidValueTx, senderAccount, header, upfrontGasCost, accumGasUsed)
           .attempt
           .unsafeRunSync()
-        result.left.get shouldBe a[TransactionSyntaxInvalid]
+        result.left.get shouldBe a[TxSyntaxInvalid]
       }
     }
 
@@ -107,7 +107,7 @@ class TransactionValidatorSpec extends JbokSpec {
           .validate(invalidSTx, senderAccount, header, upfrontGasCost, accumGasUsed)
           .attempt
           .unsafeRunSync()
-        result.left.get shouldBe a[TransactionSyntaxInvalid]
+        result.left.get shouldBe a[TxSyntaxInvalid]
       }
     }
 
@@ -118,7 +118,7 @@ class TransactionValidatorSpec extends JbokSpec {
           .validate(invalidRTx, senderAccount, header, upfrontGasCost, accumGasUsed)
           .attempt
           .unsafeRunSync()
-        result.left.get shouldBe a[TransactionSyntaxInvalid]
+        result.left.get shouldBe a[TxSyntaxInvalid]
       }
     }
 
@@ -134,7 +134,7 @@ class TransactionValidatorSpec extends JbokSpec {
           .attempt
           .unsafeRunSync()
         if (r < transactionValidator.secp256k1n && r > 0) result shouldBe Right(())
-        else result shouldBe Left(TransactionSignatureInvalid)
+        else result shouldBe Left(TxSignatureInvalid)
       }
     }
 
@@ -146,7 +146,7 @@ class TransactionValidatorSpec extends JbokSpec {
           .attempt
           .unsafeRunSync()
         if (s < transactionValidator.secp256k1n / 2 + 1 && s > 0) result shouldBe Right(())
-        else result shouldBe Left(TransactionSignatureInvalid)
+        else result shouldBe Left(TxSignatureInvalid)
       }
     }
 
@@ -162,7 +162,7 @@ class TransactionValidatorSpec extends JbokSpec {
           .attempt
           .unsafeRunSync()
         if (nonce == tx.nonce) result shouldBe Right(())
-        else result.left.get shouldBe a[TransactionNonceInvalid]
+        else result.left.get shouldBe a[TxNonceInvalid]
       }
     }
 
@@ -180,8 +180,8 @@ class TransactionValidatorSpec extends JbokSpec {
         if (gasLimit == tx.gasLimit) result shouldBe Right(())
         else if (gasLimit > tx.gasLimit)
           if (gasLimit + accumGasUsed <= upfrontGasCost) result shouldBe Right(())
-          else result.left.get shouldBe a[TransactionGasLimitTooBigInvalid]
-        else result.left.get shouldBe a[TransactionNotEnoughGasForIntrinsicInvalid]
+          else result.left.get shouldBe a[TrxGasLimitTooBigInvalid]
+        else result.left.get shouldBe a[TxNotEnoughGasForIntrinsicInvalid]
       }
     }
 
@@ -197,7 +197,7 @@ class TransactionValidatorSpec extends JbokSpec {
           .attempt
           .unsafeRunSync()
         if (UInt256(balance) >= upfrontGasCost) result shouldBe Right(())
-        else result.left.get shouldBe a[TransactionSenderCantPayUpfrontCostInvalid]
+        else result.left.get shouldBe a[TxSenderCantPayUpfrontCostInvalid]
       }
     }
   }

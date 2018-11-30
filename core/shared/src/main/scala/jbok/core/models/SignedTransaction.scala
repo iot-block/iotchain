@@ -10,7 +10,7 @@ import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import shapeless._
 import cats.implicits._
-import jbok.core.validators.TransactionInvalid.TransactionSignatureInvalid
+import jbok.core.validators.TxInvalid.TxSignatureInvalid
 
 case class SignedTransaction(
     nonce: BigInt,
@@ -31,7 +31,7 @@ case class SignedTransaction(
     SignedTransaction.getSender(this, chainId)
 
   def getSenderOrThrow[F[_]: Sync]: F[Address] =
-    Sync[F].fromOption(senderAddress, TransactionSignatureInvalid)
+    Sync[F].fromOption(senderAddress, TxSignatureInvalid)
 
   def isContractInit: Boolean =
     receivingAddress == Address.empty

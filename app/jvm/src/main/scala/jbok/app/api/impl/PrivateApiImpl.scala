@@ -102,7 +102,7 @@ object PrivateApiImpl {
           for {
             pending <- txPool.getPendingTransactions
             latestNonceOpt = Try(pending.collect {
-              case ptx if ptx.stx.senderAddress.get == wallet.address => ptx.stx.nonce
+              case (stx, _) if stx.senderAddress.get == wallet.address => stx.nonce
             }.max).toOption
             bn              <- history.getBestBlockNumber
             currentNonceOpt <- history.getAccount(request.from, bn).map(_.map(_.nonce.toBigInt))

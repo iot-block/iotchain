@@ -106,9 +106,9 @@ final case class SyncManager[F[_]](
     case Request(peer, stxs: SignedTransactions) =>
       log.debug(s"received ${stxs.txs.length} stxs from ${peer.id}")
       for {
-        _        <- peer.markTxs(stxs.txs.map(_.hash))
-        response <- executor.txPool.handleReceived(peer, stxs)
-      } yield response
+        _ <- peer.markTxs(stxs)
+        _ <- executor.txPool.addTransactions(stxs)
+      } yield PeerSelectStrategy.withoutTxs(stxs) -> stxs :: Nil
   }
 
   val service: PeerService[F] = {

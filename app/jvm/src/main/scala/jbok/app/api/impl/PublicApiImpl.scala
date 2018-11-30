@@ -49,7 +49,7 @@ class PublicApiImpl(
     history.getBlockByNumber(blockNumber)
 
   override def getTransactionByHash(txHash: ByteVector): IO[Option[SignedTransaction]] = {
-    val pending = OptionT(txPool.getPendingTransactions.map(_.map(_.stx).find(_.hash == txHash)))
+    val pending = OptionT(txPool.getPendingTransactions.map(_.keys.toList.find(_.hash == txHash)))
     val inBlock = for {
       loc   <- OptionT(history.getTransactionLocation(txHash))
       block <- OptionT(history.getBlockByHash(loc.blockHash))
@@ -226,7 +226,7 @@ class PublicApiImpl(
         case Some(block) => block.body.transactionList.collect(collectTxs)
       }.flatten
       pendingStxs <- txPool.getPendingTransactions
-      stxsFromPool = pendingStxs.map(_.stx).collect(collectTxs)
+      stxsFromPool = pendingStxs.keys.toList.collect(collectTxs)
     } yield stxsFromBlock ++ stxsFromPool
   }
 

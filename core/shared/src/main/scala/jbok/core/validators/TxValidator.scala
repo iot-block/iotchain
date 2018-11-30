@@ -3,32 +3,32 @@ package jbok.core.validators
 import cats.effect.Sync
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.models._
-import jbok.core.validators.TransactionInvalid._
+import jbok.core.validators.TxInvalid._
 import jbok.evm.EvmConfig
 import cats.implicits._
 
-object TransactionInvalid {
-  case object TransactionSignatureInvalid             extends Exception("SignedTransactionInvalid")
-  case class TransactionSyntaxInvalid(reason: String) extends Exception(s"TransactionSyntaxInvalid: ${reason}")
-  case class TransactionNonceInvalid(txNonce: UInt256, senderNonce: UInt256)
+object TxInvalid {
+  case object TxSignatureInvalid             extends Exception("SignedTransactionInvalid")
+  case class TxSyntaxInvalid(reason: String) extends Exception(s"TransactionSyntaxInvalid: ${reason}")
+  case class TxNonceInvalid(txNonce: UInt256, senderNonce: UInt256)
       extends Exception(
-        s"TransactionNonceInvalid(got tx nonce $txNonce but sender nonce in mpt is: $senderNonce)"
+        s"TxNonceInvalid(got tx nonce $txNonce but sender nonce in mpt is: $senderNonce)"
       )
-  case class TransactionNotEnoughGasForIntrinsicInvalid(txGasLimit: BigInt, txIntrinsicGas: BigInt)
+  case class TxNotEnoughGasForIntrinsicInvalid(txGasLimit: BigInt, txIntrinsicGas: BigInt)
       extends Exception(
-        s"TransactionNotEnoughGasForIntrinsicInvalid(xx gas limit ($txGasLimit) < tx intrinsic gas ($txIntrinsicGas))"
+        s"TxNotEnoughGasForIntrinsicInvalid(xx gas limit ($txGasLimit) < tx intrinsic gas ($txIntrinsicGas))"
       )
-  case class TransactionSenderCantPayUpfrontCostInvalid(upfrontCost: UInt256, senderBalance: UInt256)
+  case class TxSenderCantPayUpfrontCostInvalid(upfrontCost: UInt256, senderBalance: UInt256)
       extends Exception(
-        s"TransactionSenderCantPayUpfrontCostInvalid(upfrontcost ($upfrontCost) > sender balance ($senderBalance))"
+        s"TxSenderCantPayUpfrontCostInvalid(upfrontcost ($upfrontCost) > sender balance ($senderBalance))"
       )
-  case class TransactionGasLimitTooBigInvalid(txGasLimit: BigInt, accumGasUsed: BigInt, blockGasLimit: BigInt)
+  case class TrxGasLimitTooBigInvalid(txGasLimit: BigInt, accumGasUsed: BigInt, blockGasLimit: BigInt)
       extends Exception(
-        s"TransactionGasLimitTooBigInvalid(tx gas limit ($txGasLimit) + acc gas ($accumGasUsed) > block gas limit ($blockGasLimit))"
+        s"TxGasLimitTooBigInvalid(tx gas limit ($txGasLimit) + acc gas ($accumGasUsed) > block gas limit ($blockGasLimit))"
       )
 }
 
-class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F: Sync[F]) {
+class TxValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F: Sync[F]) {
   val secp256k1n: BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337")
 
   def validate(
@@ -61,17 +61,17 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
     val maxS          = BigInt(2).pow(8 * 32) - 1
 
     if (nonce > maxNonceValue)
-      F.raiseError(TransactionSyntaxInvalid(s"Invalid nonce: $nonce > $maxNonceValue"))
+      F.raiseError(TxSyntaxInvalid(s"Invalid nonce: $nonce > $maxNonceValue"))
     else if (gasLimit > maxGasValue)
-      F.raiseError(TransactionSyntaxInvalid(s"Invalid gasLimit: $gasLimit > $maxGasValue"))
+      F.raiseError(TxSyntaxInvalid(s"Invalid gasLimit: $gasLimit > $maxGasValue"))
     else if (gasPrice > maxGasValue)
-      F.raiseError(TransactionSyntaxInvalid(s"Invalid gasPrice: $gasPrice > $maxGasValue"))
+      F.raiseError(TxSyntaxInvalid(s"Invalid gasPrice: $gasPrice > $maxGasValue"))
     else if (value > maxValue)
-      F.raiseError(TransactionSyntaxInvalid(s"Invalid value: $value > $maxValue"))
+      F.raiseError(TxSyntaxInvalid(s"Invalid value: $value > $maxValue"))
     else if (r > maxR)
-      F.raiseError(TransactionSyntaxInvalid(s"Invalid signatureRandom: $r > $maxR"))
+      F.raiseError(TxSyntaxInvalid(s"Invalid signatureRandom: $r > $maxR"))
     else if (s > maxS)
-      F.raiseError(TransactionSyntaxInvalid(s"Invalid signature: $s > $maxS"))
+      F.raiseError(TxSyntaxInvalid(s"Invalid signature: $s > $maxS"))
     else
       F.unit
   }
@@ -83,7 +83,7 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
     val validR = r > 0 && r < secp256k1n
     val validS = s > 0 && s < secp256k1n / 2
     if (validR && validS) F.unit
-    else F.raiseError(TransactionSignatureInvalid)
+    else F.raiseError(TxSignatureInvalid)
   }
 
   /**
@@ -94,7 +94,7 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
     */
   private def validateNonce(nonce: BigInt, senderNonce: UInt256): F[Unit] =
     if (senderNonce == UInt256(nonce)) F.unit
-    else F.raiseError(TransactionNonceInvalid(UInt256(nonce), senderNonce))
+    else F.raiseError(TxNonceInvalid(UInt256(nonce), senderNonce))
 
   /**
     * Validates the sender account balance contains at least the cost required in up-front payment.
@@ -105,7 +105,7 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
     */
   private def validateAccountHasEnoughGasToPayUpfrontCost(senderBalance: UInt256, upfrontCost: UInt256): F[UInt256] =
     if (senderBalance >= upfrontCost) F.pure(senderBalance)
-    else F.raiseError(TransactionSenderCantPayUpfrontCostInvalid(upfrontCost, senderBalance))
+    else F.raiseError(TxSenderCantPayUpfrontCostInvalid(upfrontCost, senderBalance))
 
   /**
     * Validates the gas limit is no smaller than the intrinsic gas used by the transaction.
@@ -119,7 +119,7 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
     val config         = EvmConfig.forBlock(blockHeaderNumber, blockChainConfig)
     val txIntrinsicGas = config.calcTransactionIntrinsicGas(stx.payload, stx.isContractInit)
     if (stx.gasLimit >= txIntrinsicGas) F.pure(stx)
-    else F.raiseError(TransactionNotEnoughGasForIntrinsicInvalid(stx.gasLimit, txIntrinsicGas))
+    else F.raiseError(TxNotEnoughGasForIntrinsicInvalid(stx.gasLimit, txIntrinsicGas))
   }
 
   /**
@@ -134,5 +134,5 @@ class TransactionValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F:
                                                   accGasUsed: BigInt,
                                                   blockGasLimit: BigInt): F[BigInt] =
     if (gasLimit + accGasUsed <= blockGasLimit) F.pure(gasLimit)
-    else F.raiseError(TransactionGasLimitTooBigInvalid(gasLimit, accGasUsed, blockGasLimit))
+    else F.raiseError(TrxGasLimitTooBigInvalid(gasLimit, accGasUsed, blockGasLimit))
 }

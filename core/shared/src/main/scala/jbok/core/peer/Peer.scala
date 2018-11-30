@@ -1,11 +1,11 @@
 package jbok.core.peer
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ConcurrentEffect, Sync}
+import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
-import jbok.core.messages.{Message, Status}
+import jbok.core.messages.{Message, SignedTransactions, Status}
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
 import jbok.network.Connection
@@ -16,7 +16,7 @@ case class Peer[F[_]](
     conn: Connection[F, Message],
     status: Ref[F, Status],
     knownBlocks: Ref[F, Set[ByteVector]],
-    knownTxs: Ref[F, Set[ByteVector]]
+    knownTxs: Ref[F, Set[SignedTransactions]]
 )(implicit F: Sync[F]) {
   import Peer._
 
@@ -25,14 +25,14 @@ case class Peer[F[_]](
   def hasBlock(blockHash: ByteVector): F[Boolean] =
     knownBlocks.get.map(_.contains(blockHash))
 
-  def hasTx(txHash: ByteVector): F[Boolean] =
-    knownTxs.get.map(_.contains(txHash))
+  def hasTxs(stxs: SignedTransactions): F[Boolean] =
+    knownTxs.get.map(_.contains(stxs))
 
   def markBlock(blockHash: ByteVector): F[Unit] =
     knownBlocks.update(s => if (s.size >= MaxKnownBlocks) s.take(MaxKnownBlocks - 1) + blockHash else s + blockHash)
 
-  def markTxs(txHashes: List[ByteVector]): F[Unit] =
-    knownTxs.update(known => known.take(MaxKnownTxs - txHashes.length) ++ txHashes)
+  def markTxs(stxs: SignedTransactions): F[Unit] =
+    knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs)
 }
 
 object Peer {
@@ -43,7 +43,7 @@ object Peer {
     for {
       status      <- Ref.of[F, Status](status)
       knownBlocks <- Ref.of[F, Set[ByteVector]](Set.empty)
-      knownTxs    <- Ref.of[F, Set[ByteVector]](Set.empty)
+      knownTxs    <- Ref.of[F, Set[SignedTransactions]](Set.empty)
     } yield Peer[F](pk, conn, status, knownBlocks, knownTxs)
 
   def dummy[F[_]: ConcurrentEffect](pk: KeyPair.Public, status: Status): F[Peer[F]] =

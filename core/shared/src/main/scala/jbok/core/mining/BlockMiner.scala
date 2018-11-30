@@ -44,7 +44,7 @@ case class BlockMiner[F[_]](
   ): F[PendingBlock] =
     for {
       header <- executor.consensus.prepareHeader(parentOpt)
-      stxs   <- stxsOpt.fold(txPool.getPendingTransactions.map(_.map(_.stx)))(F.pure)
+      stxs   <- stxsOpt.fold(txPool.getPendingTransactions.map(_.keys.toList))(F.pure)
       txs    <- prepareTransactions(stxs, header.gasLimit)
     } yield PendingBlock(Block(header, BlockBody(txs, Nil)))
 

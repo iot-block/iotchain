@@ -13,6 +13,7 @@ import jbok.core.config.GenesisConfig
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.ledger.History
+import jbok.core.messages.SignedTransactions
 import jbok.core.models.{Account, Address}
 import jbok.core.pool.BlockPool
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
@@ -191,7 +192,7 @@ class SimulationImpl(
         case "DoubleSpend" => txGraphGen.nextDoubleSpendTxs2(nStx)
         case _             => txGraphGen.nextValidTxs(nStx)
       }
-      _ <- minerTxPool.map(_.addTransactions(stxs)).getOrElse(IO.unit)
+      _ <- minerTxPool.map(_.addTransactions(SignedTransactions(stxs), true)).getOrElse(IO.unit)
     } yield ()
 
   override def getAccounts(): IO[List[(Address, Account)]] = IO { txGraphGen.accountMap.toList }
@@ -201,7 +202,7 @@ class SimulationImpl(
       nodeIdList <- miners.get.map(_.keys.toList)
       nodeId = Random.shuffle(nodeIdList).take(1).head
       ns <- nodes.get
-      _  <- ns(nodeId).txPool.addTransactions(List(txGraphGen.getCoin(address, value)))
+      _  <- ns(nodeId).txPool.addTransactions(SignedTransactions(List(txGraphGen.getCoin(address, value))), true)
     } yield ()
 }
 

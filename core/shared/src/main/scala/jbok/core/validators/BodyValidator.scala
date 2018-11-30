@@ -10,8 +10,8 @@ import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 
 object BodyInvalid {
-  case object BlockTransactionsHashInvalid extends Exception("BlockTransactionsHashInvalid")
-  case object BlockOmmersHashInvalid       extends Exception("BlockOmmersHashInvalid")
+  case object BodyTransactionsHashInvalid extends Exception("BlockTransactionsHashInvalid")
+  case object BodyOmmersHashInvalid       extends Exception("BlockOmmersHashInvalid")
 }
 
 private[validators] object BodyValidator {
@@ -26,10 +26,10 @@ private[validators] object BodyValidator {
   private def validateTransactionRoot[F[_]](block: Block)(implicit F: Sync[F]): F[Unit] =
     MerklePatriciaTrie.calcMerkleRoot[F, SignedTransaction](block.body.transactionList).flatMap { root =>
       if (root == block.header.transactionsRoot) F.unit
-      else F.raiseError(BlockTransactionsHashInvalid)
+      else F.raiseError(BodyTransactionsHashInvalid)
     }
 
   private def validateOmmersHash[F[_]](block: Block)(implicit F: Sync[F]): F[Unit] =
     if (RlpCodec.encode(block.body.ommerList).require.toByteVector.kec256 equals block.header.ommersHash) F.unit
-    else F.raiseError(BlockOmmersHashInvalid)
+    else F.raiseError(BodyOmmersHashInvalid)
 }

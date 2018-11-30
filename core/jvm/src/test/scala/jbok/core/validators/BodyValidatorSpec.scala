@@ -3,7 +3,7 @@ package jbok.core.validators
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.models._
-import jbok.core.validators.BodyInvalid.{BlockOmmersHashInvalid, BlockTransactionsHashInvalid}
+import jbok.core.validators.BodyInvalid.{BodyOmmersHashInvalid, BodyTransactionsHashInvalid}
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
 import jbok.codec.rlp.implicits._
@@ -131,14 +131,14 @@ class BodyValidatorSpec extends JbokSpec {
         .validate[IO](
           Block(validBlockHeader, validBlockBody.copy(transactionList = validBlockBody.transactionList.reverse)))
         .attempt
-        .unsafeRunSync() shouldBe Left(BlockTransactionsHashInvalid)
+        .unsafeRunSync() shouldBe Left(BodyTransactionsHashInvalid)
     }
 
     "return a failure if a block body doesn't corresponds to a block header due to wrong ommers hash" in {
       BodyValidator
         .validate[IO](Block(validBlockHeader, validBlockBody.copy(ommerList = List(validBlockHeader))))
         .attempt
-        .unsafeRunSync() shouldBe Left(BlockOmmersHashInvalid)
+        .unsafeRunSync() shouldBe Left(BodyOmmersHashInvalid)
     }
   }
 }

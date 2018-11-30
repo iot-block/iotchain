@@ -3,6 +3,7 @@ package jbok.core.peer
 import cats.data.Kleisli
 import cats.effect.Sync
 import cats.implicits._
+import jbok.core.messages.SignedTransactions
 import jbok.core.models.Block
 
 import scala.util.Random
@@ -25,6 +26,17 @@ object PeerSelectStrategy {
     peers
       .traverse[F, Option[Peer[F]]] { peer =>
         peer.hasBlock(block.header.hash).map {
+          case true  => None
+          case false => Some(peer)
+        }
+      }
+      .map(_.flatten)
+  }
+
+  def withoutTxs[F[_]: Sync](stxs: SignedTransactions): PeerSelectStrategy[F] = PeerSelectStrategy { peers =>
+    peers
+      .traverse[F, Option[Peer[F]]] { peer =>
+        peer.hasTxs(stxs).map {
           case true  => None
           case false => Some(peer)
         }

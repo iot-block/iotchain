@@ -9,11 +9,12 @@ import jbok.common.ByteUtils
 import jbok.core.config.Configs.{BlockChainConfig, TxPoolConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
+import jbok.core.messages.SignedTransactions
 import jbok.core.models.UInt256._
 import jbok.core.models._
 import jbok.core.peer.PeerManager
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
-import jbok.core.validators.{HeaderValidator, TransactionValidator}
+import jbok.core.validators.{HeaderValidator, TxValidator}
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
 import scodec.bits.ByteVector
@@ -25,7 +26,7 @@ case class BlockExecutor[F[_]](
     consensus: Consensus[F],
     peerManager: PeerManager[F],
     vm: VM,
-    txValidator: TransactionValidator[F],
+    txValidator: TxValidator[F],
     txPool: TxPool[F],
     ommerPool: OmmerPool[F],
     semaphore: Semaphore[F]
@@ -383,7 +384,7 @@ case class BlockExecutor[F[_]](
   private def updateTxAndOmmerPools(blocksRemoved: List[Block], blocksAdded: List[Block]): F[Unit] =
     for {
       _ <- ommerPool.addOmmers(blocksRemoved.headOption.toList.map(_.header))
-      _ <- blocksRemoved.map(_.body.transactionList).traverse(txs => txPool.addTransactions(txs))
+      _ <- blocksRemoved.map(_.body.transactionList).traverse(txs => txPool.addTransactions(SignedTransactions(txs)))
       _ <- blocksAdded.map { block =>
         ommerPool.removeOmmers(block.header :: block.body.ommerList) *>
           txPool.removeTransactions(block.body.transactionList)
@@ -416,6 +417,6 @@ object BlockExecutor {
       ommerPool <- OmmerPool[F](consensus.history)
       semaphore <- Semaphore(1)
       vm          = new VM
-      txValidator = new TransactionValidator[F](config)
+      txValidator = new TxValidator[F](config)
     } yield BlockExecutor(config, consensus, peerManager, vm, txValidator, txPool, ommerPool, semaphore)
 }
