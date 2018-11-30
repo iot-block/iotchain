@@ -243,7 +243,7 @@ class PublicApiImpl(
     for {
       gasLimit <- getGasLimit(callTx, blockParam)
       tx = Transaction(0, callTx.gasPrice, gasLimit, callTx.to, callTx.value, callTx.data)
-    } yield SignedTransaction(tx, history.chainId.toByte, 0.toByte, ByteVector(0), ByteVector(0))
+    } yield SignedTransaction(tx, 0.toByte, ByteVector(0), ByteVector(0))
 
   private[jbok] def getGasLimit(callTx: CallTx, blockParam: BlockParam): IO[BigInt] =
     if (callTx.gas.isDefined) {

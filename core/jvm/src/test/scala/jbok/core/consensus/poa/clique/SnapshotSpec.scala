@@ -24,7 +24,7 @@ case class Test(signers: List[String], votes: List[TestVote], results: List[Stri
 trait SnapshotFixture {
   def mkHistory(signers: List[Address]) = {
     val extra   = Clique.fillExtraData(signers)
-    val config = GenesisConfig.default.copy(extraData = extra.toHex)
+    val config  = GenesisConfig.default.copy(extraData = extra.toHex)
     val db      = KeyValueDB.inmem[IO].unsafeRunSync()
     val history = History[IO](db).unsafeRunSync()
     history.init(config).unsafeRunSync()
@@ -44,7 +44,7 @@ trait SnapshotFixture {
     if (!accounts.contains(signer)) {
       accounts += (signer -> SecP256k1.generateKeyPair().unsafeRunSync())
     }
-    val sig       = SecP256k1.sign(Clique.sigHash(header).toArray, accounts(signer)).unsafeRunSync()
+    val sig       = SecP256k1.sign(Clique.sigHash(header).toArray, accounts(signer), 0).unsafeRunSync()
     val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val recovered = Clique.ecrecover(signed).get
     require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")

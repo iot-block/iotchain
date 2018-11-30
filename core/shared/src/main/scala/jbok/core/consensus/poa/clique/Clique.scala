@@ -40,7 +40,7 @@ class Clique[F[_]](
 
   val signer: Address = Address(keyPair)
 
-  def sign(bv: ByteVector): F[CryptoSignature] = F.liftIO(Signature[ECDSA].sign(bv.toArray, keyPair))
+  def sign(bv: ByteVector): F[CryptoSignature] = F.liftIO(Signature[ECDSA].sign(bv.toArray, keyPair, history.chainId))
 
   def applyHeaders(
       number: BigInt,
@@ -127,8 +127,11 @@ object Clique {
     val signature = header.extraData.takeRight(extraSeal)
     val hash      = sigHash(header)
     val sig       = CryptoSignature(signature.toArray)
-    Signature[ECDSA]
-      .recoverPublic(hash.toArray, sig, None)
-      .map(pub => Address(pub.bytes.kec256))
+    val chainId: Option[BigInt] =
+      if (sig.v < 35) None else Some(if (sig.v % 2 == 0) (sig.v - 36) / 2 else (sig.v - 35) / 2)
+    chainId.flatMap(
+      Signature[ECDSA]
+        .recoverPublic(hash.toArray, sig, _)
+        .map(pub => Address(pub.bytes.kec256)))
   }
 }

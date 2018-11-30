@@ -11,11 +11,11 @@ trait Signature[F[_], A] {
 
   def generatePublicKey(secret: KeyPair.Secret): F[KeyPair.Public]
 
-  def sign(hash: Array[Byte], keyPair: KeyPair, chainId: Option[Byte] = None): F[CryptoSignature]
+  def sign(hash: Array[Byte], keyPair: KeyPair, chainId: BigInt): F[CryptoSignature]
 
   def verify(hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public): F[Boolean]
 
-  def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: Option[Byte] = None): Option[KeyPair.Public]
+  def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: BigInt): Option[KeyPair.Public]
 }
 
 object Signature {

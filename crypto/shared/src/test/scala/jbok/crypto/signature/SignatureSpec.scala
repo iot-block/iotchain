@@ -1,12 +1,12 @@
 package jbok.crypto.signature
 
-
 import jbok.JbokAsyncSpec
 import jbok.crypto._
 
 class SignatureSpec extends JbokAsyncSpec {
   val hash = "jbok".utf8bytes.kec256.toArray
 
+  val chainId = BigInt(12)
   "ECDSA" should {
     val ecdsa = Signature[ECDSA]
 
@@ -14,7 +14,7 @@ class SignatureSpec extends JbokAsyncSpec {
 
       for {
         keyPair <- ecdsa.generateKeyPair()
-        signed  <- ecdsa.sign(hash, keyPair)
+        signed  <- ecdsa.sign(hash, keyPair, chainId)
         verify  <- ecdsa.verify(hash, signed, keyPair.public)
         _ = verify shouldBe true
       } yield ()
@@ -24,7 +24,7 @@ class SignatureSpec extends JbokAsyncSpec {
       for {
         kp1    <- ecdsa.generateKeyPair()
         kp2    <- ecdsa.generateKeyPair()
-        sig    <- ecdsa.sign(hash, kp1)
+        sig    <- ecdsa.sign(hash, kp1, chainId)
         verify <- ecdsa.verify(hash, sig, kp2.public)
         _ = verify shouldBe false
       } yield ()
@@ -44,7 +44,7 @@ class SignatureSpec extends JbokAsyncSpec {
     "roundtrip signature" in {
       for {
         kp  <- ecdsa.generateKeyPair()
-        sig <- ecdsa.sign(hash, kp)
+        sig <- ecdsa.sign(hash, kp, chainId)
         bytes = sig.bytes
         sig2  = CryptoSignature(bytes)
         verify <- ecdsa.verify(hash, sig2, kp.public)
@@ -55,9 +55,9 @@ class SignatureSpec extends JbokAsyncSpec {
     "recover public key from signature" in {
       for {
         kp     <- ecdsa.generateKeyPair()
-        sig    <- ecdsa.sign(hash, kp)
+        sig    <- ecdsa.sign(hash, kp, chainId)
         verify <- ecdsa.verify(hash, sig, kp.public)
-        public = ecdsa.recoverPublic(hash, sig)
+        public = ecdsa.recoverPublic(hash, sig, chainId)
 
         _ = verify shouldBe true
         _ = public shouldBe Some(kp.public)

@@ -44,8 +44,8 @@ case class Discovery[F[_]](
       promise <- Deferred[F, KadPacket]
       _       <- promises.update(_ + (packet.mdc -> promise))
       _       <- transport.send(to, packet, Some(timeout))
-      kad <- promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
-      _ <- promises.update(_ - id)
+      kad     <- promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
+      _       <- promises.update(_ - id)
     } yield kad.asInstanceOf[Pong]
   }
 
@@ -67,10 +67,10 @@ case class Discovery[F[_]](
       p <- Deferred[F, KadPacket]
       _ <- promises.update(_ + (toId -> p))
       _ = log.info(s"findnode from ${toId}")
-      packet <- encode(req)
-      _      <- transport.send(to, packet, Some(timeout))
+      packet     <- encode(req)
+      _          <- transport.send(to, packet, Some(timeout))
       neighbours <- p.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
-      _ <- promises.update(_ - toId)
+      _          <- promises.update(_ - toId)
     } yield neighbours.asInstanceOf[Neighbours]
 
   def findNode(node: PeerNode, targetPK: KeyPair.Public): F[Vector[PeerNode]] =
@@ -180,12 +180,12 @@ case class Discovery[F[_]](
     F.delay {
       val payload   = RlpCodec.encode(kad).require.bytes
       val hash      = payload.kec256
-      val signature = Signature[ECDSA].sign(hash.toArray, keyPair, None).unsafeRunSync()
+      val signature = Signature[ECDSA].sign(hash.toArray, keyPair, 0).unsafeRunSync()
 
       val sigBytes =
-        BigIntegers.asUnsignedByteArray(32, signature.r) ++
-          BigIntegers.asUnsignedByteArray(32, signature.s) ++
-          Array[Byte]((signature.v - 27).toByte)
+        BigIntegers.asUnsignedByteArray(32, signature.r.bigInteger) ++
+          BigIntegers.asUnsignedByteArray(32, signature.s.bigInteger) ++
+          signature.v.toByteArray
 
       val forSha = sigBytes ++ payload.toArray
       val mdc    = forSha.kec256
