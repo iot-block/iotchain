@@ -12,7 +12,7 @@ import jbok.crypto._
 
 class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.PostEIP161ConfigBuilder(None)
+  override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
 
   def executeOp(op: OpCode, stateIn: ProgramState[IO]): ProgramState[IO] =
     // gas is not tested in this spec

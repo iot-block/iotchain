@@ -48,9 +48,7 @@ class EthashConsensus[F[_]](
         gasLimit = calcGasLimit(parent.header.gasLimit),
         gasUsed = 0,
         unixTimestamp = timestamp,
-        extraData = blockChainConfig.daoForkConfig
-          .flatMap(daoForkConfig => daoForkConfig.getExtraData(number))
-          .getOrElse(miningConfig.headerExtraData),
+        extraData = miningConfig.headerExtraData,
         mixHash = ByteVector.empty,
         nonce = ByteVector.empty
       )

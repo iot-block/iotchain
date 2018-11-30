@@ -116,7 +116,7 @@ case class BlockExecutor[F[_]](
   ////////////////////////////////
   ////////////////////////////////
 
-  private def executeBlock(block: Block): F[ExecutedBlock[F]] =
+  private[jbok] def executeBlock(block: Block): F[ExecutedBlock[F]] =
     for {
       (result, _) <- executeTransactions(block, shortCircuit = true)
       parentTd    <- history.getTotalDifficultyByHash(block.header.parentHash).map(_.get)

@@ -9,7 +9,7 @@ import org.scalatest.{FunSuite, Matchers}
 
 class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.PostEIP160ConfigBuilder(None)
+  override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
 
   import config.feeSchedule._
 
@@ -489,7 +489,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     // Sending refund to an already existing account
     forAll(stateGen) { stateIn =>
       val (refund, _)    = stateIn.stack.pop
-      val world          = stateIn.world.putAccount(Address(refund), Account.empty())
+      val world          = stateIn.world.putAccount(Address(refund), Account(nonce = 1))
       val updatedStateIn = stateIn.withWorld(world)
       val stateOut       = op.execute(updatedStateIn).unsafeRunSync()
       verifyGas(G_selfdestruct, updatedStateIn, stateOut)

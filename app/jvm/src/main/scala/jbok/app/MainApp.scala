@@ -101,7 +101,6 @@ class Conf(arguments: List[String]) extends ScallopConf(arguments) {
 
   // chain specific config
   val blockChainConfig = BlockChainConfig()
-  val daoForkConfig    = DaoForkConfig()
   val syncConfig       = SyncConfig()
   val miningConfig = MiningConfig(
     enabled = mine()
@@ -116,8 +115,7 @@ class Conf(arguments: List[String]) extends ScallopConf(arguments) {
     txPool = TxPoolConfig(),
     mining = miningConfig,
     rpc = rpcConfig,
-    blockchain = blockChainConfig,
-    daofork = daoForkConfig,
+    blockchain = blockChainConfig
   )
 }
 

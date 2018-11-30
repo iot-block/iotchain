@@ -3,7 +3,7 @@ package jbok.core.consensus.pow.ethash
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.ledger.History
-import jbok.core.config.Configs.{BlockChainConfig, DaoForkConfig}
+import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.consensus.pow.ethash.EthashHeaderInvalid._
 import jbok.core.models._
 import jbok.common.testkit._
@@ -13,7 +13,7 @@ import scodec.bits._
 class EthashHeaderValidatorSpec extends JbokSpec {
   trait EthashHeaderValidatorFixture {
     implicit val fixture = defaultFixture(algo = "ethash")
-    val history = random[History[IO]]
+    val history          = random[History[IO]]
     val validBlockHeader = BlockHeader(
       parentHash = hex"d882d5c210bab4cb7ef0b9f3dc2130cb680959afcd9a8f9bf83ee6f13e2f9da3",
       ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
@@ -49,11 +49,9 @@ class EthashHeaderValidatorSpec extends JbokSpec {
       nonce = hex"3fc7bc671f7cee70"
     )
     val blockChainConfig = BlockChainConfig()
-    val daoForkConfig    = DaoForkConfig().copy(blockExtraData = Some(hex"d783010507846765746887676f312e372e33856c696e7578"))
     history.putBlockHeader(validBlockParent).unsafeRunSync()
-    val blockHeaderValidator = new EthashHeaderValidator[IO](blockChainConfig, daoForkConfig)
+    val blockHeaderValidator = new EthashHeaderValidator[IO](blockChainConfig)
   }
-
 
   "EthashHeaderValidator" should {
     "return a failure if created based on invalid extra data" in new EthashHeaderValidatorFixture {
