@@ -3,12 +3,6 @@ package jbok.evm
 import jbok.core.models.UInt256
 import scodec.bits.ByteVector
 
-object Memory {
-  def empty: Memory = Memory(ByteVector.empty)
-
-  private def zeros(size: Int): ByteVector = ByteVector(Array.fill[Byte](size)(0))
-}
-
 case class Memory(underlying: ByteVector) extends AnyVal {
 
   import Memory.zeros
@@ -51,7 +45,7 @@ case class Memory(underlying: ByteVector) extends AnyVal {
       (ByteVector.empty, this)
     } else {
       val start: Int = offset.toInt
-      val end: Int = start + size
+      val end: Int   = start + size
 
       val newUnderlying =
         if (end <= underlying.size)
@@ -81,4 +75,10 @@ case class Memory(underlying: ByteVector) extends AnyVal {
     * @return memory size in bytes
     */
   def size: Int = underlying.length.toInt
+}
+
+object Memory {
+  def empty: Memory = Memory(ByteVector.empty)
+
+  private def zeros(size: Int): ByteVector = ByteVector(Array.fill[Byte](size)(0))
 }

@@ -7,8 +7,8 @@ import cats.implicits._
 /**
   * Entry point to executing a program.
   */
-class VM {
-  private[this] val log = org.log4s.getLogger
+object VM {
+  private[this] val log = org.log4s.getLogger("VM")
 
   /**
     * Executes a program
@@ -47,5 +47,3 @@ class VM {
     }
   }
 }
-
-object VM extends VM

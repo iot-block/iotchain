@@ -20,7 +20,7 @@ class PrecompiledContractsSpec extends JbokSpec {
     val world = history
       .getWorldState()
       .unsafeRunSync()
-    ProgramContext(env, recipient, gas, world, EvmConfig.PostEIP161ConfigBuilder(None))
+    ProgramContext(env, recipient, gas, world, EvmConfig.SpuriousDragonConfigBuilder(None))
   }
 
   "ECDSARECOVER" in {
@@ -60,7 +60,7 @@ class PrecompiledContractsSpec extends JbokSpec {
     val validR = hex"73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f"
     val validS = hex"eeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549"
 
-    val validV   = hex"000000000000000000000000000000000000000000000000000000000000001c"
+    val validV   = hex"0000000000000000000000000000000000000000000000000000000000000024"
     val invalidV = hex"000000000000000000000000000000000000000000000000000000000000f01c"
 
     val invalidInput = validH ++ invalidV ++ validR ++ validS

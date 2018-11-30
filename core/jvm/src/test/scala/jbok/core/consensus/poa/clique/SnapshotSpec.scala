@@ -77,7 +77,7 @@ class SnapshotSpec extends JbokSpec {
 
     val head           = headers.last
     val db             = KeyValueDB.inmem[IO].unsafeRunSync()
-    val keyPair        = SecP256k1.generateKeyPair().unsafeRunSync()
+    val keyPair        = Signature[ECDSA].generateKeyPair().unsafeRunSync()
     val clique         = Clique[IO](config, history, keyPair).unsafeRunSync()
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners

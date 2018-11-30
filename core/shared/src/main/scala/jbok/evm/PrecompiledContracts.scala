@@ -1,14 +1,12 @@
 package jbok.evm
 
-import cats.implicits._
 import cats.effect.Sync
+import cats.implicits._
 import jbok.core.models._
 import jbok.crypto._
+import jbok.crypto.bn256.{BN256, CurvePoint, TwistPoint}
 import jbok.crypto.signature.{CryptoSignature, ECDSA, Signature}
 import scodec.bits.ByteVector
-import java.math.BigInteger
-
-import jbok.crypto.bn256.{BN256, CurvePoint, Fp12, TwistPoint}
 
 object PrecompiledContracts {
 

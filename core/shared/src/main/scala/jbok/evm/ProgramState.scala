@@ -4,16 +4,6 @@ import cats.effect.Sync
 import jbok.core.models.{Address, TxLogEntry, UInt256}
 import scodec.bits.ByteVector
 
-object ProgramState {
-  def apply[F[_]: Sync](context: ProgramContext[F]): ProgramState[F] =
-    ProgramState[F](
-      context = context,
-      gas = context.startGas,
-      world = context.world,
-      addressesToDelete = context.initialAddressesToDelete
-    )
-}
-
 /**
   * Intermediate state updated with execution of each opcode in the program
   *
@@ -109,3 +99,14 @@ case class ProgramState[F[_]: Sync](
   def halt: ProgramState[F] =
     copy(halted = true)
 }
+
+object ProgramState {
+  def apply[F[_]: Sync](context: ProgramContext[F]): ProgramState[F] =
+    ProgramState[F](
+      context = context,
+      gas = context.startGas,
+      world = context.world,
+      addressesToDelete = context.initialAddressesToDelete
+    )
+}
+

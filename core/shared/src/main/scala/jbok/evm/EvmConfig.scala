@@ -11,8 +11,8 @@ object EvmConfig {
 
   val MaxCallDepth: Int = 1024
 
-  val MaxMemory
-    : UInt256 = UInt256(Int.MaxValue) /* used to artificially limit memory usage by incurring maximum gas cost */
+  /** used to artificially limit memory usage by incurring maximum gas cost */
+  val MaxMemory: UInt256 = UInt256(Int.MaxValue)
 
   /**
     * returns the evm config that should be used for given block

@@ -25,7 +25,6 @@ case class BlockExecutor[F[_]](
     config: BlockChainConfig,
     consensus: Consensus[F],
     peerManager: PeerManager[F],
-    vm: VM,
     txValidator: TxValidator[F],
     txPool: TxPool[F],
     ommerPool: OmmerPool[F],
@@ -303,7 +302,7 @@ case class BlockExecutor[F[_]](
 
   private def runVM(stx: SignedTransaction, context: ProgramContext[F], config: EvmConfig): F[ProgramResult[F]] =
     for {
-      result <- vm.run(context)
+      result <- VM.run(context)
     } yield {
       if (stx.isContractInit && result.error.isEmpty)
         saveNewContract(context.env.ownerAddr, result, config)
@@ -416,7 +415,6 @@ object BlockExecutor {
       txPool    <- TxPool[F](TxPoolConfig(), peerManager)
       ommerPool <- OmmerPool[F](consensus.history)
       semaphore <- Semaphore(1)
-      vm          = new VM
       txValidator = new TxValidator[F](config)
-    } yield BlockExecutor(config, consensus, peerManager, vm, txValidator, txPool, ommerPool, semaphore)
+    } yield BlockExecutor(config, consensus, peerManager, txValidator, txPool, ommerPool, semaphore)
 }
