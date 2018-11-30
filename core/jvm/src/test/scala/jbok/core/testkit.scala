@@ -14,7 +14,6 @@ import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform}
 import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
 import jbok.core.sync._
-import jbok.crypto.signature.ecdsa.SecP256k1
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.crypto.testkit._
 import jbok.persistent.KeyValueDB

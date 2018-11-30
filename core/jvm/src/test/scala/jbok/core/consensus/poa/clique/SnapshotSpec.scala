@@ -6,8 +6,7 @@ import jbok.common.execution._
 import jbok.core.config.GenesisConfig
 import jbok.core.ledger.History
 import jbok.core.models.{Address, BlockHeader}
-import jbok.crypto.signature.KeyPair
-import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
@@ -35,16 +34,16 @@ trait SnapshotFixture {
 
   def address(account: String): Address = {
     if (!accounts.contains(account)) {
-      accounts += (account -> SecP256k1.generateKeyPair().unsafeRunSync())
+      accounts += (account -> Signature[ECDSA].generateKeyPair().unsafeRunSync())
     }
     Address(accounts(account))
   }
 
   def sign(header: BlockHeader, signer: String): BlockHeader = {
     if (!accounts.contains(signer)) {
-      accounts += (signer -> SecP256k1.generateKeyPair().unsafeRunSync())
+      accounts += (signer -> Signature[ECDSA].generateKeyPair().unsafeRunSync())
     }
-    val sig       = SecP256k1.sign(Clique.sigHash(header).toArray, accounts(signer), 0).unsafeRunSync()
+    val sig       = Signature[ECDSA].sign(Clique.sigHash(header).toArray, accounts(signer), 0).unsafeRunSync()
     val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val recovered = Clique.ecrecover(signed).get
     require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")

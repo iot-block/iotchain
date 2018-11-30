@@ -7,11 +7,12 @@ import jbok.core.Fixtures
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.models._
 import jbok.core.validators.TxInvalid._
+import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.crypto.signature.ecdsa.SecP256k1
 import scodec.bits._
 
 class TxValidatorSpec extends JbokSpec {
-  val keyPair = SecP256k1.generateKeyPair().unsafeRunSync()
+  val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
 
   val tx = Transaction(
     nonce = 12345,

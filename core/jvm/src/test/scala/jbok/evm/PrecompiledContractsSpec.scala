@@ -5,7 +5,7 @@ import jbok.JbokSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Address, UInt256}
 import jbok.crypto._
-import jbok.crypto.signature.ecdsa.SecP256k1
+import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 import jbok.evm.testkit._
@@ -20,18 +20,18 @@ class PrecompiledContractsSpec extends JbokSpec {
     val world = history
       .getWorldState()
       .unsafeRunSync()
-    ProgramContext(env, recipient, gas, world, EvmConfig.SpuriousDragonConfigBuilder(None))
+    ProgramContext(env, recipient, gas, world, EvmConfig.PostEIP161ConfigBuilder(None))
   }
 
   "ECDSARECOVER" in {
-    val keyPair  = SecP256k1.generateKeyPair().unsafeRunSync()
+    val keyPair  = Signature[ECDSA].generateKeyPair().unsafeRunSync()
     val bytesGen = getByteVectorGen(1, 128)
     val chainId  = BigInt(0)
 
     forAll(bytesGen) { bytes =>
       val hash             = bytes.kec256
-      val validSig         = SecP256k1.sign(hash.toArray, keyPair, chainId).unsafeRunSync()
-      val recoveredPub     = SecP256k1.recoverPublic(hash.toArray, validSig, chainId).get
+      val validSig         = Signature[ECDSA].sign(hash.toArray, keyPair, chainId).unsafeRunSync()
+      val recoveredPub     = Signature[ECDSA].recoverPublic(hash.toArray, validSig, chainId).get
       val recoveredAddress = recoveredPub.bytes.kec256.slice(12, 32).padLeft(32)
       val inputData        = hash ++ UInt256(validSig.v).bytes ++ UInt256(validSig.r).bytes ++ UInt256(validSig.s).bytes
 
@@ -60,7 +60,7 @@ class PrecompiledContractsSpec extends JbokSpec {
     val validR = hex"73b1693892219d736caba55bdb67216e485557ea6b6af75f37096c9aa6a5a75f"
     val validS = hex"eeb940b1d03b21e36b0e47e79769f095fe2ab855bd91e3a38756b7d75a9c4549"
 
-    val validV   = hex"0000000000000000000000000000000000000000000000000000000000000024"
+    val validV   = hex"000000000000000000000000000000000000000000000000000000000000001c"
     val invalidV = hex"000000000000000000000000000000000000000000000000000000000000f01c"
 
     val invalidInput = validH ++ invalidV ++ validR ++ validS
