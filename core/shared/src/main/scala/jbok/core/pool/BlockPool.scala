@@ -6,7 +6,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common._
 import jbok.core.ledger.History
-import jbok.core.models.{Block, BlockHeader}
+import jbok.core.models.Block
 import jbok.core.pool.BlockPool._
 import scodec.bits.ByteVector
 
@@ -19,9 +19,9 @@ case class BlockPoolConfig(
   * [[BlockPool]] is responsible for stashing blocks with unknown ancestors
   * or candidate branches of blocks in consensus protocols with some finality criteria
   */
-case class BlockPool[F[_]](
-    history: History[F],
-    config: BlockPoolConfig,
+final class BlockPool[F[_]](
+    private[jbok] val history: History[F],
+    private[jbok] val config: BlockPoolConfig,
     blocks: Ref[F, Map[ByteVector, PooledBlock]], // blockHash -> block
     parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]] // blockHash -> childrenHashes
 )(implicit F: ConcurrentEffect[F]) {
@@ -30,16 +30,18 @@ case class BlockPool[F[_]](
   def contains(blockHash: ByteVector): F[Boolean] =
     blocks.get.map(_.contains(blockHash))
 
-  def isDuplicate(blockHash: ByteVector): F[Boolean] =
-    history.getBlockByHash(blockHash).map(_.isDefined) || contains(blockHash)
+  def getPooledBlockByHash(hash: ByteVector): F[Option[PooledBlock]] =
+    blocks.get.map(_.get(hash))
 
-  def raiseIfDuplicate(blockHash: ByteVector): F[Unit] =
-    isDuplicate(blockHash).ifM(F.raiseError(new Exception("duplicate")), F.unit)
+  def getBlockFromPoolOrHistory(hash: ByteVector): F[Option[Block]] =
+    OptionT(getPooledBlockByHash(hash).map(_.map(_.block)))
+      .orElseF(history.getBlockByHash(hash))
+      .value
 
   def addBlock(block: Block): F[Option[Leaf]] =
     for {
       bestBlockNumber <- history.getBestBlockNumber
-      _               <- cleanUp(bestBlockNumber)
+      _               <- cleanStaleBlocks(bestBlockNumber)
       m               <- blocks.get
       leaf <- m.get(block.header.hash) match {
         case Some(_) =>
@@ -63,7 +65,7 @@ case class BlockPool[F[_]](
                 case None =>
                   val p: F[Option[Leaf]] = findClosestChainedAncestor(block).flatMap {
                     case Some(ancestor) =>
-                      log.debug(s"${block.tag} to will be on a rooted side chain")
+                      log.debug(s"${block.tag} will be on a rooted side chain")
                       updateTotalDifficulties(ancestor)
 
                     case None =>
@@ -112,33 +114,6 @@ case class BlockPool[F[_]](
     blocks.get.flatMap(blockMap => go(blockMap, blockHash, childShared = false).map(_.reverse))
   }
 
-  def getBlockByHash(blockHash: ByteVector): F[Option[Block]] =
-    blocks.get.map(_.get(blockHash).map(_.block))
-
-  def getHeader(hash: ByteVector): F[Option[BlockHeader]] =
-    OptionT(history.getBlockHeaderByHash(hash))
-      .orElseF(getBlockByHash(hash).map(_.map(_.header)))
-      .value
-
-  def getNBlocks(hash: ByteVector, n: Int): F[List[Block]] =
-    for {
-      pooledBlocks <- getBranch(hash, delete = false).map(_.take(n))
-      result <- if (pooledBlocks.length == n) {
-        pooledBlocks.pure[F]
-      } else {
-        val chainedBlockHash = pooledBlocks.headOption.map(_.header.parentHash).getOrElse(hash)
-        history.getBlockByHash(chainedBlockHash).flatMap {
-          case None =>
-            F.pure(List.empty[Block])
-
-          case Some(block) =>
-            val remaining = n - pooledBlocks.length - 1
-            val numbers   = (block.header.number - remaining) until block.header.number
-            numbers.toList.map(history.getBlockByNumber).sequence.map(xs => (xs.flatten :+ block) ::: pooledBlocks)
-        }
-      }
-    } yield result
-
   /** Removes a whole subtree starts with the ancestor. To be used when ancestor fails to execute */
   def removeSubtree(ancestor: ByteVector): F[Unit] =
     for {
@@ -155,11 +130,8 @@ case class BlockPool[F[_]](
       }
     } yield ()
 
-  /**
-    * Removes stale blocks - too old or too young in relation the current best block number
-    * @param bestBlockNumber - best block number of the main chain
-    */
-  private def cleanUp(bestBlockNumber: BigInt): F[Unit] =
+  /** Removes stale blocks - too old or too young in relation the current best block number */
+  private def cleanStaleBlocks(bestBlockNumber: BigInt): F[Unit] =
     for {
       m <- blocks.get
       staleHashes = m.values.toList.collect {
@@ -174,29 +146,29 @@ case class BlockPool[F[_]](
       }
     } yield ()
 
+  /** Recursively update total difficulties for the ancestor's descendants (iff ancestor's td is defined) */
   private def updateTotalDifficulties(ancestor: ByteVector): F[Option[Leaf]] = {
-    val leaf = for {
-      m        <- OptionT.liftF(blocks.get)
-      qb       <- OptionT.fromOption[F](m.get(ancestor))
-      td       <- OptionT.fromOption[F](qb.totalDifficulty)
+    val p = for {
+      blockMap <- OptionT.liftF(blocks.get)
+      pooled   <- OptionT.fromOption[F](blockMap.get(ancestor))
+      td       <- OptionT.fromOption[F](pooled.totalDifficulty)
       children <- OptionT.liftF(parentToChildren.get.map(_.getOrElse(ancestor, Set.empty)))
 
       leaf <- if (children.nonEmpty) {
         val updatedChildren =
-          children.flatMap(m.get).map(qb => qb.copy(totalDifficulty = Some(td + qb.block.header.difficulty)))
+          children.flatMap(blockMap.get).map(pb => pb.copy(totalDifficulty = Some(td + pb.block.header.difficulty)))
         val l = for {
-          _ <- blocks.update(_ ++ updatedChildren.map(x => x.block.header.hash -> x).toMap)
+          _ <- blocks.update(_ ++ updatedChildren.map(x => x.block.header.hash -> x).toMap) // update children td
           l <- updatedChildren.toList
-            .traverse(qb => updateTotalDifficulties(qb.block.header.hash))
+            .traverse(pb => updateTotalDifficulties(pb.block.header.hash)) // recursively update children's children
             .map(_.flatten.maxBy(_.totalDifficulty))
         } yield l
         OptionT.liftF(l)
       } else {
-        OptionT.some[F](Leaf(ancestor, td))
+        OptionT.some[F](Leaf(ancestor, td)) // ancestor has no children, so it is a leaf
       }
     } yield leaf
-
-    leaf.value
+    p.value
   }
 
   /**
@@ -209,11 +181,11 @@ case class BlockPool[F[_]](
   private def findClosestChainedAncestor(block: Block): F[Option[ByteVector]] = {
     def go(blockMap: Map[ByteVector, PooledBlock], block: Block): F[Option[ByteVector]] =
       blockMap.get(block.header.parentHash) match {
-        case Some(PooledBlock(block, Some(_))) =>
-          F.pure(Some(block.header.hash))
+        case Some(PooledBlock(parentBlock, Some(_))) =>
+          F.pure(Some(parentBlock.header.hash))
 
-        case Some(PooledBlock(block, None)) =>
-          go(blockMap, block)
+        case Some(PooledBlock(parentBlock, None)) =>
+          go(blockMap, parentBlock)
 
         case None =>
           F.pure(None)
@@ -224,7 +196,6 @@ case class BlockPool[F[_]](
 
   private def addBlock(block: Block, parentTd: Option[BigInt]): F[Unit] = {
     val td = parentTd.map(_ + block.header.difficulty)
-
     for {
       _        <- blocks.update(_ + (block.header.hash -> PooledBlock(block, td)))
       siblings <- parentToChildren.get.map(_.getOrElse(block.header.parentHash, Set.empty))
@@ -246,5 +217,5 @@ object BlockPool {
     for {
       blocks           <- Ref.of[F, Map[ByteVector, PooledBlock]](Map.empty)
       parentToChildren <- Ref.of[F, Map[ByteVector, Set[ByteVector]]](Map.empty)
-    } yield BlockPool(history, blockPoolConfig, blocks, parentToChildren)
+    } yield new BlockPool(history, blockPoolConfig, blocks, parentToChildren)
 }

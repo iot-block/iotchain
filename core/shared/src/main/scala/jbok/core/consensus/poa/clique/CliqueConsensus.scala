@@ -103,22 +103,27 @@ case class CliqueConsensus[F[_]](
   }
 
   override def verify(block: Block): F[Unit] =
-    history.getBlockHeaderByHash(block.header.parentHash).flatMap {
-      case Some(parent) =>
-        F.pure {
-            Set(Clique.diffInTurn, Clique.diffNoTurn).contains(block.header.difficulty) &&
-            calcGasLimit(parent.gasLimit) == block.header.gasLimit &&
-            block.header.unixTimestamp == parent.unixTimestamp + clique.config.period.toMillis &&
-            block.header.mixHash == ByteVector.empty &&
-            Set(Clique.nonceAuthVote, Clique.nonceDropVote).contains(block.header.nonce)
-          }
-          .ifM(F.unit, F.raiseError(new Exception("block verified invalid")))
-      case None => F.raiseError(HeaderParentNotFoundInvalid)
-    }
+    for {
+      blockOpt <- blockPool.getBlockFromPoolOrHistory(block.header.hash)
+      _        <- if (blockOpt.isDefined) F.raiseError(new Exception("duplicate block")) else F.unit
+      _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap[Unit] {
+        case Some(parent) =>
+          F.pure {
+              Set(Clique.diffInTurn, Clique.diffNoTurn).contains(block.header.difficulty) &&
+              calcGasLimit(parent.gasLimit) == block.header.gasLimit &&
+              block.header.unixTimestamp == parent.unixTimestamp + clique.config.period.toMillis &&
+              block.header.mixHash == ByteVector.empty &&
+              Set(Clique.nonceAuthVote, Clique.nonceDropVote).contains(block.header.nonce)
+            }
+            .ifM(F.unit, F.raiseError(new Exception("block verified invalid")))
+
+        case None => F.raiseError(HeaderParentNotFoundInvalid)
+      }
+    } yield ()
 
   override def run(block: Block): F[Consensus.Result] = {
     val result: F[Consensus.Result] = for {
-      _ <- blockPool.raiseIfDuplicate(block.header.hash)
+      _ <- verify(block)
       _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap {
         case Some(parent) =>
           BlockValidator.preExecValidate[F](parent, block) *>

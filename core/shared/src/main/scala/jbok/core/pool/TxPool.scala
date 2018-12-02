@@ -19,6 +19,7 @@ final class TxPool[F[_]] private (
 
   def addTransactions(stxs: SignedTransactions, notify: Boolean = false): F[Unit] =
     for {
+      _       <- F.delay(log.debug(s"add ${stxs.txs.length} txs"))
       current <- T.clock.realTime(MILLISECONDS)
       _ <- pending.update { txs =>
         val updated = txs ++ stxs.txs.map(_ -> current)
@@ -49,8 +50,10 @@ final class TxPool[F[_]] private (
       _ <- broadcast(SignedTransactions(newStx :: Nil))
     } yield ()
 
-  def removeTransactions(signedTransactions: List[SignedTransaction]): F[Unit] =
+  def removeTransactions(signedTransactions: List[SignedTransaction]): F[Unit] = {
+    log.debug(s"remove ${signedTransactions.length} txs")
     pending.update(_.filterNot { case (tx, _) => signedTransactions.contains(tx) })
+  }
 
   def getPendingTransactions: F[Map[SignedTransaction, Long]] =
     for {
