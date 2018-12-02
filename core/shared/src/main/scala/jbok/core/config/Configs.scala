@@ -22,7 +22,6 @@ object Configs {
       mining: MiningConfig,
       rpc: RpcConfig,
       blockchain: BlockChainConfig,
-      daofork: DaoForkConfig
   )
 
   object FullNodeConfig {
@@ -35,7 +34,6 @@ object Configs {
       val mining                       = MiningConfig()
       val rpc                          = RpcConfig(true, "localhost", port + 100)
       val blockchain: BlockChainConfig = BlockChainConfig()
-      val daofork: DaoForkConfig       = DaoForkConfig()
       FullNodeConfig(
         datadir,
         keystore,
@@ -44,8 +42,7 @@ object Configs {
         txPool,
         mining,
         rpc,
-        blockchain,
-        daofork,
+        blockchain
       )
     }
 
@@ -87,40 +84,19 @@ object Configs {
   case class BlockChainConfig(
       frontierBlockNumber: BigInt = 0,
       homesteadBlockNumber: BigInt = 1150000,
-      eip150BlockNumber: BigInt = BigInt("2500000"),
-      eip155BlockNumber: BigInt = BigInt("3000000"),
-      eip160BlockNumber: BigInt = BigInt("3000000"),
-      eip161BlockNumber: BigInt = BigInt("1000000000000000000"),
+      tangerineWhistleBlockNumber: BigInt = 2463000,
+      spuriousDragonBlockNumber: BigInt = 2675000,
+      byzantiumBlockNumber: BigInt = 4370000,
+      constantinopleBlockNumber: BigInt = BigInt("1000000000000000000000"), // TBD on the Ethereum mainnet
       maxCodeSize: Option[BigInt] = Some(24 * 1024),
       difficultyBombPauseBlockNumber: BigInt = BigInt("3000000"),
       difficultyBombContinueBlockNumber: BigInt = BigInt("5000000"),
       customGenesisFileOpt: Option[String] = None,
-      daoForkConfig: Option[DaoForkConfig] = None,
       accountStartNonce: UInt256 = UInt256.Zero,
       chainId: Byte = 0x3d.toByte,
       monetaryPolicyConfig: MonetaryPolicyConfig = MonetaryPolicyConfig(),
       gasTieBreaker: Boolean = false
   )
-
-  case class DaoForkConfig(
-      forkBlockNumber: BigInt = BigInt("1920000"),
-      forkBlockHash: ByteVector = hex"94365e3a8c0b35089c1d1195081fe7489b528a84b22199c916180db8b28ade7f",
-      blockExtraData: Option[ByteVector] = None,
-      range: Int = 10,
-      refundContract: Option[Address] = None,
-      drainList: List[Address] = Nil
-  ) {
-    private lazy val extraDataBlockRange = forkBlockNumber until (forkBlockNumber + range)
-
-    def isDaoForkBlock(blockNumber: BigInt): Boolean = forkBlockNumber == blockNumber
-
-    def requiresExtraData(blockNumber: BigInt): Boolean =
-      blockExtraData.isDefined && (extraDataBlockRange contains blockNumber)
-
-    def getExtraData(blockNumber: BigInt): Option[ByteVector] =
-      if (requiresExtraData(blockNumber)) blockExtraData
-      else None
-  }
 
   case class MonetaryPolicyConfig(
       eraDuration: Int = 5000000,

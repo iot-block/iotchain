@@ -1,35 +1,35 @@
 package jbok.crypto.signature
 
-import java.math.BigInteger
 import jbok.codec.json.implicits._
 import scodec.bits.ByteVector
 
-final case class CryptoSignature(r: BigInteger, s: BigInteger, v: Byte) {
+final case class CryptoSignature(r: BigInt, s: BigInt, v: BigInt) {
   def bytes: Array[Byte] =
-    CryptoSignature.unsigned(r) ++ CryptoSignature.unsigned(s) ++ Array(v)
+    CryptoSignature.unsignedPadding(r) ++ CryptoSignature.unsignedPadding(s) ++ CryptoSignature.unsigned(v)
 }
 
 object CryptoSignature {
-  def unsigned(bigInteger: BigInteger): Array[Byte] = {
+  def unsigned(bigInteger: BigInt): Array[Byte] = {
     val asByteArray = bigInteger.toByteArray
-    val bytes       = if (asByteArray.head == 0) asByteArray.tail else asByteArray
+    if (asByteArray.head == 0) asByteArray.tail else asByteArray
+  }
+
+  def unsignedPadding(bigInt: BigInt): Array[Byte] = {
+    val bytes = unsigned(bigInt)
     ByteVector(bytes).take(32).padLeft(32).toArray
   }
 
   def apply(bytes: Array[Byte]): CryptoSignature = {
-    require(bytes.length == 65, s"signature length should be 65 instead of ${bytes.length}")
+    require(bytes.length >= 65, s"signature length should be 65 instead of ${bytes.length}")
     CryptoSignature(
-      new BigInteger(1, bytes.slice(0, 32).toArray),
-      new BigInteger(1, bytes.slice(32, 64).toArray),
-      bytes.last
+      BigInt(1, bytes.slice(0, 32)),
+      BigInt(1, bytes.slice(32, 64)),
+      BigInt(1, bytes.slice(64, bytes.length))
     )
   }
 
-  def apply(r: BigInt, s: BigInt, v: Byte): CryptoSignature =
-    CryptoSignature(r.underlying(), s.underlying(), v)
-
-  def apply(r: ByteVector, s: ByteVector, v: Byte): CryptoSignature =
-    CryptoSignature(BigInt(1, r.toArray), BigInt(1, s.toArray), v)
+  def apply(r: ByteVector, s: ByteVector, v: ByteVector): CryptoSignature =
+    CryptoSignature(BigInt(1, r.toArray), BigInt(1, s.toArray), BigInt(1, v.toArray))
 
   implicit val signatureJsonEncoder = deriveEncoder[CryptoSignature]
 

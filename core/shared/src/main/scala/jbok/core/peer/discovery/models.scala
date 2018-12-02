@@ -62,7 +62,7 @@ case class UdpPacket(bytes: ByteVector) extends AnyVal {
   def pk: KeyPair.Public = {
     val msgHash = bytes.drop(MdcLength + 65).kec256
     val sig     = signature
-    Signature[ECDSA].recoverPublic(msgHash.toArray, sig, None).get
+    Signature[ECDSA].recoverPublic(msgHash.toArray, sig, 0).get
   }
 
   def id: ByteVector = pk.bytes.kec256
@@ -77,7 +77,7 @@ case class UdpPacket(bytes: ByteVector) extends AnyVal {
     val signatureBytes = bytes.drop(UdpPacket.MdcLength).take(65)
     val r              = signatureBytes.take(32)
     val s              = signatureBytes.drop(32).take(32)
-    val v              = (signatureBytes.last + 27).toByte
+    val v              = signatureBytes.drop(64)
 
     CryptoSignature(r, s, v)
   }
@@ -87,7 +87,7 @@ case class UdpPacket(bytes: ByteVector) extends AnyVal {
 }
 object UdpPacket {
   implicit val codec: Codec[UdpPacket] = implicitly[RlpCodec[UdpPacket]].codec
-  private val MdcLength           = 32
-  private val PacketTypeByteIndex = MdcLength + 65
-  private val DataOffset          = PacketTypeByteIndex
+  private val MdcLength                = 32
+  private val PacketTypeByteIndex      = MdcLength + 65
+  private val DataOffset               = PacketTypeByteIndex
 }

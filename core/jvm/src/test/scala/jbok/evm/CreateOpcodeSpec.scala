@@ -8,7 +8,7 @@ import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
 object CreateOpFixture {
-  val config = EvmConfig.PostEIP161ConfigBuilder(None)
+  val config = EvmConfig.SpuriousDragonConfigBuilder(None)
   import config.feeSchedule._
 
   val creatorAddr        = Address(0xcafe)
@@ -90,7 +90,7 @@ object CreateOpFixture {
 }
 
 class CreateOpcodeSpec extends JbokSpec {
-  val config = EvmConfig.PostEIP161ConfigBuilder(None)
+  val config = EvmConfig.SpuriousDragonConfigBuilder(None)
   import config.feeSchedule._
 
   case class CreateResult(
@@ -262,7 +262,7 @@ class CreateOpcodeSpec extends JbokSpec {
 
   "maxCodeSize check is enabled" should {
     val maxCodeSize = 30
-    val ethConfig   = EvmConfig.PostEIP160ConfigBuilder(Some(maxCodeSize))
+    val ethConfig   = EvmConfig.ConstantinopleConfigBuilder(Some(maxCodeSize))
 
     val context = CreateOpFixture.context.copy(startGas = Int.MaxValue, config = ethConfig)
 
@@ -324,9 +324,9 @@ class CreateOpcodeSpec extends JbokSpec {
   "account with non-zero balance, but empty code and zero nonce, already exists" should {
     "succeed in creating new contract" in {
       val accountNonZeroBalance = Account(balance = 1)
-      val world   = CreateOpFixture.initWorld.putAccount(CreateOpFixture.newAddr, accountNonZeroBalance)
-      val context = CreateOpFixture.context.copy(world = world)
-      val result  = CreateResult(context = context)
+      val world                 = CreateOpFixture.initWorld.putAccount(CreateOpFixture.newAddr, accountNonZeroBalance)
+      val context               = CreateOpFixture.context.copy(world = world)
+      val result                = CreateResult(context = context)
 
       result.returnValue shouldBe CreateOpFixture.newAddr.toUInt256
 

@@ -9,7 +9,7 @@ import scodec.bits._
 import jbok.evm.testkit._
 
 class OpCodeBenchmark extends JbokBenchmark {
-  val config = EvmConfig.PostEIP161ConfigBuilder(None)
+  val config = EvmConfig.ConstantinopleConfigBuilder(None)
   val env =
     ExecEnv(ownerAddr, callerAddr, callerAddr, 0, ByteVector.empty, 0, Program(ByteVector.empty), exampleBlockHeader, 0)
   val context = ProgramContext(env, Address(1024), UInt256.MaxValue, initWorld, config)

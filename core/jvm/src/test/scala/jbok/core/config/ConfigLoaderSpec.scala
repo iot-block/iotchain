@@ -67,8 +67,7 @@ class ConfigLoaderSpec extends JbokSpec {
           txPool,
           mining,
           rpc,
-          BlockChainConfig(),
-          DaoForkConfig()
+          BlockChainConfig()
         )
 
       println(full.unsafeRunSync())

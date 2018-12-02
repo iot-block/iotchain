@@ -71,7 +71,7 @@ object PrecompiledContracts {
 
       if (hasOnlyLastByteSet(v)) {
         val sig       = CryptoSignature(r.toArray ++ s.toArray ++ Array(v.last))
-        val recovered = Signature[ECDSA].recoverPublic(h.toArray, sig)
+        val recovered = Signature[ECDSA].recoverPublic(h.toArray, sig, 0)
         recovered
           .map { pk =>
             val hash = pk.bytes.kec256.slice(12, 32)

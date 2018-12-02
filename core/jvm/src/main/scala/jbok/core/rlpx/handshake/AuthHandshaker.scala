@@ -207,7 +207,7 @@ case class AuthHandshaker[F[_]](
     val token  = bigIntegerToBytes(sharedSecret, NonceSize)
     val signed = xor(token, nonce.toArray)
 
-    SecP256k1.recoverPublic(signed, signature, None).get
+    SecP256k1.recoverPublic(signed, signature, 0).get
   }
 
   private def xor(a: Array[Byte], b: Array[Byte]): Array[Byte] =
@@ -221,7 +221,7 @@ case class AuthHandshaker[F[_]](
     }
 
     val messageToSign = ByteVector(sharedSecret).xor(nonce)
-    val signature     = SecP256k1.sign(messageToSign.toArray, ephemeralKey).unsafeRunSync()
+    val signature     = SecP256k1.sign(messageToSign.toArray, ephemeralKey, 0).unsafeRunSync()
 
     AuthInitiateMessageV4(signature, nodeKey.public.bytes, nonce, ProtocolVersion)
   }

@@ -264,6 +264,7 @@ lazy val commonSettings = Seq(
 //  addCompilerPlugin("ch.epfl.scala"   %% "scalac-profiling"   % "1.0.0"),
 //  addCompilerPlugin(scalafixSemanticdb),
   fork := true,
+  connectInput := true,
   fork in Test := false,
   parallelExecution in test := false,
   scalacOpts

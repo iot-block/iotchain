@@ -18,7 +18,7 @@ class ECDSAPlatform extends Signature[IO, ECDSA] {
 
   override def generateKeyPair(random: Option[Random]): IO[KeyPair] = IO {
     val keyPair = secp256k1.genKeyPair()
-    val secret = KeyPair.Secret(keyPair.getPrivate("hex"))
+    val secret  = KeyPair.Secret(keyPair.getPrivate("hex"))
     // drop uncompressed indicator, make it 64-bytes
     val pubkey = KeyPair.Public(keyPair.getPublic(false, "hex").drop(2))
     KeyPair(pubkey, secret)
@@ -30,12 +30,16 @@ class ECDSAPlatform extends Signature[IO, ECDSA] {
     KeyPair.Public(keyPair.getPublic(false, "hex").drop(2))
   }
 
-  override def sign(hash: Array[Byte], keyPair: KeyPair, chainId: Option[Byte]): IO[CryptoSignature] = IO {
-    val kp = secp256k1.keyFromPrivate(keyPair.secret.bytes.toHex, "hex")
+  override def sign(hash: Array[Byte], keyPair: KeyPair, chainId: BigInt): IO[CryptoSignature] = IO {
+    val kp  = secp256k1.keyFromPrivate(keyPair.secret.bytes.toHex, "hex")
     val sig = secp256k1.sign(new Uint8Array(hash.toJSArray), kp)
-    val r      = new BigInteger(sig.r.toString)
-    val s      = new BigInteger(sig.s.toString)
-    CryptoSignature(r, s, (sig.recoveryParam + 27).toByte)
+    val r   = new BigInteger(sig.r.toString)
+    val s   = new BigInteger(sig.s.toString)
+    val v: BigInt =
+      if (sig.recoveryParam == 27) chainId * 2 + 35
+      else if (sig.recoveryParam == 28) chainId * 2 + 36
+      else sig.recoveryParam
+    CryptoSignature(r, s, v)
   }
 
   override def verify(hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public): IO[Boolean] = IO {
@@ -44,17 +48,26 @@ class ECDSAPlatform extends Signature[IO, ECDSA] {
     secp256k1.verify(new Uint8Array(hash.toJSArray), signatureEC, key)
   }
 
-  override def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: Option[Byte]): Option[KeyPair.Public] = {
-    val signatureEC = convert(sig)
-    val msg = new Uint8Array(hash.toJSArray)
-    val recId = secp256k1.getKeyRecoveryParam(msg, signatureEC)
-    val point = secp256k1.recoverPubKey(new Uint8Array(hash.toJSArray), signatureEC, recId)
-    Some(KeyPair.Public(point.encode("hex", false).drop(2)))
+  override def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: BigInt): Option[KeyPair.Public] = {
+    val v: Option[BigInt] = if (sig.v == chainId * 2 + 35) {
+      Some(27)
+    } else if (sig.v == chainId * 2 + 36) {
+      Some(28)
+    } else {
+      None
+    }
+    v.map { bigInt =>
+      val signatureEC = convert(sig.copy(v = bigInt))
+      val msg         = new Uint8Array(hash.toJSArray)
+      val recId       = secp256k1.getKeyRecoveryParam(msg, signatureEC)
+      val point       = secp256k1.recoverPubKey(new Uint8Array(hash.toJSArray), signatureEC, recId)
+      KeyPair.Public(point.encode("hex", false).drop(2))
+    }
   }
 
   def convert(sig: CryptoSignature) = {
-    val r           = new BN(sig.r.toString(16), 16)
-    val s           = new BN(sig.s.toString(16), 16)
+    val r = new BN(sig.r.toString(16), 16)
+    val s = new BN(sig.s.toString(16), 16)
     SignatureEC(r, s, recoveryParam = sig.v.toInt - 27)
   }
 }

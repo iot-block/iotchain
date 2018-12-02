@@ -19,7 +19,6 @@ case class SignedTransaction(
     receivingAddress: Address,
     value: BigInt,
     payload: ByteVector,
-    chainId: Byte,
     v: BigInt,
     r: BigInt,
     s: BigInt
@@ -27,8 +26,10 @@ case class SignedTransaction(
   lazy val hash: ByteVector =
     RlpCodec.encode(this).require.bytes.kec256
 
+  lazy val chainId: Option[BigInt] = if (v < 35) None else Some(if (v % 2 == 0) (v - 36) / 2 else (v - 35) / 2)
+
   lazy val senderAddress: Option[Address] =
-    SignedTransaction.getSender(this, chainId)
+    chainId.flatMap(SignedTransaction.getSender(this, _))
 
   def getSenderOrThrow[F[_]: Sync]: F[Address] =
     Sync[F].fromOption(senderAddress, TxSignatureInvalid)
@@ -46,7 +47,6 @@ object SignedTransaction {
 
   def apply(
       tx: Transaction,
-      chainId: Byte,
       v: BigInt,
       r: BigInt,
       s: BigInt
@@ -57,7 +57,6 @@ object SignedTransaction {
     tx.receivingAddress.getOrElse(Address.empty),
     tx.value,
     tx.payload,
-    chainId,
     v,
     r,
     s
@@ -65,13 +64,12 @@ object SignedTransaction {
 
   def apply(
       tx: Transaction,
-      chainId: Byte,
       v: Byte,
       r: ByteVector,
       s: ByteVector
-  ): SignedTransaction = apply(tx, chainId, BigInt(1, Array(v)), BigInt(1, r.toArray), BigInt(1, s.toArray))
+  ): SignedTransaction = apply(tx, BigInt(1, Array(v)), BigInt(1, r.toArray), BigInt(1, s.toArray))
 
-  def sign(tx: Transaction, keyPair: KeyPair, chainId: Byte): SignedTransaction = {
+  def sign(tx: Transaction, keyPair: KeyPair, chainId: BigInt): SignedTransaction = {
     val stx = new SignedTransaction(
       tx.nonce,
       tx.gasPrice,
@@ -79,32 +77,29 @@ object SignedTransaction {
       tx.receivingAddress.getOrElse(Address(ByteVector.empty)),
       tx.value,
       tx.payload,
-      chainId,
       BigInt(0),
       BigInt(0),
       BigInt(0)
     )
     val bytes = bytesToSign(stx, chainId)
-    val sig   = Signature[ECDSA].sign(bytes.toArray, keyPair, Some(chainId)).unsafeRunSync()
-    stx.copy(v = BigInt(1, Array(sig.v)), r = sig.r, s = sig.s)
+    val sig   = Signature[ECDSA].sign(bytes.toArray, keyPair, chainId).unsafeRunSync()
+    stx.copy(v = sig.v, r = sig.r, s = sig.s)
   }
 
-  private def bytesToSign(stx: SignedTransaction, chainId: Byte): ByteVector =
-      chainSpecificTransactionBytes(stx, chainId)
-
-  private def recoverPublicKey(stx: SignedTransaction, chainId: Byte): Option[KeyPair.Public] = {
-    val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)
-    val txSig       = CryptoSignature(stx.r, stx.s, stx.v.toByte)
-
-    Signature[ECDSA].recoverPublic(bytesToSign.toArray, txSig, Some(chainId))
-  }
-
-  private def getSender(stx: SignedTransaction, chainId: Byte): Option[Address] =
-    recoverPublicKey(stx, chainId).map(pk => Address(pk.bytes.kec256))
-
-  private def chainSpecificTransactionBytes(stx: SignedTransaction, chainId: Byte): ByteVector = {
+  private def bytesToSign(stx: SignedTransaction, chainId: BigInt): ByteVector = {
     val hlist = stx.nonce :: stx.gasPrice :: stx.gasLimit :: stx.receivingAddress :: stx.value :: stx.payload :: chainId :: BigInt(
       0) :: BigInt(0) :: HNil
     RlpCodec.encode(hlist).require.bytes.kec256
   }
+
+  private def recoverPublicKey(stx: SignedTransaction, chainId: BigInt): Option[KeyPair.Public] = {
+    val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)
+    val txSig       = CryptoSignature(stx.r, stx.s, stx.v)
+
+    Signature[ECDSA].recoverPublic(bytesToSign.toArray, txSig, chainId)
+  }
+
+  private def getSender(stx: SignedTransaction, chainId: BigInt): Option[Address] =
+    recoverPublicKey(stx, chainId).map(pk => Address(pk.bytes.kec256))
+
 }

@@ -8,8 +8,8 @@ import jbok.persistent.KeyValueDB
 
 class CallOpcodesSpecPostEip161 extends JbokSpec {
 
-  val config = EvmConfig.PostEIP161ConfigBuilder(None)
-  val db = KeyValueDB.inmem[IO].unsafeRunSync()
+  val config  = EvmConfig.ConstantinopleConfigBuilder(None)
+  val db      = KeyValueDB.inmem[IO].unsafeRunSync()
   val history = History[IO](db).unsafeRunSync()
 //  val startState = WorldStateProxy.inMemory[IO](db, noEmptyAccounts = true).unsafeRunSync()
   val startState =
@@ -22,7 +22,7 @@ class CallOpcodesSpecPostEip161 extends JbokSpec {
 
     "call depth limit is reached" should {
       val context = fxt.context.copy(env = fxt.env.copy(callDepth = EvmConfig.MaxCallDepth))
-      val call = fxt.CallResult(op = CALL, context = context)
+      val call    = fxt.CallResult(op = CALL, context = context)
 
       "not modify world state" in {
         call.world shouldEqual fxt.worldWithExtAccount
@@ -41,7 +41,7 @@ class CallOpcodesSpecPostEip161 extends JbokSpec {
     "external contract terminates abnormally" should {
 
       val context = fxt.context.copy(world = fxt.worldWithInvalidProgram)
-      val call = fxt.CallResult(op = CALL, context)
+      val call    = fxt.CallResult(op = CALL, context)
 
       "modify only touched accounts in world state" in {
         call.world shouldEqual fxt.worldWithInvalidProgram.touchAccounts(fxt.ownerAddr, fxt.extAddr)
@@ -51,8 +51,8 @@ class CallOpcodesSpecPostEip161 extends JbokSpec {
     "calling an empty" should {
 
       val contextEmptyAccount = fxt.context.copy(world = fxt.worldWithExtEmptyAccount)
-      val callEmptyAccount = fxt.CallResult(op = CALL, contextEmptyAccount)
-      val callZeroTransfer = fxt.CallResult(op = CALL, contextEmptyAccount, value = UInt256.Zero)
+      val callEmptyAccount    = fxt.CallResult(op = CALL, contextEmptyAccount)
+      val callZeroTransfer    = fxt.CallResult(op = CALL, contextEmptyAccount, value = UInt256.Zero)
 
       "consume correct gas (refund call gas, add new account modifier) when transferring value to Empty Account" in {
         val expectedGas = G_call + G_callvalue + G_newaccount - G_callstipend + fxt.expectedMemCost

@@ -7,7 +7,7 @@ import org.scalatest.{FunSuite, Matchers}
 
 class OpCodeGasSpecPostEip161 extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.PostEIP161ConfigBuilder(None)
+  override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
 
   import config.feeSchedule._
 
@@ -21,7 +21,8 @@ class OpCodeGasSpecPostEip161 extends FunSuite with OpCodeTesting with Matchers 
     forAll(stateGen) { stateIn =>
       val (refund, _) = stateIn.stack.pop
       whenever(
-        stateIn.world.getAccountOpt(Address(refund)).isEmpty.unsafeRunSync() && stateIn.ownBalance.unsafeRunSync() > 0) {
+        stateIn.world.getAccountOpt(Address(refund)).isEmpty.unsafeRunSync() && stateIn.ownBalance
+          .unsafeRunSync() > 0) {
         val stateOut = op.execute(stateIn).unsafeRunSync()
         stateOut.gasRefund shouldEqual R_selfdestruct
         verifyGas(G_selfdestruct + G_newaccount, stateIn, stateOut)
@@ -30,10 +31,10 @@ class OpCodeGasSpecPostEip161 extends FunSuite with OpCodeTesting with Matchers 
 
     // Sending refund to an already existing account not dead account
     forAll(stateGen) { stateIn =>
-      val (refund, _) = stateIn.stack.pop
-      val world = stateIn.world.putAccount(Address(refund), Account.empty().increaseNonce())
+      val (refund, _)    = stateIn.stack.pop
+      val world          = stateIn.world.putAccount(Address(refund), Account.empty().increaseNonce())
       val updatedStateIn = stateIn.withWorld(world)
-      val stateOut = op.execute(updatedStateIn).unsafeRunSync()
+      val stateOut       = op.execute(updatedStateIn).unsafeRunSync()
       verifyGas(G_selfdestruct, updatedStateIn, stateOut)
       stateOut.gasRefund shouldEqual R_selfdestruct
     }
@@ -42,9 +43,10 @@ class OpCodeGasSpecPostEip161 extends FunSuite with OpCodeTesting with Matchers 
     forAll(stateGen) { stateIn =>
       val (refund, _) = stateIn.stack.pop
       whenever(
-        stateIn.world.getAccountOpt(Address(refund)).isEmpty.unsafeRunSync() && stateIn.ownBalance.unsafeRunSync() > 0) {
+        stateIn.world.getAccountOpt(Address(refund)).isEmpty.unsafeRunSync() && stateIn.ownBalance
+          .unsafeRunSync() > 0) {
         val updatedStateIn = stateIn.withAddressToDelete(stateIn.context.env.ownerAddr)
-        val stateOut = op.execute(updatedStateIn).unsafeRunSync()
+        val stateOut       = op.execute(updatedStateIn).unsafeRunSync()
         verifyGas(G_selfdestruct + G_newaccount, updatedStateIn, stateOut)
         stateOut.gasRefund shouldEqual 0
       }

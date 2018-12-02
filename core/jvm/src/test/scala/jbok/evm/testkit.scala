@@ -87,7 +87,7 @@ object testkit {
       inputDataGen: Gen[ByteVector] = getByteVectorGen(0, 0),
       valueGen: Gen[UInt256] = getUInt256Gen(),
       blockNumberGen: Gen[UInt256] = getUInt256Gen(0, 300),
-      evmConfig: EvmConfig = EvmConfig.PostEIP160ConfigBuilder(None)
+      evmConfig: EvmConfig = EvmConfig.SpuriousDragonConfigBuilder(None)
   ): Gen[ProgramState[IO]] =
     for {
       stack          <- stackGen

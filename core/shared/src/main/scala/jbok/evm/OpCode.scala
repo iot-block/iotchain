@@ -95,9 +95,6 @@ object OpCodes {
       XOR,
       NOT,
       BYTE,
-      SHL,
-      SHR,
-      SAR,
       SHA3,
       ADDRESS,
       BALANCE,
@@ -112,8 +109,6 @@ object OpCodes {
       GASPRICE,
       EXTCODESIZE,
       EXTCODECOPY,
-//      RETURNDATASIZE,
-//      RETURNDATACOPY,
       BLOCKHASH,
       COINBASE,
       TIMESTAMP,
@@ -136,13 +131,20 @@ object OpCodes {
       CALL,
       CALLCODE,
       RETURN,
-      REVERT,
       INVALID,
       SELFDESTRUCT
     )
 
   val HomesteadOpCodes: List[OpCode] =
     DELEGATECALL +: FrontierOpCodes
+
+  val ByzantiumOpCodes: List[OpCode] =
+//    STATICCALL +: RETURNDATASIZE +: RETURNDATACOPY +:
+    REVERT +: HomesteadOpCodes
+
+  val ConstantinopleOpCodes: List[OpCode] =
+//    CREATE2 +: EXTCODEHASH +: // eip status draft
+    SHL +: SHR +: SAR +: ByzantiumOpCodes
 }
 
 object OpCode {
