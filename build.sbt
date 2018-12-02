@@ -71,6 +71,9 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "org.rogach" %%% "scallop" % "3.1.3",
       // config
       "com.github.pureconfig" %% "pureconfig" % "0.10.0",
+      // metrics
+      "io.dropwizard.metrics" % "metrics-core" % "4.0.3",
+      "io.dropwizard.metrics" % "metrics-json" % "4.0.3",
       // test
       "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
       "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
