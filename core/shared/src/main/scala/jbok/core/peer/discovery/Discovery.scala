@@ -40,12 +40,13 @@ case class Discovery[F[_]](
   def ping(id: ByteVector, to: InetSocketAddress): F[Pong] = {
     val req = Ping(4, ourEndpoint, Endpoint.makeEndpoint(to, 0), System.currentTimeMillis() + ttl.toMillis)
     for {
-      packet  <- encode(req)
       promise <- Deferred[F, KadPacket]
-      _       <- promises.update(_ + (packet.mdc -> promise))
-      _       <- transport.send(to, packet, Some(timeout))
-      kad     <- promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
-      _       <- promises.update(_ - id)
+      udp     <- makeUdpPacket(req)
+      packet = RlpCodec.encode(udp).require.bytes
+      _   <- promises.update(_ + (packet.bytes.take(32) -> promise))
+      _   <- transport.send(to, packet, Some(timeout))
+      kad <- promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
+      _   <- promises.update(_ - id)
     } yield kad.asInstanceOf[Pong]
   }
 
@@ -67,7 +68,8 @@ case class Discovery[F[_]](
       p <- Deferred[F, KadPacket]
       _ <- promises.update(_ + (toId -> p))
       _ = log.info(s"findnode from ${toId}")
-      packet     <- encode(req)
+      udp <- makeUdpPacket(req)
+      packet = RlpCodec.encode(udp).require.bytes
       _          <- transport.send(to, packet, Some(timeout))
       neighbours <- p.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
       _          <- promises.update(_ - toId)
@@ -176,58 +178,62 @@ case class Discovery[F[_]](
       F.unit
     }
 
-  private[jbok] def encode(kad: KadPacket): F[UdpPacket] =
+//  private[jbok] def encode(kad: KadPacket): F[UdpPacket2] =
+//    F.delay {
+//      val payload     = RlpCodec.encode(kad).require.bytes
+//      val payloadHash = payload.kec256
+//      val signature   = Signature[ECDSA].sign(payloadHash.toArray, keyPair, 0).unsafeRunSync()
+//
+//      val forSha = signature.bytes ++ payload.toArray
+//      val mdc    = forSha.kec256
+//      UdpPacket2(ByteVector(mdc), signature, payload)
+//    }
+//
+//  private[jbok] def decode(bytes: ByteVector): F[UdpPacket2] =
+//    if (bytes.length < 98) {
+//      F.raiseError[UdpPacket2](ErrPacketTooSmall)
+//    } else {
+//      val packet   = UdpPacket2(bytes)
+//      val mdcCheck = bytes.drop(32).kec256
+//      if (packet.hash == mdcCheck) {
+//        F.pure(packet)
+//      } else {
+//        F.raiseError[UdpPacket2](ErrBadHash)
+//      }
+//    }
+
+//  private[jbok] def extract(packet: UdpPacket2): F[KadPacket] = F.delay {
+//    RlpCodec.decode[KadPacket](packet.payload.bits).require.value
+//  }
+
+  private def makeUdpPacket(kad: KadPacket): F[UdpPacket2] =
     F.delay {
-      val payload   = RlpCodec.encode(kad).require.bytes
-      val hash      = payload.kec256
-      val signature = Signature[ECDSA].sign(hash.toArray, keyPair, 0).unsafeRunSync()
+      val payloadHash = kad.hash.toArray
+      val signature   = Signature[ECDSA].sign(payloadHash, keyPair, 0).unsafeRunSync()
+      val forSha      = signature.bytes ++ payloadHash
+      val hash        = forSha.kec256
 
-      val sigBytes =
-        BigIntegers.asUnsignedByteArray(32, signature.r.bigInteger) ++
-          BigIntegers.asUnsignedByteArray(32, signature.s.bigInteger) ++
-          signature.v.toByteArray
-
-      val forSha = sigBytes ++ payload.toArray
-      val mdc    = forSha.kec256
-
-      UdpPacket(ByteVector(mdc ++ forSha))
+      UdpPacket2(ByteVector(hash), signature, kad)
     }
 
-  private[jbok] def decode(bytes: ByteVector): F[UdpPacket] =
-    if (bytes.length < 98) {
-      F.raiseError[UdpPacket](ErrPacketTooSmall)
-    } else {
-      val packet   = UdpPacket(bytes)
-      val mdcCheck = bytes.drop(32).kec256
-      if (packet.mdc == mdcCheck) {
-        F.pure(packet)
-      } else {
-        F.raiseError[UdpPacket](ErrBadHash)
-      }
-    }
-
-  private[jbok] def extract(packet: UdpPacket): F[KadPacket] = F.delay {
-    RlpCodec.decode[KadPacket](packet.data.bits).require.value
-  }
-
-  val pipe: Pipe[F, (InetSocketAddress, UdpPacket), (InetSocketAddress, UdpPacket)] = { input =>
+  val pipe: Pipe[F, (InetSocketAddress, UdpPacket2), (InetSocketAddress, UdpPacket2)] = { input =>
     val output = input
       .evalMap {
-        case (remote, packet) =>
-          extract(packet).map(kad => (remote, kad, packet))
+        case (remote, udp) =>
+          F.delay((remote, udp.kadPacket, udp))
       }
       .evalMap[F, List[(InetSocketAddress, KadPacket)]] {
-        case (remote, Ping(_, from, to, expiration), packet) =>
+        case (remote, Ping(_, from, to, expiration), udp) =>
           for {
             _ <- checkExpiration(expiration)
             reply = Endpoint.makeEndpoint(remote, from.tcpPort)
-            pong  = Pong(reply, packet.mdc, System.currentTimeMillis() + ttl.toMillis)
+            pong  = Pong(reply, udp.hash, System.currentTimeMillis() + ttl.toMillis)
           } yield List(remote -> pong)
 
-        case (_, pong: Pong, packet) =>
+        case (_, pong: Pong, udp) =>
           for {
             _ <- checkExpiration(pong.expiration)
-            _ = log.info(s"recived pong from id ${packet.pk}")
+            _ = log.info(s"recived pong from id ${udp.pk}")
             _ <- promises.get.map(_.get(pong.pingHash)).flatMap {
               case Some(p) => p.complete(pong)
               case None    => F.raiseError[Unit](ErrUnsolicitedReply)
@@ -243,11 +249,11 @@ case class Discovery[F[_]](
                                    System.currentTimeMillis() + ttl.toMillis)
           } yield List(remote -> neighbors)
 
-        case (_, neighbours: Neighbours, packet) =>
+        case (_, neighbours: Neighbours, udp) =>
           for {
             _ <- checkExpiration(neighbours.expiration)
-            _ = log.info(s"neighbor from ${packet.id}")
-            _ <- promises.get.map(_.get(packet.id)).flatMap {
+            _ = log.info(s"neighbor from ${udp.id}")
+            _ <- promises.get.map(_.get(udp.id)).flatMap {
               case Some(p) => p.complete(neighbours)
               case None    => F.raiseError[Unit](ErrUnsolicitedReply)
             }
@@ -257,7 +263,7 @@ case class Discovery[F[_]](
     output
       .flatMap(xs => Stream(xs: _*).covary[F])
       .evalMap {
-        case (remote, kad) => encode(kad).map(udp => remote -> udp)
+        case (remote, kad) => makeUdpPacket(kad).map(udp => remote -> udp)
       }
   }
 
