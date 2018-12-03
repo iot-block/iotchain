@@ -4,6 +4,10 @@ import cats.effect.IO
 import com.codahale.metrics.{MetricRegistry, SharedMetricRegistries}
 import jbok.JbokSpec
 import jbok.common.metrics.org.http4s.metrics.dropwizard.Dropwizard
+import fs2._
+import scala.concurrent.duration._
+import jbok.common.execution._
+import cats.implicits._
 
 class DropwizardSpec extends JbokSpec {
   def count(registry: MetricRegistry, counter: Counter): Option[Long] =
@@ -40,6 +44,15 @@ class DropwizardSpec extends JbokSpec {
       valuesOf(registry, Timer("oho.aha.time")) shouldBe None
       metric.recordTime(Some("aha"), 100).unsafeRunSync()
       valuesOf(registry, Timer("oho.aha.time")) shouldBe Some(List(100L))
+    }
+
+    "console reporter" in {
+      val stream =
+        Stream.range[IO](0, 10)
+        .evalMap[IO, Unit](_ => T.sleep(500.millis) >> metric.increaseCount(None))
+        .concurrently(Dropwizard.consoleReporter[IO](registry, 1.seconds))
+
+      stream.compile.drain.unsafeRunSync()
     }
   }
 }

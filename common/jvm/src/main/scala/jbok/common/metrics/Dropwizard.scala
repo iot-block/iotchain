@@ -2,9 +2,15 @@ package jbok.common.metrics
 
 package org.http4s.metrics.dropwizard
 
-import cats.effect.Sync
-import com.codahale.metrics.MetricRegistry
 import java.util.concurrent.TimeUnit
+
+import cats.effect.{Async, Resource, Sync}
+import cats.implicits._
+import com.codahale.metrics.jmx.JmxReporter
+import com.codahale.metrics.{ConsoleReporter, MetricRegistry}
+import fs2._
+
+import scala.concurrent.duration.FiniteDuration
 
 object Dropwizard {
 
@@ -62,4 +68,36 @@ object Dropwizard {
       private def namespace(prefix: String, classifier: Option[String]): String =
         classifier.map(d => s"${prefix}.${d}").getOrElse(s"${prefix}.default")
     }
+
+  def consoleReporter[F[_]](registry: MetricRegistry, interval: FiniteDuration)(
+      implicit F: Async[F]): Stream[F, Unit] = {
+    val resource = Resource.make {
+      F.delay {
+        ConsoleReporter
+          .forRegistry(registry)
+          .convertRatesTo(TimeUnit.SECONDS)
+          .convertDurationsTo(TimeUnit.MILLISECONDS)
+          .build()
+      }
+    } { r =>
+      F.delay(r.close())
+    }
+
+    Stream.resource(resource).evalMap(r => F.delay(r.start(interval.toSeconds, TimeUnit.SECONDS)) *> F.never)
+  }
+
+  def jmxReporter[F[_]](registry: MetricRegistry)(implicit F: Async[F]): Stream[F, Unit] = {
+    val resource = Resource.make {
+      F.delay {
+        JmxReporter
+          .forRegistry(registry)
+          .convertRatesTo(TimeUnit.SECONDS)
+          .convertDurationsTo(TimeUnit.MILLISECONDS)
+          .build()
+      }
+    } { r =>
+      F.delay(r.close())
+    }
+    Stream.resource(resource).evalMap(r => F.delay(r.start()) *> F.never)
+  }
 }

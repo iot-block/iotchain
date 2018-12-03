@@ -23,6 +23,7 @@ lazy val V = new {
   val catsEffect      = "1.0.0"
   val catsCollections = "0.7.0"
   val scalacache      = "0.26.0"
+  val dropwizard      = "4.0.3"
 }
 
 lazy val jbok = project
@@ -71,13 +72,10 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "org.rogach" %%% "scallop" % "3.1.3",
       // config
       "com.github.pureconfig" %% "pureconfig" % "0.10.0",
-      // metrics
-      "io.dropwizard.metrics" % "metrics-core" % "4.0.3",
-      "io.dropwizard.metrics" % "metrics-json" % "4.0.3",
       // test
       "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
       "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
-    )
+    ) ++ dropwizard
   )
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
@@ -259,6 +257,12 @@ lazy val http4s = Seq(
   "org.http4s" %% "http4s-dropwizard-metrics",
   "org.http4s" %% "http4s-prometheus-metrics"
 ).map(_ % V.http4s)
+
+lazy val dropwizard = Seq(
+  "io.dropwizard.metrics" % "metrics-core",
+  "io.dropwizard.metrics" % "metrics-json",
+  "io.dropwizard.metrics" % "metrics-jmx",
+).map(_ % V.dropwizard)
 
 lazy val commonSettings = Seq(
   addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),
