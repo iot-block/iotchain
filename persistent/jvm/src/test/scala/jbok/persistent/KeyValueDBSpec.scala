@@ -1,4 +1,5 @@
 package jbok.persistent
+
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
