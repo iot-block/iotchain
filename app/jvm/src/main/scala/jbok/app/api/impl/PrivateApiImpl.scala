@@ -34,7 +34,7 @@ object PrivateApiImpl {
           keyStore.newAccount(passphrase)
 
         override def delAccount(address: Address): IO[Boolean] =
-          keyStore.deleteWallet(address)
+          keyStore.deleteAccount(address)
 
         override def listAccounts: IO[List[Address]] =
           keyStore.listAccounts
@@ -86,7 +86,7 @@ object PrivateApiImpl {
         override def deleteWallet(address: Address): IO[Boolean] =
           for {
             _ <- unlockedWallets.update(_ - address)
-            r <- keyStore.deleteWallet(address)
+            r <- keyStore.deleteAccount(address)
           } yield r
 
         override def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): IO[Boolean] =

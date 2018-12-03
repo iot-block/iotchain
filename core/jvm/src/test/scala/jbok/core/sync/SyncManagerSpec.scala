@@ -48,7 +48,7 @@ class SyncManagerSpec extends JbokSpec {
     "return BlockHeaders by block number/hash" in {
       val handler = random[SyncManager[IO]]
 
-      val baseHeader: BlockHeader   = BlockHeader.empty
+      val baseHeader: BlockHeader   = random[BlockHeader]
       val firstHeader: BlockHeader  = baseHeader.copy(number = 3)
       val secondHeader: BlockHeader = baseHeader.copy(number = 4)
 

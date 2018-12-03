@@ -148,6 +148,11 @@ object Configs {
       nodesLimit: Int = 10,
       scanMaxNodes: Int = 10,
       scanInterval: FiniteDuration = 10.seconds,
-      messageExpiration: FiniteDuration = 10.seconds
+      messageExpiration: FiniteDuration = 10.seconds,
+      concurrencyFactor: Int = 3, // Kademlia concurrency factor
+      timeout: FiniteDuration = 5.seconds,
+      ttl: FiniteDuration = 20.seconds,
+      bondExpiration: FiniteDuration = 24.hours,
+      maxFindNodeFailures: Int = 5
   )
 }

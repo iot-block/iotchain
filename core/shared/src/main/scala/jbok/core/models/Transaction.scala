@@ -1,20 +1,15 @@
 package jbok.core.models
 
-import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
-import jbok.crypto._
 import scodec.bits.ByteVector
 
-case class Transaction(
+final case class Transaction(
     nonce: BigInt,
     gasPrice: BigInt,
     gasLimit: BigInt,
     receivingAddress: Option[Address],
     value: BigInt,
     payload: ByteVector
-) {
-  lazy val hash: ByteVector = RlpCodec.encode(this).require.bytes.kec256
-}
+)
 
 object Transaction {
   def apply(

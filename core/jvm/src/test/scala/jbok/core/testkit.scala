@@ -1,5 +1,7 @@
 package jbok.core
 
+import java.net.InetSocketAddress
+
 import cats.effect.IO
 import jbok.common.execution._
 import jbok.common.testkit._
@@ -11,11 +13,14 @@ import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.messages._
 import jbok.core.mining.{BlockMiner, SimAccount, TxGenerator}
 import jbok.core.models._
-import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform}
+import jbok.core.peer.discovery.{Discovery, PeerTable}
+import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerNode, PeerStore, PeerType}
 import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
 import jbok.core.sync._
-import jbok.crypto.signature.{ECDSA, Signature}
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.crypto.testkit._
+import jbok.persistent.testkit._
+import jbok.network.transport.UdpTransport
 import jbok.persistent.KeyValueDB
 import org.scalacheck._
 import scodec.bits.ByteVector
@@ -129,7 +134,7 @@ object testkit {
       stateRoot        <- genBoundedByteVector(32, 32)
       transactionsRoot <- genBoundedByteVector(32, 32)
       receiptsRoot     <- genBoundedByteVector(32, 32)
-      logsBloom        <- genBoundedByteVector(50, 50)
+      logsBloom        <- genBoundedByteVector(256, 256)
       difficulty       <- bigIntGen
       number           <- bigIntGen
       gasLimit         <- bigIntGen
@@ -343,5 +348,24 @@ object testkit {
 
   implicit def arbSyncManager(implicit fixture: Fixture): Arbitrary[SyncManager[IO]] = Arbitrary {
     genSyncManager()
+  }
+
+  def genDiscovery(port: Int): Gen[Discovery[IO]] = {
+    val config    = DiscoveryConfig().copy(port = port)
+    val keyPair   = random[KeyPair]
+    val db        = random[KeyValueDB[IO]]
+    val addr      = new InetSocketAddress("localhost", port)
+    val transport = UdpTransport[IO](addr)
+    Discovery[IO](config, keyPair, transport, db).unsafeRunSync()
+  }
+
+  def genPeerTable: Gen[PeerTable[IO]] = {
+    val peerNode  = PeerNode(random[KeyPair].public, "localhost", 10000, PeerType.Trusted)
+    val peerStore = new PeerStore(random[KeyValueDB[IO]])
+    PeerTable(peerNode, peerStore, Vector.empty).unsafeRunSync()
+  }
+
+  implicit val arbPeerTable: Arbitrary[PeerTable[IO]] = Arbitrary {
+    genPeerTable
   }
 }

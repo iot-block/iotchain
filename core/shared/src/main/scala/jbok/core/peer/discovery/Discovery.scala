@@ -1,4 +1,5 @@
 package jbok.core.peer.discovery
+
 import java.net.InetSocketAddress
 
 import cats.effect.concurrent.{Deferred, Ref}
@@ -6,21 +7,31 @@ import cats.effect.implicits._
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
-import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.DiscoveryConfig
+import jbok.core.peer.discovery.PeerTable._
 import jbok.core.peer.{PeerNode, PeerStore}
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.network.transport.UdpTransport
 import jbok.persistent.KeyValueDB
-import org.bouncycastle.util.BigIntegers
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
 import scala.util.Random
 
-case class Discovery[F[_]](
+sealed abstract class ErrDiscovery(reason: String) extends Exception(reason)
+
+case object ErrPacketTooSmall   extends ErrDiscovery("too small")
+case object ErrBadHash          extends ErrDiscovery("bad hash")
+case object ErrExpired          extends ErrDiscovery("expired")
+case object ErrUnsolicitedReply extends ErrDiscovery("unsolicited reply")
+case object ErrUnknownNode      extends ErrDiscovery("unknown node")
+case object ErrTimeout          extends ErrDiscovery("transport timeout")
+case object ErrClockWarp        extends ErrDiscovery("reply deadline too far in the future")
+case object ErrClosed           extends ErrDiscovery("socket closed")
+
+final class Discovery[F[_]](
     config: DiscoveryConfig,
     keyPair: KeyPair,
     store: PeerStore[F],
@@ -32,21 +43,22 @@ case class Discovery[F[_]](
 
   private[this] val log = org.log4s.getLogger
 
-  val ourEndpoint = Endpoint.makeEndpoint(new InetSocketAddress(config.interface, config.port), config.port)
+  val peerNode = table.peerNode
+
+  val endpoint = Endpoint.makeEndpoint(new InetSocketAddress(config.interface, config.port), config.port)
 
   /**
     *  sends a [[Ping]] message to the given node and waits for a reply [[Pong]].
     */
   def ping(id: ByteVector, to: InetSocketAddress): F[Pong] = {
-    val req = Ping(4, ourEndpoint, Endpoint.makeEndpoint(to, 0), System.currentTimeMillis() + ttl.toMillis)
+    val req = Ping(4, endpoint, Endpoint.makeEndpoint(to, 0), System.currentTimeMillis() + ttl.toMillis)
     for {
       promise <- Deferred[F, KadPacket]
-      udp     <- makeUdpPacket(req)
-      packet = RlpCodec.encode(udp).require.bytes
-      _   <- promises.update(_ + (packet.bytes.take(32) -> promise))
-      _   <- transport.send(to, packet, Some(timeout))
-      kad <- promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
-      _   <- promises.update(_ - id)
+      udp     <- encode(req)
+      _       <- promises.update(_ + (udp.hash -> promise))
+      _       <- transport.send(to, udp, Some(timeout))
+      kad     <- promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
+      _       <- promises.update(_ - id)
     } yield kad.asInstanceOf[Pong]
   }
 
@@ -68,9 +80,8 @@ case class Discovery[F[_]](
       p <- Deferred[F, KadPacket]
       _ <- promises.update(_ + (toId -> p))
       _ = log.info(s"findnode from ${toId}")
-      udp <- makeUdpPacket(req)
-      packet = RlpCodec.encode(udp).require.bytes
-      _          <- transport.send(to, packet, Some(timeout))
+      udp        <- encode(req)
+      _          <- transport.send(to, udp, Some(timeout))
       neighbours <- p.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
       _          <- promises.update(_ - toId)
     } yield neighbours.asInstanceOf[Neighbours]
@@ -166,7 +177,7 @@ case class Discovery[F[_]](
     for {
       init <- table.closest(targetPK.bytes.kec256) // generate initial result set
       ask  = init.entries
-      seen = Set(table.selfNode.id)
+      seen = Set(table.peerNode.id)
       result <- lookup0(ask, seen, init)
     } yield result.entries
   }
@@ -178,45 +189,24 @@ case class Discovery[F[_]](
       F.unit
     }
 
-//  private[jbok] def encode(kad: KadPacket): F[UdpPacket2] =
-//    F.delay {
-//      val payload     = RlpCodec.encode(kad).require.bytes
-//      val payloadHash = payload.kec256
-//      val signature   = Signature[ECDSA].sign(payloadHash.toArray, keyPair, 0).unsafeRunSync()
-//
-//      val forSha = signature.bytes ++ payload.toArray
-//      val mdc    = forSha.kec256
-//      UdpPacket2(ByteVector(mdc), signature, payload)
-//    }
-//
-//  private[jbok] def decode(bytes: ByteVector): F[UdpPacket2] =
-//    if (bytes.length < 98) {
-//      F.raiseError[UdpPacket2](ErrPacketTooSmall)
-//    } else {
-//      val packet   = UdpPacket2(bytes)
-//      val mdcCheck = bytes.drop(32).kec256
-//      if (packet.hash == mdcCheck) {
-//        F.pure(packet)
-//      } else {
-//        F.raiseError[UdpPacket2](ErrBadHash)
-//      }
-//    }
-
-//  private[jbok] def extract(packet: UdpPacket2): F[KadPacket] = F.delay {
-//    RlpCodec.decode[KadPacket](packet.payload.bits).require.value
-//  }
-
-  private def makeUdpPacket(kad: KadPacket): F[UdpPacket2] =
+  private[jbok] def encode(kad: KadPacket): F[UdpPacket] =
     F.delay {
       val payloadHash = kad.hash.toArray
       val signature   = Signature[ECDSA].sign(payloadHash, keyPair, 0).unsafeRunSync()
       val forSha      = signature.bytes ++ payloadHash
       val hash        = forSha.kec256
 
-      UdpPacket2(ByteVector(hash), signature, kad)
+      UdpPacket(ByteVector(hash), signature, kad)
     }
 
-  val pipe: Pipe[F, (InetSocketAddress, UdpPacket2), (InetSocketAddress, UdpPacket2)] = { input =>
+  private[jbok] def decode(udp: UdpPacket): F[KadPacket] =
+    if (udp.isValid) {
+      F.pure(udp.kadPacket)
+    } else {
+      F.raiseError(ErrBadHash)
+    }
+
+  val pipe: Pipe[F, (InetSocketAddress, UdpPacket), (InetSocketAddress, UdpPacket)] = { input =>
     val output = input
       .evalMap {
         case (remote, udp) =>
@@ -263,7 +253,7 @@ case class Discovery[F[_]](
     output
       .flatMap(xs => Stream(xs: _*).covary[F])
       .evalMap {
-        case (remote, kad) => makeUdpPacket(kad).map(udp => remote -> udp)
+        case (remote, kad) => encode(kad).map(udp => remote -> udp)
       }
   }
 
@@ -288,5 +278,5 @@ object Discovery {
       promises <- Ref.of[F, Map[ByteVector, Deferred[F, KadPacket]]](Map.empty)
       store = new PeerStore[F](db)
       table <- PeerTable[F](PeerNode(keyPair.public, config.interface, config.port), store, Vector.empty)
-    } yield Discovery[F](config, keyPair, store, transport, table, promises)
+    } yield new Discovery[F](config, keyPair, store, transport, table, promises)
 }

@@ -96,7 +96,7 @@ object HeaderValidator {
     val logsBloomOr =
       if (receipts.isEmpty) BloomFilter.EmptyBloomFilter
       else ByteUtils.or(receipts.map(_.logsBloomFilter): _*)
-    if (logsBloomOr equals blockHeader.logsBloom) F.unit
+    if (logsBloomOr == blockHeader.logsBloom) F.unit
     else F.raiseError(HeaderLogBloomInvalid)
   }
 

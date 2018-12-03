@@ -66,7 +66,7 @@ class KeyStoreSpec extends JbokSpec {
     }
 
     "return an error deleting not existing wallet" in {
-      val res = keyStore.deleteWallet(addr1).attempt.unsafeRunSync()
+      val res = keyStore.deleteAccount(addr1).attempt.unsafeRunSync()
       res shouldBe Left(KeyNotFound)
     }
 
@@ -75,7 +75,7 @@ class KeyStoreSpec extends JbokSpec {
       val listOfNewAccounts = keyStore.listAccounts.unsafeRunSync()
       listOfNewAccounts.toSet shouldBe Set(newAddr1)
 
-      val res = keyStore.deleteWallet(newAddr1).unsafeRunSync()
+      val res = keyStore.deleteAccount(newAddr1).unsafeRunSync()
       res shouldBe true
 
       val listOfNewAccountsAfterDelete = keyStore.listAccounts.unsafeRunSync()

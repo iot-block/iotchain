@@ -11,44 +11,18 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration._
 import scala.util.Random
 
-sealed abstract class ErrDiscovery(reason: String) extends Exception(reason)
-
-case object ErrPacketTooSmall   extends ErrDiscovery("too small")
-case object ErrBadHash          extends ErrDiscovery("bad hash")
-case object ErrExpired          extends ErrDiscovery("expired")
-case object ErrUnsolicitedReply extends ErrDiscovery("unsolicited reply")
-case object ErrUnknownNode      extends ErrDiscovery("unknown node")
-case object ErrTimeout          extends ErrDiscovery("RPC timeout")
-case object ErrClockWarp        extends ErrDiscovery("reply deadline too far in the future")
-case object ErrClosed           extends ErrDiscovery("socket closed")
 
 import jbok.core.peer.discovery.PeerTable._
 
-case class Bucket(
-    entries: Vector[PeerNode],
-    replacements: Vector[PeerNode]
-) {
-  def bumped(n: PeerNode): Bucket =
-    if (entries.contains(n)) {
-      this.copy(entries = Vector(n) ++ entries.filterNot(_.id == n.id))
-    } else {
-      this
-    }
-}
-
-object Bucket {
-  def empty: Bucket = Bucket(Vector.empty, Vector.empty)
-}
-
-case class PeerTable[F[_]](
-    selfNode: PeerNode,
-    store: PeerStore[F],
-    bootstrapNodes: Vector[PeerNode],
-    buckets: Ref[F, Vector[Bucket]],
-    initDone: SignallingRef[F, Boolean]
+final class PeerTable[F[_]](
+    val peerNode: PeerNode,
+    val store: PeerStore[F],
+    val bootstrapNodes: Vector[PeerNode],
+    val buckets: Ref[F, Vector[Bucket]],
+    val initDone: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
 
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = org.log4s.getLogger("PeerTable")
 
   import PeerTable._
 
@@ -61,17 +35,15 @@ case class PeerTable[F[_]](
   // TODO
   def querySeeds(maxCount: Int, maxAge: FiniteDuration): F[Vector[PeerNode]] = F.pure(Vector.empty)
 
-  /**
-    * bucket returns the bucket for the given node ID hash.
-    */
+  /** returns the bucket for the given node ID hash. */
   def getBucket(id: ByteVector): F[Bucket] = {
-    val d = logDist(selfNode.id, id)
+    val d = logDist(peerNode.id, id)
     val i = if (d <= bucketMinDistance) 0 else d - bucketMinDistance - 1
     buckets.get.map(_(i))
   }
 
   def putBucket(id: ByteVector, bucket: Bucket): F[Unit] = {
-    val d = logDist(selfNode.id, id)
+    val d = logDist(peerNode.id, id)
     val i = if (d <= bucketMinDistance) 0 else d - bucketMinDistance - 1
     buckets.update(_.updated(i, bucket))
   }
@@ -81,21 +53,21 @@ case class PeerTable[F[_]](
     * If the bucket has space available, adding the node succeeds immediately.
     * Otherwise, the node is added if the least recently active node in the bucket does not respond to a ping packet.
     */
-  def add(n: PeerNode): F[Unit] =
-    if (n.id == selfNode.id) {
+  def add(node: PeerNode): F[Unit] =
+    if (node.id == peerNode.id) {
       F.unit
     } else {
-      bumpOrAdd(n) *> addReplacement(n)
+      bumpOrAdd(node) *> addReplacement(node)
     }
 
   /**
-    * adds the given node to the table. Compared to plain
-    * [[add]] there is an additional safety measure: if the table is still
+    * adds the given node to the table. Compared to plain [[add]]
+    * there is an additional safety measure: if the table is still
     * initializing the node is not added. This prevents an attack where the
     * table could be filled by just sending ping repeatedly.
     */
   def addThroughPing(node: PeerNode): F[Unit] =
-    F.ifM(initDone.get)(add(node), F.unit)
+    initDone.get.ifM(add(node), F.unit)
 
   /**
     * stuff adds nodes the table to the end of their corresponding bucket
@@ -104,7 +76,7 @@ case class PeerTable[F[_]](
   def stuff(nodes: Vector[PeerNode]): F[Unit] =
     nodes.traverse(bumpOrAdd).void
 
-  // delete removes an entry from the node table. It is used to evacuate dead nodes.
+  /** delete removes an entry from the node table. It is used to evacuate dead nodes. */
   def delete(node: PeerNode): F[Unit] =
     for {
       bucket <- getBucket(node.id)
@@ -220,25 +192,6 @@ case class PeerTable[F[_]](
   }
 }
 
-case class NodesByDistance(
-    entries: Vector[PeerNode],
-    target: ByteVector
-) {
-  def dist(a: ByteVector, b: ByteVector): Long =
-    a.xor(b).toLong(signed = false)
-
-  def pushed(node: PeerNode, maxSize: Int = bucketSize): NodesByDistance = {
-    val nodeDist = dist(node.id, target)
-    val updated = entries.indexWhere(x => dist(x.id, target) > nodeDist) match {
-      case -1 if entries.length < maxSize => entries ++ Vector(node)
-      case -1                             => entries
-      case i                              => entries.slice(0, i) ++ Vector(node) ++ entries.slice(i + 1, entries.length)
-    }
-
-    this.copy(entries = updated)
-  }
-}
-
 object PeerTable {
   val bucketSize      = 16 // Kademlia bucket size
   val maxReplacements = 10 // Size of per-bucket replacement list
@@ -262,6 +215,35 @@ object PeerTable {
   val refreshInterval     = 30.minutes
   val revalidateInterval  = 10.seconds
 
+  case class Bucket(entries: Vector[PeerNode], replacements: Vector[PeerNode]) {
+    def bumped(n: PeerNode): Bucket =
+      if (entries.contains(n)) {
+        this.copy(entries = Vector(n) ++ entries.filterNot(_.id == n.id))
+      } else {
+        this
+      }
+  }
+
+  object Bucket {
+    val empty: Bucket = Bucket(Vector.empty, Vector.empty)
+  }
+
+  case class NodesByDistance(entries: Vector[PeerNode], target: ByteVector) {
+    def dist(a: ByteVector, b: ByteVector): Long =
+      a.xor(b).toLong(signed = false)
+
+    def pushed(node: PeerNode, maxSize: Int = bucketSize): NodesByDistance = {
+      val nodeDist = dist(node.id, target)
+      val updated = entries.indexWhere(x => dist(x.id, target) > nodeDist) match {
+        case -1 if entries.length < maxSize => entries ++ Vector(node)
+        case -1                             => entries
+        case i                              => entries.slice(0, i) ++ Vector(node) ++ entries.slice(i + 1, entries.length)
+      }
+
+      this.copy(entries = updated)
+    }
+  }
+
   def apply[F[_]: ConcurrentEffect](
       selfNode: PeerNode,
       store: PeerStore[F],
@@ -270,5 +252,5 @@ object PeerTable {
     for {
       buckets  <- Ref.of[F, Vector[Bucket]](Vector.fill(nBuckets)(Bucket.empty))
       initDone <- SignallingRef[F, Boolean](false)
-    } yield PeerTable[F](selfNode, store, bootstrapNodes, buckets, initDone)
+    } yield new PeerTable[F](selfNode, store, bootstrapNodes, buckets, initDone)
 }

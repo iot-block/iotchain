@@ -9,6 +9,8 @@ import jbok.core.models.{Address, BlockHeader}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
+import jbok.common.testkit._
+import jbok.core.testkit._
 
 import scala.collection.mutable
 
@@ -70,7 +72,7 @@ class SnapshotSpec extends JbokSpec {
         val time     = i * config.period.toSeconds
         val coinbase = address(v.voted)
         val extra    = ByteVector.fill(Clique.extraVanity + Clique.extraSeal)(0)
-        val header = BlockHeader.empty
+        val header = random[BlockHeader]
           .copy(
             number = number,
             unixTimestamp = time,
@@ -98,7 +100,7 @@ class SnapshotSpec extends JbokSpec {
       val signer   = address("A")
       val coinbase = address("B")
       val extra    = ByteVector.fill(Clique.extraVanity + Clique.extraSeal)(0.toByte)
-      val header = BlockHeader.empty
+      val header = random[BlockHeader]
         .copy(
           beneficiary = coinbase.bytes,
           extraData = extra

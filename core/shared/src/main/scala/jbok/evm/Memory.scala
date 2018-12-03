@@ -5,8 +5,6 @@ import scodec.bits.ByteVector
 
 case class Memory(underlying: ByteVector) extends AnyVal {
 
-  import Memory.zeros
-
   def store(offset: UInt256, b: Byte): Memory = store(offset, ByteVector(b))
 
   def store(offset: UInt256, uint: UInt256): Memory = store(offset, uint.bytes)
@@ -51,7 +49,7 @@ case class Memory(underlying: ByteVector) extends AnyVal {
         if (end <= underlying.size)
           underlying
         else
-          underlying ++ zeros(end - underlying.size.toInt)
+          underlying ++ Memory.zeros(end - underlying.size.toInt)
 
       (newUnderlying.slice(start, end), Memory(newUnderlying))
     }
@@ -66,7 +64,7 @@ case class Memory(underlying: ByteVector) extends AnyVal {
     if (this.size >= totalSize || size.isZero) {
       this
     } else {
-      val fill = zeros(totalSize - this.size)
+      val fill = Memory.zeros(totalSize - this.size)
       Memory(underlying ++ fill)
     }
   }
@@ -78,7 +76,7 @@ case class Memory(underlying: ByteVector) extends AnyVal {
 }
 
 object Memory {
-  def empty: Memory = Memory(ByteVector.empty)
+  val empty: Memory = Memory(ByteVector.empty)
 
   private def zeros(size: Int): ByteVector = ByteVector(Array.fill[Byte](size)(0))
 }

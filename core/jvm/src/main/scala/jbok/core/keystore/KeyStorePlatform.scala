@@ -52,7 +52,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       }
     } yield wallet
 
-  override def deleteWallet(address: Address): F[Boolean] =
+  override def deleteAccount(address: Address): F[Boolean] =
     for {
       file    <- findKeyFile(address)
       deleted <- deleteFile(file)
@@ -70,12 +70,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       _ <- overwrite(keyFile, newEncKey)
     } yield true
 
-  override def clear: F[Boolean] = {
-    log.debug(s"delete keyStoreDir ${keyStoreDir.pathAsString}")
-    deleteFile(keyStoreDir)
-  }
-
-  private[jbok] def save(encryptedKey: EncryptedKey): F[Unit] = {
+  private def save(encryptedKey: EncryptedKey): F[Unit] = {
     val json = encryptedKey.asJson.spaces2
     val name = fileName(encryptedKey)
     val file = keyStoreDir / name
@@ -83,7 +78,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
     for {
       alreadyInKeyStore <- containsAccount(encryptedKey)
       _ <- if (alreadyInKeyStore) {
-        F.unit
+        F.raiseError(KeyStoreError.KeyAlreadyExist)
       } else {
         log.debug(s"saving key into ${file.pathAsString}")
         F.delay(file.createIfNotExists(createParents = true).writeText(json)).attempt.flatMap {
@@ -94,10 +89,10 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
     } yield ()
   }
 
-  private[jbok] def deleteFile(file: File): F[Boolean] =
+  private def deleteFile(file: File): F[Boolean] =
     F.delay(file.delete()).attemptT.isRight
 
-  private[jbok] def overwrite(file: File, encKey: EncryptedKey): F[Unit] = {
+  private def overwrite(file: File, encKey: EncryptedKey): F[Unit] = {
     val json = encKey.asJson.spaces2
     F.delay(file.createIfNotExists(createParents = true).writeText(json)).attempt.flatMap {
       case Left(e)  => F.raiseError(KeyStoreError.IOError(e.toString))
@@ -105,13 +100,13 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
     }
   }
 
-  private[jbok] def load(address: Address): F[EncryptedKey] =
+  private def load(address: Address): F[EncryptedKey] =
     for {
       filename <- findKeyFile(address)
       key      <- load(filename)
     } yield key
 
-  private[jbok] def load(file: File): F[EncryptedKey] =
+  private def load(file: File): F[EncryptedKey] =
     for {
       json <- F.delay(file.lines.mkString("\n")).attempt.flatMap {
         case Left(e)  => F.raiseError[String](KeyStoreError.IOError(e.toString))
@@ -123,23 +118,23 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       }
     } yield key
 
-  private[jbok] def fileName(encryptedKey: EncryptedKey): String = {
+  private def fileName(encryptedKey: EncryptedKey): String = {
     val dateStr = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_DATE_TIME).replace(':', '-')
     val addrStr = encryptedKey.address.bytes.toHex
     s"UTC--$dateStr--$addrStr"
   }
 
-  private[jbok] def listFiles(): F[List[File]] =
+  private def listFiles(): F[List[File]] =
     if (!keyStoreDir.exists || !keyStoreDir.isDirectory) {
       F.pure(Nil)
     } else {
       F.pure(keyStoreDir.list.toList)
     }
 
-  private[jbok] def containsAccount(encKey: EncryptedKey): F[Boolean] =
+  private def containsAccount(encKey: EncryptedKey): F[Boolean] =
     load(encKey.address).attemptT.isRight
 
-  private[jbok] def findKeyFile(address: Address): F[File] =
+  private def findKeyFile(address: Address): F[File] =
     for {
       files <- listFiles()
       matching <- files.find(_.name.endsWith(address.bytes.toHex)) match {

@@ -29,7 +29,7 @@ case class Peer[F[_]](
     knownTxs.get.map(_.contains(stxs))
 
   def markBlock(blockHash: ByteVector): F[Unit] =
-    knownBlocks.update(s => if (s.size >= MaxKnownBlocks) s.take(MaxKnownBlocks - 1) + blockHash else s + blockHash)
+    knownBlocks.update(s => s.take(MaxKnownBlocks - 1) + blockHash)
 
   def markTxs(stxs: SignedTransactions): F[Unit] =
     knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs)

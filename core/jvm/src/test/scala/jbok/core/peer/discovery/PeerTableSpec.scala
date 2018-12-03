@@ -1,15 +1,16 @@
 package jbok.core.peer.discovery
+
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.network.discovery.DiscoveryFixture
-import jbok.persistent.KeyValueDB
+import jbok.common.testkit._
+import jbok.core.testkit._
 
 class PeerTableSpec extends JbokSpec {
-  val fix = new DiscoveryFixture(10000)
   "PeerTable" should {
-    "return 0 node when empty" in {
-      val db = KeyValueDB.inmem[IO].unsafeRunSync()
-      val table = fix.table
+    val table = random[PeerTable[IO]]
+
+    "" in {
+      table.loadSeedNodes()
     }
   }
 }

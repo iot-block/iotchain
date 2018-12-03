@@ -8,7 +8,7 @@ import jbok.crypto._
 import scodec.bits._
 import shapeless._
 
-case class BlockHeader(
+final case class BlockHeader(
     parentHash: ByteVector, // B32 pre
     ommersHash: ByteVector, // B32 body
     beneficiary: ByteVector, // B20 pre
@@ -41,22 +41,4 @@ object BlockHeader {
     val hlist = Generic[BlockHeader].to(header).take(13)
     RlpCodec.encode(hlist).require.bytes
   }
-
-  def empty: BlockHeader = BlockHeader(
-    ByteVector.empty,
-    ByteVector.empty,
-    ByteVector.empty,
-    ByteVector.empty,
-    ByteVector.empty,
-    ByteVector.empty,
-    ByteVector.empty,
-    BigInt(0),
-    BigInt(0),
-    BigInt(0),
-    BigInt(0),
-    0L,
-    ByteVector.empty,
-    ByteVector.empty,
-    ByteVector.empty
-  )
 }

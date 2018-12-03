@@ -2,7 +2,6 @@ package jbok.core.peer.discovery
 
 import java.net.{InetAddress, InetSocketAddress}
 
-import cats.effect.Sync
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.crypto._
@@ -14,29 +13,29 @@ import scodec.codecs.{discriminated, uint8}
 import scala.util.Try
 
 sealed trait KadPacket {
-  lazy val hash: ByteVector = RlpCodec.encode(this).require.bytes.kec256
+  lazy val hash: ByteVector = Codec.encode(this).require.bytes.kec256
 }
+
 object KadPacket {
-  implicit val codec: RlpCodec[KadPacket] = RlpCodec.item(
+  implicit val codec: Codec[KadPacket] =
     discriminated[KadPacket]
       .by(uint8)
       .subcaseO(1) {
         case t: Ping => Some(t)
         case _       => None
-      }(RlpCodec[Ping].codec)
+      }(Codec[Ping])
       .subcaseO(2) {
         case t: Pong => Some(t)
         case _       => None
-      }(RlpCodec[Pong].codec)
+      }(Codec[Pong])
       .subcaseO(3) {
         case t: FindNode => Some(t)
         case _           => None
-      }(RlpCodec[FindNode].codec)
+      }(Codec[FindNode])
       .subcaseO(4) {
         case t: Neighbours => Some(t)
         case _             => None
-      }(RlpCodec[Neighbours].codec)
-  )
+      }(Codec[Neighbours])
 }
 
 case class Ping(version: Int, from: Endpoint, to: Endpoint, expiration: Long) extends KadPacket
@@ -59,7 +58,7 @@ object Endpoint {
   }
 }
 
-case class UdpPacket2(hash: ByteVector, signature: CryptoSignature, kadPacket: KadPacket) {
+case class UdpPacket(hash: ByteVector, signature: CryptoSignature, kadPacket: KadPacket) {
   // get?
   def pk: KeyPair.Public =
     Signature[ECDSA].recoverPublic(kadPacket.hash.toArray, signature, 0).get
@@ -69,37 +68,3 @@ case class UdpPacket2(hash: ByteVector, signature: CryptoSignature, kadPacket: K
   def isValid: Boolean =
     hash == (pk.bytes ++ kadPacket.hash).kec256
 }
-
-//case class UdpPacket(bytes: ByteVector) extends AnyVal {
-//  def pk: KeyPair.Public = {
-//    val msgHash = bytes.drop(MdcLength + 65).kec256
-//    val sig     = signature
-//    Signature[ECDSA].recoverPublic(msgHash.toArray, sig, 0).get
-//  }
-//
-//  def id: ByteVector = pk.bytes.kec256
-//
-//  def data: ByteVector = bytes.drop(UdpPacket.DataOffset)
-//
-//  def packetType: Byte = bytes(UdpPacket.PacketTypeByteIndex)
-//
-//  def mdc: ByteVector = bytes.take(UdpPacket.MdcLength)
-//
-//  def signature: CryptoSignature = {
-//    val signatureBytes = bytes.drop(UdpPacket.MdcLength).take(65)
-//    val r              = signatureBytes.take(32)
-//    val s              = signatureBytes.drop(32).take(32)
-//    val v              = signatureBytes.drop(64)
-//
-//    CryptoSignature(r, s, v)
-//  }
-//
-//  def kadPacket[F[_]: Sync]: F[KadPacket] =
-//    Sync[F].delay(RlpCodec.decode[KadPacket](data.bits).require.value)
-//}
-//object UdpPacket {
-//  implicit val codec: Codec[UdpPacket] = implicitly[RlpCodec[UdpPacket]].codec
-//  private val MdcLength                = 32
-//  private val PacketTypeByteIndex      = MdcLength + 65
-//  private val DataOffset               = PacketTypeByteIndex
-//}

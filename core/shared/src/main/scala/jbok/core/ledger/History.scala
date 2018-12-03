@@ -70,10 +70,6 @@ abstract class History[F[_]](val db: KeyValueDB[F]) {
 
   def getBestBlockNumber: F[BigInt]
 
-  def getEstimatedHighestBlock: F[BigInt]
-
-  def getSyncStartingBlock: F[BigInt]
-
   def getBestHeader: F[BlockHeader]
 
   def getBestBlock: F[Block]
@@ -93,8 +89,6 @@ object History {
 }
 
 class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt) extends History[F](db) {
-
-  private val appStateStore = new AppStateStore[F](db)
 
   // init
   override def init(config: GenesisConfig): F[Unit] =
@@ -220,7 +214,7 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
           }
 
           val updateBest =
-            if (parentAsBestBlock) appStateStore.putBestBlockNumber(bh.number - 1)
+            if (parentAsBestBlock) putBestBlockNumber(bh.number - 1)
             else F.unit
 
           removeMapping *> updateBest
@@ -296,12 +290,6 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
   override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
     db.getOpt[ByteVector, TransactionLocation](txHash, namespaces.TxLocation)
 
-  override def getEstimatedHighestBlock: F[BigInt] =
-    appStateStore.getEstimatedHighestBlock
-
-  override def getSyncStartingBlock: F[BigInt] =
-    appStateStore.getSyncStartingBlock
-
   override def getBestHeader: F[BlockHeader] =
     (getBestBlockNumber >>= getBlockHeaderByNumber).flatMap {
       case Some(header) => F.pure(header)
@@ -316,10 +304,10 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
     })
 
   override def getBestBlockNumber: F[BigInt] =
-    appStateStore.getBestBlockNumber
+    db.getOptT[String, BigInt]("BestBlockNumber", namespaces.AppStateNamespace).getOrElse(BigInt(0))
 
   override def putBestBlockNumber(number: BigInt): F[Unit] =
-    appStateStore.putBestBlockNumber(number)
+    db.put[String, BigInt]("BestBlockNumber", number, namespaces.AppStateNamespace)
 
   override def genesisHeader: F[BlockHeader] =
     getBlockHeaderByNumber(0).map(_.get)

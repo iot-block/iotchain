@@ -26,6 +26,7 @@ class BN256Benchmark extends JbokBenchmark {
 
   @Benchmark
   def Fp12SquareByMul(): Unit = fp12 * fp12
+
   @Benchmark
   def Fp2Add(): Unit = fp2 + fp2
 
@@ -36,7 +37,7 @@ class BN256Benchmark extends JbokBenchmark {
   def Fp2Square(): Unit = fp2.square()
 
   @Benchmark
-  def Fp2SuqareByMul(): Unit = fp2 * fp2
+  def Fp2SquareByMul(): Unit = fp2 * fp2
 
   @Benchmark
   def G1AddG1(): Unit = g1 + g1

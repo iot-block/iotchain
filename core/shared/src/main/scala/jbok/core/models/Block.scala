@@ -2,7 +2,7 @@ package jbok.core.models
 
 import jbok.codec.json.implicits._
 
-case class Block(header: BlockHeader, body: BlockBody) {
+final case class Block(header: BlockHeader, body: BlockBody) {
   lazy val tag: String = s"Block(${header.number})#${header.hash.toHex.take(7)}"
 }
 

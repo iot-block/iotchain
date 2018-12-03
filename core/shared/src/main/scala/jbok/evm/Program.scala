@@ -43,8 +43,4 @@ case class Program(code: ByteVector) {
         case _                    => validJumpDestinationsAfterPosition(pos + 1, accum)
       }
     }
-
-  lazy val codeHash: ByteVector =
-    code.kec256
-
 }
