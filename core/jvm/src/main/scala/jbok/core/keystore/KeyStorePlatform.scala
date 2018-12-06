@@ -15,8 +15,7 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
 
-class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F], chainId: BigInt)
-    extends KeyStore[F] {
+class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
   private[this] val log = org.log4s.getLogger("KeyStore")
 
   private val keyLength = 32
@@ -151,8 +150,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
 }
 
 object KeyStorePlatform {
-  def apply[F[_]: Async](keyStoreDir: String, secureRandom: SecureRandom)(
-      implicit chainId: BigInt): F[KeyStorePlatform[F]] = {
+  def apply[F[_]: Async](keyStoreDir: String, secureRandom: SecureRandom): F[KeyStorePlatform[F]] = {
     val dir = File(keyStoreDir)
     for {
       _ <- if (!dir.isDirectory) {

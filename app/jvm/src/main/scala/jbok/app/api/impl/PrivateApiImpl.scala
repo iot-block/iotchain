@@ -22,7 +22,7 @@ object PrivateApiImpl {
       history: History[IO],
       blockChainConfig: BlockChainConfig,
       txPool: TxPool[IO],
-  ): IO[PrivateAPI] =
+  )(implicit chainId: BigInt): IO[PrivateAPI] =
     for {
       unlockedWallets <- Ref.of[IO, Map[Address, Wallet]](Map.empty)
     } yield

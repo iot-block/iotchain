@@ -9,7 +9,7 @@ import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
-import jbok.crypto.signature.{ecdsa => _, _}
+import jbok.crypto.signature._
 import scalacache._
 import scodec.bits._
 import _root_.io.circe.generic.JsonCodec
