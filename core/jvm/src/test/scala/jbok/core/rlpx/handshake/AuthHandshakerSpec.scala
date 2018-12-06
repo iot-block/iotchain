@@ -25,7 +25,7 @@ class AuthHandshakerSpec extends JbokSpec {
 
   "AuthHandshakerSpec" should {
     "build auth connection" in {
-      val server = fs2.io.tcp
+      val server = fs2.io.tcp.Socket
         .server[IO](addr)
         .evalMap[IO, AuthHandshakeResult] { res =>
           for {
@@ -39,7 +39,7 @@ class AuthHandshakerSpec extends JbokSpec {
 
       val client =
         for {
-          conn       <- TcpUtil.socketToConnection[IO, Message](fs2.io.tcp.client[IO](addr), false)
+          conn       <- TcpUtil.socketToConnection[IO, Message](fs2.io.tcp.Socket.client[IO](addr), false)
           _          <- conn.start
           handshaker <- AuthHandshaker[IO](clientKey)
           result     <- handshaker.connect(conn, serverKey.public)

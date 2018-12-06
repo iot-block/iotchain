@@ -1,46 +1,30 @@
 package jbok.core.peer
-import cats.effect.Sync
-import jbok.core.store.namespaces
-import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.FiniteDuration
-import jbok.codec.rlp.implicits._
 
-class PeerStore[F[_]](db: KeyValueDB[F])(implicit F: Sync[F]) {
-  val ns = namespaces.Peer
+trait PeerStore[F[_]] {
+  type NodeId = ByteVector
 
-  def lastPingKey(id: ByteVector) = s"n:${id.toHex}:lastping"
+  def getLastPing(id: NodeId): F[Long]
 
-  def lastPongKey(id: ByteVector) = s"n:${id.toHex}:lastping"
+  def putLastPing(id: NodeId, ts: Long): F[Unit]
 
-  def failsKey(id: ByteVector) = s"n:${id.toHex}:fails"
+  def getLastPong(id: NodeId): F[Long]
 
-  def nodeKey(id: ByteVector) = s"n:${id.toHex}"
+  def putLastPong(id: NodeId, ts: Long): F[Unit]
 
-  def getLastPingReceived(id: ByteVector): F[Long] =
-    db.getOptT[String, Long](lastPingKey(id), ns).getOrElse(0L)
+  def getFails(id: NodeId): F[Int]
 
-  def putLastPingReceived(id: ByteVector, ts: Long): F[Unit] =
-    db.put(lastPingKey(id), ts, ns)
+  def putFails(id: NodeId, n: Int): F[Unit]
 
-  def getLastPongReceived(id: ByteVector): F[Long] =
-    db.getOptT[String, Long](lastPongKey(id), ns).getOrElse(0)
+  def getNodeOpt(id: NodeId): F[Option[PeerNode]]
 
-  def putLastPongReceived(id: ByteVector, ts: Long): F[Unit] =
-    db.put(lastPongKey(id), ts, ns)
+  def putNode(node: PeerNode): F[Unit]
 
-  def getFails(id: ByteVector): F[Int] =
-    db.getOptT[String, Int](failsKey(id), ns).getOrElse(0)
+  def delNode(id: NodeId): F[Unit]
 
-  def putFails(id: ByteVector, fails: Int): F[Unit] =
-    db.put(failsKey(id), fails, ns)
+  def getNodes: F[List[PeerNode]]
 
-  def getSeeds(n: Int, maxAge: FiniteDuration): F[List[PeerNode]] = ???
-
-  def getNodeOpt(id: ByteVector): F[Option[PeerNode]] =
-    db.getOpt[String, PeerNode](nodeKey(id), ns)
-
-  def delNode(id: ByteVector): F[Unit] =
-    db.del[String](nodeKey(id), ns)
+  def getSeeds(n: Int, age: FiniteDuration): F[List[PeerNode]]
 }

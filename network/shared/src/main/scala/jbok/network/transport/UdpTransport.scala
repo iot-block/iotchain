@@ -7,24 +7,13 @@ import cats.implicits._
 import fs2.io.udp
 import fs2.io.udp.{AsynchronousSocketGroup, Packet}
 import fs2.{Pipe, _}
+import jbok.network.common.TcpUtil
 import scodec.Codec
-import scodec.bits.BitVector
 
-import scala.concurrent.duration.FiniteDuration
-
-case class UdpTransport[F[_]](
-    bind: InetSocketAddress,
-    timeout: Option[FiniteDuration] = None
-)(implicit F: ConcurrentEffect[F], CS: ContextShift[F]) {
+case class UdpTransport[F[_]](bind: InetSocketAddress)(implicit F: ConcurrentEffect[F], CS: ContextShift[F]) {
   private[this] val log = org.log4s.getLogger("UdpTransport")
 
   implicit val AG = AsynchronousSocketGroup()
-
-  private def decodeChunk[A: Codec](chunk: Chunk[Byte]): F[A] =
-    F.delay(Codec[A].decode(BitVector(chunk.toArray)).require.value)
-
-  private def encodeChunk[A: Codec](a: A): F[Chunk[Byte]] =
-    F.delay(Chunk.array(Codec[A].encode(a).require.toByteArray))
 
   def serve[A: Codec](pipe: Pipe[F, (InetSocketAddress, A), (InetSocketAddress, A)]): Stream[F, Unit] =
     Stream
@@ -32,30 +21,28 @@ case class UdpTransport[F[_]](
       .flatMap { socket =>
         log.debug(s"successfully bound to ${bind}")
         socket
-          .reads(timeout)
+          .reads()
           .evalMap(p =>
-            decodeChunk(p.bytes).map(a => {
-              log.trace(s"received msg from ${p.remote}")
-              p.remote -> a
-            }))
+            TcpUtil
+              .decodeChunk(p.bytes)
+              .map(a => {
+                log.trace(s"received msg from ${p.remote}")
+                p.remote -> a
+              }))
           .through(pipe)
           .evalMap {
             case (remote, a) =>
-              encodeChunk(a).map(chunk => Packet(remote, chunk))
+              TcpUtil.encode(a).map(chunk => Packet(remote, chunk))
           }
-          .to(socket.writes(timeout))
+          .to(socket.writes())
       }
       .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)(s"transport error"))))
       .onFinalize(F.delay(log.trace(s"serving terminated")))
 
-  def send[A: Codec](remote: InetSocketAddress, a: A, timeout: Option[FiniteDuration] = None): F[Unit] = {
+  def send[A: Codec](remote: InetSocketAddress, a: A): F[Unit] = {
     log.trace(s"sending msg to ${remote}")
-    val s = for {
-      socket <- Stream.resource(udp.Socket[F](bind, reuseAddress = true))
-      chunk  <- Stream.eval(encodeChunk(a))
-      packet = Packet(remote, chunk)
-      _ <- Stream.eval(socket.write(packet, timeout))
-    } yield ()
-    s.compile.drain
+    udp.Socket[F](bind, reuseAddress = true).use { socket =>
+      TcpUtil.encode(a).flatMap(chunk => socket.write(Packet(remote, chunk)))
+    }
   }
 }

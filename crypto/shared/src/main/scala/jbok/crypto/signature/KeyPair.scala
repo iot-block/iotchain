@@ -2,6 +2,7 @@ package jbok.crypto.signature
 
 import java.math.BigInteger
 
+import scodec.Codec
 import scodec.bits.ByteVector
 
 case class KeyPair(public: KeyPair.Public, secret: KeyPair.Secret)

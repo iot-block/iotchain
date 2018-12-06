@@ -14,14 +14,14 @@ import jbok.core.messages._
 import jbok.core.mining.{BlockMiner, SimAccount, TxGenerator}
 import jbok.core.models._
 import jbok.core.peer.discovery.{Discovery, PeerTable}
-import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerNode, PeerStore, PeerType}
+import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerNode, PeerStorePlatform, PeerType}
 import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
 import jbok.core.sync._
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.crypto.testkit._
-import jbok.persistent.testkit._
 import jbok.network.transport.UdpTransport
 import jbok.persistent.KeyValueDB
+import jbok.persistent.testkit._
 import org.scalacheck._
 import scodec.bits.ByteVector
 
@@ -243,22 +243,6 @@ object testkit {
 
   implicit val arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-//  def genBlockHandler(port: Int = 1000)(implicit fixture: Fixture): Gen[BlockHandler[IO]] = {
-//    val consensus        = fixture.consensus.unsafeRunSync()
-//    val blockChainConfig = BlockChainConfig()
-//    val history          = consensus.history
-//    val executor         = BlockExecutor[IO](blockChainConfig, consensus)
-//    val syncConfig       = SyncConfig()
-//    val txPool           = TxPool[IO](TxPoolConfig()).unsafeRunSync()
-//    val ommerPool        = OmmerPool[IO](history).unsafeRunSync()
-//    val blockHandler     = BlockHandler[IO](syncConfig, executor, txPool, ommerPool)
-//    blockHandler
-//  }
-//
-//  implicit def arbBlockHandler(implicit fixture: Fixture): Arbitrary[BlockHandler[IO]] = Arbitrary {
-//    genBlockHandler()
-//  }
-
   def genTxs(min: Int = 0, max: Int = 1024)(implicit fixture: Fixture): Gen[List[SignedTransaction]] =
     for {
       size <- Gen.chooseNum(min, max)
@@ -351,21 +335,31 @@ object testkit {
   }
 
   def genDiscovery(port: Int): Gen[Discovery[IO]] = {
-    val config    = DiscoveryConfig().copy(port = port)
-    val keyPair   = random[KeyPair]
-    val db        = random[KeyValueDB[IO]]
+    val discovery = DiscoveryConfig(port = port)
+    val config    = PeerManagerConfig(port * 2, discovery = discovery)
     val addr      = new InetSocketAddress("localhost", port)
     val transport = UdpTransport[IO](addr)
-    Discovery[IO](config, keyPair, transport, db).unsafeRunSync()
+    val keyPair   = random[KeyPair]
+    val db        = random[KeyValueDB[IO]]
+    val store     = PeerStorePlatform.fromKV(db)
+    Discovery[IO](config, transport, keyPair, store).unsafeRunSync()
   }
 
   def genPeerTable: Gen[PeerTable[IO]] = {
-    val peerNode  = PeerNode(random[KeyPair].public, "localhost", 10000, PeerType.Trusted)
-    val peerStore = new PeerStore(random[KeyValueDB[IO]])
-    PeerTable(peerNode, peerStore, Vector.empty).unsafeRunSync()
+    val peerNode = PeerNode(random[KeyPair].public, "localhost", 10000, 0, PeerType.Trusted)
+    val db       = random[KeyValueDB[IO]]
+    val store    = PeerStorePlatform.fromKV(db)
+    PeerTable(peerNode, store, Vector.empty).unsafeRunSync()
   }
 
   implicit val arbPeerTable: Arbitrary[PeerTable[IO]] = Arbitrary {
     genPeerTable
+  }
+
+  implicit val arbPeerNode: Arbitrary[PeerNode] = Arbitrary {
+    for {
+      port <- Gen.chooseNum(10000, 60000)
+      kp = random[KeyPair]
+    } yield PeerNode(kp.public, "localhost", port, 0, PeerType.Trusted)
   }
 }

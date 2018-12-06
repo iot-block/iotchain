@@ -36,7 +36,7 @@ abstract class PeerManager[F[_]](
 )(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F], AG: AsynchronousChannelGroup, chainId: BigInt) {
   private[this] val log = org.log4s.getLogger("PeerManager")
 
-  val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port)
+  val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port, config.discovery.port)
 
   def listen(
       bind: InetSocketAddress = config.bindAddr,
@@ -82,7 +82,7 @@ abstract class PeerManager[F[_]](
       to: PeerNode,
   ): Stream[F, Unit] = {
     val connect0 = {
-      val res = io.tcp.Socket.client[F](to.addr, keepAlive = true, noDelay = true)
+      val res = io.tcp.Socket.client[F](to.tcpAddress, keepAlive = true, noDelay = true)
       val stream = for {
         conn <- eval(TcpUtil.socketToConnection[F, Message](res, false))
         _    <- eval(conn.start)
@@ -119,7 +119,7 @@ abstract class PeerManager[F[_]](
 
   def addPeerNode(nodes: PeerNode*): F[Unit] =
     nodes.toList
-      .filterNot(_.addr == config.bindAddr)
+      .filterNot(_.tcpAddress == config.bindAddr)
       .distinct
       .traverse(node => nodeQueue.enqueue1(node, node.peerType.priority))
       .void

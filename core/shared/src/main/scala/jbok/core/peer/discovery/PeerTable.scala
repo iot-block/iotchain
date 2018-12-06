@@ -4,187 +4,93 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
-import fs2.concurrent.SignallingRef
+import jbok.core.peer.discovery.PeerTable._
 import jbok.core.peer.{PeerNode, PeerStore}
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
 import scala.util.Random
 
-
-import jbok.core.peer.discovery.PeerTable._
-
-final class PeerTable[F[_]](
-    val peerNode: PeerNode,
-    val store: PeerStore[F],
-    val bootstrapNodes: Vector[PeerNode],
-    val buckets: Ref[F, Vector[Bucket]],
-    val initDone: SignallingRef[F, Boolean]
+case class PeerTable[F[_]](
+    selfNode: PeerNode,
+    store: PeerStore[F],
+    bootstrapNodes: Vector[PeerNode],
+    buckets: Ref[F, Vector[Bucket]]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
 
   private[this] val log = org.log4s.getLogger("PeerTable")
 
-  import PeerTable._
+  def getBuckets: F[Vector[Bucket]] =
+    buckets.get
 
-  // TODO
-  def getFails(id: ByteVector): F[Int] = F.pure(0)
-
-  // TODO
-  def putFails(id: ByteVector, n: Int): F[Unit] = F.unit
-
-  // TODO
-  def querySeeds(maxCount: Int, maxAge: FiniteDuration): F[Vector[PeerNode]] = F.pure(Vector.empty)
-
-  /** returns the bucket for the given node ID hash. */
   def getBucket(id: ByteVector): F[Bucket] = {
-    val d = logDist(peerNode.id, id)
+    val d = logDist(selfNode.id, id)
     val i = if (d <= bucketMinDistance) 0 else d - bucketMinDistance - 1
     buckets.get.map(_(i))
   }
 
   def putBucket(id: ByteVector, bucket: Bucket): F[Unit] = {
-    val d = logDist(peerNode.id, id)
+    val d = logDist(selfNode.id, id)
     val i = if (d <= bucketMinDistance) 0 else d - bucketMinDistance - 1
     buckets.update(_.updated(i, bucket))
   }
 
-  /**
-    * add attempts to add the given node to its corresponding bucket.
-    * If the bucket has space available, adding the node succeeds immediately.
-    * Otherwise, the node is added if the least recently active node in the bucket does not respond to a ping packet.
-    */
-  def add(node: PeerNode): F[Unit] =
-    if (node.id == peerNode.id) {
+  /** bump up or add or back up the node */
+  def addNode(node: PeerNode): F[Unit] =
+    if (node.id == selfNode.id) {
       F.unit
     } else {
-      bumpOrAdd(node) *> addReplacement(node)
+      for {
+        bucket <- getBucket(node.id)
+        updated = bucket.bumpOrAdd(node)
+        _ <- putBucket(node.id, updated)
+      } yield ()
     }
 
-  /**
-    * adds the given node to the table. Compared to plain [[add]]
-    * there is an additional safety measure: if the table is still
-    * initializing the node is not added. This prevents an attack where the
-    * table could be filled by just sending ping repeatedly.
-    */
-  def addThroughPing(node: PeerNode): F[Unit] =
-    initDone.get.ifM(add(node), F.unit)
-
-  /**
-    * stuff adds nodes the table to the end of their corresponding bucket
-    * if the bucket is not full
-    */
-  def stuff(nodes: Vector[PeerNode]): F[Unit] =
-    nodes.traverse(bumpOrAdd).void
-
-  /** delete removes an entry from the node table. It is used to evacuate dead nodes. */
-  def delete(node: PeerNode): F[Unit] =
+  def delNode(node: PeerNode): F[Unit] =
     for {
       bucket <- getBucket(node.id)
-      newBucket = bucket.copy(entries = deleteNode(bucket.entries, node))
-      _ <- putBucket(node.id, newBucket)
+      updated = bucket.deleteEntry(node)
+      _ <- putBucket(node.id, updated)
     } yield ()
 
-  def addReplacement(node: PeerNode): F[Unit] =
+  def loadSeedNodes: F[Unit] =
     for {
-      bucket <- getBucket(node.id)
-      newBucket = bucket.copy(replacements = pushNode(bucket.replacements, node, maxReplacements))
-      _ <- putBucket(node.id, newBucket)
-    } yield ()
-
-  /**
-    * replace removes n from the replacement list and replaces 'last' with it if it is the
-    * last entry in the bucket. If 'last' isn't the last entry, it has either been replaced
-    * with someone else or became active.
-    */
-  def replace(last: PeerNode): F[Unit] =
-    for {
-      bucket <- getBucket(last.id)
-      _ <- if (bucket.entries.isEmpty || bucket.entries.last.id != last.id) {
-        // Entry has moved, don't replace it.
-        F.unit
-      } else {
-        if (bucket.replacements.isEmpty) {
-          delete(last)
-        } else {
-          val r            = Random.shuffle(bucket.replacements).head
-          val replacements = deleteNode(bucket.replacements, r)
-          val entries      = bucket.entries.updated(bucket.entries.length - 1, r)
-          val updated = bucket.copy(
-            entries = entries,
-            replacements = replacements
-          )
-          putBucket(last.id, updated)
-        }
-      }
-    } yield ()
-
-  /**
-    * bumpOrAdd moves n to the front of the bucket entry list or adds it if the list isn't
-    * full. The return value is true if n is in the bucket.
-    */
-  def bumpOrAdd(n: PeerNode): F[Unit] =
-    for {
-      bucket <- getBucket(n.id)
-      bumped = bucket.bumped(n)
-      _ <- if (bucket == bumped) {
-        F.unit
-      } else {
-        val newEntries      = pushNode(bucket.entries, n, bucketSize)
-        val newReplacements = deleteNode(bucket.replacements, n)
-        val newBucket       = bucket.copy(entries = newEntries, replacements = newReplacements)
-        putBucket(n.id, newBucket)
-      }
-    } yield ()
-
-  /**
-    * pushNode adds n to the front of list, keeping at most max items.
-    */
-  def pushNode(list: Vector[PeerNode], n: PeerNode, max: Int): Vector[PeerNode] =
-    Vector(n) ++ list.take(max - 1)
-
-  /**
-    * deleteNode removes n from list.
-    */
-  def deleteNode(list: Vector[PeerNode], n: PeerNode) =
-    list.filterNot(_.id == n.id)
-
-  def logDist(a: ByteVector, b: ByteVector): Int =
-    a.bits.xor(b.bits).toIndexedSeq.indexWhere(_ == true) match {
-      case -1 => a.length.toInt * 8
-      case x  => a.length.toInt * 8 - x
-    }
-
-  /**
-    * closest returns the n nodes in the table that are closest to the given target
-    */
-  def closest(target: ByteVector, numResults: Int = bucketSize): F[NodesByDistance] = {
-    val result = NodesByDistance(Vector.empty, target)
-    for {
-      buckets <- buckets.get
-      entries = buckets.flatMap(_.entries)
-    } yield {
-      entries.foldLeft(result)((acc, cur) => acc.pushed(cur))
-    }
-  }
-
-  def stream: Stream[F, Unit] =
-    Stream.awakeEvery[F](persistInterval).evalMap(_ => persistentNodes())
-
-  def loadSeedNodes(): F[Unit] =
-    for {
-      seeds <- querySeeds(seedCount, seedMaxAge)
+      seeds <- store.getSeeds(seedCount, seedMaxAge).map(_.toVector)
       full = seeds ++ bootstrapNodes
       _ <- full.traverse(node => {
         log.info(s"found seed ${node} in database")
-        add(node)
+        addNode(node)
       })
     } yield ()
+
+  def closest(target: ByteVector, maxSize: Int = bucketSize): F[NodesByDistance] = {
+    val result = NodesByDistance(Vector.empty, target)
+    for {
+      buckets <- getBuckets
+      entries = buckets.flatMap(_.entries)
+    } yield {
+      entries.foldLeft(result)((acc, cur) => acc.pushed(cur, maxSize))
+    }
+  }
+
+//  /**
+//    * adds the given node to the table. Compared to plain [[addNode]]
+//    * there is an additional safety measure: if the table is still
+//    * initializing the node is not added. This prevents an attack where the
+//    * table could be filled by just sending ping repeatedly.
+//    */
+//  def addThroughPing(node: PeerNode): F[Unit] =
+//    initDone.get.ifM(addNode(node), F.unit)
+
+  def stream: Stream[F, Unit] =
+    Stream.awakeEvery[F](persistInterval).evalMap(_ => persistentNodes)
 
   /**
     * adds nodes from the table to the database if they have been in the table
     * longer then minTableTime.
     */
-  def persistentNodes() = {
+  private def persistentNodes = {
     val now = System.currentTimeMillis()
     for {
       buckets <- buckets.get
@@ -215,32 +121,79 @@ object PeerTable {
   val refreshInterval     = 30.minutes
   val revalidateInterval  = 10.seconds
 
+  /** a [[Bucket]] is just a list of [[PeerNode]]s and a list of backup [[PeerNode]]s */
   case class Bucket(entries: Vector[PeerNode], replacements: Vector[PeerNode]) {
-    def bumped(n: PeerNode): Bucket =
+    def bump(n: PeerNode): Bucket =
       if (entries.contains(n)) {
         this.copy(entries = Vector(n) ++ entries.filterNot(_.id == n.id))
       } else {
         this
       }
+
+    def bumpOrAdd(node: PeerNode): Bucket =
+      if (entries.contains(node)) {
+        bump(node)
+      } else if (entries.length < bucketSize) {
+        addEntry(node).delReplacement(node)
+      } else {
+        addReplacement(node)
+      }
+
+    private def addReplacement(node: PeerNode): Bucket =
+      copy(replacements = Vector(node) ++ replacements.take(maxReplacements - 1))
+
+    private def delReplacement(node: PeerNode): Bucket =
+      copy(replacements = replacements.filterNot(_.id == node.id))
+
+    private def addEntry(node: PeerNode): Bucket =
+      copy(entries = Vector(node) ++ entries.take(bucketSize - 1))
+
+    private[jbok] def deleteEntry(node: PeerNode): Bucket =
+      copy(entries = entries.filterNot(_.id == node.id))
+
+    /**
+      * replace removes n from the replacement list and replaces 'last' with it if it is the
+      * last entry in the bucket. If 'last' isn't the last entry, it has either been replaced
+      * with someone else or became active.
+      */
+    def replace(last: PeerNode): Bucket =
+      if (entries.isEmpty || entries.last.id != last.id) {
+        this
+      } else {
+        if (replacements.isEmpty) {
+          deleteEntry(last)
+        } else {
+          val r = Random.shuffle(replacements).head
+          delReplacement(r).copy(entries = entries.updated(entries.length - 1, r))
+        }
+      }
+
+    override def toString: String =
+      s"Bucket(entries: [${entries.mkString(",")}], replacements: [${replacements.mkString(",")}])"
   }
 
   object Bucket {
     val empty: Bucket = Bucket(Vector.empty, Vector.empty)
   }
 
-  case class NodesByDistance(entries: Vector[PeerNode], target: ByteVector) {
-    def dist(a: ByteVector, b: ByteVector): Long =
-      a.xor(b).toLong(signed = false)
+  def logDist(a: ByteVector, b: ByteVector): Int =
+    a.bits.xor(b.bits).toIndexedSeq.indexWhere(_ == true) match {
+      case -1 => a.length.toInt * 8
+      case x  => a.length.toInt * 8 - x
+    }
 
+  def ordByTargetDist(target: ByteVector): Ordering[ByteVector] =
+    Ordering.by((v: ByteVector) => v.xor(target).toIterable)
+
+  case class NodesByDistance(entries: Vector[PeerNode], target: ByteVector) {
+    val ord = ordByTargetDist(target)
     def pushed(node: PeerNode, maxSize: Int = bucketSize): NodesByDistance = {
-      val nodeDist = dist(node.id, target)
-      val updated = entries.indexWhere(x => dist(x.id, target) > nodeDist) match {
+      val updated = entries.indexWhere(x => ord.compare(node.id, x.id) <= 0) match {
         case -1 if entries.length < maxSize => entries ++ Vector(node)
         case -1                             => entries
-        case i                              => entries.slice(0, i) ++ Vector(node) ++ entries.slice(i + 1, entries.length)
+        case i                              => entries.slice(0, i) ++ Vector(node) ++ entries.slice(i, entries.length)
       }
-
-      this.copy(entries = updated)
+      copy(entries = updated)
     }
   }
 
@@ -251,6 +204,5 @@ object PeerTable {
   )(implicit T: Timer[F]): F[PeerTable[F]] =
     for {
       buckets  <- Ref.of[F, Vector[Bucket]](Vector.fill(nBuckets)(Bucket.empty))
-      initDone <- SignallingRef[F, Boolean](false)
-    } yield new PeerTable[F](selfNode, store, bootstrapNodes, buckets, initDone)
+    } yield PeerTable[F](selfNode, store, bootstrapNodes, buckets)
 }

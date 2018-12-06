@@ -4,6 +4,7 @@ import java.net._
 import jbok.codec.rlp.RlpCodec
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
+import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
 
@@ -19,17 +20,25 @@ object PeerType {
     RlpCodec.item(mappedEnum(uint8, Discovered -> 1, Static -> 2, Trusted -> 3))
 }
 
-case class PeerNode(pk: KeyPair.Public, host: String, port: Int, peerType: PeerType = PeerType.Trusted) {
-  lazy val id   = pk.bytes.kec256
-  lazy val addr = new InetSocketAddress(host, port)
+final case class PeerNode(
+    pk: KeyPair.Public,
+    host: String,
+    tcpPort: Int,
+    udpPort: Int,
+    peerType: PeerType = PeerType.Trusted
+) {
+  lazy val id         = pk.bytes.kec256
+  lazy val tcpAddress = new InetSocketAddress(host, tcpPort)
+  lazy val udpAddress = new InetSocketAddress(host, udpPort)
   lazy val uri = {
-    val host = addr.getAddress match {
-      case _: Inet6Address => s"[${addr.getHostName}]"
-      case _               => addr.getHostName
+    val host = tcpAddress.getAddress match {
+      case _: Inet6Address => s"[${tcpAddress.getHostName}]"
+      case _               => tcpAddress.getHostName
     }
-    val port = addr.getPort
+    val port = tcpAddress.getPort
     new URI(s"${PeerNode.NodeScheme}://${pk.bytes.toHex}@$host:$port")
   }
+  override def toString: String = s"PeerNode(#${id.toHex.take(7)})"
 }
 
 object PeerNode {
@@ -38,11 +47,11 @@ object PeerNode {
   val PublicLength = 64
 
   def fromAddr(pk: KeyPair.Public, addr: InetSocketAddress): PeerNode =
-    PeerNode(pk, addr.getHostName, addr.getPort)
+    PeerNode(pk, addr.getHostName, addr.getPort, 0)
 
   def fromUri(uri: URI): PeerNode = {
     val pk = KeyPair.Public(uri.getUserInfo)
-    PeerNode(pk, uri.getHost, uri.getPort)
+    PeerNode(pk, uri.getHost, uri.getPort, 0)
   }
 
   /**
@@ -83,6 +92,6 @@ object PeerNode {
       _       <- checkScheme(uri)
       nodeId  <- checkPk(uri)
       address <- checkAddress(uri)
-    } yield PeerNode(nodeId, address.getHostName, address.getPort)
+    } yield PeerNode(nodeId, address.getHostName, address.getPort, 0)
   }
 }

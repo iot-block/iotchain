@@ -2,6 +2,7 @@ package jbok.codec.rlp
 
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 import cats.effect.Sync
 import jbok.codec.rlp.RlpCodec.item
@@ -115,6 +116,8 @@ object implicits extends CodecSyntax {
         },
         short => shortToBytes(short)
       ))
+
+  implicit val ruuid: RlpCodec[UUID] = item(uuid)
 
   implicit val rubigint: RlpCodec[BigInt] =
     item(bytes.xmap[BigInt](bytes => if (bytes.isEmpty) 0 else BigInt(1, bytes.toArray), bi => {

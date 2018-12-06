@@ -1,9 +1,8 @@
 package jbok.core.config
 
-import java.net.InetSocketAddress
+import java.net.{InetSocketAddress, URI}
 
 import jbok.core.models.{Address, UInt256}
-import jbok.core.peer.PeerNode
 import scodec.bits._
 
 import scala.concurrent.duration._
@@ -68,6 +67,7 @@ object Configs {
       port: Int = 10000,
       host: String = "localhost",
       nodekeyPath: String = s"${defaultRootDir}/nodekey",
+      discovery: DiscoveryConfig = DiscoveryConfig(),
       bootUris: List[String] = Nil,
       updatePeersInterval: FiniteDuration = 10.seconds,
       maxOutgoingPeers: Int = 10,
@@ -78,7 +78,6 @@ object Configs {
       timeout: FiniteDuration = 10.seconds
   ) {
     val bindAddr: InetSocketAddress = new InetSocketAddress(host, port)
-    val bootNodes                   = bootUris.flatMap(s => PeerNode.fromStr(s).toOption)
   }
 
   case class BlockChainConfig(
@@ -141,10 +140,10 @@ object Configs {
   )
 
   case class DiscoveryConfig(
-      enabled: Boolean = true,
+      enabled: Boolean = false,
       interface: String = "localhost",
       port: Int = 8889,
-      bootstrapNodes: Set[PeerNode] = Set.empty,
+      bootstrapNodes: Set[URI] = Set.empty,
       nodesLimit: Int = 10,
       scanMaxNodes: Int = 10,
       scanInterval: FiniteDuration = 10.seconds,
