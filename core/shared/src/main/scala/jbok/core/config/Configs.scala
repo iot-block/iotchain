@@ -93,7 +93,6 @@ object Configs {
       difficultyBombContinueBlockNumber: BigInt = BigInt("5000000"),
       customGenesisFileOpt: Option[String] = None,
       accountStartNonce: UInt256 = UInt256.Zero,
-      chainId: Byte = 0x3d.toByte,
       monetaryPolicyConfig: MonetaryPolicyConfig = MonetaryPolicyConfig(),
       gasTieBreaker: Boolean = false
   )

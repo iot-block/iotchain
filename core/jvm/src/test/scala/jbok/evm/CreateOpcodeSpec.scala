@@ -11,10 +11,11 @@ object CreateOpFixture {
   val config = EvmConfig.SpuriousDragonConfigBuilder(None)
   import config.feeSchedule._
 
-  val creatorAddr        = Address(0xcafe)
-  val endowment: UInt256 = 123
-  val db                 = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history            = History[IO](db).unsafeRunSync()
+  val creatorAddr              = Address(0xcafe)
+  val endowment: UInt256       = 123
+  implicit val chainId: BigInt = 61
+  val db                       = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history                  = History[IO](db).unsafeRunSync()
   val initWorld =
     history
       .getWorldState()

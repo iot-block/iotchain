@@ -29,7 +29,7 @@ case class BlockExecutor[F[_]](
     txPool: TxPool[F],
     ommerPool: OmmerPool[F],
     semaphore: Semaphore[F]
-)(implicit F: Sync[F], T: Timer[F]) {
+)(implicit F: Sync[F], T: Timer[F], chainId: BigInt) {
   private[this] val log = org.log4s.getLogger("BlockExecutor")
 
   import BlockExecutor._
@@ -410,7 +410,7 @@ object BlockExecutor {
       config: BlockChainConfig,
       consensus: Consensus[F],
       peerManager: PeerManager[F],
-  )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[BlockExecutor[F]] =
+  )(implicit F: ConcurrentEffect[F], T: Timer[F], chainId: BigInt): F[BlockExecutor[F]] =
     for {
       txPool    <- TxPool[F](TxPoolConfig(), peerManager)
       ommerPool <- OmmerPool[F](consensus.history)

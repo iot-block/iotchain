@@ -3,7 +3,6 @@ package jbok.common.metrics
 import cats.effect.IO
 import com.codahale.metrics.{MetricRegistry, SharedMetricRegistries}
 import jbok.JbokSpec
-import jbok.common.metrics.org.http4s.metrics.dropwizard.Dropwizard
 import fs2._
 import scala.concurrent.duration._
 import jbok.common.execution._
@@ -24,7 +23,7 @@ class DropwizardSpec extends JbokSpec {
 
   "Dropwizard" should {
     val registry = SharedMetricRegistries.getOrCreate("test")
-    val metric = Dropwizard[IO](registry, "oho")
+    val metric   = Dropwizard[IO](registry, "oho")
 
     "metric count" in {
       count(registry, Counter("oho.default.count")) shouldBe None
@@ -48,9 +47,10 @@ class DropwizardSpec extends JbokSpec {
 
     "console reporter" in {
       val stream =
-        Stream.range[IO](0, 10)
-        .evalMap[IO, Unit](_ => T.sleep(500.millis) >> metric.increaseCount(None))
-        .concurrently(Dropwizard.consoleReporter[IO](registry, 1.seconds))
+        Stream
+          .range[IO](0, 10)
+          .evalMap[IO, Unit](_ => T.sleep(500.millis) >> metric.increaseCount(None))
+          .concurrently(Dropwizard.consoleReporter[IO](registry, 1.seconds))
 
       stream.compile.drain.unsafeRunSync()
     }

@@ -57,8 +57,9 @@ object testkit {
   def getStorageGen(maxSize: Int = 0, uint256Gen: Gen[UInt256] = getUInt256Gen()): Gen[Storage[IO]] =
     getListGen(0, maxSize, uint256Gen).map(l => Storage.fromList[IO](l).unsafeRunSync())
 
-  val ownerAddr  = Address(0x123456)
-  val callerAddr = Address(0xabcdef)
+  val ownerAddr                = Address(0x123456)
+  val callerAddr               = Address(0xabcdef)
+  implicit val chainId: BigInt = 61
 
   val exampleBlockHeader = BlockHeader(
     parentHash = hex"d882d5c210bab4cb7ef0b9f3dc2130cb680959afcd9a8f9bf83ee6f13e2f9da3",

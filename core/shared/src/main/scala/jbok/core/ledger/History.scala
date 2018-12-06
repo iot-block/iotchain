@@ -12,7 +12,7 @@ import jbok.evm.WorldState
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits._
 
-abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
+abstract class History[F[_]](val db: KeyValueDB[F]) {
   // init
   def init(config: GenesisConfig = GenesisConfig.default): F[Unit]
 
@@ -86,16 +86,13 @@ abstract class History[F[_]](val db: KeyValueDB[F], val chainId: Int) {
 }
 
 object History {
-  def apply[F[_]: Sync](db: KeyValueDB[F], chainId: Int = 1): F[History[F]] =
+  def apply[F[_]: Sync](db: KeyValueDB[F])(implicit chainId: BigInt): F[History[F]] =
     Sync[F].pure {
-      new HistoryImpl[F](
-        db,
-        chainId
-      )
+      new HistoryImpl[F](db)
     }
 }
 
-class HistoryImpl[F[_]](db: KeyValueDB[F], chainId: Int)(implicit F: Sync[F]) extends History[F](db, chainId) {
+class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt) extends History[F](db) {
 
   private val appStateStore = new AppStateStore[F](db)
 

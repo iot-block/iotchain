@@ -49,7 +49,8 @@ object PeerManagerPlatform {
   )(
       implicit F: ConcurrentEffect[F],
       T: Timer[F],
-      AG: AsynchronousChannelGroup
+      AG: AsynchronousChannelGroup,
+      chainId: BigInt
   ): F[PeerManager[F]] =
     for {
       keyPair      <- OptionT.fromOption[F](keyPairOpt).getOrElseF(F.liftIO(loadOrGenerateNodeKey(config.nodekeyPath)))

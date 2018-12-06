@@ -25,7 +25,7 @@ class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signat
 
   override def toString: String = s"ECDSASignature(${curveName})"
 
-  import ECDSAPlatform._
+  import ECDSAChainIdConvert._
 
   val curve: ECNamedCurveParameterSpec = ECNamedCurveTable.getParameterSpec(curveName)
   val domain: ECDomainParameters       = new ECDomainParameters(curve.getCurve, curve.getG, curve.getN, curve.getH)
@@ -56,26 +56,24 @@ class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signat
     val Array(r, s) = signer.generateSignature(hash)
     val v           = calculateRecId(r, toCanonicalS(s), keyPair, hash, chainId).get
 
-    val pointSign: BigInt =
-      if (v == NEGATIVE_POINT_SIGN) chainId * 2 + EIP155_NEGATIVE_POINT_SIGN
-      else if (v == POSITIVE_POINT_SIGN) chainId * 2 + EIP155_POSITIVE_POINT_SIGN
-      else v
+    val pointSign: BigInt = getRecoveryId(chainId, v).getOrElse(v)
 
     CryptoSignature(r, toCanonicalS(s), pointSign)
   }
 
-  override def verify(hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public): F[Boolean] = F.delay {
-    val signer = new ECDSASigner()
-    val q      = curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR +: public.bytes.toArray)
-    signer.init(false, new ECPublicKeyParameters(q, domain))
-    signer.verifySignature(hash, sig.r.bigInteger, sig.s.bigInteger)
-  }
+  override def verify(hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt): F[Boolean] =
+    F.delay {
+      val signer = new ECDSASigner()
+      val q      = curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR_BYTE +: public.bytes.toArray)
+      signer.init(false, new ECPublicKeyParameters(q, domain))
+      signer.verifySignature(hash, sig.r.bigInteger, sig.s.bigInteger)
+    }
 
   override def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: BigInt): Option[KeyPair.Public] = {
     val order = curve.getN
     val prime = curve.getCurve.asInstanceOf[SecP256K1Curve].getQ
 
-    val bytesOpt = getRecoveredPointSign(sig.v, chainId).flatMap { recovery =>
+    val bytesOpt = getPointSign(chainId, sig.v).flatMap { recovery =>
       if (sig.r.compareTo(prime) < 0) {
         val R = constructPoint(sig.r, recovery.toInt)
         if (R.multiply(order).isInfinity) {
@@ -103,7 +101,7 @@ class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signat
     new ECPrivateKeyParameters(secret.d, domain)
 
   private[jbok] def toECPublicKeyParameters(public: KeyPair.Public) =
-    new ECPublicKeyParameters(curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR +: public.bytes.toArray), domain)
+    new ECPublicKeyParameters(curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR_BYTE +: public.bytes.toArray), domain)
 
   private[jbok] def toCanonicalS(s: BigInteger): BigInt =
     BigInt(if (s.compareTo(halfCurveOrder) <= 0) {
@@ -117,8 +115,10 @@ class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signat
                                    keyPair: KeyPair,
                                    hash: Array[Byte],
                                    chainId: BigInt): Option[BigInt] =
-    allowedPointSigns.find(v =>
-      recoverPublic(hash, CryptoSignature(r, s, getV(v, chainId)), chainId).contains(keyPair.public))
+    allowedPointSigns.find(
+      v =>
+        recoverPublic(hash, CryptoSignature(r, s, getRecoveryId(chainId, v).getOrElse(v)), chainId)
+          .contains(keyPair.public))
 
   private[jbok] def constructPoint(xCoordinate: BigInt, recId: Int): ECPoint = {
     val x9      = new X9IntegerConverter
@@ -126,35 +126,4 @@ class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signat
     compEnc(0) = if (recId == POSITIVE_POINT_SIGN) 3.toByte else 2.toByte
     curve.getCurve.decodePoint(compEnc)
   }
-
-  private[jbok] def getRecoveredPointSign(pointSign: BigInt, chainId: BigInt): Option[BigInt] =
-    (if (pointSign == chainId * 2 + EIP155_NEGATIVE_POINT_SIGN) {
-       Some(NEGATIVE_POINT_SIGN)
-     } else if (pointSign == chainId * 2 + EIP155_POSITIVE_POINT_SIGN) {
-       Some(POSITIVE_POINT_SIGN)
-     } else {
-       None
-     }).filter(pointSign => allowedPointSigns.contains(pointSign))
-
-  private[jbok] def getV(pointSign: BigInt, chainId: BigInt): BigInt =
-    if (pointSign == NEGATIVE_POINT_SIGN) {
-      chainId * 2 + EIP155_NEGATIVE_POINT_SIGN
-    } else {
-      chainId * 2 + EIP155_POSITIVE_POINT_SIGN
-    }
-
-  private[jbok] def pointSign(chainId: Option[BigInt], v: Byte): Byte = chainId match {
-    case Some(id) if v == NEGATIVE_POINT_SIGN => (id * 2 + EIP155_NEGATIVE_POINT_SIGN).toByte
-    case Some(id) if v == POSITIVE_POINT_SIGN => (id * 2 + EIP155_POSITIVE_POINT_SIGN).toByte
-    case None                                 => v
-  }
-}
-
-object ECDSAPlatform {
-  val UNCOMPRESSED_INDICATOR: Byte       = 0x04
-  val NEGATIVE_POINT_SIGN: BigInt        = 27
-  val POSITIVE_POINT_SIGN: BigInt        = 28
-  val EIP155_NEGATIVE_POINT_SIGN: BigInt = 35
-  val EIP155_POSITIVE_POINT_SIGN: BigInt = 36
-  val allowedPointSigns                  = Set(NEGATIVE_POINT_SIGN, POSITIVE_POINT_SIGN)
 }

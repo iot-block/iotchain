@@ -15,7 +15,7 @@ case class GenesisConfig(
     coinbase: String,
     timestamp: Long = System.currentTimeMillis(),
     alloc: Map[String, String] = Map.empty,
-    chainId: Int = 0
+    chainId: BigInt = 0
 ) {
   lazy val header = BlockHeader(
     parentHash = ByteVector.empty,
@@ -51,6 +51,6 @@ object GenesisConfig {
     alloc = Map(
       "d7a681378321f472adffb9fdded2712f677e0ba9" -> "1000000000000000000000000000000000000000000"
     ),
-    chainId = 0.toByte
+    chainId = 1
   )
 }
