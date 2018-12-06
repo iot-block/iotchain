@@ -110,6 +110,15 @@ final class MerklePatriciaTrie[F[_]](
     } yield m.map { case (k, v) => ByteVector.fromValidHex(k) -> v }
   }
 
+  override def keys[Key: Codec](namespace: ByteVector): F[List[Key]] =
+    keysRaw.flatMap(_.traverse(k => decode[Key](k, namespace)))
+
+  override def toMap[Key: Codec, Val: Codec](namespace: ByteVector): F[Map[Key, Val]] =
+    for {
+      mapRaw <- toMapRaw
+      xs     <- mapRaw.toList.traverse { case (k, v) => (decode[Key](k, namespace), decode[Val](v)).tupled }
+    } yield xs.toMap
+
   override protected[jbok] def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit] =
     del.traverse(delRaw) *> put.traverse { case (k, v) => putRaw(k, v) }.void
 

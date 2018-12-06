@@ -2,7 +2,6 @@ package jbok.persistent
 
 import cats.data.OptionT
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import scodec.Codec
 import scodec.bits.ByteVector
@@ -23,6 +22,10 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
   protected[jbok] def toMapRaw: F[Map[ByteVector, ByteVector]]
 
   protected[jbok] def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit]
+
+  def keys[Key: Codec](namespace: ByteVector): F[List[Key]]
+
+  def toMap[Key: Codec, Val: Codec](namespace: ByteVector): F[Map[Key, Val]]
 
   final def getOpt[Key: Codec, Val: Codec](key: Key, namespace: ByteVector): F[Option[Val]] =
     for {
@@ -53,15 +56,6 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
   final def has[Key: Codec](key: Key, namespace: ByteVector): F[Boolean] =
     encode[Key](key, namespace) >>= hasRaw
 
-  final def keys[Key: Codec](namespace: ByteVector): F[List[Key]] =
-    keysRaw.flatMap(_.traverse(k => decode[Key](k, namespace)))
-
-  final def toMap[Key: Codec, Val: Codec](namespace: ByteVector): F[Map[Key, Val]] =
-    for {
-      mapRaw <- toMapRaw
-      xs     <- mapRaw.toList.traverse { case (k, v) => (decode[Key](k, namespace), decode[Val](v)).tupled }
-    } yield xs.toMap
-
   final def writeBatch[Key: Codec, Val: Codec](put: List[(Key, Val)], del: List[Key], namespace: ByteVector): F[Unit] =
     for {
       p <- put.traverse { case (k, v) => (encode[Key](k, namespace), encode[Val](v)).tupled }
@@ -83,33 +77,10 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
     F.delay(Codec[A].decode(bytes.drop(prefix.length).bits).require.value)
 }
 
-object KeyValueDB {
-  def inmem[F[_]: Sync]: F[KeyValueDB[F]] =
-    Ref.of[F, Map[ByteVector, ByteVector]](Map.empty).map { ref =>
-      new KeyValueDB[F] {
-        override def getRaw(key: ByteVector): F[Option[ByteVector]] =
-          ref.get.map(_.get(key))
+object KeyValueDB extends KeyValueDBPlatform {
+  val INMEM = "inmem"
 
-        override def putRaw(key: ByteVector, newVal: ByteVector): F[Unit] =
-          ref.update(_ + (key -> newVal))
+  def inmem[F[_]: Sync]: F[KeyValueDB[F]] = InmemKeyValueDB[F]
 
-        override def delRaw(key: ByteVector): F[Unit] =
-          ref.update(_ - key)
-
-        override def hasRaw(key: ByteVector): F[Boolean] =
-          ref.get.map(_.contains(key))
-
-        override def keysRaw: F[List[ByteVector]] =
-          ref.get.map(_.keys.toList)
-
-        override def size: F[Int] =
-          ref.get.map(_.size)
-
-        override def toMapRaw: F[Map[ByteVector, ByteVector]] =
-          ref.get
-
-        override def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit] =
-          ref.update(xs => xs -- del ++ put)
-      }
-    }
+  def forPath[F[_]: Sync](path: String): F[KeyValueDB[F]] = _forPath[F](path)
 }

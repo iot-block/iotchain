@@ -4,31 +4,46 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.codec.rlp.implicits._
-import jbok.persistent.testkit._
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 
 class KeyValueDBSpec extends JbokSpec {
-  "KeyValueDB" should {
-    "toMap" in {
-      forAll { (db: KeyValueDB[IO], kvs: Map[String, String], namespace: ByteVector) =>
-        kvs.toList.traverse[IO, Unit](t => db.put(t._1, t._2, namespace)).unsafeRunSync()
-        db.toMap[String, String](namespace).unsafeRunSync() shouldBe kvs
+  def check(path: String) = {
+    s"KeyValueDB of ${path}" should {
+      "toMap" in {
+        val ns1 = random[ByteVector]
+        val ns2 = random[ByteVector]
+        forAll { (kv1: Map[String, String], kv2: Map[String, String]) =>
+          val db  = KeyValueDB.forPath[IO](path).unsafeRunSync()
+          kv1.toList.traverse[IO, Unit](t => db.put(t._1, t._2, ns1)).unsafeRunSync()
+          kv2.toList.traverse[IO, Unit](t => db.put(t._1, t._2, ns2)).unsafeRunSync()
+          db.toMap[String, String](ns1).unsafeRunSync() shouldBe kv1
+          db.toMap[String, String](ns2).unsafeRunSync() shouldBe kv2
+        }
       }
-    }
 
-    "keys" in {
-      forAll { (db: KeyValueDB[IO], kvs: Map[String, String], namespace: ByteVector) =>
-        kvs.toList.traverse[IO, Unit](t => db.put(t._1, t._2, namespace)).unsafeRunSync()
-        db.keys[String](namespace).unsafeRunSync() should contain theSameElementsAs kvs.keys.toList
+      "keys" in {
+        val ns1 = random[ByteVector]
+        val ns2 = random[ByteVector]
+        forAll { (kv1: Map[String, String], kv2: Map[String, String]) =>
+          val db  = KeyValueDB.forPath[IO](path).unsafeRunSync()
+          kv1.toList.traverse[IO, Unit](t => db.put(t._1, t._2, ns1)).unsafeRunSync()
+          kv2.toList.traverse[IO, Unit](t => db.put(t._1, t._2, ns2)).unsafeRunSync()
+          db.keys[String](ns1).unsafeRunSync() should contain theSameElementsAs kv1.keys.toList
+          db.keys[String](ns2).unsafeRunSync() should contain theSameElementsAs kv2.keys.toList
+          db.keysRaw.unsafeRunSync().length shouldBe kv1.size + kv2.size
+        }
       }
-    }
 
-    "writeBatch" in {
-      forAll { (db: KeyValueDB[IO], kvs: Map[String, String], namespace: ByteVector) =>
-        db.writeBatch[String, String](kvs.toList.map(t => t._1 -> t._2.some), namespace).unsafeRunSync()
-        db.toMap[String, String](namespace).unsafeRunSync() shouldBe kvs
+      "writeBatch" in {
+        forAll { (kvs: Map[String, String], namespace: ByteVector) =>
+          val db  = KeyValueDB.forPath[IO](path).unsafeRunSync()
+          db.writeBatch[String, String](kvs.toList.map(t => t._1 -> t._2.some), namespace).unsafeRunSync()
+          db.toMap[String, String](namespace).unsafeRunSync() shouldBe kvs
+        }
       }
     }
   }
+
+  check(KeyValueDB.INMEM)
 }
