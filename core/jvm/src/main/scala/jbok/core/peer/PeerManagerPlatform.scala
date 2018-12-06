@@ -5,7 +5,7 @@ import java.nio.channels.AsynchronousChannelGroup
 import better.files._
 import cats.data.OptionT
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, IO, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, IO, Timer}
 import cats.implicits._
 import fs2.concurrent.Queue
 import jbok.common.concurrent.PriorityQueue
@@ -48,6 +48,7 @@ object PeerManagerPlatform {
       maxQueueSize: Int = 64
   )(
       implicit F: ConcurrentEffect[F],
+      CS: ContextShift[F],
       T: Timer[F],
       AG: AsynchronousChannelGroup,
       chainId: BigInt

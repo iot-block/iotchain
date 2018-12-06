@@ -18,12 +18,13 @@ lazy val contributors = Map(
 lazy val V = new {
   val circe           = "0.9.1"
   val tsec            = "0.0.1-RC1"
-  val http4s          = "0.20.0-M1"
-  val fs2             = "1.0.0"
-  val catsEffect      = "1.0.0"
+  val http4s          = "0.20.0-M3"
+  val fs2             = "1.0.2"
+  val catsEffect      = "1.1.0"
   val catsCollections = "0.7.0"
   val scalacache      = "0.26.0"
   val dropwizard      = "4.0.3"
+  val fs2redis        = "0.5.1"
 }
 
 lazy val jbok = project
@@ -214,7 +215,8 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
       "org.fusesource.leveldbjni" % "leveldbjni-all"          % "1.8",
       "com.github.cb372"          %%% "scalacache-core"       % V.scalacache,
       "com.github.cb372"          %% "scalacache-cats-effect" % V.scalacache,
-      "com.github.cb372"          %% "scalacache-caffeine"    % V.scalacache
+      "com.github.cb372"          %% "scalacache-caffeine"    % V.scalacache,
+      "io.lettuce"                % "lettuce-core"            % "5.1.3.RELEASE"
     )
   )
   .dependsOn(common % CompileAndTest, codec)

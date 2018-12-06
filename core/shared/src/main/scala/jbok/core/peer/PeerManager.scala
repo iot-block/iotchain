@@ -5,7 +5,7 @@ import java.nio.channels.AsynchronousChannelGroup
 import cats.data.OptionT
 import cats.effect.concurrent.Ref
 import cats.effect.implicits._
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, Timer}
 import cats.implicits._
 import fs2.Stream._
 import fs2._
@@ -33,7 +33,7 @@ abstract class PeerManager[F[_]](
     val outgoing: Ref[F, Map[KeyPair.Public, Peer[F]]],
     val nodeQueue: PriorityQueue[F, PeerNode],
     val messageQueue: Queue[F, Request[F]]
-)(implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup, chainId: BigInt) {
+)(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F], AG: AsynchronousChannelGroup, chainId: BigInt) {
   private[this] val log = org.log4s.getLogger("PeerManager")
 
   val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port)
@@ -43,7 +43,7 @@ abstract class PeerManager[F[_]](
       maxQueued: Int = config.maxPendingPeers,
       maxOpen: Int = config.maxIncomingPeers
   ): Stream[F, Unit] =
-    fs2.io.tcp
+    fs2.io.tcp.Socket
       .serverWithLocalAddress[F](bind, maxQueued)
       .map {
         case Left(bound) =>
@@ -82,7 +82,7 @@ abstract class PeerManager[F[_]](
       to: PeerNode,
   ): Stream[F, Unit] = {
     val connect0 = {
-      val res = io.tcp.client[F](to.addr, keepAlive = true, noDelay = true)
+      val res = io.tcp.Socket.client[F](to.addr, keepAlive = true, noDelay = true)
       val stream = for {
         conn <- eval(TcpUtil.socketToConnection[F, Message](res, false))
         _    <- eval(conn.start)

@@ -18,6 +18,7 @@ import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import scodec.Codec
 import scodec.bits.BitVector
+import org.http4s.implicits._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
@@ -42,6 +43,7 @@ trait Server[F[_]] {
 object Server {
   def tcp[F[_], A: Codec: RequestId](bind: InetSocketAddress, pipe: Pipe[F, A, A], maxOpen: Int = Int.MaxValue)(
       implicit F: ConcurrentEffect[F],
+      CS: ContextShift[F],
       T: Timer[F],
       AG: AsynchronousChannelGroup): F[Server[F]] =
     for {
@@ -55,7 +57,7 @@ object Server {
         override val haltWhenTrue: SignallingRef[F, Boolean] = signal
 
         override val stream: Stream[F, Unit] =
-          fs2.io.tcp
+          fs2.io.tcp.Socket
             .serverWithLocalAddress[F](bind)
             .map {
               case Left(bindAddr) =>

@@ -1,7 +1,7 @@
 package jbok.core.peer
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{ConcurrentEffect, Sync}
+import cats.effect.{ConcurrentEffect, ContextShift, Sync}
 import cats.implicits._
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
@@ -46,7 +46,7 @@ object Peer {
       knownTxs    <- Ref.of[F, Set[SignedTransactions]](Set.empty)
     } yield Peer[F](pk, conn, status, knownBlocks, knownTxs)
 
-  def dummy[F[_]: ConcurrentEffect](pk: KeyPair.Public, status: Status): F[Peer[F]] =
+  def dummy[F[_]: ConcurrentEffect](pk: KeyPair.Public, status: Status)(implicit CS: ContextShift[F]): F[Peer[F]] =
     for {
       in           <- Queue.bounded[F, Message](1)
       out          <- Queue.bounded[F, Message](1)

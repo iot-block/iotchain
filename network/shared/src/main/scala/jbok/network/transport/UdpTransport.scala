@@ -2,7 +2,7 @@ package jbok.network.transport
 
 import java.net.InetSocketAddress
 
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, ContextShift}
 import cats.implicits._
 import fs2.io.udp
 import fs2.io.udp.{AsynchronousSocketGroup, Packet}
@@ -15,7 +15,7 @@ import scala.concurrent.duration.FiniteDuration
 case class UdpTransport[F[_]](
     bind: InetSocketAddress,
     timeout: Option[FiniteDuration] = None
-)(implicit F: ConcurrentEffect[F]) {
+)(implicit F: ConcurrentEffect[F], CS: ContextShift[F]) {
   private[this] val log = org.log4s.getLogger("UdpTransport")
 
   implicit val AG = AsynchronousSocketGroup()
@@ -28,15 +28,14 @@ case class UdpTransport[F[_]](
 
   def serve[A: Codec](pipe: Pipe[F, (InetSocketAddress, A), (InetSocketAddress, A)]): Stream[F, Unit] =
     Stream
-      .resource(udp
-        .open[F](bind, reuseAddress = true))
+      .resource(udp.Socket[F](bind, reuseAddress = true))
       .flatMap { socket =>
-        log.debug(s"udp transport bound at ${bind}")
+        log.debug(s"successfully bound to ${bind}")
         socket
           .reads(timeout)
           .evalMap(p =>
             decodeChunk(p.bytes).map(a => {
-              log.debug(s"received msg from ${p.remote}")
+              log.trace(s"received msg from ${p.remote}")
               p.remote -> a
             }))
           .through(pipe)
@@ -46,13 +45,13 @@ case class UdpTransport[F[_]](
           }
           .to(socket.writes(timeout))
       }
-      .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)(s"udp transport error"))))
-      .onFinalize(F.delay(log.debug(s"udp transport serving terminated")))
+      .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)(s"transport error"))))
+      .onFinalize(F.delay(log.trace(s"serving terminated")))
 
   def send[A: Codec](remote: InetSocketAddress, a: A, timeout: Option[FiniteDuration] = None): F[Unit] = {
-    log.debug(s"sending msg to ${remote}")
+    log.trace(s"sending msg to ${remote}")
     val s = for {
-      socket <- Stream.resource(udp.open[F](bind, reuseAddress = true))
+      socket <- Stream.resource(udp.Socket[F](bind, reuseAddress = true))
       chunk  <- Stream.eval(encodeChunk(a))
       packet = Packet(remote, chunk)
       _ <- Stream.eval(socket.write(packet, timeout))

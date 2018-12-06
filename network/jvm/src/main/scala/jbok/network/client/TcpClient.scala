@@ -16,12 +16,13 @@ object TcpClient {
       maxBytes: Int = 256 * 1024
   )(
       implicit F: ConcurrentEffect[F],
+      cs: ContextShift[F],
       T: Timer[F],
       AG: AsynchronousChannelGroup
   ): F[Client[F, A]] = {
     val to = new InetSocketAddress(uri.getHost, uri.getPort)
     TcpUtil
-      .socketToConnection[F, A](fs2.io.tcp.client[F](to, keepAlive = true, noDelay = true), false)
+      .socketToConnection[F, A](fs2.io.tcp.Socket.client[F](to, keepAlive = true, noDelay = true), false)
       .map(conn => Client(conn.stream, conn.in, conn.out, conn.promises, uri, conn.haltWhenTrue))
   }
 }

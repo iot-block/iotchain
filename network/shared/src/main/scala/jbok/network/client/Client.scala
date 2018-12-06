@@ -18,6 +18,6 @@ object Client {
       promises: Ref[F, Map[String, Deferred[F, A]]],
       uri: URI,
       haltWhenTrue: SignallingRef[F, Boolean]
-  )(implicit F: ConcurrentEffect[F], C: Codec[A], I: RequestId[A]): Client[F, A] =
+  )(implicit F: Concurrent[F], CS: ContextShift[F], C: Codec[A], I: RequestId[A]): Client[F, A] =
     Connection[F, A](stream, in, out, promises, false, haltWhenTrue)
 }

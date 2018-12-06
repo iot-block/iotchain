@@ -35,7 +35,7 @@ private[jbok] object TcpUtil {
       incoming: Boolean,
       maxBytes: Int = 256 * 1024,
       maxQueued: Int = 64
-  )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[Connection[F, A]] =
+  )(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F]): F[Connection[F, A]] =
     for {
       in           <- Queue.bounded[F, A](maxQueued)
       out          <- Queue.bounded[F, A](maxQueued)

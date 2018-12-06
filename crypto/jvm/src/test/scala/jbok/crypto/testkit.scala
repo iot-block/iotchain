@@ -1,4 +1,6 @@
 package jbok.crypto
+import java.security.SecureRandom
+
 import cats.effect.IO
 import jbok.codec.HexPrefix
 import jbok.common.testkit._
@@ -45,10 +47,11 @@ object testkit {
     Gen.oneOf[MptNode](arbLeafNode.arbitrary, arbExtensionNode.arbitrary, arbBranchNode.arbitrary)
   }
 
-  def genKeyPair: Gen[KeyPair] =
-    Signature[ECDSA].generateKeyPair().unsafeRunSync()
+  def genKeyPair: Gen[KeyPair] = {
+    Signature[ECDSA].generateKeyPair(Some(new SecureRandom())).unsafeRunSync()
+  }
 
-  implicit val arbKeyPair: Arbitrary[KeyPair] = Arbitrary {
+  implicit def arbKeyPair: Arbitrary[KeyPair] = Arbitrary {
     genKeyPair
   }
 }

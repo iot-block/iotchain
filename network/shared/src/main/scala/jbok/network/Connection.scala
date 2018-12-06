@@ -2,7 +2,7 @@ package jbok.network
 
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.implicits._
-import cats.effect.{ConcurrentEffect, Fiber, Resource}
+import cats.effect._
 import cats.implicits._
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
@@ -20,7 +20,7 @@ final case class Connection[F[_], A: Codec: RequestId](
     promises: Ref[F, Map[String, Deferred[F, A]]],
     incoming: Boolean,
     haltWhenTrue: SignallingRef[F, Boolean]
-)(implicit F: ConcurrentEffect[F]) {
+)(implicit F: Concurrent[F], CS: ContextShift[F]) {
   def write(a: A): F[Unit] =
     out.enqueue1(a)
 
