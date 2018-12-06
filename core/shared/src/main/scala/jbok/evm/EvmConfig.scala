@@ -2,8 +2,9 @@ package jbok.evm
 
 import jbok.core.config.Configs.BlockChainConfig
 import jbok.core.models.UInt256
-import jbok.evm
+import jbok.evm.PrecompiledContracts.PrecompiledContract
 import scodec.bits.ByteVector
+import jbok.core.models.Address
 
 object EvmConfig {
 
@@ -39,14 +40,18 @@ object EvmConfig {
     EvmConfig(
       feeSchedule = FeeSchedule.Frontier,
       opCodes = OpCodes.FrontierOpCodes,
+      preCompiledContracts = PrecompiledContracts.FrontierContracts,
       subGasCapDivisor = None,
       chargeSelfDestructForNewAccount = false,
       maxCodeSize = maxCodeSize,
+      exceptionalFailedCodeDeposit = false,
       traceInternalTransactions = false
   )
 
   val HomesteadConfigBuilder: EvmConfigBuilder = maxCodeSize =>
-    FrontierConfigBuilder(maxCodeSize).copy(feeSchedule = FeeSchedule.Homestead, opCodes = OpCodes.HomesteadOpCodes)
+    FrontierConfigBuilder(maxCodeSize).copy(feeSchedule = FeeSchedule.Homestead,
+                                            opCodes = OpCodes.HomesteadOpCodes,
+                                            exceptionalFailedCodeDeposit = true)
 
   val TangerineWhistleConfigBuilder: EvmConfigBuilder = maxCodeSize =>
     HomesteadConfigBuilder(maxCodeSize).copy(feeSchedule = FeeSchedule.TangerineWhistle,
@@ -57,7 +62,8 @@ object EvmConfig {
     TangerineWhistleConfigBuilder(maxCodeSize).copy(feeSchedule = FeeSchedule.SpuriousDragon, noEmptyAccounts = true)
 
   val ByzantiumConfigBuilder: EvmConfigBuilder = maxCodeSize =>
-    SpuriousDragonConfigBuilder(maxCodeSize).copy(opCodes = OpCodes.ByzantiumOpCodes)
+    SpuriousDragonConfigBuilder(maxCodeSize)
+      .copy(opCodes = OpCodes.ByzantiumOpCodes, preCompiledContracts = PrecompiledContracts.ByzantiumContracts)
 
   val ConstantinopleConfigBuilder: EvmConfigBuilder = maxCodeSize =>
     ByzantiumConfigBuilder(maxCodeSize).copy(opCodes = OpCodes.ConstantinopleOpCodes)
@@ -67,10 +73,12 @@ object EvmConfig {
 case class EvmConfig(
     feeSchedule: FeeSchedule,
     opCodes: List[OpCode],
+    preCompiledContracts: Map[Address, PrecompiledContract],
     subGasCapDivisor: Option[Long],
     chargeSelfDestructForNewAccount: Boolean,
     maxCodeSize: Option[BigInt],
     traceInternalTransactions: Boolean,
+    exceptionalFailedCodeDeposit: Boolean,
     noEmptyAccounts: Boolean = false
 ) {
 

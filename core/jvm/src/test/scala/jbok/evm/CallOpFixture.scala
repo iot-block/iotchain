@@ -9,13 +9,13 @@ import scodec.bits.ByteVector
 class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
   import config.feeSchedule._
 
-  val ownerAddr = Address(0xcafebabe)
-  val extAddr = Address(0xfacefeed)
+  val ownerAddr  = Address(0xcafebabe)
+  val extAddr    = Address(0xfacefeed)
   val callerAddr = Address(0xdeadbeef)
 
-  val ownerOffset = UInt256(0)
+  val ownerOffset  = UInt256(0)
   val callerOffset = UInt256(1)
-  val valueOffset = UInt256(2)
+  val valueOffset  = UInt256(2)
 
   val extCode = Assembly(
     //store owner address
@@ -53,6 +53,14 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
     SELFDESTRUCT
   )
 
+  val revertCode = Assembly(
+    PUSH1,
+    0,
+    PUSH1,
+    0,
+    REVERT
+  )
+
   val selfDestructTransferringToSelfCode = Assembly(
     PUSH20,
     extAddr.bytes,
@@ -88,15 +96,15 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
     RETURN
   )
 
-  val inputData = getUInt256Gen().sample.get.bytes
+  val inputData       = getUInt256Gen().sample.get.bytes
   val expectedMemCost = config.calcMemCost(inputData.size, inputData.size, inputData.size / 2)
 
   val initialBalance = UInt256(1000)
 
   val requiredGas = {
     val storageCost = 3 * G_sset
-    val memCost = config.calcMemCost(0, 0, 32)
-    val copyCost = G_copy * wordsForBytes(32)
+    val memCost     = config.calcMemCost(0, 0, 32)
+    val copyCost    = G_copy * wordsForBytes(32)
 
     extCode.linearConstGas(config) + storageCost + memCost + copyCost
   }
@@ -105,10 +113,11 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
 
   val initialOwnerAccount = Account(balance = initialBalance)
 
-  val extProgram = extCode.program
-  val invalidProgram = Program(extProgram.code.init :+ INVALID.code.toByte)
-  val selfDestructProgram = selfDestructCode.program
-  val sstoreWithClearProgram = sstoreWithClearCode.program
+  val extProgram                             = extCode.program
+  val invalidProgram                         = Program(extProgram.code.init :+ INVALID.code.toByte)
+  val selfDestructProgram                    = selfDestructCode.program
+  val revertProgram                          = revertCode.program
+  val sstoreWithClearProgram                 = sstoreWithClearCode.program
   val accountWithCode: ByteVector => Account = code => Account.empty().withCode(code.kec256)
 
   val worldWithoutExtAccount = startState.putAccount(ownerAddr, initialOwnerAccount)
@@ -127,6 +136,9 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
     .putAccount(extAddr, accountWithCode(selfDestructProgram.code))
     .putCode(extAddr, selfDestructCode.code)
 
+  val worldWithRevertProgram =
+    worldWithoutExtAccount.putAccount(extAddr, accountWithCode(revertProgram.code)).putCode(extAddr, revertProgram.code)
+
   val worldWithSelfDestructSelfProgram = worldWithoutExtAccount
     .putAccount(extAddr, Account.empty())
     .putCode(extAddr, selfDestructTransferringToSelfCode.code)
@@ -139,7 +151,7 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
     .putAccount(extAddr, accountWithCode(returnSingleByteProgram.code))
     .putCode(extAddr, returnSingleByteProgram.code)
 
-  val env = ExecEnv(ownerAddr, callerAddr, callerAddr, 1, ByteVector.empty, 123, Program(ByteVector.empty), null, 0)
+  val env     = ExecEnv(ownerAddr, callerAddr, callerAddr, 1, ByteVector.empty, 123, Program(ByteVector.empty), null, 0)
   val context = ProgramContext(env, ownerAddr, 2 * requiredGas, worldWithExtAccount, config)
 
   case class CallResult(
@@ -154,14 +166,15 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
       outOffset: UInt256 = inputData.size,
       outSize: UInt256 = inputData.size / 2
   ) {
-    private val params = List(UInt256(gas), to.toUInt256, value, inOffset, inSize, outOffset, outSize).reverse
-    private val paramsForDelegate = params.take(4) ++ params.drop(5)
-    private val stack = Stack.empty().push(if (op == DELEGATECALL) paramsForDelegate else params)
+    private val params                     = List(UInt256(gas), to.toUInt256, value, inOffset, inSize, outOffset, outSize).reverse
+    private val paramsForDelegateAndStatic = params.take(4) ++ params.drop(5)
+    private val stack =
+      Stack.empty().push(if (op == DELEGATECALL || op == STATICCALL) paramsForDelegateAndStatic else params)
     private val mem = Memory.empty.store(UInt256.Zero, inputData)
 
-    val stateIn = ProgramState[IO](context).withStack(stack).withMemory(mem)
+    val stateIn  = ProgramState[IO](context).withStack(stack).withMemory(mem)
     val stateOut = op.execute(stateIn).unsafeRunSync()
-    val world = stateOut.world
+    val world    = stateOut.world
 
     val ownBalance: UInt256 = world.getBalance(context.env.ownerAddr).unsafeRunSync()
     val extBalance: UInt256 = world.getBalance(to).unsafeRunSync()
@@ -170,4 +183,3 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
     val extStorage = world.getStorage(to).unsafeRunSync()
   }
 }
-

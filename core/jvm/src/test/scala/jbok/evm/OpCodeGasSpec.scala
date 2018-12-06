@@ -6,6 +6,7 @@ import jbok.core.models.{Account, Address, UInt256}
 import jbok.evm.testkit._
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FunSuite, Matchers}
+import scodec.bits.ByteVector
 
 class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
@@ -17,49 +18,50 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   val constOpsFees = constOps.map(_                       -> G_base)
 
   val constGasFees = Map[OpCode, BigInt](
-    STOP         -> G_zero,
-    ADD          -> G_verylow,
-    MUL          -> G_low,
-    SUB          -> G_verylow,
-    DIV          -> G_low,
-    SDIV         -> G_low,
-    MOD          -> G_low,
-    SMOD         -> G_low,
-    ADDMOD       -> G_mid,
-    MULMOD       -> G_mid,
-    SIGNEXTEND   -> G_low,
-    LT           -> G_verylow,
-    GT           -> G_verylow,
-    SLT          -> G_verylow,
-    SGT          -> G_verylow,
-    EQ           -> G_verylow,
-    ISZERO       -> G_verylow,
-    AND          -> G_verylow,
-    OR           -> G_verylow,
-    XOR          -> G_verylow,
-    NOT          -> G_verylow,
-    BYTE         -> G_verylow,
-    SHL          -> G_verylow,
-    SHR          -> G_verylow,
-    SAR          -> G_verylow,
-    ADDRESS      -> G_base,
-    BALANCE      -> G_balance,
-    CALLVALUE    -> G_base,
-    CALLDATALOAD -> G_verylow,
-    CALLDATASIZE -> G_base,
-    EXTCODESIZE  -> G_extcode,
-    BLOCKHASH    -> G_blockhash,
-    COINBASE     -> G_base,
-    TIMESTAMP    -> G_base,
-    NUMBER       -> G_base,
-    DIFFICULTY   -> G_base,
-    GASLIMIT     -> G_base,
-    POP          -> G_base,
-    SLOAD        -> G_sload,
-    JUMP         -> G_mid,
-    JUMPI        -> G_high,
-    GAS          -> G_base,
-    JUMPDEST     -> G_jumpdest
+    STOP           -> G_zero,
+    ADD            -> G_verylow,
+    MUL            -> G_low,
+    SUB            -> G_verylow,
+    DIV            -> G_low,
+    SDIV           -> G_low,
+    MOD            -> G_low,
+    SMOD           -> G_low,
+    ADDMOD         -> G_mid,
+    MULMOD         -> G_mid,
+    SIGNEXTEND     -> G_low,
+    LT             -> G_verylow,
+    GT             -> G_verylow,
+    SLT            -> G_verylow,
+    SGT            -> G_verylow,
+    EQ             -> G_verylow,
+    ISZERO         -> G_verylow,
+    AND            -> G_verylow,
+    OR             -> G_verylow,
+    XOR            -> G_verylow,
+    NOT            -> G_verylow,
+    BYTE           -> G_verylow,
+    SHL            -> G_verylow,
+    SHR            -> G_verylow,
+    SAR            -> G_verylow,
+    ADDRESS        -> G_base,
+    BALANCE        -> G_balance,
+    CALLVALUE      -> G_base,
+    CALLDATALOAD   -> G_verylow,
+    CALLDATASIZE   -> G_base,
+    RETURNDATASIZE -> G_base,
+    EXTCODESIZE    -> G_extcode,
+    BLOCKHASH      -> G_blockhash,
+    COINBASE       -> G_base,
+    TIMESTAMP      -> G_base,
+    NUMBER         -> G_base,
+    DIFFICULTY     -> G_base,
+    GASLIMIT       -> G_base,
+    POP            -> G_base,
+    SLOAD          -> G_sload,
+    JUMP           -> G_mid,
+    JUMPI          -> G_high,
+    GAS            -> G_base,
+    JUMPDEST       -> G_jumpdest
   ) ++ stackOpsFees ++ constOpsFees
 
   test("wordsForBytes helper") {
@@ -233,6 +235,52 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val expectedGas               = G_verylow + memCost + copyCost
 
       verifyGas(expectedGas, stateIn, stateOut)
+    }
+  }
+
+  test(RETURNDATACOPY) { op =>
+    val table = Table[UInt256, BigInt](
+      ("size", "expectedGas"),
+      (0, G_verylow),
+      (1, G_verylow + G_copy * 1),
+      (32, G_verylow + G_copy * 1),
+      (33, G_verylow + G_copy * 2)
+    )
+
+    forAll(table) { (size, expectedGas) =>
+      val stackIn    = Stack.empty().push(size).push(Zero).push(Zero)
+      val memIn      = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
+      val returnData = ByteVector.fill(64)(0)
+      val stateIn = getProgramStateGen().sample.get
+        .withStack(stackIn)
+        .withMemory(memIn)
+        .withReturnData(returnData)
+        .copy(gas = expectedGas)
+      val stateOut = op.execute(stateIn).unsafeRunSync()
+      verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
+    }
+
+    val maxGas = G_verylow + G_copy * 64
+    val stateGen = getProgramStateGen(
+      stackGen = getStackGen(elems = 3, maxUInt = UInt256(256)),
+      memGen = getMemoryGen(256),
+      gasGen = getBigIntGen(min = maxGas, max = maxGas),
+      returnDataGen = getByteVectorGen(256, 256)
+    )
+
+    forAll(stateGen) { stateIn =>
+      val stateOut = op.execute(stateIn).unsafeRunSync()
+
+      val (Seq(offset, dataOffset, size), _) = stateIn.stack.pop(3)
+      if (dataOffset + size > stateIn.returnData.size) {
+        stateOut.error.contains(ReturnDataOutOfBounds) shouldBe true
+      } else {
+        val memCost     = config.calcMemCost(stateIn.memory.size, offset, size)
+        val copyCost    = G_copy * wordsForBytes(size)
+        val expectedGas = G_verylow + memCost + copyCost
+
+        verifyGas(expectedGas, stateIn, stateOut)
+      }
     }
   }
 

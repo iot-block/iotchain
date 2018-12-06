@@ -86,6 +86,7 @@ object testkit {
       gasGen: Gen[BigInt] = getBigIntGen(min = UInt256.MaxValue.toBigInt, max = UInt256.MaxValue.toBigInt),
       codeGen: Gen[ByteVector] = getByteVectorGen(0, 0),
       inputDataGen: Gen[ByteVector] = getByteVectorGen(0, 0),
+      returnDataGen: Gen[ByteVector] = getByteVectorGen(0, 0),
       valueGen: Gen[UInt256] = getUInt256Gen(),
       blockNumberGen: Gen[UInt256] = getUInt256Gen(0, 300),
       evmConfig: EvmConfig = EvmConfig.SpuriousDragonConfigBuilder(None)
@@ -98,6 +99,7 @@ object testkit {
       program        <- codeGen.map(Program.apply)
       inputData      <- inputDataGen
       value          <- valueGen
+      returnData     <- returnDataGen
       blockNumber    <- blockNumberGen
       blockPlacement <- getUInt256Gen(0, blockNumber)
 
@@ -115,5 +117,5 @@ object testkit {
         .putAccount(ownerAddr, Account.empty().increaseBalance(value))
 
       context = ProgramContext(env, ownerAddr, gas, world, evmConfig)
-    } yield ProgramState(context).withStack(stack).withMemory(memory)
+    } yield ProgramState(context).withStack(stack).withMemory(memory).withReturnData(returnData)
 }

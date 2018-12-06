@@ -20,13 +20,13 @@ class PrecompiledContractsSpec extends JbokSpec {
     val world = history
       .getWorldState()
       .unsafeRunSync()
-    ProgramContext(env, recipient, gas, world, EvmConfig.SpuriousDragonConfigBuilder(None))
+    ProgramContext(env, recipient, gas, world, EvmConfig.ByzantiumConfigBuilder(None))
   }
 
   "ECDSARECOVER" in {
-    val keyPair  = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-    val bytesGen = getByteVectorGen(1, 128)
-    val chainId  = BigInt(0)
+    val keyPair         = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val bytesGen        = getByteVectorGen(1, 128)
+    val chainId: BigInt = 0
 
     forAll(bytesGen) { bytes =>
       val hash             = bytes.kec256

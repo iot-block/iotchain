@@ -21,5 +21,6 @@ case class ProgramResult[F[_]](
     logs: List[TxLogEntry],
     internalTxs: List[InternalTransaction],
     gasRefund: BigInt,
-    error: Option[ProgramError]
+    error: Option[ProgramError],
+    isRevert: Boolean = false
 )

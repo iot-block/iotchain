@@ -10,12 +10,10 @@ import scodec.bits.ByteVector
 
 class CallOpcodesSpec extends JbokSpec {
 
-  val config  = EvmConfig.SpuriousDragonConfigBuilder(None)
-  val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history = History[IO](db).unsafeRunSync()
-//  val startState = WorldStateProxy.inMemory[IO](db).unsafeRunSync()
-  val startState =
-    history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
+  val config     = EvmConfig.FrontierConfigBuilder(None)
+  val db         = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history    = History[IO](db).unsafeRunSync()
+  val startState = history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
   import config.feeSchedule._
 
   val fxt = new CallOpFixture(config, startState)
@@ -188,11 +186,11 @@ class CallOpcodesSpec extends JbokSpec {
         call.ownBalance shouldBe fxt.initialBalance - call.value
       }
 
-//      "consume correct gas" in {
-//        val contractCost = UInt256(3000)
-//        val expectedGas = contractCost - G_callstipend + G_call + G_callvalue // memory not increased
-//        call.stateOut.gasUsed shouldBe expectedGas
-//      }
+      "consume correct gas" in {
+        val contractCost = UInt256(3000)
+        val expectedGas  = contractCost - G_callstipend + G_call + G_callvalue // memory not increased
+        call.stateOut.gasUsed shouldBe expectedGas
+      }
     }
 
     "calling a program that executes a SELFDESTRUCT" should {
