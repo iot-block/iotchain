@@ -68,7 +68,7 @@ object SignedTransaction {
       s: ByteVector
   ): SignedTransaction = apply(tx, BigInt(1, Array(v)), BigInt(1, r.toArray), BigInt(1, s.toArray))
 
-  def sign(tx: Transaction, keyPair: KeyPair, chainId: BigInt): SignedTransaction = {
+  def sign(tx: Transaction, keyPair: KeyPair)(implicit chainId: BigInt): SignedTransaction = {
     val stx = new SignedTransaction(
       tx.nonce,
       tx.gasPrice,

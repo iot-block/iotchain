@@ -36,7 +36,8 @@ class ECDSAPlatform extends Signature[IO, ECDSA] {
     val sig       = secp256k1.sign(new Uint8Array(hash.toJSArray), kp)
     val r         = new BigInteger(sig.r.toString)
     val s         = new BigInteger(sig.s.toString)
-    val v: BigInt = getRecoveryId(chainId, sig.recoveryParam).getOrElse(sig.recoveryParam)
+    val pointSign = sig.recoveryParam + NEGATIVE_POINT_SIGN
+    val v: BigInt = getRecoveryId(chainId, pointSign).getOrElse(pointSign)
     CryptoSignature(r, s, v)
   }
 
@@ -61,9 +62,9 @@ class ECDSAPlatform extends Signature[IO, ECDSA] {
     }
   }
 
-  def convert(sig: CryptoSignature) = {
+  private def convert(sig: CryptoSignature) = {
     val r = new BN(sig.r.toString(16), 16)
     val s = new BN(sig.s.toString(16), 16)
-    SignatureEC(r, s, recoveryParam = sig.v.toInt)
+    SignatureEC(r, s, recoveryParam = (sig.v - NEGATIVE_POINT_SIGN).toInt)
   }
 }

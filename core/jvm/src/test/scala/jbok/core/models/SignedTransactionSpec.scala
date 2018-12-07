@@ -12,7 +12,7 @@ class SignedTransactionSpec extends JbokSpec {
         val keyPair                  = Signature[ECDSA].generateKeyPair().unsafeRunSync()
         implicit val chainId: BigInt = 61
         val address                  = Address(keyPair.public.bytes.kec256)
-        val result                   = SignedTransaction.sign(tx, keyPair, chainId)
+        val result                   = SignedTransaction.sign(tx, keyPair)
         val senderAddress            = result.senderAddress.getOrElse(Address.empty)
         address shouldBe senderAddress
       }
