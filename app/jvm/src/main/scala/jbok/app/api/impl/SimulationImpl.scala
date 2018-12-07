@@ -31,8 +31,10 @@ class SimulationImpl(
 ) extends SimulationAPI {
   private[this] val log = org.log4s.getLogger
 
-  val cliqueConfig = CliqueConfig(period = 5.seconds)
-  val txGraphGen   = new TxGraphGen(10)
+  val cliqueConfig     = CliqueConfig(period = 5.seconds)
+  val genesisConfig    = GenesisConfig.default
+  implicit val chainId = genesisConfig.chainId
+  val txGraphGen       = new TxGraphGen(10)
 
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
     NodeInfo(fullNode.id, fullNode.config.peer.host, fullNode.config.peer.port, fullNode.config.rpc.port)
@@ -44,7 +46,6 @@ class SimulationImpl(
     FullNode.forConfigAndConsensus(config, consensus)
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    log.info("in createNodes")
     val fullNodeConfigs = FullNodeConfig.fill(n)
     val signers = (1 to n).toList
       .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair())
@@ -52,8 +53,8 @@ class SimulationImpl(
     val (configs, minerSingers) = selectMiner(n, m, fullNodeConfigs, signers)
 
     log.info(minerSingers.toString)
-    val genesisConfig =
-      GenesisConfig.default
+    val newGenesisConfig =
+      genesisConfig
         .copy(alloc = txGraphGen.alloc,
               extraData = Clique.fillExtraData(minerSingers.map(Address(_))).toHex,
               timestamp = System.currentTimeMillis())
@@ -67,7 +68,7 @@ class SimulationImpl(
           for {
             db        <- KeyValueDB.inmem[IO]
             history   <- History[IO](db)
-            _         <- history.init(genesisConfig)
+            _         <- history.init(newGenesisConfig)
             clique    <- Clique[IO](cliqueConfig, history, signers(idx))
             blockPool <- BlockPool(history)
             consensus = new CliqueConsensus[IO](clique, blockPool)

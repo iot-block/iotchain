@@ -65,7 +65,7 @@ final case class Fixture(
 object testkit {
   def defaultFixture(port: Int = 10001, algo: String = "clique"): Fixture = cliqueFixture(port)
 
-  implicit val chainId: BigInt = 61
+  implicit val chainId: BigInt = 1
 
   def cliqueFixture(port: Int): Fixture = {
     val miner = SimAccount(Signature[ECDSA].generateKeyPair().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
@@ -122,7 +122,7 @@ object testkit {
     for {
       tx <- arbTransaction.arbitrary
       keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-      stx     = SignedTransaction.sign(tx, keyPair, chainId)
+      stx     = SignedTransaction.sign(tx, keyPair)
     } yield stx
   }
 

@@ -51,9 +51,9 @@ class TxPoolSpec extends JbokSpec {
       val kp1 = random[KeyPair]
       val kp2 = random[KeyPair]
 
-      val first  = SignedTransaction.sign(tx1, kp1, 0)
-      val second = SignedTransaction.sign(tx2.copy(nonce = tx1.nonce), kp1, 0)
-      val other  = SignedTransaction.sign(tx3, kp2, 0)
+      val first  = SignedTransaction.sign(tx1, kp1)
+      val second = SignedTransaction.sign(tx2.copy(nonce = tx1.nonce), kp1)
+      val other  = SignedTransaction.sign(tx3, kp2)
 
       val p = for {
         _ <- txPool.addOrUpdateTransaction(first)

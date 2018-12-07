@@ -8,5 +8,5 @@ case class Wallet(address: Address, secret: KeyPair.Secret) {
     Signature[ECDSA].generatePublicKey(secret).map(public => KeyPair(public, secret)).unsafeRunSync()
 
   def signTx(tx: Transaction)(implicit chainId: BigInt): SignedTransaction =
-    SignedTransaction.sign(tx, keyPair, chainId)
+    SignedTransaction.sign(tx, keyPair)
 }

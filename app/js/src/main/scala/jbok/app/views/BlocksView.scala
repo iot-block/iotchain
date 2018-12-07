@@ -28,7 +28,7 @@ case class BlocksView(state: AppState) {
             </tr>
           </thead>
           <tbody>
-            {for (block <- Constants(history.history.bind.toList.sortBy(_.header.number).reverse: _*)) yield {
+            {for (block <- Constants(history.history.all.bind.toList.sortBy(_.header.number).reverse: _*)) yield {
             <tr>
               <td>
                 {block.header.number.toString}

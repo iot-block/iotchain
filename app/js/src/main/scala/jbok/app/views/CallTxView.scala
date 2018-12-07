@@ -60,14 +60,14 @@ case class CallTxView(state: AppState) {
     event.currentTarget match {
       case select: HTMLSelectElement =>
         val v = select.options(select.selectedIndex).value
-        if (v.value == "default") {
+        if (v == "default") {
           contractSelected.value = false
           contractAbi.value = None
         } else {
           to.value = v.substring(2)
           toSyntax.value = InputValidator.isValidAddress(to.value)
           contractSelected.value = true
-          contractAbi.value = state.contractInfo.value.find(_.address.toString == v.value).map {
+          contractAbi.value = state.contractInfo.value.find(_.address.toString == v).map {
             _.abi
               .filter(_.isInstanceOf[Description.Function])
               .map(_.asInstanceOf[Description.Function])
@@ -83,10 +83,10 @@ case class CallTxView(state: AppState) {
     event.currentTarget match {
       case select: HTMLSelectElement =>
         val v = select.options(select.selectedIndex).value
-        if (v.value == "default") {
+        if (v == "default") {
           function.value = None
         } else {
-          function.value = contractAbi.value.flatMap(_.find(_.name.contains(v.value)))
+          function.value = contractAbi.value.flatMap(_.find(_.name.contains(v)))
           function.value.foreach { f =>
             if (f.stateMutability == "view")
               txType.value = "Call"
@@ -210,7 +210,7 @@ case class CallTxView(state: AppState) {
         </label>
         <select name="to" class="autocomplete" onchange={toOnChange}>
           {
-            val contractList = state.contractInfo.bind
+            val contractList = state.contractInfo.all.bind
             for (account <- Constants(contractList.map(_.address): _*)) yield {
               <option value={account.toString}>{account.toString}</option>
             }
@@ -246,7 +246,7 @@ case class CallTxView(state: AppState) {
               }
             }
             {
-              for (param <- Constants(paramInputs.bind.toList: _*)) yield {
+              for (param <- Constants(paramInputs.all.bind.toList: _*)) yield {
                 <div>
                   <label for={param.name}>
                     <b>{param.name.stripPrefix("_")}</b>

@@ -22,7 +22,7 @@ class TxValidatorSpec extends JbokSpec {
     payload = ByteVector.empty
   )
 
-  val stx = SignedTransaction.sign(tx, keyPair, 0x3d.toByte)
+  val stx = SignedTransaction.sign(tx, keyPair)
 
   val senderBalance = 100
 
