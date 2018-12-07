@@ -30,8 +30,8 @@ lazy val V = new {
 lazy val jbok = project
   .in(file("."))
   .aggregate(
-    crypto.jvm,
     persistent.jvm,
+    crypto.jvm,
     core.js,
     core.jvm
   )
