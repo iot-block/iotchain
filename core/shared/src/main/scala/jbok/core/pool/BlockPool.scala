@@ -24,7 +24,7 @@ final class BlockPool[F[_]](
     private[jbok] val config: BlockPoolConfig,
     blocks: Ref[F, Map[ByteVector, PooledBlock]], // blockHash -> block
     parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]] // blockHash -> childrenHashes
-)(implicit F: ConcurrentEffect[F]) {
+)(implicit F: ConcurrentEffect[F])  {
   private[this] val log = org.log4s.getLogger("BlockPool")
 
   def contains(blockHash: ByteVector): F[Boolean] =

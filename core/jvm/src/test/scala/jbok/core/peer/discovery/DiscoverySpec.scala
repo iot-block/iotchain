@@ -21,21 +21,18 @@ import scala.concurrent.duration._
 
 class DiscoverySpec extends JbokSpec {
   "Discovery" should {
-    val d1 = random[Discovery[IO]](genDiscovery(10001))
-    val d2 = random[Discovery[IO]](genDiscovery(10002))
-
-    def roundtrip[A <: KadPacket](a: A) = {
-      val bits = Codec.encode[KadPacket](a).require
-      Codec.decode[KadPacket](bits).require.value shouldBe a
-    }
-
-    val ping      = Ping(random[PeerNode], Long.MaxValue, UUID.randomUUID())
-    val pong      = Pong(random[PeerNode], Long.MaxValue, UUID.randomUUID())
-    val findNode  = FindNode(random[PeerNode], random[KeyPair].public, Long.MaxValue, UUID.randomUUID())
-    val nodes     = random[List[PeerNode]](Gen.listOfN(16, arbPeerNode.arbitrary))
-    val neighbors = Neighbours(random[PeerNode], nodes, Long.MaxValue, UUID.randomUUID())
-
     "roundtrip kad packets" in {
+      def roundtrip[A <: KadPacket](a: A) = {
+        val bits = Codec.encode[KadPacket](a).require
+        Codec.decode[KadPacket](bits).require.value shouldBe a
+      }
+
+      val ping      = Ping(random[PeerNode], Long.MaxValue, UUID.randomUUID())
+      val pong      = Pong(random[PeerNode], Long.MaxValue, UUID.randomUUID())
+      val findNode  = FindNode(random[PeerNode], random[KeyPair].public, Long.MaxValue, UUID.randomUUID())
+      val nodes     = random[List[PeerNode]](Gen.listOfN(16, arbPeerNode.arbitrary))
+      val neighbors = Neighbours(random[PeerNode], nodes, Long.MaxValue, UUID.randomUUID())
+
       roundtrip(ping)
       roundtrip(pong)
       roundtrip(findNode)
@@ -43,6 +40,8 @@ class DiscoverySpec extends JbokSpec {
     }
 
     "handle Ping" in {
+      val d1 = random[Discovery[IO]](genDiscovery(10001))
+      val d2 = random[Discovery[IO]](genDiscovery(10002))
       val p = for {
         fiber <- Stream(d1, d2).map(_.serve).parJoinUnbounded.compile.drain.start
         _     <- T.sleep(1.second)
@@ -54,6 +53,8 @@ class DiscoverySpec extends JbokSpec {
     }
 
     "handle FindNode" in {
+      val d1    = random[Discovery[IO]](genDiscovery(10001))
+      val d2    = random[Discovery[IO]](genDiscovery(10002))
       val N     = 10
       val nodes = random[List[PeerNode]](Gen.listOfN(N, arbPeerNode.arbitrary))
 

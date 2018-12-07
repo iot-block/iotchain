@@ -106,8 +106,7 @@ lazy val crypto = crossProject(JSPlatform, JVMPlatform)
       "crypto-js" -> "3.1.9-1"
     ),
     // https://github.com/indutny/elliptic/issues/149
-    jsEnv in Test := new org.scalajs.jsenv.nodejs.NodeJSEnv(),
-    requiresDOM in Test := false
+    jsEnv in Test := new org.scalajs.jsenv.nodejs.NodeJSEnv()
   )
   .settings(
     name := "jbok-crypto",
@@ -290,7 +289,6 @@ lazy val commonJsSettings = Seq(
   fork := false,
   scalaJSUseMainModuleInitializer := true,
   scalaJSUseMainModuleInitializer in Test := false,
-  requiresDOM in Test := true,
   webpackBundlingMode := BundlingMode.LibraryOnly(),
   scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
   libraryDependencies ++= Seq(

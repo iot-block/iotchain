@@ -338,7 +338,7 @@ object testkit {
     val discovery = DiscoveryConfig(port = port)
     val config    = PeerManagerConfig(port * 2, discovery = discovery)
     val addr      = new InetSocketAddress("localhost", port)
-    val transport = UdpTransport[IO](addr)
+    val (transport, _) = UdpTransport[IO](addr).allocated.unsafeRunSync()
     val keyPair   = random[KeyPair]
     val db        = random[KeyValueDB[IO]]
     val store     = PeerStorePlatform.fromKV(db)

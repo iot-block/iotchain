@@ -12,16 +12,16 @@ import scala.concurrent.duration._
 class UdpTransportSpec extends JbokSpec {
   "UdpTransport" should {
     "listen" in {
-      val bind1                               = new InetSocketAddress("localhost", 30000)
-      val bind2                               = new InetSocketAddress("localhost", 30001)
+      val bind1 = new InetSocketAddress("localhost", 30000)
+      val bind2 = new InetSocketAddress("localhost", 30001)
 
       val pipe: Pipe[IO, (InetSocketAddress, String), (InetSocketAddress, String)] = input =>
         input.map(x => {
           x
         })
 
-      val transport1 = UdpTransport[IO](bind1)
-      val transport2 = UdpTransport[IO](bind2)
+      val (transport1, _) = UdpTransport[IO](bind1).allocated.unsafeRunSync()
+      val (transport2, _) = UdpTransport[IO](bind2).allocated.unsafeRunSync()
       val p = for {
         fiber1 <- transport1.serve(pipe).compile.drain.start
         fiber2 <- transport2.serve(pipe).compile.drain.start
