@@ -277,8 +277,8 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),
   addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.2.4"),
   addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
-//  addCompilerPlugin("ch.epfl.scala"   %% "scalac-profiling"   % "1.0.0"),
-//  addCompilerPlugin(scalafixSemanticdb),
+  //  addCompilerPlugin("ch.epfl.scala"   %% "scalac-profiling"   % "1.0.0"),
+  //  addCompilerPlugin(scalafixSemanticdb),
   fork := true,
   connectInput := true,
   fork in Test := false,
@@ -314,10 +314,10 @@ lazy val scalacOpts = scalacOptions := Seq(
   "-language:higherKinds",
   "-language:implicitConversions",
   "-language:postfixOps",
-//  "-P:scalac-profiling:generate-macro-flamegraph",
-//  "-P:scalac-profiling:no-profiledb"
-//  "-Yrangepos", // required by SemanticDB compiler plugin
-//  "-Ywarn-unused-import" // required by `RemoveUnused` rule
+  //  "-P:scalac-profiling:generate-macro-flamegraph",
+  //  "-P:scalac-profiling:no-profiledb"
+  //  "-Yrangepos", // required by SemanticDB compiler plugin
+  //  "-Ywarn-unused-import" // required by `RemoveUnused` rule
 )
 
 lazy val micrositeSettings = Seq(
@@ -411,7 +411,7 @@ lazy val releaseSettings = {
           username,
           password
         )
-    ).toSeq,
+      ).toSeq,
     publishArtifact in Test := false,
     releasePublishArtifactsAction := PgpKeys.publishSigned.value,
     scmInfo := Some(

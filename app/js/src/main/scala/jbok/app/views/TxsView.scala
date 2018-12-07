@@ -38,7 +38,7 @@ case class TxsView(state: AppState) {
           </tr>
         </thead>
         <tbody>
-          {for (tx <- Constants(stxs.bind.toList: _*)) yield {
+          {for (tx <- Constants(stxs.all.bind.toList: _*)) yield {
           <tr>
             <td>
               <a onclick={state.hrefHandler} type="tx">

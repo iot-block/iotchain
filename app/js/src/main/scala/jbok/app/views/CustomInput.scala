@@ -31,8 +31,6 @@ case class CustomInput(name: String,
         _value.value = input.value.trim.toLowerCase
         _Syntax.value = validator(_value.value)
       case textarea: HTMLTextAreaElement =>
-        println(s"${_value.value}")
-        println(s"${validator(_value.value)}")
         _value.value = textarea.value.trim
         _Syntax.value = validator(_value.value)
       case _ =>
@@ -75,7 +73,6 @@ case class AddressOptionInput(candidates: Vars[Address],
           false
         } else {
           address.value = v.substring(2)
-          println(s"addressopt: ${address.value}, ${isValid}, ${validator(address.value)}")
           true
         }
       case _ =>
@@ -92,7 +89,7 @@ case class AddressOptionInput(candidates: Vars[Address],
       </label>
       <select name="account" class="autocomplete" onchange={addressOnChange}>
         {
-          val accountList = candidates.bind
+          val accountList = candidates.all.bind
           for(account<-Constants(accountList: _*)) yield {
             <option value={account.toString}>{account.toString}</option>
           }
