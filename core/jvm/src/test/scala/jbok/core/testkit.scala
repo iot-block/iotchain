@@ -210,7 +210,7 @@ object testkit {
   }
 
   def genStatus(number: BigInt = 0,
-                chainId: Int = GenesisConfig.default.chainId.toInt,
+                chainId: BigInt = GenesisConfig.default.chainId,
                 genesisHash: ByteVector = GenesisConfig.default.header.hash): Gen[Status] =
     Gen.delay(Status(chainId, genesisHash, number))
 

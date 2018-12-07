@@ -144,7 +144,7 @@ abstract class PeerManager[F[_]](
     for {
       genesis <- history.genesisHeader
       number  <- history.getBestBlockNumber
-    } yield Status(chainId.toInt, genesis.hash, number)
+    } yield Status(chainId, genesis.hash, number)
 
   private[jbok] def handshakeIncoming(conn: Connection[F, Message]): F[Peer[F]]
 

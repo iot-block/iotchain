@@ -19,7 +19,7 @@ case class Handshake(
 ) extends Message(0x00)
 
 case class Status(
-    chainId: Int,
+    chainId: BigInt,
     genesisHash: ByteVector,
     bestNumber: BigInt
 ) extends Message(0x1000) {
