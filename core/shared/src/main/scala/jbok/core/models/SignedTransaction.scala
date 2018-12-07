@@ -6,7 +6,7 @@ import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.codec.json.implicits._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
+import jbok.crypto.signature.{ecdsa => _, _}
 import scodec.bits.ByteVector
 import shapeless._
 import cats.implicits._
@@ -26,10 +26,9 @@ case class SignedTransaction(
   lazy val hash: ByteVector =
     RlpCodec.encode(this).require.bytes.kec256
 
-  lazy val chainId: Option[BigInt] = if (v < 35) None else Some(if (v % 2 == 0) (v - 36) / 2 else (v - 35) / 2)
+  lazy val chainIdOpt: Option[BigInt] = ECDSAChainIdConvert.getChainId(v)
 
-  lazy val senderAddress: Option[Address] =
-    chainId.flatMap(SignedTransaction.getSender(this, _))
+  lazy val senderAddress: Option[Address] = chainIdOpt.flatMap(chainId => SignedTransaction.getSender(this, chainId))
 
   def getSenderOrThrow[F[_]: Sync]: F[Address] =
     Sync[F].fromOption(senderAddress, TxSignatureInvalid)

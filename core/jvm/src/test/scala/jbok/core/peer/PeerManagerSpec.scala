@@ -66,7 +66,7 @@ class PeerManagerSpec extends JbokSpec {
     "fail if peers are incompatible" in {
       val pm1 = random[PeerManager[IO]](genPeerManager(PeerManagerConfig(10001))(fixture))
       val pm2 =
-        random[PeerManager[IO]](genPeerManager(PeerManagerConfig(10002))(fixture.copy(chainId = fixture.chainId + 1)))
+        random[PeerManager[IO]](genPeerManager(PeerManagerConfig(10002))(fixture.copy(cId = fixture.cId + 1)))
 
       val p = for {
         fiber    <- startAll(pm1, pm2)

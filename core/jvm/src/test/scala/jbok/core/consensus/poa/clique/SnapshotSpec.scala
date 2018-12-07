@@ -22,10 +22,11 @@ case class Test(signers: List[String], votes: List[TestVote], results: List[Stri
 
 trait SnapshotFixture {
   def mkHistory(signers: List[Address]) = {
-    val extra   = Clique.fillExtraData(signers)
-    val config  = GenesisConfig.default.copy(extraData = extra.toHex)
-    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history = History[IO](db).unsafeRunSync()
+    val extra            = Clique.fillExtraData(signers)
+    val config           = GenesisConfig.default.copy(extraData = extra.toHex)
+    implicit val chainId = config.chainId
+    val db               = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history          = History[IO](db).unsafeRunSync()
     history.init(config).unsafeRunSync()
     history
   }
@@ -39,11 +40,11 @@ trait SnapshotFixture {
     Address(accounts(account))
   }
 
-  def sign(header: BlockHeader, signer: String): BlockHeader = {
+  def sign(header: BlockHeader, signer: String)(implicit chainId: BigInt): BlockHeader = {
     if (!accounts.contains(signer)) {
       accounts += (signer -> Signature[ECDSA].generateKeyPair().unsafeRunSync())
     }
-    val sig       = Signature[ECDSA].sign(Clique.sigHash(header).toArray, accounts(signer), 0).unsafeRunSync()
+    val sig       = Signature[ECDSA].sign(Clique.sigHash(header).toArray, accounts(signer), chainId).unsafeRunSync()
     val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val recovered = Clique.ecrecover(signed).get
     require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")
@@ -53,9 +54,14 @@ trait SnapshotFixture {
 
 class SnapshotSpec extends JbokSpec {
   def check(test: Test) = new SnapshotFixture {
-    val config  = CliqueConfig().copy(epoch = test.epoch)
-    val signers = test.signers.map(signer => address(signer))
-    val history = mkHistory(signers) // genesis signers
+    val config           = CliqueConfig().copy(epoch = test.epoch)
+    val signers          = test.signers.map(signer => address(signer))
+    val extra            = Clique.fillExtraData(signers)
+    val genesisConfig    = GenesisConfig.default.copy(extraData = extra.toHex)
+    implicit val chainId = genesisConfig.chainId
+    val db               = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history          = History[IO](db).unsafeRunSync()
+    history.init(genesisConfig).unsafeRunSync()
 
     // Assemble a chain of headers from the cast votes
     val headers: List[BlockHeader] = test.votes.zipWithIndex.map {
@@ -76,7 +82,7 @@ class SnapshotSpec extends JbokSpec {
     }
 
     val head           = headers.last
-    val db             = KeyValueDB.inmem[IO].unsafeRunSync()
+    val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
     val keyPair        = Signature[ECDSA].generateKeyPair().unsafeRunSync()
     val clique         = Clique[IO](config, history, keyPair).unsafeRunSync()
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()

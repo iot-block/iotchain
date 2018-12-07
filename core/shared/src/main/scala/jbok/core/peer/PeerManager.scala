@@ -33,7 +33,7 @@ abstract class PeerManager[F[_]](
     val outgoing: Ref[F, Map[KeyPair.Public, Peer[F]]],
     val nodeQueue: PriorityQueue[F, PeerNode],
     val messageQueue: Queue[F, Request[F]]
-)(implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup) {
+)(implicit F: ConcurrentEffect[F], T: Timer[F], AG: AsynchronousChannelGroup, chainId: BigInt) {
   private[this] val log = org.log4s.getLogger("PeerManager")
 
   val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port)
@@ -144,7 +144,7 @@ abstract class PeerManager[F[_]](
     for {
       genesis <- history.genesisHeader
       number  <- history.getBestBlockNumber
-    } yield Status(history.chainId, genesis.hash, number)
+    } yield Status(chainId.toInt, genesis.hash, number)
 
   private[jbok] def handshakeIncoming(conn: Connection[F, Message]): F[Peer[F]]
 

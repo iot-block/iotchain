@@ -24,6 +24,8 @@ trait JbokSpec
     s.compile.toVector
       .unsafeRunTimed(timeLimit)
       .getOrElse(throw new TimeoutException("IO run timed out"))
+
+  implicit val chainId: BigInt = 61
 }
 
 trait JbokAsyncSpec extends AsyncWordSpec with Matchers with AsyncTimeLimitedTests {

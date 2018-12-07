@@ -73,6 +73,8 @@ object FullNode {
       CS: ContextShift[IO]
   ): IO[FullNode[IO]] = {
     val random = new SecureRandom()
+    // load genesis first and define chainId
+    implicit val chainId: BigInt = 1
     for {
       db <- LevelDB(s"${config.datadir}/db")
       keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
@@ -108,7 +110,8 @@ object FullNode {
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
       CS: ContextShift[IO]
-  ): IO[FullNode[IO]] =
+  ): IO[FullNode[IO]] = {
+    implicit val chainId: BigInt = 1
     for {
       nodeKey     <- Signature[ECDSA].generateKeyPair()
       peerManager <- PeerManagerPlatform[IO](config.peer, Some(nodeKey), consensus.history)
@@ -131,4 +134,5 @@ object FullNode {
       server       <- Server.websocket(config.rpc.addr, rpc.pipe)
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
+  }
 }

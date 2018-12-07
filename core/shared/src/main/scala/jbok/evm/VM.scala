@@ -15,9 +15,10 @@ object VM {
     * @param context context to be executed
     * @return result of the execution
     */
-  def run[F[_]: Sync](context: ProgramContext[F]): F[ProgramResult[F]] =
-    OptionT.fromOption[F](PrecompiledContracts.runOptionally(context)).getOrElseF {
-      run(ProgramState[F](context)).map { finalState =>
+  def run[F[_]: Sync](context: ProgramContext[F]): F[ProgramResult[F]] = {
+    val state = ProgramState[F](context)
+    OptionT.fromOption[F](PrecompiledContracts.runOptionally(state.config.preCompiledContracts, context)).getOrElseF {
+      run(state).map { finalState =>
         ProgramResult[F](
           finalState.returnData,
           finalState.gas,
@@ -26,10 +27,12 @@ object VM {
           finalState.logs,
           finalState.internalTxs,
           finalState.gasRefund,
-          finalState.error
+          finalState.error,
+          finalState.reverted
         )
       }
     }
+  }
 
   private def run[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val byte = state.program.getByte(state.pc)
@@ -39,7 +42,7 @@ object VM {
           newState <- opCode.execute(state)
           _ = log.trace(
             s"$opCode | pc: ${newState.pc} | depth: ${newState.env.callDepth} | gas: ${newState.gas} | stack: ${newState.stack}")
-          s <- if (newState.halted) newState.pure[F] else run(newState)
+          s <- if (newState.halted || newState.reverted) newState.pure[F] else run(newState)
         } yield s
 
       case None =>

@@ -47,7 +47,6 @@ trait OpCodeTesting extends FunSuiteLike {
       fail(s"Unexpected $OutOfGas error")
     else if (stateOut.error.isDefined && stateOut.error.collect {
                case InvalidJump(dest) => dest
-               case RevertOp          =>
              }.isEmpty)
       //Found error that is not an InvalidJump
       fail(s"Unexpected ${stateOut.error.get} error")

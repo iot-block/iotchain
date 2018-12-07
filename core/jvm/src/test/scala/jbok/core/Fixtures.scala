@@ -24,7 +24,7 @@ object Fixtures {
       override val size: Long                          = Block3125369.size
     }
 
-    private val chainId: Byte = 0x3d.toByte
+    implicit val chainId: BigInt = 61
 
     object Block3125369 extends FixtureBlock {
       val header = BlockHeader(

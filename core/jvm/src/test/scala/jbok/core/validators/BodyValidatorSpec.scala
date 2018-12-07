@@ -9,8 +9,6 @@ import scodec.bits._
 import jbok.codec.rlp.implicits._
 
 class BodyValidatorSpec extends JbokSpec {
-  val chainId = 0x3d.toByte
-
   val validBlockHeader = BlockHeader(
     parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
     ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",

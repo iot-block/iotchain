@@ -19,18 +19,24 @@ object PrecompiledContracts {
   val BN256MulAddr     = Address(7)
   val BN256PairingAddr = Address(8)
 
-  val contracts = Map(
-    EcDsaRecAddr     -> EllipticCurveRecovery,
-    Sha256Addr       -> Sha256,
-    Rip160Addr       -> Ripemd160,
-    IdAddr           -> Identity,
+  val FrontierContracts = Map(
+    EcDsaRecAddr -> EllipticCurveRecovery,
+    Sha256Addr   -> Sha256,
+    Rip160Addr   -> Ripemd160,
+    IdAddr       -> Identity,
+  )
+
+  private val bn256Constracts = Map(
     ExpModAddr       -> ExpMod,
     BN256AddAddr     -> BN256Add,
     BN256MulAddr     -> BN256Mul,
     BN256PairingAddr -> BN256Pairing
   )
 
-  def runOptionally[F[_]: Sync](context: ProgramContext[F]): Option[ProgramResult[F]] =
+  val ByzantiumContracts = FrontierContracts ++ bn256Constracts
+
+  def runOptionally[F[_]: Sync](contracts: Map[Address, PrecompiledContract],
+                                context: ProgramContext[F]): Option[ProgramResult[F]] =
     contracts.get(context.receivingAddr).map(_.run(context))
 
   sealed trait PrecompiledContract {
@@ -228,7 +234,8 @@ object PrecompiledContracts {
         } yield (g1, g2)
       }
 
-      pairs.sequence
+      pairs
+        .sequence[Option, (CurvePoint, TwistPoint)]
         .map(ps => ByteVector(if (BN256.pairingCheck(ps)) 1 else 0).padLeft(32))
         .getOrElse(ByteVector.empty.padTo(32))
     }

@@ -1,7 +1,5 @@
 package jbok.common.metrics
 
-package org.http4s.metrics.dropwizard
-
 import java.util.concurrent.TimeUnit
 
 import cats.effect.{Async, Resource, Sync}

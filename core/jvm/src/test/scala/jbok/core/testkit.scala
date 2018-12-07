@@ -23,17 +23,19 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration._
 
 final case class Fixture(
-    chainId: Int,
+    cId: Int,
     port: Int,
     miner: SimAccount,
     genesisConfig: GenesisConfig,
     consensusAlgo: String
 ) {
+  implicit val chainId: BigInt = cId
+
   def consensus: IO[Consensus[IO]] = consensusAlgo match {
     case "clique" =>
       for {
         db        <- KeyValueDB.inmem[IO]
-        history   <- History[IO](db, chainId)
+        history   <- History[IO](db)
         _         <- history.init(genesisConfig)
         blockPool <- BlockPool[IO](history, BlockPoolConfig())
         cliqueConfig = CliqueConfig(period = 100.millis)
@@ -58,22 +60,22 @@ final case class Fixture(
 object testkit {
   def defaultFixture(port: Int = 10001, algo: String = "clique"): Fixture = cliqueFixture(port)
 
+  implicit val chainId: BigInt = 61
+
   def cliqueFixture(port: Int): Fixture = {
-    val chainId = 0
-    val miner   = SimAccount(Signature[ECDSA].generateKeyPair().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
-    val alloc   = Map(miner.address.toString -> miner.balance.toString())
+    val miner = SimAccount(Signature[ECDSA].generateKeyPair().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
+    val alloc = Map(miner.address.toString -> miner.balance.toString())
     val genesisConfig =
       GenesisConfig.default.copy(alloc = alloc, extraData = Clique.fillExtraData(miner.address :: Nil).toHex)
 
-    Fixture(chainId, port, miner, genesisConfig, "clique")
+    Fixture(chainId.toInt, port, miner, genesisConfig, "clique")
   }
 
   def fixture(port: Int): Fixture = {
-    val chainId       = 0
     val miner         = SimAccount(Signature[ECDSA].generateKeyPair().unsafeRunSync(), BigInt("100000000000000000000"), 0)
     val alloc         = Map(miner.address.toString -> miner.balance.toString())
     val genesisConfig = GenesisConfig.default.copy(alloc = alloc)
-    Fixture(chainId, port, miner, genesisConfig, "ethash")
+    Fixture(chainId.toInt, port, miner, genesisConfig, "ethash")
   }
 
   implicit val arbUint256 = Arbitrary {
@@ -115,7 +117,7 @@ object testkit {
     for {
       tx <- arbTransaction.arbitrary
       keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-      stx     = SignedTransaction.sign(tx, keyPair, 0)
+      stx     = SignedTransaction.sign(tx, keyPair, chainId)
     } yield stx
   }
 
@@ -203,7 +205,7 @@ object testkit {
   }
 
   def genStatus(number: BigInt = 0,
-                chainId: Int = 0,
+                chainId: Int = GenesisConfig.default.chainId.toInt,
                 genesisHash: ByteVector = GenesisConfig.default.header.hash): Gen[Status] =
     Gen.delay(Status(chainId, genesisHash, number))
 
@@ -291,8 +293,9 @@ object testkit {
     } yield mined.block
 
   def genPeerManager(config: PeerManagerConfig)(implicit fixture: Fixture): Gen[PeerManager[IO]] = {
-    val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-    val history = fixture.consensus.unsafeRunSync().history
+    implicit val chainId: BigInt = fixture.cId
+    val keyPair                  = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val history                  = fixture.consensus.unsafeRunSync().history
     PeerManagerPlatform[IO](config, Some(keyPair), history).unsafeRunSync()
   }
 

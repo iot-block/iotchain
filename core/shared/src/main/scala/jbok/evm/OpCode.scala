@@ -139,11 +139,11 @@ object OpCodes {
     DELEGATECALL +: FrontierOpCodes
 
   val ByzantiumOpCodes: List[OpCode] =
-//    STATICCALL +: RETURNDATASIZE +: RETURNDATACOPY +:
-    REVERT +: HomesteadOpCodes
+    STATICCALL +: RETURNDATASIZE +: RETURNDATACOPY +:
+      REVERT +: HomesteadOpCodes
 
   val ConstantinopleOpCodes: List[OpCode] =
-//    CREATE2 +: EXTCODEHASH +: // eip status draft
+//    CREATE2 +: EXTCODEHASH +: // eip status draft on 2018.12
     SHL +: SHR +: SAR +: ByzantiumOpCodes
 }
 
@@ -443,6 +443,31 @@ case object EXTCODECOPY extends OpCode(0x3c.toByte, 4, 0, _.G_extcode) {
   }
 }
 
+case object RETURNDATASIZE extends ConstOp(0x3d) {
+  override def f[F[_]: Sync](state: ProgramState[F]): UInt256 = state.returnData.size
+}
+
+case object RETURNDATACOPY extends OpCode(0x3e.toByte, 3, 0, _.G_verylow) {
+  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].pure {
+    val (Seq(memOffset, dataOffset, size), stack1) = state.stack.pop(3)
+    val end: BigInt                                = dataOffset.toBigInt + size.toBigInt
+    if (end.bitLength > 64 || state.returnData.size < end) {
+      state.withError(ReturnDataOutOfBounds)
+    } else {
+      val data = OpCode.sliceBytes(state.returnData, dataOffset, size)
+      val mem1 = state.memory.store(memOffset, data)
+      state.withStack(stack1).withMemory(mem1).step()
+    }
+  }
+
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+    val (Seq(offset, _, size), _) = state.stack.pop(3)
+    val memCost                   = state.config.calcMemCost(state.memory.size, offset, size)
+    val copyCost                  = state.config.feeSchedule.G_copy * wordsForBytes(size)
+    (memCost + copyCost).pure[F]
+  }
+}
+
 /////////////////////
 // Block Information
 /////////////////////
@@ -544,17 +569,20 @@ case object MSTORE8 extends OpCode(0x53, 2, 0, _.G_verylow) {
 }
 
 case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
-  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
-    val (Seq(offset, value), stack1) = state.stack.pop(2)
-    for {
-      storage  <- state.storage
-      oldValue <- storage.load(offset)
-      refund: BigInt = if (value.isZero && !oldValue.isZero) state.config.feeSchedule.R_sclear else 0
-      updatedStorage = storage.store(offset, value)
-    } yield {
-      state.withStack(stack1).withStorage(updatedStorage).refundGas(refund).step()
+  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] =
+    if (state.context.readOnly) {
+      Sync[F].pure(state.withError(WriteProtectionError))
+    } else {
+      val (Seq(offset, value), stack1) = state.stack.pop(2)
+      for {
+        storage  <- state.storage
+        oldValue <- storage.load(offset)
+        refund: BigInt = if (value.isZero && !oldValue.isZero) state.config.feeSchedule.R_sclear else 0
+        updatedStorage = storage.store(offset, value)
+      } yield {
+        state.withStack(stack1).withStorage(updatedStorage).refundGas(refund).step()
+      }
     }
-  }
 
   def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
     val (Seq(offset, value), _) = state.stack.pop(2)
@@ -791,11 +819,15 @@ sealed abstract class LogOp(code: Int, val i: Int) extends OpCode(code.toByte, i
   def this(code: Int) = this(code, code - 0xa0)
 
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].pure {
-    val (Seq(offset, size, topics @ _*), stack1) = state.stack.pop(delta)
-    val (data, memory)                           = state.memory.load(offset, size)
-    val logEntry                                 = TxLogEntry(state.env.ownerAddr, topics.map(_.bytes).toList, data)
+    if (state.context.readOnly) {
+      state.withError(WriteProtectionError)
+    } else {
+      val (Seq(offset, size, topics @ _*), stack1) = state.stack.pop(delta)
+      val (data, memory)                           = state.memory.load(offset, size)
+      val logEntry                                 = TxLogEntry(state.env.ownerAddr, topics.map(_.bytes).toList, data)
 
-    state.withStack(stack1).withMemory(memory).withLog(logEntry).step()
+      state.withStack(stack1).withMemory(memory).withLog(logEntry).step()
+    }
   }
 
   def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
@@ -820,91 +852,105 @@ case object LOG4 extends LogOp(0xa4)
 // System
 ///////////////////////////
 abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
-  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
-    val (Seq(endowment, inOffset, inSize), stack1) = state.stack.pop(3)
+  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] =
+    if (state.context.readOnly) {
+      Sync[F].pure(state.withError(WriteProtectionError))
+    } else {
+      val (Seq(endowment, inOffset, inSize), stack1) = state.stack.pop(3)
 
-    val validCall =
-      (state.env.callDepth < EvmConfig.MaxCallDepth).pure[F] && state.ownBalance.map(_ >= endowment)
+      val validCall =
+        (state.env.callDepth < EvmConfig.MaxCallDepth).pure[F] && state.ownBalance.map(_ >= endowment)
 
-    Sync[F].ifM(validCall)(
-      ifTrue = {
-        val (initCode, memory1) = state.memory.load(inOffset, inSize)
+      Sync[F].ifM(validCall)(
+        ifTrue = {
+          val (initCode, memory1) = state.memory.load(inOffset, inSize)
 
-        for {
-          (newAddress, world1) <- state.world.createAddressWithOpCode(state.env.ownerAddr)
-          world2               <- world1.initialiseAccount(newAddress).flatMap(_.transfer(state.env.ownerAddr, newAddress, endowment))
-          conflict             <- state.world.nonEmptyCodeOrNonce(newAddress)
-          code = if (conflict) ByteVector(INVALID.code) else initCode
-          newEnv = state.env.copy(
-            callerAddr = state.env.ownerAddr,
-            ownerAddr = newAddress,
-            value = endowment,
-            program = Program(code),
-            inputData = ByteVector.empty,
-            callDepth = state.env.callDepth + 1
-          )
+          for {
+            (newAddress, world1) <- state.world.createAddressWithOpCode(state.env.ownerAddr)
+            world2 <- world1
+              .initialiseAccount(newAddress)
+              .flatMap(_.transfer(state.env.ownerAddr, newAddress, endowment))
+            conflict <- state.world.nonEmptyCodeOrNonce(newAddress)
+            code = if (conflict) ByteVector(INVALID.code) else initCode
+            newEnv = state.env.copy(
+              callerAddr = state.env.ownerAddr,
+              ownerAddr = newAddress,
+              value = endowment,
+              program = Program(code),
+              inputData = ByteVector.empty,
+              callDepth = state.env.callDepth + 1
+            )
 
-          //FIXME: to avoid calculating this twice, we could adjust state.gas prior to execution in OpCode#execute
-          //not sure how this would affect other opcodes [EC-243]
-          vg <- varGas(state)
-          availableGas = state.gas - (constGasFn(state.config.feeSchedule) + vg)
-          startGas     = state.config.gasCap(availableGas)
+            //FIXME: to avoid calculating this twice, we could adjust state.gas prior to execution in OpCode#execute
+            //not sure how this would affect other opcodes [EC-243]
+            vg <- varGas(state)
+            availableGas = state.gas - (constGasFn(state.config.feeSchedule) + vg)
+            startGas     = state.config.gasCap(availableGas)
 
-          context = ProgramContext[F](newEnv, newAddress, startGas, world2, state.config, state.addressesToDelete)
-          result <- VM.run(context)
+            context = ProgramContext[F](newEnv, newAddress, startGas, world2, state.config, state.addressesToDelete)
+            result <- VM.run(context)
 
-          contractCode     = result.returnData
-          codeDepositGas   = state.config.calcCodeDepositCost(contractCode)
-          gasUsedInVm      = startGas - result.gasRemaining
-          totalGasRequired = gasUsedInVm + codeDepositGas
+            contractCode     = result.returnData
+            codeDepositGas   = state.config.calcCodeDepositCost(contractCode)
+            gasUsedInVm      = startGas - result.gasRemaining
+            totalGasRequired = gasUsedInVm + codeDepositGas
 
-          maxCodeSizeExceeded = state.config.maxCodeSize.exists(codeSizeLimit => contractCode.size > codeSizeLimit)
-          outOfGasForDeposit  = totalGasRequired >= startGas
+            maxCodeSizeExceeded = state.config.maxCodeSize.exists(codeSizeLimit => contractCode.size > codeSizeLimit)
+            outOfGasForDeposit  = totalGasRequired > startGas
 
-          creationFailed = maxCodeSizeExceeded || result.error.isDefined || outOfGasForDeposit
+            creationFailed = maxCodeSizeExceeded || result.error.isDefined || (outOfGasForDeposit && state.config.exceptionalFailedCodeDeposit)
 
-        } yield {
-          if (state.env.noSelfCall) {
-            val stack2 = stack1.push(newAddress.toUInt256)
-            state
-              .withStack(stack2)
-              .step()
-          } else {
-            if (creationFailed) {
-              val stack2 = stack1.push(UInt256.Zero)
+          } yield {
+            if (state.env.noSelfCall) {
+              val stack2 = stack1.push(newAddress.toUInt256)
               state
-                .withWorld(world1) // if creation fails at this point we still leave the creators nonce incremented
                 .withStack(stack2)
-                .spendGas(startGas)
                 .step()
             } else {
-              val stack2 = stack1.push(newAddress.toUInt256)
-              val state1 =
-                if (outOfGasForDeposit)
-                  state.withWorld(result.world).spendGas(gasUsedInVm)
-                else {
-                  val world3     = result.world.putCode(newAddress, result.returnData)
-                  val internalTx = InternalTransaction(CREATE, state.env.ownerAddr, None, startGas, initCode, endowment)
-                  state.withWorld(world3).spendGas(totalGasRequired).withInternalTxs(internalTx +: result.internalTxs)
-                }
+              if (creationFailed) {
+                val stack2 = stack1.push(UInt256.Zero)
+                state
+                  .withWorld(world1) // if creation fails at this point we still leave the creators nonce incremented
+                  .withStack(stack2)
+                  .spendGas(startGas)
+                  .step()
+              } else {
+                val stack2 = stack1.push(newAddress.toUInt256)
+                val state1 =
+                  if (outOfGasForDeposit)
+                    state.withWorld(result.world).spendGas(gasUsedInVm)
+                  else {
+                    if (result.isRevert) {
+                      state.withWorld(world1).withReturnData(result.returnData).spendGas(gasUsedInVm)
+                    } else {
+                      val world3 = result.world.putCode(newAddress, result.returnData)
+                      val internalTx =
+                        InternalTransaction(CREATE, state.env.ownerAddr, None, startGas, initCode, endowment)
+                      state
+                        .withWorld(world3)
+                        .spendGas(totalGasRequired)
+                        .withInternalTxs(internalTx +: result.internalTxs)
 
-              state1
-                .refundGas(result.gasRefund)
-                .withStack(stack2)
-                .withAddressesToDelete(result.addressesToDelete)
-                .withLogs(result.logs)
-                .withMemory(memory1)
-                .step()
+                    }
+                  }
+
+                state1
+                  .refundGas(result.gasRefund)
+                  .withStack(stack2)
+                  .withAddressesToDelete(result.addressesToDelete)
+                  .withLogs(result.logs)
+                  .withMemory(memory1)
+                  .step()
+              }
             }
           }
+        },
+        ifFalse = {
+          val stack2 = stack1.push(UInt256.Zero)
+          state.withStack(stack2).step().pure[F]
         }
-      },
-      ifFalse = {
-        val stack2 = stack1.push(UInt256.Zero)
-        state.withStack(stack2).step().pure[F]
-      }
-    )
-  }
+      )
+    }
 
   def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
     val (Seq(_, inOffset, inSize), _) = state.stack.pop(3)
@@ -918,93 +964,113 @@ abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toB
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (params @ Seq(_, to, callValue, inOffset, inSize, outOffset, outSize), stack1) = getParams(state)
 
-    val (inputData, mem1) = state.memory.load(inOffset, inSize)
-    val endowment         = if (this == DELEGATECALL) UInt256.Zero else callValue
-    val toAddr            = Address(to)
-
-    if (state.env.noSelfCall) {
-      for {
-        startGas <- calcStartGas(state, params, endowment)
-      } yield {
-        val stack2 = stack1.push(UInt256.One)
-
-        state
-          .withStack(stack2)
-          .withMemory(state.memory.expand(outOffset, outSize))
-          .spendGas(-startGas)
-          .step()
-      }
+    if (this == CALL && callValue != UInt256.Zero && state.context.readOnly) {
+      Sync[F].pure(state.withError(WriteProtectionError))
     } else {
-      for {
-        startGas <- calcStartGas(state, params, endowment)
-        (world1, owner, caller) <- this match {
-          case CALL =>
-            state.world
-              .transfer(state.ownAddress, toAddr, endowment)
-              .map(withTransfer => (withTransfer, toAddr, state.ownAddress))
+      val (inputData, mem1) = state.memory.load(inOffset, inSize)
+      val endowment         = if (this == DELEGATECALL) UInt256.Zero else callValue
+      val toAddr            = Address(to)
 
-          case CALLCODE =>
-            (state.world, state.ownAddress, state.ownAddress).pure[F]
+      if (state.env.noSelfCall) {
+        for {
+          startGas <- calcStartGas(state, params, endowment)
+        } yield {
+          val stack2 = stack1.push(UInt256.One)
 
-          case DELEGATECALL =>
-            (state.world, state.ownAddress, state.env.callerAddr).pure[F]
+          state
+            .withStack(stack2)
+            .withMemory(state.memory.expand(outOffset, outSize))
+            .spendGas(-startGas)
+            .step()
         }
+      } else {
+        for {
+          startGas <- calcStartGas(state, params, endowment)
+          (world1, owner, caller) <- this match {
+            case CALL | STATICCALL =>
+              state.world
+                .transfer(state.ownAddress, toAddr, endowment)
+                .map(withTransfer => (withTransfer, toAddr, state.ownAddress))
 
-        code       <- world1.getCode(toAddr)
-        ownBalance <- state.ownBalance
-        env = state.env.copy(
-          ownerAddr = owner,
-          callerAddr = caller,
-          inputData = inputData,
-          value = callValue,
-          program = Program(code),
-          callDepth = state.env.callDepth + 1
-        )
+            case CALLCODE =>
+              (state.world, state.ownAddress, state.ownAddress).pure[F]
 
-        context: ProgramContext[F] = state.context.copy(
-          env = env,
-          receivingAddr = toAddr,
-          startGas = startGas,
-          world = world1,
-          initialAddressesToDelete = state.addressesToDelete
-        )
+            case DELEGATECALL =>
+              (state.world, state.ownAddress, state.env.callerAddr).pure[F]
+          }
 
-        result <- VM.run(context)
-      } yield {
-        val validCall = state.env.callDepth < EvmConfig.MaxCallDepth && endowment <= ownBalance
+          code       <- world1.getCode(toAddr)
+          ownBalance <- state.ownBalance
+          env = state.env.copy(
+            ownerAddr = owner,
+            callerAddr = caller,
+            inputData = inputData,
+            value = callValue,
+            program = Program(code),
+            callDepth = state.env.callDepth + 1
+          )
 
-        if (!validCall || result.error.isDefined) {
-          val stack2 = stack1.push(UInt256.Zero)
+          context: ProgramContext[F] = state.context.copy(
+            env = env,
+            receivingAddr = toAddr,
+            startGas = startGas,
+            world = world1,
+            initialAddressesToDelete = state.addressesToDelete
+          )
 
-          val gasAdjustment: BigInt = if (validCall) 0 else -startGas
-          val mem2                  = mem1.expand(outOffset, outSize)
+          result <- if (this == STATICCALL) VM.run(context.copy(readOnly = true)) else VM.run(context)
+        } yield {
+          val validCall = state.env.callDepth < EvmConfig.MaxCallDepth && endowment <= ownBalance
 
-          val world1 = if (validCall) state.world.combineTouchedAccounts(result.world) else state.world
+          if (!validCall) {
+            val stack2 = stack1.push(UInt256.Zero)
+            val mem2   = mem1.expand(outOffset, outSize)
 
-          state
-            .withStack(stack2)
-            .withMemory(mem2)
-            .withWorld(world1)
-            .spendGas(gasAdjustment)
-            .step()
+            state
+              .withStack(stack2)
+              .withMemory(mem2)
+              .spendGas(-startGas)
+              .step()
+          } else if (result.error.isDefined) {
+            val stack2 = stack1.push(UInt256.Zero)
+            val mem2   = mem1.expand(outOffset, outSize)
+            val word1  = state.world.combineTouchedAccounts(result.world)
 
-        } else {
-          val stack2     = stack1.push(UInt256.One)
-          val sizeCap    = outSize.min(result.returnData.size).toInt
-          val output     = result.returnData.take(sizeCap)
-          val mem2       = mem1.store(outOffset, output).expand(outOffset, outSize)
-          val internalTx = internalTransaction(state.env, to, startGas, inputData, endowment)
+            state
+              .withStack(stack2)
+              .withMemory(mem2)
+              .withWorld(word1)
+              .step()
+          } else if (result.isRevert) {
+            val stack2  = stack1.push(UInt256.Zero)
+            val sizeCap = outSize.min(result.returnData.size).toInt
+            val output  = result.returnData.take(sizeCap)
+            val mem2    = mem1.store(outOffset, output).expand(outOffset, outSize)
+            state
+              .withStack(stack2)
+              .withMemory(mem2)
+              .spendGas(-result.gasRemaining)
+              .withReturnData(result.returnData)
+              .step()
+          } else {
+            val stack2     = stack1.push(UInt256.One)
+            val sizeCap    = outSize.min(result.returnData.size).toInt
+            val output     = result.returnData.take(sizeCap)
+            val mem2       = mem1.store(outOffset, output).expand(outOffset, outSize)
+            val internalTx = internalTransaction(state.env, to, startGas, inputData, endowment)
 
-          state
-            .spendGas(-result.gasRemaining)
-            .refundGas(result.gasRefund)
-            .withStack(stack2)
-            .withMemory(mem2)
-            .withWorld(result.world)
-            .withAddressesToDelete(result.addressesToDelete)
-            .withInternalTxs(internalTx +: result.internalTxs)
-            .withLogs(result.logs)
-            .step()
+            state
+              .spendGas(-result.gasRemaining)
+              .refundGas(result.gasRefund)
+              .withStack(stack2)
+              .withMemory(mem2)
+              .withWorld(result.world)
+              .withAddressesToDelete(result.addressesToDelete)
+              .withInternalTxs(internalTx +: result.internalTxs)
+              .withReturnData(result.returnData)
+              .withLogs(result.logs)
+              .step()
+          }
         }
       }
     }
@@ -1024,7 +1090,7 @@ abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toB
 
   def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
     val (Seq(gas, to, callValue, inOffset, inSize, outOffset, outSize), _) = getParams(state)
-    val endowment                                                          = if (this == DELEGATECALL) UInt256.Zero else callValue
+    val endowment                                                          = if (this == DELEGATECALL || this == STATICCALL) UInt256.Zero else callValue
     val memCost                                                            = calcMemCost(state, inOffset, inSize, outOffset, outSize)
 
     // FIXME: these are calculated twice (for gas and exec), especially account existence. Can we do better? [EC-243]
@@ -1050,8 +1116,11 @@ abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toB
   }
 
   def getParams[F[_]: Sync](state: ProgramState[F]): (Seq[UInt256], Stack) = {
-    val (Seq(gas, to), stack1)                              = state.stack.pop(2)
-    val (value, stack2)                                     = if (this == DELEGATECALL) (state.env.value, stack1) else stack1.pop
+    val (Seq(gas, to), stack1) = state.stack.pop(2)
+    val (value, stack2) =
+      if (this == DELEGATECALL) (state.env.value, stack1)
+      else if (this == STATICCALL) (UInt256.Zero, stack1)
+      else stack1.pop
     val (Seq(inOffset, inSize, outOffset, outSize), stack3) = stack2.pop(4)
     Seq(gas, to, value, inOffset, inSize, outOffset, outSize) -> stack3
   }
@@ -1098,6 +1167,8 @@ case object CALLCODE extends CallOp(0xf2, 7, 1)
 
 case object DELEGATECALL extends CallOp(0xf4, 6, 1)
 
+case object STATICCALL extends CallOp(0xfa, 6, 1)
+
 case object RETURN extends OpCode(0xf3.toByte, 2, 0, _.G_zero) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].pure {
     val (Seq(offset, size), stack1) = state.stack.pop(2)
@@ -1115,7 +1186,7 @@ case object REVERT extends OpCode(0xfd.toByte, 2, 0, _.G_zero) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].pure {
     val (Seq(offset, size), stack1) = state.stack.pop(2)
     val (ret, mem1)                 = state.memory.load(offset, size)
-    state.withStack(stack1).withReturnData(ret).withMemory(mem1).withError(RevertOp).halt
+    state.withStack(stack1).withReturnData(ret).withMemory(mem1).revert
   }
 
   def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
@@ -1130,27 +1201,30 @@ case object INVALID extends OpCode(0xfe.toByte, 0, 0, _.G_zero) with ConstGas {
 }
 
 case object SELFDESTRUCT extends OpCode(0xff.toByte, 1, 0, _.G_selfdestruct) {
-  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
-    val (refund, stack1)    = state.stack.pop
-    val refundAddr: Address = Address(refund)
-    val gasRefund: BigInt =
-      if (state.addressesToDelete contains state.ownAddress) 0 else state.config.feeSchedule.R_selfdestruct
+  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] =
+    if (state.context.readOnly) {
+      Sync[F].pure(state.withError(WriteProtectionError))
+    } else {
+      val (refund, stack1)    = state.stack.pop
+      val refundAddr: Address = Address(refund)
+      val gasRefund: BigInt =
+        if (state.addressesToDelete contains state.ownAddress) 0 else state.config.feeSchedule.R_selfdestruct
 
-    for {
-      ownBalance <- state.ownBalance
-      world <- if (state.ownAddress == refundAddr)
-        state.world.removeAllEther(state.ownAddress)
-      else
-        state.world.transfer(state.ownAddress, refundAddr, ownBalance)
-    } yield {
-      state
-        .withWorld(world)
-        .refundGas(gasRefund)
-        .withAddressToDelete(state.ownAddress)
-        .withStack(stack1)
-        .halt
+      for {
+        ownBalance <- state.ownBalance
+        world <- if (state.ownAddress == refundAddr)
+          state.world.removeAllEther(state.ownAddress)
+        else
+          state.world.transfer(state.ownAddress, refundAddr, ownBalance)
+      } yield {
+        state
+          .withWorld(world)
+          .refundGas(gasRefund)
+          .withAddressToDelete(state.ownAddress)
+          .withStack(stack1)
+          .halt
+      }
     }
-  }
 
   def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
     val (refundAddr, _) = state.stack.pop

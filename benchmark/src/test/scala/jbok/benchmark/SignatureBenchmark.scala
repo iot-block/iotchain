@@ -8,17 +8,17 @@ import fs2._
 import jbok.common.execution._
 
 class SignatureBenchmark extends JbokBenchmark {
-  val s       = "hash benchmark"
-  val b       = s.utf8bytes
-  val h       = b.kec256.toArray
-  val k       = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-  val chainId = BigInt(0)
-  val sig     = Signature[ECDSA].sign(h, k, chainId).unsafeRunSync()
+  val s                        = "hash benchmark"
+  val b                        = s.utf8bytes
+  val h                        = b.kec256.toArray
+  val k                        = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+  implicit val chainId: BigInt = 61
+  val sig                      = Signature[ECDSA].sign(h, k).unsafeRunSync()
 
   @Benchmark
   @OperationsPerInvocation(100)
   def signSecp256k1() =
-    (0 until 100).foreach(_ => Signature[ECDSA].sign(h, k, chainId).unsafeRunSync())
+    (0 until 100).foreach(_ => Signature[ECDSA].sign(h, k).unsafeRunSync())
 
   @Benchmark
   @OperationsPerInvocation(100)
@@ -26,7 +26,7 @@ class SignatureBenchmark extends JbokBenchmark {
     Stream
       .range(0, 100)
       .covary[IO]
-      .mapAsyncUnordered(4)(_ => Signature[ECDSA].sign(h, k, chainId))
+      .mapAsyncUnordered(4)(_ => Signature[ECDSA].sign(h, k))
       .compile
       .drain
       .unsafeRunSync()
@@ -37,6 +37,6 @@ class SignatureBenchmark extends JbokBenchmark {
 
   @Benchmark
   def recoverSecp256k1() =
-    Signature[ECDSA].recoverPublic(h, sig, chainId)
+    Signature[ECDSA].recoverPublic(h, sig)
 
 }

@@ -17,7 +17,7 @@ case class SimAccount(keyPair: KeyPair, balance: BigInt, nonce: BigInt) {
   def balanceChanged(delta: BigInt): SimAccount = this.copy(balance = this.balance + delta)
 }
 
-class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]]) {
+class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]])(implicit chainId: BigInt) {
   def newAccount: IO[SimAccount] = Signature[ECDSA].generateKeyPair().map(kp => SimAccount(kp, 0, 0))
 
   def genValue(sender: SimAccount, receiver: SimAccount): BigInt =
@@ -33,8 +33,7 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]]) {
       sender = Random.shuffle(acc.values.toList).head
       receiver <- newAccount
       value = genValue(sender, receiver)
-      _ <- accounts.update(
-        _ ++ Map(sender.address   -> sender.balanceChanged(-value).nonceIncreased))
+      _ <- accounts.update(_ ++ Map(sender.address -> sender.balanceChanged(-value).nonceIncreased))
 //                 receiver.address -> receiver.balanceChanged(value)))
       tx = Transaction(
         sender.nonce,
@@ -44,7 +43,7 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]]) {
         value,
         ByteVector.empty
       )
-      stx = SignedTransaction.sign(tx, sender.keyPair, 0)
+      stx = SignedTransaction.sign(tx, sender.keyPair, chainId)
     } yield stx
 
   def genTxs: Stream[IO, SignedTransaction] =
@@ -52,7 +51,7 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]]) {
 }
 
 object TxGenerator {
-  def apply(miner: SimAccount): IO[TxGenerator] =
+  def apply(miner: SimAccount)(implicit chainId: BigInt): IO[TxGenerator] =
     for {
       accounts <- Ref.of[IO, Map[Address, SimAccount]](Map(miner.address -> miner))
     } yield new TxGenerator(accounts)

@@ -12,7 +12,7 @@ import jbok.crypto._
 
 class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
+  override val config = EvmConfig.ByzantiumConfigBuilder(None)
 
   def executeOp(op: OpCode, stateIn: ProgramState[IO]): ProgramState[IO] =
     // gas is not tested in this spec
@@ -206,6 +206,32 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
         val expectedState = stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
         stateOut shouldBe expectedState
+      }
+    }
+  }
+
+  test(RETURNDATACOPY) { op =>
+    val stateGen = getProgramStateGen(
+      stackGen = getStackGen(maxWord = UInt256(256)),
+      memGen = getMemoryGen(256),
+      returnDataGen = getByteVectorGen(256, 256)
+    )
+
+    forAll(stateGen) { stateIn =>
+      val stateOut = executeOp(op, stateIn)
+
+      withStackVerification(op, stateIn, stateOut) {
+        val (Seq(memOffset, dataOffset, size), _) = stateIn.stack.pop(3)
+        if (dataOffset + size > stateIn.returnData.size) {
+          stateOut.error.contains(ReturnDataOutOfBounds) shouldBe true
+        } else {
+          val data             = OpCode.sliceBytes(stateIn.returnData, dataOffset, size)
+          val (storedInMem, _) = stateOut.memory.load(memOffset, size)
+          data shouldBe storedInMem
+
+          val expectedState = stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
+          stateOut shouldBe expectedState
+        }
       }
     }
   }
@@ -706,7 +732,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
         }
 
         val expectedState =
-          stateIn.withStack(stateOut.stack).withMemory(mem1).withReturnData(data).withError(RevertOp).halt
+          stateIn.withStack(stateOut.stack).withMemory(mem1).withReturnData(data).revert
         stateOut shouldBe expectedState
       }
     }
@@ -771,7 +797,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     }
   }
 
-  verifyAllOpCodesRegistered(except = CREATE, CALL, CALLCODE, DELEGATECALL)
+  verifyAllOpCodesRegistered(except = CREATE, CALL, CALLCODE, DELEGATECALL, STATICCALL)
 
   test("sliceBytes helper") {
     def zeroes(i: Int): ByteVector =

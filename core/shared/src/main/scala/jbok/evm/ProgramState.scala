@@ -32,6 +32,7 @@ case class ProgramState[F[_]: Sync](
     internalTxs: List[InternalTransaction] = Nil,
     logs: List[TxLogEntry] = Nil,
     halted: Boolean = false,
+    reverted: Boolean = false,
     error: Option[ProgramError] = None
 ) {
 
@@ -98,6 +99,9 @@ case class ProgramState[F[_]: Sync](
 
   def halt: ProgramState[F] =
     copy(halted = true)
+
+  def revert: ProgramState[F] =
+    copy(reverted = true)
 }
 
 object ProgramState {
@@ -109,4 +113,3 @@ object ProgramState {
       addressesToDelete = context.initialAddressesToDelete
     )
 }
-

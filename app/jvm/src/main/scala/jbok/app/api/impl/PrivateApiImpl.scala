@@ -22,7 +22,7 @@ object PrivateApiImpl {
       history: History[IO],
       blockChainConfig: BlockChainConfig,
       txPool: TxPool[IO],
-  ): IO[PrivateAPI] =
+  )(implicit chainId: BigInt): IO[PrivateAPI] =
     for {
       unlockedWallets <- Ref.of[IO, Map[Address, Wallet]](Map.empty)
     } yield
@@ -55,13 +55,13 @@ object PrivateApiImpl {
             } else {
               unlockedWallets.get.map(_(address))
             }
-            sig <- Signature[ECDSA].sign(getMessageToSign(message).toArray, wallet.keyPair, history.chainId)
+            sig <- Signature[ECDSA].sign(getMessageToSign(message).toArray, wallet.keyPair)
           } yield sig
 
         override def ecRecover(message: ByteVector, signature: CryptoSignature): IO[Address] =
           IO {
             Signature[ECDSA]
-              .recoverPublic(getMessageToSign(message).toArray, signature, history.chainId)
+              .recoverPublic(getMessageToSign(message).toArray, signature)
               .map(public => Address(public.bytes.kec256))
               .get
           }
@@ -108,7 +108,7 @@ object PrivateApiImpl {
             currentNonceOpt <- history.getAccount(request.from, bn).map(_.map(_.nonce.toBigInt))
             maybeNextTxNonce = latestNonceOpt.map(_ + 1).orElse(currentNonceOpt)
             tx               = request.toTransaction(maybeNextTxNonce.getOrElse(blockChainConfig.accountStartNonce))
-            stx              = wallet.signTx(tx, blockChainConfig.chainId)
+            stx              = wallet.signTx(tx)
             _ <- txPool.addOrUpdateTransaction(stx)
           } yield stx.hash
       }

@@ -39,7 +39,7 @@ case class AuthHandshaker[F[_]](
     initiatePacketOpt: Option[ByteVector] = None,
     responsePacketOpt: Option[ByteVector] = None,
     remotePubKeyOpt: Option[ByteVector] = None
-)(implicit F: Concurrent[F], T: Timer[F]) {
+)(implicit F: Concurrent[F], T: Timer[F], chainId: BigInt) {
   import AuthHandshaker._
 
   private[this] val log = org.log4s.getLogger(s"AuthHandshaker")
@@ -326,7 +326,7 @@ object AuthHandshaker {
 
   val secureRandom = new SecureRandom()
 
-  def apply[F[_]](nodeKey: KeyPair)(implicit F: Concurrent[F], T: Timer[F]): F[AuthHandshaker[F]] =
+  def apply[F[_]](nodeKey: KeyPair)(implicit F: Concurrent[F], T: Timer[F], chainId: BigInt): F[AuthHandshaker[F]] =
     for {
       nonce <- Sync[F].delay(randomByteArray(secureRandom, NonceSize))
       ephemeralKey = Signature[ECDSA].generateKeyPair(Some(secureRandom)).unsafeRunSync()

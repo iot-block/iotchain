@@ -56,5 +56,6 @@ case class ProgramContext[F[_]: Sync](
     startGas: BigInt,
     world: WorldState[F],
     config: EvmConfig,
-    initialAddressesToDelete: Set[Address] = Set.empty
+    initialAddressesToDelete: Set[Address] = Set.empty,
+    readOnly: Boolean = false
 )

@@ -9,7 +9,7 @@ import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
+import jbok.crypto.signature._
 import scalacache._
 import scodec.bits._
 import _root_.io.circe.generic.JsonCodec
@@ -33,14 +33,14 @@ class Clique[F[_]](
     val history: History[F],
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
     val keyPair: KeyPair
-)(implicit F: ConcurrentEffect[F], C: Cache[Snapshot]) {
+)(implicit F: ConcurrentEffect[F], C: Cache[Snapshot], chainId: BigInt) {
   private[this] val log = org.log4s.getLogger("Clique")
 
   import config._
 
   val signer: Address = Address(keyPair)
 
-  def sign(bv: ByteVector): F[CryptoSignature] = F.liftIO(Signature[ECDSA].sign(bv.toArray, keyPair, history.chainId))
+  def sign(bv: ByteVector): F[CryptoSignature] = F.liftIO(Signature[ECDSA].sign(bv.toArray, keyPair, chainId))
 
   def applyHeaders(
       number: BigInt,
@@ -108,10 +108,10 @@ object Clique {
       config: CliqueConfig,
       history: History[F],
       keyPair: KeyPair
-  )(implicit F: ConcurrentEffect[F]): F[Clique[F]] =
+  )(implicit F: ConcurrentEffect[F], chainId: BigInt): F[Clique[F]] =
     for {
       cache <- CacheBuilder.build[F, Snapshot](config.inMemorySnapshots)
-    } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache)
+    } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache, chainId)
 
   def fillExtraData(signers: List[Address]): ByteVector =
     ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
@@ -122,13 +122,12 @@ object Clique {
     bytes.kec256
   }
 
-  def ecrecover(header: BlockHeader): Option[Address] = {
+  def ecrecover(header: BlockHeader)(implicit chainId: BigInt): Option[Address] = {
     // Retrieve the signature from the header extra-data
-    val signature = header.extraData.takeRight(extraSeal)
-    val hash      = sigHash(header)
-    val sig       = CryptoSignature(signature.toArray)
-    val chainId: Option[BigInt] =
-      if (sig.v < 35) None else Some(if (sig.v % 2 == 0) (sig.v - 36) / 2 else (sig.v - 35) / 2)
+    val signature               = header.extraData.takeRight(extraSeal)
+    val hash                    = sigHash(header)
+    val sig                     = CryptoSignature(signature.toArray)
+    val chainId: Option[BigInt] = ECDSAChainIdConvert.getChainId(sig.v)
     chainId.flatMap(
       Signature[ECDSA]
         .recoverPublic(hash.toArray, sig, _)

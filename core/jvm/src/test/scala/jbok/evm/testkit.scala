@@ -57,8 +57,9 @@ object testkit {
   def getStorageGen(maxSize: Int = 0, uint256Gen: Gen[UInt256] = getUInt256Gen()): Gen[Storage[IO]] =
     getListGen(0, maxSize, uint256Gen).map(l => Storage.fromList[IO](l).unsafeRunSync())
 
-  val ownerAddr  = Address(0x123456)
-  val callerAddr = Address(0xabcdef)
+  val ownerAddr                = Address(0x123456)
+  val callerAddr               = Address(0xabcdef)
+  implicit val chainId: BigInt = 61
 
   val exampleBlockHeader = BlockHeader(
     parentHash = hex"d882d5c210bab4cb7ef0b9f3dc2130cb680959afcd9a8f9bf83ee6f13e2f9da3",
@@ -85,6 +86,7 @@ object testkit {
       gasGen: Gen[BigInt] = getBigIntGen(min = UInt256.MaxValue.toBigInt, max = UInt256.MaxValue.toBigInt),
       codeGen: Gen[ByteVector] = getByteVectorGen(0, 0),
       inputDataGen: Gen[ByteVector] = getByteVectorGen(0, 0),
+      returnDataGen: Gen[ByteVector] = getByteVectorGen(0, 0),
       valueGen: Gen[UInt256] = getUInt256Gen(),
       blockNumberGen: Gen[UInt256] = getUInt256Gen(0, 300),
       evmConfig: EvmConfig = EvmConfig.SpuriousDragonConfigBuilder(None)
@@ -97,6 +99,7 @@ object testkit {
       program        <- codeGen.map(Program.apply)
       inputData      <- inputDataGen
       value          <- valueGen
+      returnData     <- returnDataGen
       blockNumber    <- blockNumberGen
       blockPlacement <- getUInt256Gen(0, blockNumber)
 
@@ -114,5 +117,5 @@ object testkit {
         .putAccount(ownerAddr, Account.empty().increaseBalance(value))
 
       context = ProgramContext(env, ownerAddr, gas, world, evmConfig)
-    } yield ProgramState(context).withStack(stack).withMemory(memory)
+    } yield ProgramState(context).withStack(stack).withMemory(memory).withReturnData(returnData)
 }

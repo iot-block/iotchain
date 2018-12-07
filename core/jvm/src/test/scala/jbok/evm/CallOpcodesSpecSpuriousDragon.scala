@@ -6,14 +6,12 @@ import jbok.core.ledger.History
 import jbok.core.models.UInt256
 import jbok.persistent.KeyValueDB
 
-class CallOpcodesSpecPostEip161 extends JbokSpec {
+class CallOpcodesSpecSpuriousDragon extends JbokSpec {
 
-  val config  = EvmConfig.ConstantinopleConfigBuilder(None)
-  val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history = History[IO](db).unsafeRunSync()
-//  val startState = WorldStateProxy.inMemory[IO](db, noEmptyAccounts = true).unsafeRunSync()
-  val startState =
-    history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
+  val config     = EvmConfig.SpuriousDragonConfigBuilder(None)
+  val db         = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history    = History[IO](db).unsafeRunSync()
+  val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
   import config.feeSchedule._
 
   val fxt = new CallOpFixture(config, startState)

@@ -5,7 +5,7 @@ import jbok.evm.testkit._
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FunSuite, Matchers}
 
-class OpCodeGasSpecPostEip161 extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
+class OpCodeGasSpecSpuriousDragon extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
   override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
 

@@ -154,7 +154,6 @@ object KeyStorePlatform {
     val dir = File(keyStoreDir)
     for {
       _ <- if (!dir.isDirectory) {
-        Sync[F].delay(println(dir.pathAsString))
         Sync[F].delay(dir.createIfNotExists(asDirectory = true, createParents = true)).attempt
       } else {
         Sync[F].unit
