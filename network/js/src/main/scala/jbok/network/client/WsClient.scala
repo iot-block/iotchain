@@ -19,7 +19,7 @@ object WsClient {
       uri: URI,
       maxQueued: Int = 64,
       maxBytes: Int = 256 * 1024
-  )(implicit F: ConcurrentEffect[F]): F[Client[F, A]] =
+  )(implicit F: ConcurrentEffect[F], CS: ContextShift[F]): F[Client[F, A]] =
     for {
       in           <- Queue.bounded[F, A](maxQueued)
       out          <- Queue.bounded[F, A](maxQueued)

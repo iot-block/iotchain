@@ -6,7 +6,7 @@ import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.codec.json.implicits._
 import jbok.crypto._
-import jbok.crypto.signature.{ecdsa => _, _}
+import jbok.crypto.signature._
 import scodec.bits.ByteVector
 import shapeless._
 import cats.implicits._

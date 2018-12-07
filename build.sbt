@@ -30,10 +30,17 @@ lazy val V = new {
 lazy val jbok = project
   .in(file("."))
   .aggregate(
+    codec.js,
+    codec.jvm,
+    persistent.js,
     persistent.jvm,
+    crypto.js,
     crypto.jvm,
+    network.js,
+    network.jvm,
     core.js,
-    core.jvm
+    core.jvm,
+    app.jvm // app.jvm is depends on app.js
   )
   .settings(noPublishSettings)
 
@@ -86,7 +93,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-core"
   )
-  .dependsOn(common % CompileAndTest, codec, crypto % CompileAndTest, network, persistent)
+  .dependsOn(common % CompileAndTest, codec, crypto % CompileAndTest, network, persistent % CompileAndTest)
 
 lazy val crypto = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)

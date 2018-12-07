@@ -125,24 +125,6 @@ class PublicApiImpl(
 
   override def getCoinbase: IO[Address] = miningConfig.coinbase.pure[IO]
 
-  override def syncing: IO[Option[SyncingStatus]] =
-    for {
-      currentBlock  <- history.getBestBlockNumber
-      highestBlock  <- history.getEstimatedHighestBlock
-      startingBlock <- history.getSyncStartingBlock
-    } yield {
-      if (currentBlock < highestBlock) {
-        Some(
-          SyncingStatus(
-            startingBlock,
-            currentBlock,
-            highestBlock
-          ))
-      } else {
-        None
-      }
-    }
-
   override def sendRawTransaction(data: ByteVector): IO[ByteVector] = {
     val stx = RlpCodec.decode[SignedTransaction](data.bits).require.value
     val txHash = for {

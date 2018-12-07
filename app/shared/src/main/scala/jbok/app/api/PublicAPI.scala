@@ -59,8 +59,6 @@ trait PublicAPI {
 
   def getCoinbase: IO[Address]
 
-  def syncing: IO[Option[SyncingStatus]]
-
   def sendRawTransaction(data: ByteVector): IO[ByteVector]
 
   def call(callTx: CallTx, blockParam: BlockParam): IO[ByteVector]

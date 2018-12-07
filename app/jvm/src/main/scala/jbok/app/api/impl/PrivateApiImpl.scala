@@ -55,13 +55,13 @@ object PrivateApiImpl {
             } else {
               unlockedWallets.get.map(_(address))
             }
-            sig <- Signature[ECDSA].sign(getMessageToSign(message).toArray, wallet.keyPair)
+            sig <- Signature[ECDSA].sign(getMessageToSign(message).toArray, wallet.keyPair, chainId)
           } yield sig
 
         override def ecRecover(message: ByteVector, signature: CryptoSignature): IO[Address] =
           IO {
             Signature[ECDSA]
-              .recoverPublic(getMessageToSign(message).toArray, signature)
+              .recoverPublic(getMessageToSign(message).toArray, signature, chainId)
               .map(public => Address(public.bytes.kec256))
               .get
           }
