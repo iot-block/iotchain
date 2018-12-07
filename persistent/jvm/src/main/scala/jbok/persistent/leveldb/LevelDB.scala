@@ -111,13 +111,14 @@ object LevelDB {
 
   def apply[F[_]](
       path: String,
-      useJni: Boolean = true,
+      useJni: Boolean = false,
       options: Options = defaultOptions,
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
   )(implicit F: Sync[F]): F[KeyValueDB[F]] =
-    if (useJni) jni[F](path, options, readOptions, writeOptions)
-    else iq80[F](path, options, readOptions, writeOptions)
+    jni[F](path, options, readOptions, writeOptions).attemptT.getOrElseF(
+      iq80[F](path, options, readOptions, writeOptions)
+    )
 
   private[jbok] def iq80[F[_]](
       path: String,
@@ -139,7 +140,7 @@ object LevelDB {
       db <- F.delay(JNIFactory.open(new File(path), options))
     } yield new LevelDB[F](path, db, options, readOptions, writeOptions)
 
-  def destroy[F[_]](path: String, useJni: Boolean = true, options: Options = defaultOptions)(
+  def destroy[F[_]](path: String, useJni: Boolean = false, options: Options = defaultOptions)(
       implicit F: Sync[F]): F[Unit] =
     if (useJni)
       F.delay(JNIFactory.destroy(new File(path), options))
