@@ -68,7 +68,7 @@ case class FullSync[F[_]](
             } else {
               T.clock.monotonic(MILLISECONDS).map { end =>
                 log.debug(s"received ${headers.length} BlockHeader(s) in ${end - start}ms")
-              } *> handleBlockHeaders(peer, requestNumber, headers)
+              } >> handleBlockHeaders(peer, requestNumber, headers)
             }
           case _ =>
             log.debug(s"got headers timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")
@@ -102,7 +102,7 @@ case class FullSync[F[_]](
           } else {
             T.clock.monotonic(MILLISECONDS).map { end =>
               log.info(s"received ${bodies.length} BlockBody(s) in ${end - start}ms")
-            } *> handleBlockBodies(peer, betterBranch, bodies)
+            } >> handleBlockBodies(peer, betterBranch, bodies)
           }
         case _ =>
           log.debug(s"got bodies timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")

@@ -57,10 +57,10 @@ object PriorityQueue {
       naive[F, A] map { queue =>
         new PriorityQueue[F, A] {
           def enqueue1(a: A, priority: Int): F[Unit] =
-            queue.enqueue1(a, priority) *> n.release
+            queue.enqueue1(a, priority) >> n.release
 
           def dequeue1: F[A] =
-            n.acquire *> queue.dequeue1
+            n.acquire >> queue.dequeue1
         }
       }
     }

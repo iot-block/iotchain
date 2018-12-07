@@ -61,7 +61,7 @@ class EthashConsensus[F[_]](
   override def verify(block: Block): F[Unit] =
     history.getBlockHeaderByHash(block.header.parentHash).flatMap {
       case Some(parent) =>
-        headerValidator.validate(parent, block.header) *> ommersValidator.validate(
+        headerValidator.validate(parent, block.header) >> ommersValidator.validate(
           block.header.parentHash,
           block.header.number,
           block.body.ommerList,

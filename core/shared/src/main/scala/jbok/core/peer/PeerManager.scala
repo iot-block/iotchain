@@ -60,7 +60,7 @@ abstract class PeerManager[F[_]](
             _ <- peer.conn.reads
               .map(msg => Request(peer, msg))
               .to(messageQueue.enqueue)
-              .onFinalize(incoming.update(_ - peer.pk) *> F.delay(log.debug(s"${peer.id} disconnected")))
+              .onFinalize(incoming.update(_ - peer.pk) >> F.delay(log.debug(s"${peer.id} disconnected")))
           } yield ()
 
           stream.handleErrorWith {
@@ -93,7 +93,7 @@ abstract class PeerManager[F[_]](
         _ <- peer.conn.reads
           .map(msg => Request(peer, msg))
           .to(messageQueue.enqueue)
-          .onFinalize(outgoing.update(_ - peer.pk) *> F.delay(log.debug(s"${peer.id} disconnected")))
+          .onFinalize(outgoing.update(_ - peer.pk) >> F.delay(log.debug(s"${peer.id} disconnected")))
       } yield ()
 
       stream.handleErrorWith {

@@ -122,23 +122,23 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
   override def putBlockHeader(blockHeader: BlockHeader, updateTD: Boolean): F[Unit] =
     if (updateTD) {
       if (blockHeader.number == 0) {
-        db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) *>
-          db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash) *>
+        db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) >>
+          db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash) >>
           db.put(blockHeader.hash, blockHeader.difficulty, namespaces.TotalDifficulty)
       } else {
         getTotalDifficultyByHash(blockHeader.parentHash).flatMap {
           case Some(td) =>
-            db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) *>
-              db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash) *>
+            db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) >>
+              db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash) >>
               db.put(blockHeader.hash, td + blockHeader.difficulty, namespaces.TotalDifficulty)
 
           case None =>
-            db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) *>
+            db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) >>
               db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash)
         }
       }
     } else {
-      db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) *>
+      db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) >>
         db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash)
     }
 
@@ -147,7 +147,7 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
     db.getOpt[ByteVector, BlockBody](hash, namespaces.BlockBody)
 
   override def putBlockBody(blockHash: ByteVector, blockBody: BlockBody): F[Unit] =
-    db.put(blockHash, blockBody, namespaces.BlockBody) *>
+    db.put(blockHash, blockBody, namespaces.BlockBody) >>
       blockBody.transactionList.zipWithIndex
         .map {
           case (tx, index) =>
@@ -185,9 +185,9 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
                                    receipts: List[Receipt],
                                    totalDifficulty: BigInt,
                                    asBestBlock: Boolean): F[Unit] =
-    putBlockHeader(block.header, updateTD = true) *>
-      putBlockBody(block.header.hash, block.body) *>
-      putReceipts(block.header.hash, receipts) *>
+    putBlockHeader(block.header, updateTD = true) >>
+      putBlockBody(block.header.hash, block.body) >>
+      putReceipts(block.header.hash, receipts) >>
       (if (asBestBlock) {
          putBestBlockNumber(block.header.number)
        } else {
@@ -198,14 +198,14 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
     val maybeBlockHeader = getBlockHeaderByHash(blockHash)
     val maybeTxList      = getBlockBodyByHash(blockHash).map(_.map(_.transactionList))
 
-    db.del(blockHash, namespaces.BlockHeader) *>
-      db.del(blockHash, namespaces.BlockBody) *>
-      db.del(blockHash, namespaces.TotalDifficulty) *>
-      db.del(blockHash, namespaces.Receipts) *>
+    db.del(blockHash, namespaces.BlockHeader) >>
+      db.del(blockHash, namespaces.BlockBody) >>
+      db.del(blockHash, namespaces.TotalDifficulty) >>
+      db.del(blockHash, namespaces.Receipts) >>
       maybeTxList.map {
         case Some(txs) => txs.traverse(tx => db.del(tx.hash, namespaces.TxLocation)).void
         case None      => F.unit
-      } *>
+      } >>
       maybeBlockHeader.map {
         case Some(bh) =>
           val removeMapping = getHashByBlockNumber(bh.number).flatMap {
@@ -217,7 +217,7 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
             if (parentAsBestBlock) putBestBlockNumber(bh.number - 1)
             else F.unit
 
-          removeMapping *> updateBest
+          removeMapping >> updateBest
 
         case None => F.unit
       }

@@ -33,26 +33,25 @@ final case class Connection[F[_], A: Codec: RequestId](
   def reads: Stream[F, A] =
     in.dequeue.interruptWhen(haltWhenTrue)
 
-  def request(a: A): F[A] = {
-    val resource = Resource.make[F, (String, Deferred[F, A])] {
-      for {
-        id      <- F.delay(RequestId[A].id(a))
-        promise <- Deferred[F, A]
-        _       <- promises.update(_ + (id -> promise))
-      } yield (id, promise)
-    } {
-      case (id, _) =>
-        promises.update(_ - id)
-    }
-
-    resource.use {
-      case (_, promise) =>
-        write(a) *> promise.get
-    }
-  }
+  def request(a: A): F[A] =
+    Resource
+      .make[F, (String, Deferred[F, A])] {
+        for {
+          id      <- F.delay(RequestId[A].id(a))
+          promise <- Deferred[F, A]
+          _       <- promises.update(_ + (id -> promise))
+        } yield (id, promise)
+      } {
+        case (id, _) =>
+          promises.update(_ - id)
+      }
+      .use {
+        case (_, promise) =>
+          write(a) >> promise.get
+      }
 
   def start: F[Fiber[F, Unit]] =
-    haltWhenTrue.set(false) *> stream.interruptWhen(haltWhenTrue).compile.drain.start
+    haltWhenTrue.set(false) >> stream.interruptWhen(haltWhenTrue).compile.drain.start
 
   def close: F[Unit] =
     haltWhenTrue.set(true)

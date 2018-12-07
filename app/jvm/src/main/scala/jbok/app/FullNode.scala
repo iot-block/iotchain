@@ -57,7 +57,7 @@ case class FullNode[F[_]](
       ).parJoinUnbounded
         .interruptWhen(haltWhenTrue)
         .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)("FullNode error"))))
-        .onFinalize(haltWhenTrue.set(true) *> F.delay(log.debug("FullNode finalized")))
+        .onFinalize(haltWhenTrue.set(true) >> F.delay(log.debug("FullNode finalized")))
 
   def start: F[Fiber[F, Unit]] =
     stream.compile.drain.start

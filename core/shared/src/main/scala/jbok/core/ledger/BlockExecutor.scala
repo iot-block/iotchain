@@ -144,7 +144,7 @@ case class BlockExecutor[F[_]](
           newBranch.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(oldBranch, newBranch)
 
         case Consensus.Stash(block) =>
-          blockPool.addBlock(block) *> ommerPool.addOmmers(List(block.header)) as Nil
+          blockPool.addBlock(block) >> ommerPool.addOmmers(List(block.header)) as Nil
 
         case Consensus.Discard(e) =>
           log.warn(s"discard ${block.tag} because ${e}")
@@ -385,7 +385,7 @@ case class BlockExecutor[F[_]](
       _ <- ommerPool.addOmmers(blocksRemoved.headOption.toList.map(_.header))
       _ <- blocksRemoved.map(_.body.transactionList).traverse(txs => txPool.addTransactions(SignedTransactions(txs)))
       _ <- blocksAdded.map { block =>
-        ommerPool.removeOmmers(block.header :: block.body.ommerList) *>
+        ommerPool.removeOmmers(block.header :: block.body.ommerList) >>
           txPool.removeTransactions(block.body.transactionList)
       }.sequence
     } yield ()

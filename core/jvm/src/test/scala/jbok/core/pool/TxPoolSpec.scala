@@ -74,7 +74,7 @@ class TxPoolSpec extends JbokSpec {
         _  <- txPool.addTransactions(SignedTransactions(stx :: Nil))
         p1 <- txPool.getPendingTransactions
         _ = p1.size shouldBe 1
-        p2 <- T.sleep(2.seconds) *> txPool.getPendingTransactions
+        p2 <- T.sleep(2.seconds) >> txPool.getPendingTransactions
         _ = p2.size shouldBe 0
       } yield ()
       p.unsafeRunSync()

@@ -33,7 +33,7 @@ trait Server[F[_]] {
   def start(implicit F: Concurrent[F]): F[Unit] =
     haltWhenTrue.get.flatMap {
       case false => F.unit
-      case true  => haltWhenTrue.set(false) *> stream.interruptWhen(haltWhenTrue).compile.drain.start.void
+      case true  => haltWhenTrue.set(false) >> stream.interruptWhen(haltWhenTrue).compile.drain.start.void
     }
 
   def stop(implicit F: Concurrent[F]): F[Unit] =

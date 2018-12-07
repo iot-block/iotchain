@@ -148,7 +148,7 @@ object EventPool {
           _ <- if (event.isDivided) rounds.update(_ + (-1 -> ri.-=(event.hash))) else ().pure[F]
         } yield ()
 
-        invalidate *> update
+        invalidate >> update
       }
 
       override def lastRound: F[Int] =

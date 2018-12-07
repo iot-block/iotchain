@@ -60,7 +60,7 @@ final class BlockPool[F[_]](
               parentTd match {
                 case Some(_) =>
                   log.debug(s"${block.tag} will be on the main chain")
-                  addBlock(block, parentTd) *> updateTotalDifficulties(block.header.hash)
+                  addBlock(block, parentTd) >> updateTotalDifficulties(block.header.hash)
 
                 case None =>
                   val p: F[Option[Leaf]] = findClosestChainedAncestor(block).flatMap {
@@ -73,7 +73,7 @@ final class BlockPool[F[_]](
                       none[Leaf].pure[F]
                   }
 
-                  addBlock(block, parentTd) *> p
+                  addBlock(block, parentTd) >> p
               }
             }
           } yield l
@@ -140,7 +140,7 @@ final class BlockPool[F[_]](
       }
       _ <- if (staleHashes.nonEmpty) {
         log.debug(s"clean up ${staleHashes.length} pooled blocks")
-        blocks.update(_ -- staleHashes) *> parentToChildren.update(_ -- staleHashes)
+        blocks.update(_ -- staleHashes) >> parentToChildren.update(_ -- staleHashes)
       } else {
         F.unit
       }

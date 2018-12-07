@@ -120,7 +120,7 @@ final class MerklePatriciaTrie[F[_]](
     } yield xs.toMap
 
   override protected[jbok] def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit] =
-    del.traverse(delRaw) *> put.traverse { case (k, v) => putRaw(k, v) }.void
+    del.traverse(delRaw) >> put.traverse { case (k, v) => putRaw(k, v) }.void
 
   // note: since merkle trie only use key as tree path, we do not need
   // prefix key by namespace. we only need prefix node bytes hash when

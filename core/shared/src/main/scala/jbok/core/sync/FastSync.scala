@@ -136,7 +136,7 @@ final class FastSync[F[_]](
         peers.map(peer => peer.status.get.map(status => peer -> status)).sequence
       } else {
         log.warn(s"fast sync did not started, peers not enough ${peers.length}/${minPeersToChooseTargetBlock}")
-        T.sleep(retryInterval) *> getPeersStatus
+        T.sleep(retryInterval) >> getPeersStatus
       }
 
     peerManager.connected >>= go

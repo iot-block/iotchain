@@ -81,7 +81,7 @@ object Dropwizard {
       F.delay(r.close())
     }
 
-    Stream.resource(resource).evalMap(r => F.delay(r.start(interval.toSeconds, TimeUnit.SECONDS)) *> F.never)
+    Stream.resource(resource).evalMap(r => F.delay(r.start(interval.toSeconds, TimeUnit.SECONDS)) >> F.never)
   }
 
   def jmxReporter[F[_]](registry: MetricRegistry)(implicit F: Async[F]): Stream[F, Unit] = {
@@ -96,6 +96,6 @@ object Dropwizard {
     } { r =>
       F.delay(r.close())
     }
-    Stream.resource(resource).evalMap(r => F.delay(r.start()) *> F.never)
+    Stream.resource(resource).evalMap(r => F.delay(r.start()) >> F.never)
   }
 }

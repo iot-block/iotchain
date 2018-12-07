@@ -69,7 +69,7 @@ case class CliqueConsensus[F[_]](
               val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
               log.trace(s"signed recently, sleep (${delay}) seconds")
 
-              T.sleep(delay.millis) *>
+              T.sleep(delay.millis) >>
                 F.raiseError(new Exception(
                   s"${clique.signer} signed recently, must wait for others: ${executed.block.header.number}, ${seen}, ${snap.signers.size / 2 + 1}, ${snap.recents}"))
 
@@ -126,7 +126,7 @@ case class CliqueConsensus[F[_]](
       _ <- verify(block)
       _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap {
         case Some(parent) =>
-          BlockValidator.preExecValidate[F](parent, block) *>
+          BlockValidator.preExecValidate[F](parent, block) >>
             clique.applyHeaders(parent.number, parent.hash, List(block.header)).void
         case None =>
           F.raiseError[Unit](HeaderParentNotFoundInvalid)
