@@ -9,8 +9,8 @@ import jbok.network.server.Server
 import jbok.network.testkit._
 
 class WebsocketSpec extends JbokSpec {
-  val server                   = random[Server[IO]](genWsServer(9000))
-  val client: Client[IO, Data] = random[Client[IO, Data]](genWsClient(9000))
+  val server                   = random[Server[IO]](genWsServer(9001))
+  val client: Client[IO, Data] = random[Client[IO, Data]](genWsClient(9001))
 
   server.start.unsafeRunSync()
   Thread.sleep(1000)
@@ -32,6 +32,8 @@ class WebsocketSpec extends JbokSpec {
     }
   }
 
-  override protected def afterAll(): Unit =
+  override protected def afterAll(): Unit = {
+    client.close.unsafeRunSync()
     server.stop.unsafeRunSync()
+  }
 }

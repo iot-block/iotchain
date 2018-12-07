@@ -33,6 +33,8 @@ class TcpSpec extends JbokSpec {
 
   }
 
-  override protected def afterAll(): Unit =
+  override protected def afterAll(): Unit = {
+    client.close.unsafeRunSync()
     server.stop.unsafeRunSync()
+  }
 }
