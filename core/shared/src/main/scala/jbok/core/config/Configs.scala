@@ -1,47 +1,51 @@
 package jbok.core.config
 
-import java.net.{InetSocketAddress, URI}
+import java.net.InetSocketAddress
 
 import jbok.core.models.{Address, UInt256}
+import jbok.persistent.KeyValueDB
 import scodec.bits._
 
 import scala.concurrent.duration._
 
 object Configs {
-  val home = System.getProperty("user.home")
+  val home: String = System.getProperty("user.home")
 
   val defaultRootDir: String = s"${home}/.jbok"
 
   case class FullNodeConfig(
       datadir: String,
+      history: HistoryConfig,
       keystore: KeyStoreConfig,
-      peer: PeerManagerConfig,
+      peer: PeerConfig,
       sync: SyncConfig,
       txPool: TxPoolConfig,
       mining: MiningConfig,
-      rpc: RpcConfig,
-      blockchain: BlockChainConfig,
-  )
+      rpc: RpcConfig
+  ) {
+    val keystoreDir = s"${datadir}/keystore"
+  }
 
   object FullNodeConfig {
     def apply(suffix: String, port: Int): FullNodeConfig = {
-      val datadir                      = s"${defaultRootDir}/${suffix}"
-      val keystore                     = KeyStoreConfig(s"${datadir}/keystore")
-      val peer                         = PeerManagerConfig(port, timeout = 0.seconds)
-      val sync                         = SyncConfig()
-      val txPool                       = TxPoolConfig()
-      val mining                       = MiningConfig()
-      val rpc                          = RpcConfig(true, "localhost", port + 100)
-      val blockchain: BlockChainConfig = BlockChainConfig()
+      val datadir  = s"${defaultRootDir}/${suffix}"
+      val history  = HistoryConfig()
+      val keystore = KeyStoreConfig(s"${datadir}/keystore")
+      val peer     = PeerConfig(port)
+      val sync     = SyncConfig()
+      val txPool   = TxPoolConfig()
+      val mining   = MiningConfig(enabled = false)
+      val rpc      = RpcConfig(enabled = false, "localhost", port + 200, "public,admin")
+
       FullNodeConfig(
         datadir,
+        history,
         keystore,
         peer,
         sync,
         txPool,
         mining,
-        rpc,
-        blockchain
+        rpc
       )
     }
 
@@ -51,36 +55,12 @@ object Configs {
       })
   }
 
-  case class RpcConfig(
-      enabled: Boolean = false,
-      host: String,
-      port: Int
-  ) {
-    val addr = new InetSocketAddress(host, port)
-  }
-
   case class KeyStoreConfig(
       keystoreDir: String = s"${defaultRootDir}/keystore"
   )
 
-  case class PeerManagerConfig(
-      port: Int = 10000,
-      host: String = "localhost",
-      nodekeyPath: String = s"${defaultRootDir}/nodekey",
-      discovery: DiscoveryConfig = DiscoveryConfig(),
-      bootUris: List[String] = Nil,
-      updatePeersInterval: FiniteDuration = 10.seconds,
-      maxOutgoingPeers: Int = 10,
-      maxIncomingPeers: Int = 10,
-      maxPendingPeers: Int = 10,
-      connectionTimeout: FiniteDuration = 10.seconds,
-      handshakeTimeout: FiniteDuration = 10.seconds,
-      timeout: FiniteDuration = 10.seconds
-  ) {
-    val bindAddr: InetSocketAddress = new InetSocketAddress(host, port)
-  }
-
-  case class BlockChainConfig(
+  case class HistoryConfig(
+      chainDataDir: String = KeyValueDB.INMEM,
       frontierBlockNumber: BigInt = 0,
       homesteadBlockNumber: BigInt = 1150000,
       tangerineWhistleBlockNumber: BigInt = 2463000,
@@ -95,6 +75,34 @@ object Configs {
       monetaryPolicyConfig: MonetaryPolicyConfig = MonetaryPolicyConfig(),
       gasTieBreaker: Boolean = false
   )
+
+  case class PeerConfig(
+      port: Int = 30314,
+      host: String = "localhost",
+      enableDiscovery: Boolean = false,
+      discoveryPort: Int = 30315,
+      peerDataDir: String = s"${defaultRootDir}/peerData",
+      nodekeyPath: String = s"${defaultRootDir}/nodekey",
+      bootUris: List[String] = Nil,
+      updatePeersInterval: FiniteDuration = 10.seconds,
+      maxOutgoingPeers: Int = 10,
+      maxIncomingPeers: Int = 10,
+      maxPendingPeers: Int = 10,
+      handshakeTimeout: FiniteDuration = 10.seconds,
+      timeout: FiniteDuration = 10.seconds
+  ) {
+    val bindAddr: InetSocketAddress      = new InetSocketAddress(host, port)
+    val discoveryAddr: InetSocketAddress = new InetSocketAddress(host, discoveryPort)
+  }
+
+  case class RpcConfig(
+      enabled: Boolean = false,
+      host: String = "localhost",
+      port: Int = 30316,
+      apis: String = "admin,public"
+  ) {
+    val addr = new InetSocketAddress(host, port)
+  }
 
   case class MonetaryPolicyConfig(
       eraDuration: Int = 5000000,
@@ -137,21 +145,5 @@ object Configs {
       checkForNewBlockInterval: FiniteDuration = 5.seconds,
       banDuration: FiniteDuration = 200.seconds,
       requestTimeout: FiniteDuration = 10.seconds,
-  )
-
-  case class DiscoveryConfig(
-      enabled: Boolean = false,
-      interface: String = "localhost",
-      port: Int = 8889,
-      bootstrapNodes: Set[URI] = Set.empty,
-      nodesLimit: Int = 10,
-      scanMaxNodes: Int = 10,
-      scanInterval: FiniteDuration = 10.seconds,
-      messageExpiration: FiniteDuration = 10.seconds,
-      concurrencyFactor: Int = 3, // Kademlia concurrency factor
-      timeout: FiniteDuration = 5.seconds,
-      ttl: FiniteDuration = 20.seconds,
-      bondExpiration: FiniteDuration = 24.hours,
-      maxFindNodeFailures: Int = 5
   )
 }

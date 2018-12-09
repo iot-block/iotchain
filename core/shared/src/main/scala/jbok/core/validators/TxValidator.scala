@@ -1,7 +1,7 @@
 package jbok.core.validators
 
 import cats.effect.Sync
-import jbok.core.config.Configs.BlockChainConfig
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.models._
 import jbok.core.validators.TxInvalid._
 import jbok.evm.EvmConfig
@@ -28,7 +28,7 @@ object TxInvalid {
       )
 }
 
-class TxValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F: Sync[F]) {
+class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[F]) {
   val secp256k1n: BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337")
 
   def validate(

@@ -1,6 +1,6 @@
 package jbok.evm
 
-import jbok.core.config.Configs.BlockChainConfig
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.models.UInt256
 import jbok.evm.PrecompiledContracts.PrecompiledContract
 import scodec.bits.ByteVector
@@ -18,7 +18,7 @@ object EvmConfig {
   /**
     * returns the evm config that should be used for given block
     */
-  def forBlock(blockNumber: BigInt, blockchainConfig: BlockChainConfig): EvmConfig = {
+  def forBlock(blockNumber: BigInt, blockchainConfig: HistoryConfig): EvmConfig = {
     val transitionBlockToConfigMapping: Map[BigInt, EvmConfigBuilder] = Map(
       blockchainConfig.frontierBlockNumber         -> FrontierConfigBuilder,
       blockchainConfig.homesteadBlockNumber        -> HomesteadConfigBuilder,

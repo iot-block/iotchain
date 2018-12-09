@@ -67,6 +67,7 @@ class Conf(arguments: List[String]) extends ScallopConf(arguments) {
   val rpc     = opt[Boolean](default = false.some, descr = "enable rpc server", noshort = true)
   val rpchost = opt[String](default = "localhost".some, descr = "rpc server binding host", noshort = true)
   val rpcport = opt[Int](default = 10086.some, descr = "rpc server binding port", noshort = true)
+  val rpcapis = opt[String](default = "".some, descr = "comma seperated apis", noshort = true)
 
   // peer manager config
   val port        = opt[Int](default = 30314.some, descr = "peer server binding port", noshort = true)
@@ -86,21 +87,22 @@ class Conf(arguments: List[String]) extends ScallopConf(arguments) {
   val rpcConfig = RpcConfig(
     rpc(),
     rpchost(),
-    rpcport()
+    rpcport(),
+    rpcapis()
   )
 
   val keystoreConfig = KeyStoreConfig(
     s"${datadir()}/keystore"
   )
 
-  val peerManagerConfig = PeerManagerConfig(
+  val peerManagerConfig = PeerConfig(
     port = port(),
     host = "localhost",
     bootUris = bootnodes().split(",").toList
   )
 
   // chain specific config
-  val blockChainConfig = BlockChainConfig()
+  val blockChainConfig = HistoryConfig()
   val syncConfig       = SyncConfig()
   val miningConfig = MiningConfig(
     enabled = mine()
@@ -115,7 +117,7 @@ class Conf(arguments: List[String]) extends ScallopConf(arguments) {
     txPool = TxPoolConfig(),
     mining = miningConfig,
     rpc = rpcConfig,
-    blockchain = blockChainConfig
+    history = blockChainConfig
   )
 }
 

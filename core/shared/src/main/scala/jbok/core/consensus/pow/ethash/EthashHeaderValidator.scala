@@ -2,7 +2,7 @@ package jbok.core.consensus.pow.ethash
 
 import cats.effect.Effect
 import cats.implicits._
-import jbok.core.config.Configs.{BlockChainConfig}
+import jbok.core.config.Configs.{HistoryConfig}
 import jbok.core.models.BlockHeader
 import jbok.core.consensus.pow.ethash.EthashHeaderInvalid._
 import scodec.bits.ByteVector
@@ -14,7 +14,7 @@ object EthashHeaderInvalid {
   case object HeaderPoWInvalid          extends Exception("HeaderPoWInvalid")
 }
 
-class EthashHeaderValidator[F[_]](blockChainConfig: BlockChainConfig)(implicit F: Effect[F]) {
+class EthashHeaderValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Effect[F]) {
   private val MaxExtraDataSize: Int = 32
   private val MaxPowCaches: Int     = 2
 

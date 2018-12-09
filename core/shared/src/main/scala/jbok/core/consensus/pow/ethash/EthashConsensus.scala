@@ -5,7 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.config.Configs.{BlockChainConfig, MiningConfig, MonetaryPolicyConfig}
+import jbok.core.config.Configs.{HistoryConfig, MiningConfig, MonetaryPolicyConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock.MinedBlock
 import jbok.core.ledger.{History, TypedBlock}
@@ -17,7 +17,7 @@ import jbok.common._
 import scodec.bits.ByteVector
 
 class EthashConsensus[F[_]](
-    blockChainConfig: BlockChainConfig,
+    blockChainConfig: HistoryConfig,
     miningConfig: MiningConfig,
     history: History[F],
     blockPool: BlockPool[F],

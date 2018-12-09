@@ -3,7 +3,7 @@ package jbok.core.consensus.pow.ethash
 import cats.effect.Effect
 import cats.implicits._
 import jbok.core.ledger.History
-import jbok.core.config.Configs.BlockChainConfig
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.consensus.pow.ethash.OmmersError._
 import jbok.core.models.{Block, BlockHeader}
 import jbok.core.validators.HeaderValidator
@@ -17,7 +17,7 @@ object OmmersError {
   case object OmmersDuplicated       extends Exception("ommers duplicated")
 }
 
-class EthashOmmersValidator[F[_]](history: History[F], blockChainConfig: BlockChainConfig)(implicit F: Effect[F]) {
+class EthashOmmersValidator[F[_]](history: History[F], blockChainConfig: HistoryConfig)(implicit F: Effect[F]) {
 
   val headerValidator = new EthashHeaderValidator(blockChainConfig)
 

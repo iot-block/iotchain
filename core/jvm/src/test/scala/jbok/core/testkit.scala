@@ -197,7 +197,7 @@ object testkit {
   }
 
   implicit def arbPeerManager(implicit fixture: Fixture): Arbitrary[PeerManager[IO]] = Arbitrary {
-    genPeerManager(PeerManagerConfig(fixture.port))
+    genPeerManager(PeerConfig(fixture.port))
   }
 
   def genTxPool(config: TxPoolConfig = TxPoolConfig())(implicit fixture: Fixture): Gen[TxPool[IO]] = {
@@ -281,7 +281,7 @@ object testkit {
       mined = miner.mine1(parentOpt, stxsOpt, ommersOpt).unsafeRunSync()
     } yield mined.block
 
-  def genPeerManager(config: PeerManagerConfig)(implicit fixture: Fixture): Gen[PeerManager[IO]] = {
+  def genPeerManager(config: PeerConfig)(implicit fixture: Fixture): Gen[PeerManager[IO]] = {
     implicit val chainId: BigInt = fixture.cId
     val keyPair                  = Signature[ECDSA].generateKeyPair().unsafeRunSync()
     val history                  = fixture.consensus.unsafeRunSync().history
@@ -316,8 +316,8 @@ object testkit {
   implicit def arbBlockExecutor(implicit fixture: Fixture): Arbitrary[BlockExecutor[IO]] = Arbitrary {
     val consensus = fixture.consensus.unsafeRunSync()
     val keyPair   = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-    val pm        = PeerManagerPlatform[IO](PeerManagerConfig(fixture.port), Some(keyPair), consensus.history).unsafeRunSync()
-    BlockExecutor[IO](BlockChainConfig(), consensus, pm).unsafeRunSync()
+    val pm        = PeerManagerPlatform[IO](PeerConfig(fixture.port), Some(keyPair), consensus.history).unsafeRunSync()
+    BlockExecutor[IO](HistoryConfig(), consensus, pm).unsafeRunSync()
   }
 
   def genFullSync(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[FullSync[IO]] = {
@@ -335,8 +335,7 @@ object testkit {
   }
 
   def genDiscovery(port: Int): Gen[Discovery[IO]] = {
-    val discovery = DiscoveryConfig(port = port)
-    val config    = PeerManagerConfig(port * 2, discovery = discovery)
+    val config = PeerConfig(discoveryPort = port)
     val addr      = new InetSocketAddress("localhost", port)
     val (transport, _) = UdpTransport[IO](addr).allocated.unsafeRunSync()
     val keyPair   = random[KeyPair]

@@ -4,7 +4,7 @@ import cats.effect.IO
 import jbok.JbokSpec
 import jbok.common.testkit._
 import jbok.core.Fixtures
-import jbok.core.config.Configs.BlockChainConfig
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.models._
 import jbok.core.validators.TxInvalid._
 import jbok.crypto.signature.{ECDSA, Signature}
@@ -34,7 +34,7 @@ class TxValidatorSpec extends JbokSpec {
 
   val upfrontGasCost: UInt256 = UInt256(senderBalance / 2)
 
-  val transactionValidator = new TxValidator[IO](BlockChainConfig())
+  val transactionValidator = new TxValidator[IO](HistoryConfig())
 
   "TxValidator" should {
     "report as valid a tx from after EIP155" in {

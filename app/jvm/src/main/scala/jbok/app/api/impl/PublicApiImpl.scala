@@ -11,7 +11,7 @@ import jbok.app.api._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.ledger.History
-import jbok.core.config.Configs.{BlockChainConfig, MiningConfig}
+import jbok.core.config.Configs.{HistoryConfig, MiningConfig}
 import jbok.core.keystore.KeyStore
 import jbok.core.mining.BlockMiner
 import jbok.core.models._
@@ -19,7 +19,7 @@ import jbok.crypto.signature.CryptoSignature
 import scodec.bits.ByteVector
 
 class PublicApiImpl(
-    blockChainConfig: BlockChainConfig,
+    blockChainConfig: HistoryConfig,
     miningConfig: MiningConfig,
     miner: BlockMiner[IO],
     keyStore: KeyStore[IO],
@@ -268,7 +268,7 @@ class PublicApiImpl(
 object PublicApiImpl {
   def apply(
       blockChain: History[IO],
-      blockChainConfig: BlockChainConfig,
+      blockChainConfig: HistoryConfig,
       miningConfig: MiningConfig,
       miner: BlockMiner[IO],
       keyStore: KeyStore[IO],

@@ -3,7 +3,7 @@ package jbok.core.consensus.pow.ethash
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.ledger.History
-import jbok.core.config.Configs.BlockChainConfig
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.consensus.pow.ethash.OmmersError._
 import jbok.core.models.{Block, BlockBody, BlockHeader}
 import jbok.core.validators.HeaderInvalid.HeaderNumberInvalid
@@ -280,7 +280,7 @@ class EthashOmmersValidatorSpec extends JbokSpec {
     history.putBlockAndReceipts(block95, Nil, 0, false).unsafeRunSync()
     history.putBlockAndReceipts(block96, Nil, 0, false).unsafeRunSync()
 
-    val blockChainConfig = BlockChainConfig()
+    val blockChainConfig = HistoryConfig()
     val ommersValidator  = new EthashOmmersValidator(history, blockChainConfig)
   }
 

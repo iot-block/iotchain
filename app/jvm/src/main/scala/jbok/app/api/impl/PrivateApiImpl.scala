@@ -3,7 +3,7 @@ package jbok.app.api.impl
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import jbok.app.api.{PrivateAPI, TransactionRequest}
-import jbok.core.config.Configs.BlockChainConfig
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.keystore.{KeyStorePlatform, Wallet}
 import jbok.core.ledger.History
 import jbok.core.models.Address
@@ -20,7 +20,7 @@ object PrivateApiImpl {
   def apply(
       keyStore: KeyStorePlatform[IO],
       history: History[IO],
-      blockChainConfig: BlockChainConfig,
+      blockChainConfig: HistoryConfig,
       txPool: TxPool[IO],
   )(implicit chainId: BigInt): IO[PrivateAPI] =
     for {

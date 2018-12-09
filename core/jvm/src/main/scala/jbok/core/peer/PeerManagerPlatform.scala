@@ -9,8 +9,8 @@ import cats.effect.{ConcurrentEffect, ContextShift, IO, Timer}
 import cats.implicits._
 import fs2.concurrent.Queue
 import jbok.common.concurrent.PriorityQueue
+import jbok.core.config.Configs.PeerConfig
 import jbok.core.ledger.History
-import jbok.core.config.Configs.PeerManagerConfig
 import jbok.core.messages.{Message, Status}
 import jbok.core.rlpx.handshake.AuthHandshaker
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
@@ -42,7 +42,7 @@ object PeerManagerPlatform {
     }
 
   def apply[F[_]](
-      config: PeerManagerConfig,
+      config: PeerConfig,
       keyPairOpt: Option[KeyPair],
       history: History[F],
       maxQueueSize: Int = 64

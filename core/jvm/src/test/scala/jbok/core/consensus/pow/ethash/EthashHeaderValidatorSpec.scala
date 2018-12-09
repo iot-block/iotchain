@@ -3,7 +3,7 @@ package jbok.core.consensus.pow.ethash
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.core.ledger.History
-import jbok.core.config.Configs.BlockChainConfig
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.consensus.pow.ethash.EthashHeaderInvalid._
 import jbok.core.models._
 import jbok.common.testkit._
@@ -48,7 +48,7 @@ class EthashHeaderValidatorSpec extends JbokSpec {
       mixHash = hex"7f9ac1ddeafff0f926ed9887b8cf7d50c3f919d902e618b957022c46c8b404a6",
       nonce = hex"3fc7bc671f7cee70"
     )
-    val blockChainConfig = BlockChainConfig()
+    val blockChainConfig = HistoryConfig()
     history.putBlockHeader(validBlockParent).unsafeRunSync()
     val blockHeaderValidator = new EthashHeaderValidator[IO](blockChainConfig)
   }

@@ -8,7 +8,7 @@ import cats.effect.implicits._
 import cats.effect.{ConcurrentEffect, Resource, Timer}
 import cats.implicits._
 import fs2._
-import jbok.core.config.Configs.PeerManagerConfig
+import jbok.core.config.Configs.PeerConfig
 import jbok.core.peer.discovery.KadPacket._
 import jbok.core.peer.discovery.PeerTable._
 import jbok.core.peer.{PeerNode, PeerStore}
@@ -32,7 +32,7 @@ case object ErrClockWarp        extends ErrDiscovery("reply deadline too far in 
 case object ErrClosed           extends ErrDiscovery("socket closed")
 
 final class Discovery[F[_]](
-    config: PeerManagerConfig,
+    config: PeerConfig,
     transport: UdpTransport[F],
     val keyPair: KeyPair,
     val table: PeerTable[F],
@@ -111,7 +111,7 @@ final class Discovery[F[_]](
           } yield Vector.empty[PeerNode]
 
         case Right(neighbours) =>
-          val nodes = neighbours.nodes.map(x => PeerNode.fromAddr(x.pk, x.udpAddress))
+          val nodes = neighbours.nodes.map(x => PeerNode.fromTcpAddr(x.pk, x.udpAddress))
           log.debug(s"found ${nodes.length} node(s)")
           nodes.traverse(table.addNode).as(nodes.toVector)
       }
@@ -269,14 +269,14 @@ object Discovery {
   val maxFindNodeFailures = 5
 
   def apply[F[_]: ConcurrentEffect](
-      config: PeerManagerConfig,
+      config: PeerConfig,
       transport: UdpTransport[F],
       keyPair: KeyPair,
       store: PeerStore[F]
   )(implicit T: Timer[F]): F[Discovery[F]] =
     for {
       promises <- Ref.of[F, Map[UUID, Deferred[F, KadPacket]]](Map.empty)
-      selfNode = PeerNode(keyPair.public, config.host, config.port, config.discovery.port)
+      selfNode = PeerNode(keyPair.public, config.host, config.port, config.discoveryPort)
       table <- PeerTable[F](selfNode, store, Vector.empty)
     } yield new Discovery[F](config, transport, keyPair, table, promises)
 }

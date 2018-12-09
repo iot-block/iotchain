@@ -11,7 +11,7 @@ import fs2.Stream._
 import fs2._
 import fs2.concurrent.Queue
 import jbok.common.concurrent.PriorityQueue
-import jbok.core.config.Configs.PeerManagerConfig
+import jbok.core.config.Configs.PeerConfig
 import jbok.core.ledger.History
 import jbok.core.messages._
 import jbok.core.peer.PeerSelectStrategy.PeerSelectStrategy
@@ -26,7 +26,7 @@ object PeerErr {
 }
 
 abstract class PeerManager[F[_]](
-    val config: PeerManagerConfig,
+    val config: PeerConfig,
     val keyPair: KeyPair,
     val history: History[F],
     val incoming: Ref[F, Map[KeyPair.Public, Peer[F]]],
@@ -36,7 +36,7 @@ abstract class PeerManager[F[_]](
 )(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F], AG: AsynchronousChannelGroup, chainId: BigInt) {
   private[this] val log = org.log4s.getLogger("PeerManager")
 
-  val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port, config.discovery.port)
+  val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port, config.discoveryPort)
 
   def listen(
       bind: InetSocketAddress = config.bindAddr,

@@ -6,7 +6,7 @@ import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common.ByteUtils
-import jbok.core.config.Configs.{BlockChainConfig, TxPoolConfig}
+import jbok.core.config.Configs.{HistoryConfig, TxPoolConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
 import jbok.core.messages.SignedTransactions
@@ -22,7 +22,7 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration._
 
 case class BlockExecutor[F[_]](
-    config: BlockChainConfig,
+    config: HistoryConfig,
     consensus: Consensus[F],
     peerManager: PeerManager[F],
     txValidator: TxValidator[F],
@@ -407,7 +407,7 @@ object BlockExecutor {
   )
 
   def apply[F[_]](
-      config: BlockChainConfig,
+      config: HistoryConfig,
       consensus: Consensus[F],
       peerManager: PeerManager[F],
   )(implicit F: ConcurrentEffect[F], T: Timer[F], chainId: BigInt): F[BlockExecutor[F]] =

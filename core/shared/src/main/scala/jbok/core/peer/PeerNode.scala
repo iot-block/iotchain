@@ -4,7 +4,6 @@ import java.net._
 import jbok.codec.rlp.RlpCodec
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
-import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
 
@@ -46,12 +45,13 @@ object PeerNode {
 
   val PublicLength = 64
 
-  def fromAddr(pk: KeyPair.Public, addr: InetSocketAddress): PeerNode =
+  def fromTcpAddr(pk: KeyPair.Public, addr: InetSocketAddress): PeerNode =
     PeerNode(pk, addr.getHostName, addr.getPort, 0)
 
   def fromUri(uri: URI): PeerNode = {
-    val pk = KeyPair.Public(uri.getUserInfo)
-    PeerNode(pk, uri.getHost, uri.getPort, 0)
+    val pk   = KeyPair.Public(uri.getUserInfo)
+    val addr = new InetSocketAddress(uri.getHost, uri.getPort)
+    fromTcpAddr(pk, addr)
   }
 
   /**
@@ -88,10 +88,10 @@ object PeerNode {
       } yield addr
 
     for {
-      uri     <- checkURI(node)
-      _       <- checkScheme(uri)
-      nodeId  <- checkPk(uri)
-      address <- checkAddress(uri)
-    } yield PeerNode(nodeId, address.getHostName, address.getPort, 0)
+      uri  <- checkURI(node)
+      _    <- checkScheme(uri)
+      pk   <- checkPk(uri)
+      addr <- checkAddress(uri)
+    } yield PeerNode.fromTcpAddr(pk, addr)
   }
 }

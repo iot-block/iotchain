@@ -1,9 +1,9 @@
 package jbok.core.consensus.pow.ethash
 
-import jbok.core.config.Configs.BlockChainConfig
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.models.BlockHeader
 
-class EthDifficultyCalculator(config: BlockChainConfig) {
+class EthDifficultyCalculator(config: HistoryConfig) {
   val DifficultyBoundDivision: Int    = 2048
   val FrontierTimestampDiffLimit: Int = -99
   val ExpDifficultyPeriod: Int        = 100000
