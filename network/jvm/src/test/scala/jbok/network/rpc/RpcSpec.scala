@@ -30,7 +30,7 @@ class RpcSpec extends JbokSpec {
   val server                               = Server.websocket(bind, serverPipe)
 
   "RPC Client & Server" should {
-    "mount and use API" in {
+    "mount and use API" ignore {
       val p = for {
         client <- WsClient[IO, String](uri)
         api = RpcClient[IO](client).useAPI[TestAPI]

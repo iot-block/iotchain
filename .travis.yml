@@ -1,11 +1,13 @@
-sudo: false
 language: scala
 
 scala:
   - 2.12.6
 
 jdk:
-  - oraclejdk8
+  - openjdk11
+
+sudo: false
+dist: trusty
 
 # microsites
 before_install:
