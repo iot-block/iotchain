@@ -1,12 +1,20 @@
 package jbok.core.keystore
 
+import cats.effect.Sync
+import cats.implicits._
 import jbok.core.models.{Address, SignedTransaction, Transaction}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 
-case class Wallet(address: Address, secret: KeyPair.Secret) {
-  val keyPair: KeyPair =
-    Signature[ECDSA].generatePublicKey(secret).map(public => KeyPair(public, secret)).unsafeRunSync()
+case class Wallet(address: Address, keyPair: KeyPair) {
+  def signTx[F[_]: Sync](tx: Transaction)(implicit chainId: BigInt): F[SignedTransaction] =
+    SignedTransaction.sign[F](tx, keyPair)
+}
 
-  def signTx(tx: Transaction)(implicit chainId: BigInt): SignedTransaction =
-    SignedTransaction.sign(tx, keyPair)
+object Wallet {
+  def fromSecret[F[_]: Sync](secret: KeyPair.Secret): F[Wallet] =
+    for {
+      public <- Signature[ECDSA].generatePublicKey[F](secret)
+      keyPair = KeyPair(public, secret)
+      address = Address(keyPair)
+    } yield Wallet(address, keyPair)
 }

@@ -122,7 +122,7 @@ final class Discovery[F[_]](
   def refresh: F[Unit] =
     for {
       _   <- table.loadSeedNodes
-      key <- F.liftIO(Signature[ECDSA].generateKeyPair())
+      key <- Signature[ECDSA].generateKeyPair[F]()
       _   <- lookup(key.public)
     } yield ()
 

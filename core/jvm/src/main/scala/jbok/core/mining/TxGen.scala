@@ -18,7 +18,7 @@ case class SimAccount(keyPair: KeyPair, balance: BigInt, nonce: BigInt) {
 }
 
 class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]])(implicit chainId: BigInt) {
-  def newAccount: IO[SimAccount] = Signature[ECDSA].generateKeyPair().map(kp => SimAccount(kp, 0, 0))
+  def newAccount: IO[SimAccount] = Signature[ECDSA].generateKeyPair[IO]().map(kp => SimAccount(kp, 0, 0))
 
   def genValue(sender: SimAccount, receiver: SimAccount): BigInt =
     BigInt("1000000")
@@ -43,7 +43,7 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]])(implicit chai
         value,
         ByteVector.empty
       )
-      stx = SignedTransaction.sign(tx, sender.keyPair)
+      stx <- SignedTransaction.sign[IO](tx, sender.keyPair)
     } yield stx
 
   def genTxs: Stream[IO, SignedTransaction] =

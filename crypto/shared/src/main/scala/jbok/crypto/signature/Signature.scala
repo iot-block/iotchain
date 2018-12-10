@@ -2,22 +2,23 @@ package jbok.crypto.signature
 
 import java.util.Random
 
-import cats.effect.IO
+import cats.effect.Sync
 
 sealed trait ECDSA
 
-trait Signature[F[_], A] {
-  def generateKeyPair(random: Option[Random] = None): F[KeyPair]
+trait Signature[A] {
+  def generateKeyPair[F[_]](random: Option[Random] = None)(implicit F: Sync[F]): F[KeyPair]
 
-  def generatePublicKey(secret: KeyPair.Secret): F[KeyPair.Public]
+  def generatePublicKey[F[_]](secret: KeyPair.Secret)(implicit F: Sync[F]): F[KeyPair.Public]
 
-  def sign(hash: Array[Byte], keyPair: KeyPair, chainId: BigInt): F[CryptoSignature]
+  def sign[F[_]](hash: Array[Byte], keyPair: KeyPair, chainId: BigInt)(implicit F: Sync[F]): F[CryptoSignature]
 
-  def verify(hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt): F[Boolean]
+  def verify[F[_]](hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt)(
+      implicit F: Sync[F]): F[Boolean]
 
   def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: BigInt): Option[KeyPair.Public]
 }
 
 object Signature {
-  def apply[A](implicit ev: Signature[IO, A]): Signature[IO, A] = ev
+  def apply[A](implicit ev: Signature[A]): Signature[A] = ev
 }

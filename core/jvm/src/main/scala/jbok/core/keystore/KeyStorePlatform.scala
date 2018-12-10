@@ -22,9 +22,9 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
 
   override def newAccount(passphrase: String): F[Address] =
     for {
-      keyPair <- F.liftIO(Signature[ECDSA].generateKeyPair())
-      encKey = EncryptedKey(keyPair.secret, passphrase, secureRandom)
-      _ <- save(encKey)
+      keyPair <- Signature[ECDSA].generateKeyPair[F]()
+      encKey  <- EncryptedKey(keyPair.secret, passphrase, secureRandom)
+      _       <- save(encKey)
     } yield encKey.address
 
   override def importPrivateKey(key: ByteVector, passphrase: String): F[Address] =
@@ -32,8 +32,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       log.warn(s"import key failed, incorrect key length ${key.length}")
       F.raiseError(KeyStoreError.InvalidKeyFormat)
     } else {
-      val encKey = EncryptedKey(KeyPair.Secret(key), passphrase, secureRandom)
-      save(encKey).map(_ => encKey.address)
+      EncryptedKey[F](KeyPair.Secret(key), passphrase, secureRandom).flatMap(encKey => save(encKey).as(encKey.address))
     }
 
   override def listAccounts: F[List[Address]] =
@@ -48,7 +47,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       wallet <- key
         .decrypt(passphrase) match {
         case Left(e)       => F.raiseError(KeyStoreError.DecryptionFailed)
-        case Right(secret) => F.pure(Wallet(address, secret))
+        case Right(secret) => Wallet.fromSecret[F](secret)
       }
     } yield wallet
 
@@ -65,9 +64,9 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
         case Left(_)  => F.raiseError(KeyStoreError.DecryptionFailed)
         case Right(s) => F.pure(s)
       }
-      keyFile <- findKeyFile(address)
-      newEncKey = EncryptedKey(prvKey, newPassphrase, secureRandom)
-      _ <- overwrite(keyFile, newEncKey)
+      keyFile   <- findKeyFile(address)
+      newEncKey <- EncryptedKey(prvKey, newPassphrase, secureRandom)
+      _         <- overwrite(keyFile, newEncKey)
     } yield true
 
   private def save(encryptedKey: EncryptedKey): F[Unit] = {

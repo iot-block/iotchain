@@ -9,8 +9,7 @@ import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.messages.{AuthPacket, Message}
-import jbok.crypto.signature.ecdsa.SecP256k1
-import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
+import jbok.crypto.signature._
 import jbok.crypto.{ECIES, _}
 import jbok.network.Connection
 import org.bouncycastle.crypto.agreement.ECDHBasicAgreement
@@ -46,16 +45,15 @@ case class AuthHandshaker[F[_]](
 
   implicit val codec: Codec[ByteVector] = pure.codec
 
-  def initiate(remotePk: KeyPair.Public): F[(ByteVector, AuthHandshaker[F])] = {
-    val message              = createAuthInitiateMessageV4(remotePk)
-    val encoded: Array[Byte] = RlpCodec.encode(message).require.bytes.toArray
-    val padded               = encoded ++ randomBytes(Random.nextInt(MaxPadding - MinPadding) + MinPadding)
-    val encryptedSize        = padded.length + ECIES.OverheadSize
-    val sizePrefix           = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array
-
+  def initiate(remotePk: KeyPair.Public): F[(ByteVector, AuthHandshaker[F])] =
     for {
+      message <- createAuthInitiateMessageV4(remotePk)
+      encoded       = RlpCodec.encode(message).require.bytes.toArray
+      padded        = encoded ++ randomBytes(Random.nextInt(MaxPadding - MinPadding) + MinPadding)
+      encryptedSize = padded.length + ECIES.OverheadSize
+      sizePrefix    = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array
       encryptedPayload <- ECIES.encrypt[F](
-        SecP256k1.toECPublicKeyParameters(remotePk).getQ,
+        ECDSAPlatform.toECPublicKeyParameters(remotePk).getQ,
         secureRandom,
         padded,
         Some(sizePrefix)
@@ -64,7 +62,6 @@ case class AuthHandshaker[F[_]](
       val packet = ByteVector(sizePrefix) ++ encryptedPayload
       (packet, copy(isInitiator = true, initiatePacketOpt = Some(packet), remotePubKeyOpt = Some(remotePk.bytes)))
     }
-  }
 
   def connect(
       conn: Connection[F, Message],
@@ -145,7 +142,7 @@ case class AuthHandshaker[F[_]](
       )
 
       encryptedPacket <- ECIES.encrypt[F](
-        SecP256k1.toECPublicKeyParameters(KeyPair.Public(message.publicKey)).getQ,
+        ECDSAPlatform.toECPublicKeyParameters(KeyPair.Public(message.publicKey)).getQ,
         secureRandom,
         response.encoded.toArray,
         None
@@ -180,7 +177,7 @@ case class AuthHandshaker[F[_]](
       encryptedSize = encodedResponse.length + ECIES.OverheadSize
       sizePrefix    = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array
       encryptedResponsePayload <- ECIES.encrypt[F](
-        SecP256k1.toECPublicKeyParameters(KeyPair.Public(message.publicKey)).getQ,
+        ECDSAPlatform.toECPublicKeyParameters(KeyPair.Public(message.publicKey)).getQ,
         secureRandom,
         encodedResponse,
         Some(sizePrefix)
@@ -201,29 +198,29 @@ case class AuthHandshaker[F[_]](
                                   nonce: ByteVector,
                                   publicKey: ByteVector): KeyPair.Public = {
     val agreement = new ECDHBasicAgreement
-    agreement.init(SecP256k1.toECPrivateKeyParameters(nodeKey.secret))
-    val sharedSecret = agreement.calculateAgreement(SecP256k1.toECPublicKeyParameters(KeyPair.Public(publicKey)))
+    agreement.init(ECDSAPlatform.toECPrivateKeyParameters(nodeKey.secret))
+    val sharedSecret = agreement.calculateAgreement(ECDSAPlatform.toECPublicKeyParameters(KeyPair.Public(publicKey)))
 
     val token  = bigIntegerToBytes(sharedSecret, NonceSize)
     val signed = xor(token, nonce.toArray)
 
-    SecP256k1.recoverPublic(signed, signature, 0).get
+    ECDSAPlatform.recoverPublic(signed, signature, 0).get
   }
 
   private def xor(a: Array[Byte], b: Array[Byte]): Array[Byte] =
     (a zip b) map { case (b1, b2) => (b1 ^ b2).toByte }
 
-  private def createAuthInitiateMessageV4(remotePubKey: KeyPair.Public): AuthInitiateMessageV4 = {
+  private def createAuthInitiateMessageV4(remotePubKey: KeyPair.Public): F[AuthInitiateMessageV4] = {
     val sharedSecret = {
       val agreement = new ECDHBasicAgreement
-      agreement.init(SecP256k1.toECPrivateKeyParameters(nodeKey.secret))
-      bigIntegerToBytes(agreement.calculateAgreement(SecP256k1.toECPublicKeyParameters(remotePubKey)), NonceSize)
+      agreement.init(ECDSAPlatform.toECPrivateKeyParameters(nodeKey.secret))
+      bigIntegerToBytes(agreement.calculateAgreement(ECDSAPlatform.toECPublicKeyParameters(remotePubKey)), NonceSize)
     }
 
     val messageToSign = ByteVector(sharedSecret).xor(nonce)
-    val signature     = SecP256k1.sign(messageToSign.toArray, ephemeralKey, 0).unsafeRunSync()
-
-    AuthInitiateMessageV4(signature, nodeKey.public.bytes, nonce, ProtocolVersion)
+    ECDSAPlatform
+      .sign[F](messageToSign.toArray, ephemeralKey, 0)
+      .map(sig => AuthInitiateMessageV4(sig, nodeKey.public.bytes, nonce, ProtocolVersion))
   }
 
   private[jbok] def bigIntegerToBytes(b: BigInteger, numBytes: Int): Array[Byte] = {
@@ -243,8 +240,8 @@ case class AuthHandshaker[F[_]](
     } yield {
       val secretScalar = {
         val agreement = new ECDHBasicAgreement
-        agreement.init(SecP256k1.toECPrivateKeyParameters(ephemeralKey.secret))
-        agreement.calculateAgreement(SecP256k1.toECPublicKeyParameters(remoteEphemeralKey))
+        agreement.init(ECDSAPlatform.toECPrivateKeyParameters(ephemeralKey.secret))
+        agreement.calculateAgreement(ECDSAPlatform.toECPublicKeyParameters(remoteEphemeralKey))
       }
 
       val agreedSecret = bigIntegerToBytes(secretScalar, SecretSize)
@@ -328,8 +325,8 @@ object AuthHandshaker {
 
   def apply[F[_]](nodeKey: KeyPair)(implicit F: Concurrent[F], T: Timer[F], chainId: BigInt): F[AuthHandshaker[F]] =
     for {
-      nonce <- Sync[F].delay(randomByteArray(secureRandom, NonceSize))
-      ephemeralKey = Signature[ECDSA].generateKeyPair(Some(secureRandom)).unsafeRunSync()
+      nonce        <- Sync[F].delay(randomByteArray(secureRandom, NonceSize))
+      ephemeralKey <- Signature[ECDSA].generateKeyPair[F](Some(secureRandom))
     } yield
       AuthHandshaker[F](
         nodeKey,

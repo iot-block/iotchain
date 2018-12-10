@@ -24,13 +24,13 @@ class PrecompiledContractsSpec extends JbokSpec {
   }
 
   "ECDSARECOVER" in {
-    val keyPair         = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val keyPair         = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
     val bytesGen        = getByteVectorGen(1, 128)
     val chainId: BigInt = 0
 
     forAll(bytesGen) { bytes =>
       val hash             = bytes.kec256
-      val validSig         = Signature[ECDSA].sign(hash.toArray, keyPair, chainId).unsafeRunSync()
+      val validSig         = Signature[ECDSA].sign[IO](hash.toArray, keyPair, chainId).unsafeRunSync()
       val recoveredPub     = Signature[ECDSA].recoverPublic(hash.toArray, validSig, chainId).get
       val recoveredAddress = recoveredPub.bytes.kec256.slice(12, 32).padLeft(32)
       val inputData        = hash ++ UInt256(validSig.v).bytes ++ UInt256(validSig.r).bytes ++ UInt256(validSig.s).bytes

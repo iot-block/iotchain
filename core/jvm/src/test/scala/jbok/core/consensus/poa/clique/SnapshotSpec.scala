@@ -37,16 +37,16 @@ trait SnapshotFixture {
 
   def address(account: String): Address = {
     if (!accounts.contains(account)) {
-      accounts += (account -> Signature[ECDSA].generateKeyPair().unsafeRunSync())
+      accounts += (account -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
     }
     Address(accounts(account))
   }
 
   def sign(header: BlockHeader, signer: String)(implicit chainId: BigInt): BlockHeader = {
     if (!accounts.contains(signer)) {
-      accounts += (signer -> Signature[ECDSA].generateKeyPair().unsafeRunSync())
+      accounts += (signer -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
     }
-    val sig       = Signature[ECDSA].sign(Clique.sigHash(header).toArray, accounts(signer), chainId).unsafeRunSync()
+    val sig       = Signature[ECDSA].sign[IO](Clique.sigHash(header).toArray, accounts(signer), chainId).unsafeRunSync()
     val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val recovered = Clique.ecrecover(signed).get
     require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")
@@ -85,7 +85,7 @@ class SnapshotSpec extends JbokSpec {
 
     val head           = headers.last
     val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
-    val keyPair        = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val keyPair        = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
     val clique         = Clique[IO](config, history, keyPair).unsafeRunSync()
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners

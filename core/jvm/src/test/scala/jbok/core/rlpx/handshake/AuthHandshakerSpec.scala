@@ -16,8 +16,8 @@ import scodec.bits._
 import scala.concurrent.duration._
 
 class AuthHandshakerSpec extends JbokSpec {
-  val serverKey = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-  val clientKey = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+  val serverKey = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+  val clientKey = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
   val addr      = new InetSocketAddress("localhost", 9003)
 
   implicit val I: RequestId[ByteVector] = RequestId.empty

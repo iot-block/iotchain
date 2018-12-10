@@ -48,7 +48,7 @@ object testkit {
   }
 
   def genKeyPair: Gen[KeyPair] = {
-    Signature[ECDSA].generateKeyPair(Some(new SecureRandom())).unsafeRunSync()
+    Signature[ECDSA].generateKeyPair[IO](Some(new SecureRandom())).unsafeRunSync()
   }
 
   implicit def arbKeyPair: Arbitrary[KeyPair] = Arbitrary {

@@ -2,6 +2,7 @@ package jbok.core.keystore
 
 import java.security.SecureRandom
 
+import cats.effect.IO
 import jbok.JbokSpec
 import io.circe.parser._
 import jbok.crypto._
@@ -45,7 +46,7 @@ class EncryptedKeySpec extends JbokSpec {
       val secureRandom = new SecureRandom
       val prvKey = KeyPair.Secret(randomByteString(secureRandom, 32))
       val passphrase = "P4S5W0rd"
-      val encKey = EncryptedKey(prvKey, passphrase, secureRandom)
+      val encKey = EncryptedKey[IO](prvKey, passphrase, secureRandom).unsafeRunSync()
 
       val json = encKey.asJson.spaces2
       val decoded = decode[EncryptedKey](json)

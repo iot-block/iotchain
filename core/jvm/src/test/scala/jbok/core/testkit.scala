@@ -68,7 +68,8 @@ object testkit {
   implicit val chainId: BigInt = 1
 
   def cliqueFixture(port: Int): Fixture = {
-    val miner = SimAccount(Signature[ECDSA].generateKeyPair().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
+    val miner =
+      SimAccount(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
     val alloc = Map(miner.address.toString -> miner.balance.toString())
     val genesisConfig =
       GenesisConfig.default.copy(alloc = alloc, extraData = Clique.fillExtraData(miner.address :: Nil).toHex)
@@ -77,7 +78,7 @@ object testkit {
   }
 
   def fixture(port: Int): Fixture = {
-    val miner         = SimAccount(Signature[ECDSA].generateKeyPair().unsafeRunSync(), BigInt("100000000000000000000"), 0)
+    val miner         = SimAccount(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync(), BigInt("100000000000000000000"), 0)
     val alloc         = Map(miner.address.toString -> miner.balance.toString())
     val genesisConfig = GenesisConfig.default.copy(alloc = alloc)
     Fixture(chainId.toInt, port, miner, genesisConfig, "ethash")
@@ -121,8 +122,8 @@ object testkit {
   implicit val arbSignedTransaction: Arbitrary[SignedTransaction] = Arbitrary {
     for {
       tx <- arbTransaction.arbitrary
-      keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-      stx     = SignedTransaction.sign(tx, keyPair)
+      keyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+      stx     = SignedTransaction.sign[IO](tx, keyPair).unsafeRunSync()
     } yield stx
   }
 
@@ -283,7 +284,7 @@ object testkit {
 
   def genPeerManager(config: PeerConfig)(implicit fixture: Fixture): Gen[PeerManager[IO]] = {
     implicit val chainId: BigInt = fixture.cId
-    val keyPair                  = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val keyPair                  = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
     val history                  = fixture.consensus.unsafeRunSync().history
     PeerManagerPlatform[IO](config, Some(keyPair), history).unsafeRunSync()
   }
@@ -315,7 +316,7 @@ object testkit {
 
   implicit def arbBlockExecutor(implicit fixture: Fixture): Arbitrary[BlockExecutor[IO]] = Arbitrary {
     val consensus = fixture.consensus.unsafeRunSync()
-    val keyPair   = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val keyPair   = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
     val pm        = PeerManagerPlatform[IO](PeerConfig(fixture.port), Some(keyPair), consensus.history).unsafeRunSync()
     BlockExecutor[IO](HistoryConfig(), consensus, pm).unsafeRunSync()
   }
@@ -335,12 +336,12 @@ object testkit {
   }
 
   def genDiscovery(port: Int): Gen[Discovery[IO]] = {
-    val config = PeerConfig(discoveryPort = port)
-    val addr      = new InetSocketAddress("localhost", port)
+    val config         = PeerConfig(discoveryPort = port)
+    val addr           = new InetSocketAddress("localhost", port)
     val (transport, _) = UdpTransport[IO](addr).allocated.unsafeRunSync()
-    val keyPair   = random[KeyPair]
-    val db        = random[KeyValueDB[IO]]
-    val store     = PeerStorePlatform.fromKV(db)
+    val keyPair        = random[KeyPair]
+    val db             = random[KeyValueDB[IO]]
+    val store          = PeerStorePlatform.fromKV(db)
     Discovery[IO](config, transport, keyPair, store).unsafeRunSync()
   }
 

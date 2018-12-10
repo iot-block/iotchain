@@ -1,11 +1,12 @@
 package jbok.core.peer
 
+import cats.effect.IO
 import jbok.JbokSpec
 import jbok.crypto.signature.{ECDSA, Signature}
 
 class PeerNodeSpec extends JbokSpec {
   "PeerNode" should {
-    val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+    val keyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
     val uri     = s"jbok://${keyPair.public.bytes.toHex}@localhost:10000"
     val node    = PeerNode.fromStr(uri)
 

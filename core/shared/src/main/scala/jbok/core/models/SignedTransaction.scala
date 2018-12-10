@@ -68,7 +68,7 @@ object SignedTransaction {
       s: ByteVector
   ): SignedTransaction = apply(tx, BigInt(1, Array(v)), BigInt(1, r.toArray), BigInt(1, s.toArray))
 
-  def sign(tx: Transaction, keyPair: KeyPair)(implicit chainId: BigInt): SignedTransaction = {
+  def sign[F[_]: Sync](tx: Transaction, keyPair: KeyPair)(implicit chainId: BigInt): F[SignedTransaction] = {
     val stx = new SignedTransaction(
       tx.nonce,
       tx.gasPrice,
@@ -81,8 +81,7 @@ object SignedTransaction {
       BigInt(0)
     )
     val bytes = bytesToSign(stx, chainId)
-    val sig   = Signature[ECDSA].sign(bytes.toArray, keyPair, chainId).unsafeRunSync()
-    stx.copy(v = sig.v, r = sig.r, s = sig.s)
+    Signature[ECDSA].sign[F](bytes.toArray, keyPair, chainId).map(sig => stx.copy(v = sig.v, r = sig.r, s = sig.s))
   }
 
   private def bytesToSign(stx: SignedTransaction, chainId: BigInt): ByteVector = {

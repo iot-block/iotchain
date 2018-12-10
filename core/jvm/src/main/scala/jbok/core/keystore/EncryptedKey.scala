@@ -3,7 +3,8 @@ package jbok.core.keystore
 import java.security.SecureRandom
 import java.util.UUID
 
-import cats.effect.IO
+import cats.effect.{IO, Sync}
+import cats.implicits._
 import io.circe.generic.JsonCodec
 import jbok.core.models.Address
 import jbok.crypto._
@@ -42,12 +43,12 @@ case class EncryptedKey(
   implicit val encryptor = AES128CTR.genEncryptor[IO]
 
   def decrypt(passphrase: String): Either[String, KeyPair.Secret] = {
-    val dk = deriveKey(passphrase, crypto.kdfparams)
-    val secret = dk.take(16)
-    val content = RawCipherText[AES128CTR](crypto.ciphertext.toArray)
-    val nonce = Iv[AES128CTR](crypto.cipherparams.iv.toArray)
+    val dk         = deriveKey(passphrase, crypto.kdfparams)
+    val secret     = dk.take(16)
+    val content    = RawCipherText[AES128CTR](crypto.ciphertext.toArray)
+    val nonce      = Iv[AES128CTR](crypto.cipherparams.iv.toArray)
     val cipherText = CipherText[AES128CTR](content, nonce)
-    val jcaKey = AES128CTR.buildKey[IO](secret.toArray).unsafeRunSync()
+    val jcaKey     = AES128CTR.buildKey[IO](secret.toArray).unsafeRunSync()
     val decrypted = AES128CTR.decrypt[IO](cipherText, jcaKey).attempt.map {
       case Left(_) => Left("Couldn't decrypt key")
       case Right(plainText) =>
@@ -65,26 +66,30 @@ case class EncryptedKey(
 object EncryptedKey {
   implicit val encryptor = AES128CTR.genEncryptor[IO]
 
-  def apply(prvKey: KeyPair.Secret, passphrase: String, secureRandom: SecureRandom): EncryptedKey = {
+  def apply[F[_]](prvKey: KeyPair.Secret, passphrase: String, secureRandom: SecureRandom)(
+      implicit F: Sync[F]): F[EncryptedKey] = {
     val version = 3
-    val uuid = UUID.randomUUID()
-    val pubKey = Signature[ECDSA].generatePublicKey(prvKey).unsafeRunSync()
-    val address = Address(KeyPair(pubKey, prvKey))
-    val salt = randomByteString(secureRandom, 32)
-    val kdfParams = KdfParams(salt, 1 << 18, 8, 1, 32) //params used by Geth
-    val dk = deriveKey(passphrase, kdfParams)
-    val secret = dk.take(16)
+    for {
+      uuid   <- F.delay(UUID.randomUUID())
+      pubKey <- Signature[ECDSA].generatePublicKey[F](prvKey)
+    } yield {
+      val address   = Address(KeyPair(pubKey, prvKey))
+      val salt      = randomByteString(secureRandom, 32)
+      val kdfParams = KdfParams(salt, 1 << 18, 8, 1, 32) //params used by Geth
+      val dk        = deriveKey(passphrase, kdfParams)
+      val secret    = dk.take(16)
 
-    val jcaKey = AES128CTR.buildKey[IO](secret.toArray).unsafeRunSync()
-    val iv = JCAIvGen.random[IO, AES128CTR]
-    val cipherText =
-      AES128CTR.encrypt[IO](PlainText(prvKey.bytes.toArray), jcaKey, iv)(encryptor).unsafeRunSync()
-    val cipherContent = ByteVector(cipherText.content)
-    val mac = createMac(dk, cipherContent)
+      val jcaKey = AES128CTR.buildKey[IO](secret.toArray).unsafeRunSync()
+      val iv     = JCAIvGen.random[IO, AES128CTR]
+      val cipherText =
+        AES128CTR.encrypt[IO](PlainText(prvKey.bytes.toArray), jcaKey, iv)(encryptor).unsafeRunSync()
+      val cipherContent = ByteVector(cipherText.content)
+      val mac           = createMac(dk, cipherContent)
 
-    val cryptoSpec =
-      CryptoSpec("aes-128-ctr", cipherContent, CipherParams(ByteVector(cipherText.nonce)), "scrypt", kdfParams, mac)
-    EncryptedKey(uuid, address, cryptoSpec, version)
+      val cryptoSpec =
+        CryptoSpec("aes-128-ctr", cipherContent, CipherParams(ByteVector(cipherText.nonce)), "scrypt", kdfParams, mac)
+      EncryptedKey(uuid, address, cryptoSpec, version)
+    }
   }
 
   private def deriveKey(passphrase: String, kdfParams: KdfParams): ByteVector =

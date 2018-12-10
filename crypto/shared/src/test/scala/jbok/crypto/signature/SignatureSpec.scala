@@ -1,5 +1,6 @@
 package jbok.crypto.signature
 
+import cats.effect.IO
 import jbok.JbokAsyncSpec
 import jbok.crypto._
 
@@ -13,29 +14,29 @@ class SignatureSpec extends JbokAsyncSpec {
     "sign and verify for right keypair" in {
 
       for {
-        keyPair <- ecdsa.generateKeyPair()
-        signed  <- ecdsa.sign(hash, keyPair, chainId)
-        verify  <- ecdsa.verify(hash, signed, keyPair.public, chainId)
+        keyPair <- ecdsa.generateKeyPair[IO]()
+        signed  <- ecdsa.sign[IO](hash, keyPair, chainId)
+        verify  <- ecdsa.verify[IO](hash, signed, keyPair.public, chainId)
         _ = verify shouldBe true
       } yield ()
     }
 
     "not verified for wrong keypair" in {
       for {
-        kp1    <- ecdsa.generateKeyPair()
-        kp2    <- ecdsa.generateKeyPair()
-        sig    <- ecdsa.sign(hash, kp1, chainId)
-        verify <- ecdsa.verify(hash, sig, kp2.public, chainId)
+        kp1    <- ecdsa.generateKeyPair[IO]()
+        kp2    <- ecdsa.generateKeyPair[IO]()
+        sig    <- ecdsa.sign[IO](hash, kp1, chainId)
+        verify <- ecdsa.verify[IO](hash, sig, kp2.public, chainId)
         _ = verify shouldBe false
       } yield ()
     }
 
     "generate keypair from secret" in {
       for {
-        keyPair <- ecdsa.generateKeyPair()
+        keyPair <- ecdsa.generateKeyPair[IO]()
         bytes      = keyPair.secret.bytes
         privateKey = KeyPair.Secret(bytes)
-        publicKey <- ecdsa.generatePublicKey(privateKey)
+        publicKey <- ecdsa.generatePublicKey[IO](privateKey)
         _ = privateKey shouldBe keyPair.secret
         _ = publicKey shouldBe keyPair.public
       } yield ()
@@ -43,20 +44,20 @@ class SignatureSpec extends JbokAsyncSpec {
 
     "roundtrip signature" in {
       for {
-        kp  <- ecdsa.generateKeyPair()
-        sig <- ecdsa.sign(hash, kp, chainId)
+        kp  <- ecdsa.generateKeyPair[IO]()
+        sig <- ecdsa.sign[IO](hash, kp, chainId)
         bytes = sig.bytes
         sig2  = CryptoSignature(bytes)
-        verify <- ecdsa.verify(hash, sig2, kp.public, chainId)
+        verify <- ecdsa.verify[IO](hash, sig2, kp.public, chainId)
         _ = verify shouldBe true
       } yield ()
     }
 
     "recover public key from signature" in {
       for {
-        kp     <- ecdsa.generateKeyPair()
-        sig    <- ecdsa.sign(hash, kp, chainId)
-        verify <- ecdsa.verify(hash, sig, kp.public, chainId)
+        kp     <- ecdsa.generateKeyPair[IO]()
+        sig    <- ecdsa.sign[IO](hash, kp, chainId)
+        verify <- ecdsa.verify[IO](hash, sig, kp.public, chainId)
         public = ecdsa.recoverPublic(hash, sig, chainId)
 
         _ = verify shouldBe true

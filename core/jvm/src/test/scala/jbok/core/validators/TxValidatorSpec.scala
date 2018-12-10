@@ -11,7 +11,7 @@ import jbok.crypto.signature.{ECDSA, Signature}
 import scodec.bits._
 
 class TxValidatorSpec extends JbokSpec {
-  val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+  val keyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
 
   val tx = Transaction(
     nonce = 12345,
@@ -22,7 +22,7 @@ class TxValidatorSpec extends JbokSpec {
     payload = ByteVector.empty
   )
 
-  val stx = SignedTransaction.sign(tx, keyPair)
+  val stx = SignedTransaction.sign[IO](tx, keyPair).unsafeRunSync()
 
   val senderBalance = 100
 

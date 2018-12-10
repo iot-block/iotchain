@@ -21,17 +21,15 @@ import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec
 import org.bouncycastle.math.ec.ECPoint
 import org.bouncycastle.math.ec.custom.sec.SecP256K1Curve
 
-class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signature[F, ECDSA] {
-
-  override def toString: String = s"ECDSASignature(${curveName})"
+object ECDSAPlatform extends Signature[ECDSA] {
 
   import ECDSAChainIdConvert._
 
-  val curve: ECNamedCurveParameterSpec = ECNamedCurveTable.getParameterSpec(curveName)
+  val curve: ECNamedCurveParameterSpec = ECNamedCurveTable.getParameterSpec("secp256k1")
   val domain: ECDomainParameters       = new ECDomainParameters(curve.getCurve, curve.getG, curve.getN, curve.getH)
   val halfCurveOrder                   = curve.getN.shiftRight(1)
 
-  override def generateKeyPair(random: Option[Random]): F[KeyPair] = {
+  override def generateKeyPair[F[_]](random: Option[Random])(implicit F: Sync[F]): F[KeyPair] = {
     val secureRandom = new SecureRandom()
     val generator    = new ECKeyPairGenerator()
     val keygenParams = new ECKeyGenerationParameters(domain, secureRandom)
@@ -40,17 +38,18 @@ class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signat
       keyPair <- F.delay(generator.generateKeyPair())
       privParams = keyPair.getPrivate.asInstanceOf[ECPrivateKeyParameters]
       secret     = KeyPair.Secret(privParams.getD)
-      public <- generatePublicKey(secret)
+      public <- generatePublicKey[F](secret)
     } yield KeyPair(public, secret)
   }
 
-  override def generatePublicKey(secret: KeyPair.Secret): F[KeyPair.Public] = F.delay {
+  override def generatePublicKey[F[_]](secret: KeyPair.Secret)(implicit F: Sync[F]): F[KeyPair.Public] = F.delay {
     val q = curve.getG.multiply(secret.d).getEncoded(false).tail
     require(q.length == 64, s"public key length should be 64 instead of ${q.length}")
     KeyPair.Public(q)
   }
 
-  override def sign(hash: Array[Byte], keyPair: KeyPair, chainId: BigInt): F[CryptoSignature] = F.delay {
+  override def sign[F[_]](hash: Array[Byte], keyPair: KeyPair, chainId: BigInt)(
+      implicit F: Sync[F]): F[CryptoSignature] = F.delay {
     val signer = new ECDSASigner(new HMacDSAKCalculator(new SHA256Digest()))
     signer.init(true, new ECPrivateKeyParameters(keyPair.secret.d, domain))
     val Array(r, s) = signer.generateSignature(hash)
@@ -61,13 +60,13 @@ class ECDSAPlatform[F[_]](curveName: String)(implicit F: Sync[F]) extends Signat
     CryptoSignature(r, toCanonicalS(s), pointSign)
   }
 
-  override def verify(hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt): F[Boolean] =
-    F.delay {
-      val signer = new ECDSASigner()
-      val q      = curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR_BYTE +: public.bytes.toArray)
-      signer.init(false, new ECPublicKeyParameters(q, domain))
-      signer.verifySignature(hash, sig.r.bigInteger, sig.s.bigInteger)
-    }
+  override def verify[F[_]](hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt)(
+      implicit F: Sync[F]): F[Boolean] = F.delay {
+    val signer = new ECDSASigner()
+    val q      = curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR_BYTE +: public.bytes.toArray)
+    signer.init(false, new ECPublicKeyParameters(q, domain))
+    signer.verifySignature(hash, sig.r.bigInteger, sig.s.bigInteger)
+  }
 
   override def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: BigInt): Option[KeyPair.Public] = {
     val order = curve.getN

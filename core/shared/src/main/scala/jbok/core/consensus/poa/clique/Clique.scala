@@ -40,7 +40,8 @@ class Clique[F[_]](
 
   val signer: Address = Address(keyPair)
 
-  def sign(bv: ByteVector): F[CryptoSignature] = F.liftIO(Signature[ECDSA].sign(bv.toArray, keyPair, chainId))
+  def sign(bv: ByteVector): F[CryptoSignature] =
+    Signature[ECDSA].sign[F](bv.toArray, keyPair, chainId)
 
   def applyHeaders(
       number: BigInt,
