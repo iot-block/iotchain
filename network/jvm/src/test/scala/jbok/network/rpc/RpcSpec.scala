@@ -27,14 +27,14 @@ class RpcSpec extends JbokSpec {
   val bind                                 = new InetSocketAddress("localhost", 9002)
   val uri                                  = new URI("ws://localhost:9002")
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
+  val server                               = Server.websocket(bind, serverPipe)
 
   "RPC Client & Server" should {
     "mount and use API" in {
       val p = for {
-        fiber  <- Server.websocket(bind, serverPipe).stream.compile.drain.start
         client <- WsClient[IO, String](uri)
         api = RpcClient[IO](client).useAPI[TestAPI]
-        _ <- client.start
+        fiber <- Stream(server.stream, Stream.sleep(1.second) ++ client.stream).parJoinUnbounded.compile.drain.start
         _ = rpcServer.handlers.size shouldBe 5
         _ = api.foo.unsafeRunSync() shouldBe impl.foo.unsafeRunSync()
         _ = api.bar.unsafeRunSync() shouldBe impl.bar.unsafeRunSync()

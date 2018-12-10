@@ -45,8 +45,8 @@ object Server {
 
   def websocket[F[_], A: Codec](bind: InetSocketAddress, pipe: Pipe[F, A, A], maxOpen: Int = Int.MaxValue)(
       implicit F: ConcurrentEffect[F],
-      T: Timer[F],
-      AG: AsynchronousChannelGroup): Server[F] = {
+      T: Timer[F]
+  ): Server[F] = {
 
     val stream: Stream[F, Unit] = {
       val dsl = Http4sDsl[F]
