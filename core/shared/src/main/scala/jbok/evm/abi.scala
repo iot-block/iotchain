@@ -153,7 +153,12 @@ object abi {
           case None         => InvalidParam(s"${param.toString} is not boolean type.").asLeft
         }
       case "address" =>
-        param.asString.filter(_.length == 40).flatMap(ByteVector.fromHex(_)).map(UInt256(_).bytes) match {
+        param.asString
+          .flatMap {
+            case p if p.length == 40                       => ByteVector.fromHex(p)
+            case p if p.length == 42 && p.startsWith("0x") => ByteVector.fromHex(p.substring(2))
+          }
+          .map(UInt256(_).bytes) match {
           case Some(result) => (false, List.apply(result)).asRight
           case None         => InvalidParam(s"${param.toString} is not address type.").asLeft
         }
