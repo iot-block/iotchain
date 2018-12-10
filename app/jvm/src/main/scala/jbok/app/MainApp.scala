@@ -6,7 +6,8 @@ import better.files.File
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import ch.qos.logback.classic.{Level, Logger}
-import jbok.core.config.Configs
+import com.typesafe.config.ConfigFactory
+import jbok.core.config.{ConfigHelper, Configs}
 import jbok.core.config.Configs._
 import jbok.network.server.Server
 import org.rogach.scallop._
@@ -172,4 +173,20 @@ object MainApp extends IOApp {
         IO.pure(ExitCode.Error)
     }
   }
+
+  def parse(args: List[String]): IO[ExitCode] =
+    for {
+      reference <- IO(ConfigFactory.load("reference.conf").getConfig("jbok"))
+      _ <- if (args == List("-help")) {
+        IO(println(ConfigHelper.printConfig(reference).render)) >> IO(System.exit(1))
+      } else {
+        IO.unit
+      }
+      cmdConfig <- ConfigHelper.parseConfig(args) match {
+        case Left(e)       => IO.raiseError(e)
+        case Right(config) => IO.pure(config)
+      }
+      config = cmdConfig.withFallback(reference)
+      _ <- IO(println(ConfigHelper.printConfig(config).render))
+    } yield ExitCode.Success
 }
