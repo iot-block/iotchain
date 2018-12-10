@@ -1,5 +1,6 @@
 package jbok.app.simulations
 
+import cats.effect.IO
 import jbok.common.GraphUtil
 import jbok.core.config.GenesisConfig
 import jbok.core.models._
@@ -30,7 +31,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000))(implicit chai
 
   val keyPairs = (1 to nAddr)
     .map(_ => {
-      val keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
+      val keyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
       SimAddress(keyPair)
     })
     .toVector
@@ -123,7 +124,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000))(implicit chai
             node <- nextNodes
             if accounts.contains(node.sender)
             (transaction, account) = genTransaction(accounts(node.sender), node.receiver)
-            _                      = transactions += SignedTransaction.sign(transaction, keyPairMap(node.sender))
+            _                      = transactions += SignedTransaction.sign[IO](transaction, keyPairMap(node.sender)).unsafeRunSync()
             _                      = mAccount += (node.sender -> account)
           } ()
           nextNodes.map(mg.remove(_))
@@ -167,6 +168,6 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000))(implicit chai
     val sender  = keyPair.address
     val tx      = Transaction(accountMap(sender).nonce, gasPrice, gasLimit, Some(address), value, ByteVector.empty)
     accountMap(sender).increaseNonce().increaseBalance(UInt256(-value))
-    SignedTransaction.sign(tx, keyPair.keyPair)
+    SignedTransaction.sign[IO](tx, keyPair.keyPair).unsafeRunSync()
   }
 }

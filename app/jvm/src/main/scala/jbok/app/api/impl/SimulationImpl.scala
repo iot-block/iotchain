@@ -48,7 +48,7 @@ class SimulationImpl(
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
     val fullNodeConfigs = FullNodeConfig.fill(n)
     val signers = (1 to n).toList
-      .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair())
+      .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
       .unsafeRunSync()
     val (configs, minerSingers) = selectMiner(n, m, fullNodeConfigs, signers)
 
