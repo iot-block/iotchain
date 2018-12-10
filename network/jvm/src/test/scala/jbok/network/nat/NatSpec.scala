@@ -12,26 +12,26 @@ import scala.concurrent.duration._
 
 class NatSpec extends JbokSpec {
   val externalIP: String = ""
-  val internalPort = 12345
-  val externalPort = 12346
-  val server       = random[Server[IO]](genTcpServer(internalPort))
-  val client       = random[Client[IO, Data]](genTcpClient(externalPort))
+  val internalPort       = 12345
+  val externalPort       = 12346
+  val server             = random[Server[IO]](genTcpServer(internalPort))
+  val client             = random[Client[IO, Data]](genTcpClient(externalPort))
 
   def checkNat(natType: NatType) =
     s"NAT $natType" should {
       "add and delete mapping" ignore {
         val p = for {
-          nat <- Nat[IO](natType)
-          _   <- nat.addMapping(internalPort, externalPort, 120)
-          _   <- nat.deleteMapping(externalPort)
-          _   <- nat.addMapping(internalPort, externalPort, 120)
-          _ = server.start
-          _   <- T.sleep(1.second)
-          _   <- client.start
-          _   <- client.write(Data("hello"))
-          res <- client.read
+          nat   <- Nat[IO](natType)
+          _     <- nat.addMapping(internalPort, externalPort, 120)
+          _     <- nat.deleteMapping(externalPort)
+          _     <- nat.addMapping(internalPort, externalPort, 120)
+          fiber <- server.stream.compile.drain.start
+          _     <- T.sleep(1.second)
+          _     <- client.start
+          _     <- client.write(Data("hello"))
+          res   <- client.read
           _ = res.data shouldBe "hello"
-          _ <- server.stop
+          _ <- fiber.cancel
         } yield ()
 
         p.unsafeRunSync()

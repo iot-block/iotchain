@@ -64,7 +64,7 @@ class SimulationImpl(
       newNodes <- configs.zipWithIndex.traverse[IO, FullNode[IO]] {
         case (config, idx) =>
           implicit val ec =
-            ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2, mkThreadFactory(s"EC${idx}", true)))
+            ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2, namedThreadFactory(s"EC${idx}", true)))
           for {
             db        <- KeyValueDB.inmem[IO]
             history   <- History[IO](db)

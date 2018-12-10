@@ -1,6 +1,7 @@
 package jbok.common
 import java.lang.Thread.UncaughtExceptionHandler
 import java.nio.channels.AsynchronousChannelGroup
+import java.nio.channels.spi.AsynchronousChannelProvider
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executors, ThreadFactory}
 
@@ -17,17 +18,18 @@ object execution {
   implicit val CS: ContextShift[IO] = IO.contextShift(EC)
 
   implicit val AG: AsynchronousChannelGroup =
-    AsynchronousChannelGroup.withThreadPool(
-      Executors.newCachedThreadPool(mkThreadFactory("JBOK-AG", daemon = true)))
+    AsynchronousChannelProvider
+      .provider()
+      .openAsynchronousChannelGroup(8, namedThreadFactory("fs2-ag-tcp", true))
 
-  def mkThreadFactory(name: String, daemon: Boolean, exitJvmOnFatalError: Boolean = true): ThreadFactory =
+  def namedThreadFactory(threadPrefix: String, daemon: Boolean, exitJvmOnFatalError: Boolean = true): ThreadFactory =
     new ThreadFactory {
-      val idx            = new AtomicInteger(0)
       val defaultFactory = Executors.defaultThreadFactory()
+      val idx            = new AtomicInteger(0)
       def newThread(r: Runnable): Thread = {
         val t = defaultFactory.newThread(r)
-        t.setName(s"$name-${idx.incrementAndGet()}")
         t.setDaemon(daemon)
+        t.setName(s"$threadPrefix-${idx.incrementAndGet()}")
         t.setUncaughtExceptionHandler(new UncaughtExceptionHandler {
           def uncaughtException(t: Thread, e: Throwable): Unit = {
             ExecutionContext.defaultReporter(e)

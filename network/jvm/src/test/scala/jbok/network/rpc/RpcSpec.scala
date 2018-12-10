@@ -31,18 +31,15 @@ class RpcSpec extends JbokSpec {
   "RPC Client & Server" should {
     "mount and use API" in {
       val p = for {
-        server <- Server.websocket(bind, serverPipe)
-        _      <- T.sleep(1.second)
-        _      <- server.start
+        fiber  <- Server.websocket(bind, serverPipe).stream.compile.drain.start
         client <- WsClient[IO, String](uri)
         api = RpcClient[IO](client).useAPI[TestAPI]
-        fiber <- client.start
+        _ <- client.start
         _ = rpcServer.handlers.size shouldBe 5
         _ = api.foo.unsafeRunSync() shouldBe impl.foo.unsafeRunSync()
         _ = api.bar.unsafeRunSync() shouldBe impl.bar.unsafeRunSync()
         _ = api.qux("oho", 42).unsafeRunSync() shouldBe impl.qux("oho", 42).unsafeRunSync()
         _ = api.error.attempt.unsafeRunSync().isLeft shouldBe true
-        _ <- server.stop
         _ <- fiber.cancel
       } yield ()
       p.unsafeRunSync()

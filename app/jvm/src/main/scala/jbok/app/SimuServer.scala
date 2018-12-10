@@ -25,7 +25,7 @@ object SimuServer {
 
   val impl: SimulationAPI = SimulationImpl().unsafeRunSync()
   val rpcServer           = RpcServer().unsafeRunSync().mountAPI[SimulationAPI](impl)
-  val server              = Server.websocket(bind, rpcServer.pipe).unsafeRunSync()
+  val server              = Server.websocket(bind, rpcServer.pipe)
   val peerCount           = 10
   val minerCount          = 1
 
@@ -39,7 +39,7 @@ object SimuServer {
 
   def main(args: Array[String]): Unit = {
     init.unsafeRunSync()
-    server.start.unsafeRunSync()
+    val fiber = server.stream.compile.drain.start.unsafeRunSync()
     println("simulation start")
 
     println(s"server listen on ${bind}, press any key to quit")
@@ -51,6 +51,6 @@ object SimuServer {
     } yield ()
     cleanUp.unsafeRunSync()
 
-    server.stop.unsafeRunSync()
+    fiber.cancel.unsafeRunSync()
   }
 }

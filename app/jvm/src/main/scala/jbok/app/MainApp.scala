@@ -163,8 +163,8 @@ object MainApp extends IOApp {
         val bind = new InetSocketAddress(conf.web.host(), conf.web.port())
         for {
           fullNode <- FullNode.forConfig(conf.config)
-          server   <- Server.http[IO](bind, fullNode.rpc.handle)
-          code     <- server.stream.compile.drain.as(ExitCode.Success)
+          server = Server.http[IO](bind, fullNode.rpc.handle)
+          code <- server.stream.compile.drain.as(ExitCode.Success)
         } yield code
 
       case _ =>

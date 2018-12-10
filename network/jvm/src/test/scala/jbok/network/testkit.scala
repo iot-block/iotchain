@@ -29,13 +29,13 @@ object testkit {
   val echoPipe: Pipe[IO, Data, Data] = _.map(identity)
 
   def genTcpServer(port: Int): Gen[Server[IO]] =
-    Server.tcp[IO, Data](new InetSocketAddress(port), echoPipe).unsafeRunSync()
+    Server.tcp[IO, Data](new InetSocketAddress(port), echoPipe)
 
   def genTcpClient(port: Int): Gen[Client[IO, Data]] =
     TcpClient[IO, Data](new URI(s"tcp://localhost:${port}")).unsafeRunSync()
 
   def genWsServer(port: Int): Gen[Server[IO]] =
-    Server.websocket[IO, Data](new InetSocketAddress(port), echoPipe).unsafeRunSync()
+    Server.websocket[IO, Data](new InetSocketAddress(port), echoPipe)
 
   def genWsClient(port: Int): Gen[Client[IO, Data]] =
     WsClient[IO, Data](new URI(s"tcp://localhost:${port}")).unsafeRunSync()

@@ -101,7 +101,7 @@ object FullNode {
       )
       privateAPI   <- PrivateApiImpl(keyStore, history, config.history, executor.txPool)
       rpc          <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
-      server       <- Server.websocket(config.rpc.addr, rpc.pipe)
+      server       = Server.websocket(config.rpc.addr, rpc.pipe)
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
   }
@@ -131,7 +131,7 @@ object FullNode {
       )
       privateAPI   <- PrivateApiImpl(keyStore, consensus.history, config.history, executor.txPool)
       rpc          <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
-      server       <- Server.websocket(config.rpc.addr, rpc.pipe)
+      server       = Server.websocket(config.rpc.addr, rpc.pipe)
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
   }

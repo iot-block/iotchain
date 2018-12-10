@@ -10,7 +10,7 @@ import jbok.network.client.{Client, WsClient}
 import jbok.network.rpc.RpcClient
 
 import scala.concurrent.duration._
-import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
+import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("JbokClient")
 @JSExportAll
@@ -26,6 +26,8 @@ case class JbokClient(uri: URI, client: Client[IO, String], admin: PrivateAPI, p
 @JSExportAll
 object JbokClient {
   import jbok.network.rpc.RpcServer._
+
+  @JSExport("apply")
   def apply(uri: URI): IO[JbokClient] =
     for {
       client <- WsClient[IO, String](uri)
