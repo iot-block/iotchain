@@ -51,8 +51,6 @@ trait PublicAPI {
 
   def getUncleByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): IO[Option[BlockHeader]]
 
-  def submitHashRate(hashRate: BigInt, id: ByteVector): IO[Boolean]
-
   def getGasPrice: IO[BigInt]
 
   def isMining: IO[Boolean]

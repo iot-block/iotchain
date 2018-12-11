@@ -79,7 +79,7 @@ object FullNode {
       Resource.liftF {
         for {
           history     <- History.forPath[IO](config.history.chainDataDir)
-          _           <- history.init().attempt
+          _           <- history.init(config.genesis).attempt
           keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
           keyPair     <- Signature[ECDSA].generateKeyPair[IO]()
           peerManager <- PeerManagerPlatform[IO](config.peer, None, history)

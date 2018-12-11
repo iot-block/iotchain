@@ -20,7 +20,7 @@ class FullNodeSpec extends JbokSpec {
 
   "FullNode" should {
     "create a full node" in {
-      val fullNodeConfig = FullNodeConfig("1", 10001)
+      val fullNodeConfig = ConfigGenerator.withIdentityAndPort("1", 10001)
       val fullNode       = newFullNode(fullNodeConfig)
       val p = for {
         _ <- fullNode.start
@@ -32,7 +32,7 @@ class FullNodeSpec extends JbokSpec {
     }
 
     "create a bunch of nodes and connect with ring" in {
-      val configs = FullNodeConfig.fill(10)
+      val configs = ConfigGenerator.fill(10)
       val nodes   = configs.map(config => newFullNode(config))
 
       println(nodes.map(_.peerManager.peerNode.uri).mkString("\n"))
@@ -56,7 +56,7 @@ class FullNodeSpec extends JbokSpec {
 
     "create a bunch of nodes and connect with star" in {
       val N       = 10
-      val configs = FullNodeConfig.fill(N)
+      val configs = ConfigGenerator.fill(N)
       val nodes   = configs.map(config => newFullNode(config))
 
       val p = for {
@@ -75,7 +75,7 @@ class FullNodeSpec extends JbokSpec {
 
     "create a bunch of nodes and connect with star and broadcast some blocks" in {
       val N       = 4
-      val configs = FullNodeConfig.fill(N)
+      val configs = ConfigGenerator.fill(N)
       val nodes   = configs.map(config => newFullNode(config))
 
       val miner = nodes.head.miner

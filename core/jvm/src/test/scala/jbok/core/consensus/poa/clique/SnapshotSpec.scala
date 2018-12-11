@@ -11,6 +11,7 @@ import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 import jbok.core.testkit._
+import jbok.core.config.reference
 
 import scala.collection.mutable
 
@@ -25,7 +26,7 @@ case class Test(signers: List[String], votes: List[TestVote], results: List[Stri
 trait SnapshotFixture {
   def mkHistory(signers: List[Address]) = {
     val extra            = Clique.fillExtraData(signers)
-    val config           = GenesisConfig.default.copy(extraData = extra.toHex)
+    val config           = reference.genesis.copy(extraData = extra)
     implicit val chainId = config.chainId
     val db               = KeyValueDB.inmem[IO].unsafeRunSync()
     val history          = History[IO](db).unsafeRunSync()
@@ -59,7 +60,7 @@ class SnapshotSpec extends JbokSpec {
     val config           = CliqueConfig().copy(epoch = test.epoch)
     val signers          = test.signers.map(signer => address(signer))
     val extra            = Clique.fillExtraData(signers)
-    val genesisConfig    = GenesisConfig.default.copy(extraData = extra.toHex)
+    val genesisConfig    = reference.genesis.copy(extraData = extra)
     implicit val chainId = genesisConfig.chainId
     val db               = KeyValueDB.inmem[IO].unsafeRunSync()
     val history          = History[IO](db).unsafeRunSync()

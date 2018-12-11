@@ -9,6 +9,7 @@ import jbok.core.models._
 import jbok.core.validators.TxInvalid._
 import jbok.crypto.signature.{ECDSA, Signature}
 import scodec.bits._
+import jbok.core.config.reference
 
 class TxValidatorSpec extends JbokSpec {
   val keyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
@@ -34,7 +35,7 @@ class TxValidatorSpec extends JbokSpec {
 
   val upfrontGasCost: UInt256 = UInt256(senderBalance / 2)
 
-  val transactionValidator = new TxValidator[IO](HistoryConfig())
+  val transactionValidator = new TxValidator[IO](reference.history)
 
   "TxValidator" should {
     "report as valid a tx from after EIP155" in {

@@ -5,7 +5,7 @@ import fs2._
 import jbok.core.config.Configs.FullNodeConfig
 
 object AppServer extends StreamApp {
-  val config: FullNodeConfig = FullNodeConfig.apply("", 10000)
+  val config: FullNodeConfig = ConfigGenerator.withIdentityAndPort("my-node", 10000)
 
   override def run(args: List[String]): IO[ExitCode] =
     runStream {

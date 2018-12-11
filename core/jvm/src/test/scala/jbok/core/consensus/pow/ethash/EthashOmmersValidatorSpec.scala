@@ -10,6 +10,7 @@ import jbok.core.validators.HeaderInvalid.HeaderNumberInvalid
 import scodec.bits._
 import jbok.common.testkit._
 import jbok.core.testkit._
+import jbok.core.config.reference
 
 class EthashOmmersValidatorSpec extends JbokSpec {
   trait OmmersValidatorFixture {
@@ -280,7 +281,7 @@ class EthashOmmersValidatorSpec extends JbokSpec {
     history.putBlockAndReceipts(block95, Nil, 0, false).unsafeRunSync()
     history.putBlockAndReceipts(block96, Nil, 0, false).unsafeRunSync()
 
-    val blockChainConfig = HistoryConfig()
+    val blockChainConfig = reference.history
     val ommersValidator  = new EthashOmmersValidator(history, blockChainConfig)
   }
 

@@ -48,7 +48,7 @@ class EthashConsensus[F[_]](
         gasLimit = calcGasLimit(parent.header.gasLimit),
         gasUsed = 0,
         unixTimestamp = timestamp,
-        extraData = miningConfig.headerExtraData,
+        extraData = miningConfig.extraData,
         mixHash = ByteVector.empty,
         nonce = ByteVector.empty
       )

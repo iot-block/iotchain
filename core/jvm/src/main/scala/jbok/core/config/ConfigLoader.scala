@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.typesafe.config.Config
 import jbok.core.config.Configs._
-import jbok.core.models.UInt256
+import jbok.core.models.{Address, UInt256}
 import pureconfig._
 import pureconfig.generic.auto._
 import pureconfig.generic.ProductHint
@@ -51,8 +51,14 @@ object ConfigLoader {
     ConvertHelpers.catchReadError(s => ByteVector.fromValidHex(s))
   )
 
+  implicit private val addressReader: ConfigReader[Address] = ConfigReader.fromString[Address](
+    ConvertHelpers.catchReadError(s => Address.fromHex(s))
+  )
+
   implicit def hint[A]: ProductHint[A] =
-    ProductHint[A](fieldMapping = ConfigFieldMapping(CamelCase, CamelCase), allowUnknownKeys = false)
+    ProductHint[A](fieldMapping = ConfigFieldMapping(CamelCase, CamelCase),
+                   allowUnknownKeys = false,
+                   useDefaultArgs = false)
 
   private def loadOrThrow[A: ClassTag](config: Config, namespace: String)(
       implicit reader: Derivation[ConfigReader[A]]): A =

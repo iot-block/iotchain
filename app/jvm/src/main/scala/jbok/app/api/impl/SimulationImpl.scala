@@ -5,11 +5,11 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, IO, Timer}
 import cats.implicits._
 import fs2.concurrent.Topic
-import jbok.app.FullNode
 import jbok.app.simulations.SimulationImpl.NodeId
+import jbok.app.{ConfigGenerator, FullNode}
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.GenesisConfig
+import jbok.core.config.reference
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.ledger.History
@@ -32,7 +32,7 @@ class SimulationImpl(
   private[this] val log = org.log4s.getLogger
 
   val cliqueConfig     = CliqueConfig(period = 5.seconds)
-  val genesisConfig    = GenesisConfig.default
+  val genesisConfig    = reference.genesis
   implicit val chainId = genesisConfig.chainId
   val txGraphGen       = new TxGraphGen(10)
 
@@ -46,7 +46,7 @@ class SimulationImpl(
     FullNode.forConfigAndConsensus(config, consensus)
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val fullNodeConfigs = FullNodeConfig.fill(n)
+    val fullNodeConfigs = ConfigGenerator.fill(n)
     val signers = (1 to n).toList
       .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
       .unsafeRunSync()
@@ -55,9 +55,7 @@ class SimulationImpl(
     log.info(minerSingers.toString)
     val newGenesisConfig =
       genesisConfig
-        .copy(alloc = txGraphGen.alloc,
-              extraData = Clique.fillExtraData(minerSingers.map(Address(_))).toHex,
-              timestamp = System.currentTimeMillis())
+        .copy(alloc = txGraphGen.alloc, extraData = Clique.fillExtraData(minerSingers.map(Address(_))))
     log.info(s"create ${n} node(s)")
 
     for {

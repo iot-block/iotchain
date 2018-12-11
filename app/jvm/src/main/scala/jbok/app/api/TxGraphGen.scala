@@ -2,7 +2,7 @@ package jbok.app.simulations
 
 import cats.effect.IO
 import jbok.common.GraphUtil
-import jbok.core.config.GenesisConfig
+import jbok.core.config.reference
 import jbok.core.models._
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scalax.collection.GraphEdge.DiEdge
@@ -38,7 +38,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000))(implicit chai
 
   val alloc: Map[String, String] = keyPairs.map(x => x.address.toString -> initBalance).toMap
 
-  val genesisConfig = GenesisConfig.default.copy(alloc = alloc)
+  val genesisConfig = reference.genesis.copy(alloc = alloc)
 
   val keyPairMap: Map[Address, KeyPair] = keyPairs.map(x => x.address -> x.keyPair).toMap
 

@@ -16,7 +16,7 @@ import jbok.crypto.testkit._
 import scodec.bits.ByteVector
 import cats.implicits._
 import jbok.core.ledger.TypedBlock.SyncBlocks
-import jbok.core.config.referenceConfig
+import jbok.core.config.reference
 
 import scala.concurrent.duration._
 
@@ -124,7 +124,7 @@ class SyncManagerSpec extends JbokSpec {
       val sm1   = random[SyncManager[IO]](genSyncManager()(fixture))
       val sm2   = random[SyncManager[IO]](genSyncManager()(fixture.copy(port = fixture.port + 1)))
       val sm3   = random[SyncManager[IO]](genSyncManager()(fixture.copy(port = fixture.port + 2)))
-      val miner = BlockMiner[IO](MiningConfig(), sm1).unsafeRunSync()
+      val miner = BlockMiner[IO](reference.mining, sm1).unsafeRunSync()
 
       // let miner mine 10 blocks first
       val blocks = miner.stream.take(10).compile.toList.unsafeRunSync()
@@ -157,7 +157,7 @@ class SyncManagerSpec extends JbokSpec {
   "SyncManager FastSync" should {
 
     "fast sync to median state if best peer number - offset >= current best number" in {
-      val config = referenceConfig.sync.copy(fastEnabled = true, fastSyncOffset = 0)
+      val config = reference.sync.copy(fastEnabled = true, fastSyncOffset = 0)
       val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
       val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
       val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
@@ -184,7 +184,7 @@ class SyncManagerSpec extends JbokSpec {
     }
 
     "skip fast sync if best peer number - offset < current best number" in {
-      val config = referenceConfig.sync.copy(fastEnabled = true)
+      val config = reference.sync.copy(fastEnabled = true)
       val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
       val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
       val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
@@ -215,7 +215,7 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager" should {
     "start with FastSync then switch to FullSync" in {
-      val config = referenceConfig.sync.copy(fastEnabled = true, fastSyncOffset = 5)
+      val config = reference.sync.copy(fastEnabled = true, fastSyncOffset = 5)
       val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
       val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
       val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))

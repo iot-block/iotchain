@@ -103,6 +103,8 @@ final class LevelDB[F[_]](
 }
 
 object LevelDB {
+  private[this] val log = org.log4s.getLogger("LevelDB")
+
   val defaultOptions = (new Options).createIfMissing(true)
 
   val defaultReadOptions = new ReadOptions
@@ -128,6 +130,7 @@ object LevelDB {
   )(implicit F: Sync[F]): F[KeyValueDB[F]] =
     for {
       db <- F.delay(factory.open(new File(path), options))
+      _  <- F.delay(log.info(s"open db at ${path}"))
     } yield new LevelDB[F](path, db, options, readOptions, writeOptions)
 
   private[jbok] def jni[F[_]](
@@ -138,6 +141,7 @@ object LevelDB {
   )(implicit F: Sync[F]): F[KeyValueDB[F]] =
     for {
       db <- F.delay(JNIFactory.open(new File(path), options))
+      _  <- F.delay(log.info(s"open db at ${path}"))
     } yield new LevelDB[F](path, db, options, readOptions, writeOptions)
 
   def destroy[F[_]](path: String, useJni: Boolean = false, options: Options = defaultOptions)(

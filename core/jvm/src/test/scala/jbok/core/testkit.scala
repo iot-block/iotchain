@@ -24,7 +24,7 @@ import jbok.persistent.KeyValueDB
 import jbok.persistent.testkit._
 import org.scalacheck._
 import scodec.bits.ByteVector
-import jbok.core.config.referenceConfig
+import jbok.core.config.reference
 
 import scala.concurrent.duration._
 
@@ -73,7 +73,7 @@ object testkit {
       SimAccount(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
     val alloc = Map(miner.address.toString -> miner.balance.toString())
     val genesisConfig =
-      GenesisConfig.default.copy(alloc = alloc, extraData = Clique.fillExtraData(miner.address :: Nil).toHex)
+      reference.genesis.copy(alloc = alloc, extraData = Clique.fillExtraData(miner.address :: Nil))
 
     Fixture(chainId.toInt, port, miner, genesisConfig, "clique")
   }
@@ -81,7 +81,7 @@ object testkit {
   def fixture(port: Int): Fixture = {
     val miner         = SimAccount(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync(), BigInt("100000000000000000000"), 0)
     val alloc         = Map(miner.address.toString -> miner.balance.toString())
-    val genesisConfig = GenesisConfig.default.copy(alloc = alloc)
+    val genesisConfig = reference.genesis.copy(alloc = alloc)
     Fixture(chainId.toInt, port, miner, genesisConfig, "ethash")
   }
 
@@ -199,7 +199,7 @@ object testkit {
   }
 
   implicit def arbPeerManager(implicit fixture: Fixture): Arbitrary[PeerManager[IO]] = Arbitrary {
-    genPeerManager(PeerConfig(fixture.port))
+    genPeerManager(reference.peer.copy(port = fixture.port))
   }
 
   def genTxPool(config: TxPoolConfig = TxPoolConfig())(implicit fixture: Fixture): Gen[TxPool[IO]] = {
@@ -212,8 +212,8 @@ object testkit {
   }
 
   def genStatus(number: BigInt = 0,
-                chainId: BigInt = GenesisConfig.default.chainId,
-                genesisHash: ByteVector = GenesisConfig.default.header.hash): Gen[Status] =
+                chainId: BigInt = reference.genesis.chainId,
+                genesisHash: ByteVector = reference.genesis.header.hash): Gen[Status] =
     Gen.delay(Status(chainId, genesisHash, number))
 
   def genPeer: Gen[Peer[IO]] =
@@ -258,7 +258,7 @@ object testkit {
 
   def genBlockMiner(implicit fixture: Fixture): Gen[BlockMiner[IO]] = {
     val sm    = random[SyncManager[IO]]
-    val miner = BlockMiner[IO](MiningConfig(), sm).unsafeRunSync()
+    val miner = BlockMiner[IO](reference.mining, sm).unsafeRunSync()
     miner
   }
 
@@ -318,16 +318,17 @@ object testkit {
   implicit def arbBlockExecutor(implicit fixture: Fixture): Arbitrary[BlockExecutor[IO]] = Arbitrary {
     val consensus = fixture.consensus.unsafeRunSync()
     val keyPair   = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val pm        = PeerManagerPlatform[IO](PeerConfig(fixture.port), Some(keyPair), consensus.history).unsafeRunSync()
-    BlockExecutor[IO](HistoryConfig(), consensus, pm).unsafeRunSync()
+    val pm = PeerManagerPlatform[IO](reference.peer.copy(port = fixture.port), Some(keyPair), consensus.history)
+      .unsafeRunSync()
+    BlockExecutor[IO](reference.history, consensus, pm).unsafeRunSync()
   }
 
-  def genFullSync(config: SyncConfig = referenceConfig.sync)(implicit fixture: Fixture): Gen[FullSync[IO]] = {
+  def genFullSync(config: SyncConfig = reference.sync)(implicit fixture: Fixture): Gen[FullSync[IO]] = {
     val executor = random[BlockExecutor[IO]]
     FullSync[IO](config, executor).unsafeRunSync()
   }
 
-  def genSyncManager(config: SyncConfig = referenceConfig.sync)(implicit fixture: Fixture): Gen[SyncManager[IO]] = {
+  def genSyncManager(config: SyncConfig = reference.sync)(implicit fixture: Fixture): Gen[SyncManager[IO]] = {
     val executor = random[BlockExecutor[IO]]
     SyncManager[IO](config, executor).unsafeRunSync()
   }
@@ -337,9 +338,8 @@ object testkit {
   }
 
   def genDiscovery(port: Int): Gen[Discovery[IO]] = {
-    val config         = PeerConfig(discoveryPort = port)
-    val addr           = new InetSocketAddress("localhost", port)
-    val (transport, _) = UdpTransport[IO](addr).allocated.unsafeRunSync()
+    val config         = reference.peer.copy(discoveryPort = port)
+    val (transport, _) = UdpTransport[IO](config.discoveryAddr).allocated.unsafeRunSync()
     val keyPair        = random[KeyPair]
     val db             = random[KeyValueDB[IO]]
     val store          = PeerStorePlatform.fromKV(db)

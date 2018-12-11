@@ -99,13 +99,6 @@ class PublicApiImpl(
     x.value
   }
 
-  override def submitHashRate(hr: BigInt, id: ByteVector): IO[Boolean] =
-    for {
-      _ <- reportActive
-      now = new Date
-      _ <- hashRate.update(m => removeObsoleteHashrates(now, m + (id -> (hr, now))))
-    } yield true
-
   override def getGasPrice: IO[BigInt] = {
     val blockDifference = BigInt(30)
     for {
@@ -232,13 +225,6 @@ class PublicApiImpl(
       callTx.gas.get.pure[IO]
     } else {
       resolveBlock(BlockParam.Latest).map(_.header.gasLimit)
-    }
-
-  private[jbok] def removeObsoleteHashrates(now: Date,
-                                            rates: Map[ByteVector, (BigInt, Date)]): Map[ByteVector, (BigInt, Date)] =
-    rates.filter {
-      case (_, (_, reported)) =>
-        Duration.between(reported.toInstant, now.toInstant).toMillis < miningConfig.activeTimeout.toMillis
     }
 
   private[jbok] def reportActive: IO[Unit] = {

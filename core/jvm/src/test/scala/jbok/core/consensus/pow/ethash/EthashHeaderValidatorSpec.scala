@@ -9,6 +9,7 @@ import jbok.core.models._
 import jbok.common.testkit._
 import jbok.core.testkit._
 import scodec.bits._
+import jbok.core.config.reference
 
 class EthashHeaderValidatorSpec extends JbokSpec {
   trait EthashHeaderValidatorFixture {
@@ -48,7 +49,7 @@ class EthashHeaderValidatorSpec extends JbokSpec {
       mixHash = hex"7f9ac1ddeafff0f926ed9887b8cf7d50c3f919d902e618b957022c46c8b404a6",
       nonce = hex"3fc7bc671f7cee70"
     )
-    val blockChainConfig = HistoryConfig()
+    val blockChainConfig = reference.history
     history.putBlockHeader(validBlockParent).unsafeRunSync()
     val blockHeaderValidator = new EthashHeaderValidator[IO](blockChainConfig)
   }

@@ -14,7 +14,7 @@ import scodec.bits._
 
 abstract class History[F[_]](val db: KeyValueDB[F]) {
   // init
-  def init(config: GenesisConfig = GenesisConfig.default): F[Unit]
+  def init(config: GenesisConfig): F[Unit]
 
   // header
   def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]]

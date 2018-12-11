@@ -65,6 +65,7 @@ final class Discovery[F[_]](
       current <- T.clock.realTime(MILLISECONDS)
       id      <- F.delay(UUID.randomUUID())
       ping = Ping(peerNode, current + ttl.toMillis, id)
+      _ = log.debug(s"ping ${remote.udpAddress}")
       kad <- sendAndWaitPacket(remote.udpAddress, ping)
       pong = kad.asInstanceOf[Pong]
     } yield pong

@@ -1,7 +1,6 @@
 package jbok.app
 
-import cats.effect.{ExitCode, IO, IOApp}
-import cats.implicits._
+import cats.effect.{ExitCode, IO}
 import fs2._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.{ConfigHelper, ConfigLoader}
@@ -12,19 +11,11 @@ object MainApp extends StreamApp {
   val version = s"v${buildVersion} © 2018 The JBOK Authors"
 
   val banner = """
-           | .----------------.  .----------------.  .----------------.  .----------------.
-           || .--------------. || .--------------. || .--------------. || .--------------. |
-           || |     _____    | || |   ______     | || |     ____     | || |  ___  ____   | |
-           || |    |_   _|   | || |  |_   _ \    | || |   .'    `.   | || | |_  ||_  _|  | |
-           || |      | |     | || |    | |_) |   | || |  /  .--.  \  | || |   | |_/ /    | |
-           || |   _  | |     | || |    |  __'.   | || |  | |    | |  | || |   |  __'.    | |
-           || |  | |_' |     | || |   _| |__) |  | || |  \  `--'  /  | || |  _| |  \ \_  | |
-           || |  `.___.'     | || |  |_______/   | || |   `.____.'   | || | |____||____| | |
-           || |              | || |              | || |              | || |              | |
-           || '--------------' || '--------------' || '--------------' || '--------------' |
-           | '----------------'  '----------------'  '----------------'  '----------------'
-           |
-           |""".stripMargin
+                  | ____     ____     ____     ____
+                  |||J ||   ||B ||   ||O ||   ||K ||
+                  |||__||<--||__||<--||__||<--||__||
+                  ||/__\|   |/__\|   |/__\|   |/__\|
+                  |""".stripMargin
 
   def loadConfig(args: List[String]): IO[FullNodeConfig] =
     for {
