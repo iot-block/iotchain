@@ -30,6 +30,8 @@ lazy val V = new {
 lazy val jbok = project
   .in(file("."))
   .aggregate(
+    common.js,
+    common.jvm,
     codec.js,
     codec.jvm,
     persistent.js,
@@ -76,8 +78,6 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "org.log4s"      %% "log4s"          % "1.6.1",
       // files
       "com.github.pathikrit" %% "better-files" % "3.5.0",
-      // command line
-      "org.rogach" %%% "scallop" % "3.1.3",
       // config
       "com.github.pureconfig" %% "pureconfig" % "0.10.0",
       // test
@@ -409,7 +409,7 @@ lazy val releaseSettings = {
           username,
           password
         )
-      ).toSeq,
+    ).toSeq,
     publishArtifact in Test := false,
     releasePublishArtifactsAction := PgpKeys.publishSigned.value,
     scmInfo := Some(

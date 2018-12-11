@@ -4,18 +4,17 @@ import com.typesafe.config.ConfigFactory
 import jbok.JbokSpec
 
 class ConfigHelperSpec extends JbokSpec {
-  val config = ConfigFactory.load().getConfig("jbok")
-
   "ConfigHelper" should {
     "print config help" in {
-      val help = ConfigHelper.printConfig(config)
+      val help = ConfigHelper.printConfig(ConfigHelper.reference)
       println(help.render)
     }
 
     "parse config" in {
       val args             = List("-datadir", "oho")
       val Right(cmdConfig) = ConfigHelper.parseConfig(args)
-      val fullConfig       = cmdConfig.withFallback(config)
+      val fullConfig       = cmdConfig.withFallback(ConfigHelper.reference)
+      println(fullConfig.root().render())
       println(ConfigHelper.printConfig(fullConfig).render)
     }
   }

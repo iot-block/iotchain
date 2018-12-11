@@ -15,6 +15,8 @@ object Configs {
 
   case class FullNodeConfig(
       datadir: String,
+      identity: String,
+      genesis: GenesisConfig,
       history: HistoryConfig,
       keystore: KeyStoreConfig,
       peer: PeerConfig,
@@ -27,8 +29,9 @@ object Configs {
   }
 
   object FullNodeConfig {
-    def apply(suffix: String, port: Int): FullNodeConfig = {
-      val datadir  = s"${defaultRootDir}/${suffix}"
+    def apply(identity: String, port: Int): FullNodeConfig = {
+      val datadir  = s"${defaultRootDir}/${identity}"
+      val genesis = GenesisConfig.default
       val history  = HistoryConfig()
       val keystore = KeyStoreConfig(s"${datadir}/keystore")
       val peer     = PeerConfig(port)
@@ -39,6 +42,8 @@ object Configs {
 
       FullNodeConfig(
         datadir,
+        identity,
+        genesis,
         history,
         keystore,
         peer,
