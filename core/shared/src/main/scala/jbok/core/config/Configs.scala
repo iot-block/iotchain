@@ -25,33 +25,34 @@ object Configs {
       mining: MiningConfig,
       rpc: RpcConfig
   ) {
-    val keystoreDir = s"${datadir}/keystore"
+    val lock: String = s"${datadir}/LOCK"
   }
 
   object FullNodeConfig {
     def apply(identity: String, port: Int): FullNodeConfig = {
-      val datadir  = s"${defaultRootDir}/${identity}"
-      val genesis = GenesisConfig.default
-      val history  = HistoryConfig()
-      val keystore = KeyStoreConfig(s"${datadir}/keystore")
-      val peer     = PeerConfig(port)
-      val sync     = SyncConfig()
-      val txPool   = TxPoolConfig()
-      val mining   = MiningConfig(enabled = false)
-      val rpc      = RpcConfig(enabled = false, "localhost", port + 200, "public,admin")
-
-      FullNodeConfig(
-        datadir,
-        identity,
-        genesis,
-        history,
-        keystore,
-        peer,
-        sync,
-        txPool,
-        mining,
-        rpc
-      )
+//      val datadir  = s"${defaultRootDir}/${identity}"
+//      val genesis = GenesisConfig.default
+//      val history  = HistoryConfig()
+//      val keystore = KeyStoreConfig(s"${datadir}/keystore")
+//      val peer     = PeerConfig(port)
+//      val sync     = SyncConfig()
+//      val txPool   = TxPoolConfig()
+//      val mining   = MiningConfig(enabled = false)
+//      val rpc      = RpcConfig(enabled = false, "localhost", port + 200, "public,admin")
+//
+//      FullNodeConfig(
+//        datadir,
+//        identity,
+//        genesis,
+//        history,
+//        keystore,
+//        peer,
+//        sync,
+//        txPool,
+//        mining,
+//        rpc
+//      )
+      ???
     }
 
     def fill(size: Int): List[FullNodeConfig] =
@@ -136,19 +137,19 @@ object Configs {
   )
 
   case class SyncConfig(
-      maxConcurrentRequests: Int = 50, // fast sync
-      maxBlockHeadersPerRequest: Int = 128, // fast/full sync
-      maxBlockBodiesPerRequest: Int = 128, // fast/full sync
-      maxReceiptsPerRequest: Int = 60, // fast sync
-      maxNodesPerRequest: Int = 200, // fast sync
-      minPeersToChooseTargetBlock: Int = 2, // fast sync
-      minBroadcastPeers: Int = 4,
-      fullSyncOffset: Int = 10, // the actual full sync number = min(1, current + 1 - offset)
-      fastSyncOffset: Int = 64, // fast sync
-      fastEnabled: Boolean = false,
-      retryInterval: FiniteDuration = 15.seconds,
-      checkForNewBlockInterval: FiniteDuration = 5.seconds,
-      banDuration: FiniteDuration = 200.seconds,
-      requestTimeout: FiniteDuration = 10.seconds,
+      maxConcurrentRequests: Int,
+      maxBlockHeadersPerRequest: Int,
+      maxBlockBodiesPerRequest: Int,
+      maxReceiptsPerRequest: Int,
+      maxNodesPerRequest: Int,
+      minPeersToChooseTargetBlock: Int,
+      minBroadcastPeers: Int,
+      fullSyncOffset: Int,
+      fastSyncOffset: Int,
+      fastEnabled: Boolean,
+      retryInterval: FiniteDuration,
+      checkForNewBlockInterval: FiniteDuration,
+      banDuration: FiniteDuration,
+      requestTimeout: FiniteDuration
   )
 }

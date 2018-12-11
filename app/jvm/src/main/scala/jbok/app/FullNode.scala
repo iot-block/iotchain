@@ -1,6 +1,7 @@
 package jbok.app
 
 import java.net.InetSocketAddress
+import java.nio.file.Paths
 import java.security.SecureRandom
 
 import cats.effect._
@@ -9,6 +10,7 @@ import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
+import jbok.common.FileLock
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.Consensus
@@ -23,7 +25,6 @@ import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
-import jbok.persistent.KeyValueDB
 
 case class FullNode[F[_]](
     config: FullNodeConfig,
@@ -71,39 +72,40 @@ object FullNode {
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
       CS: ContextShift[IO]
-  ): IO[FullNode[IO]] = {
-    val random = new SecureRandom()
+  ): Resource[IO, FullNode[IO]] = {
     // load genesis first and define chainId
-    implicit val chainId: BigInt = 1
-    for {
-      db <- KeyValueDB.forPath[IO](config.datadir)
-      keyPair = Signature[ECDSA].generateKeyPair().unsafeRunSync()
-      history <- History(db)
-      // load genesis if does not exist
-      _         <- history.init()
-      blockPool <- BlockPool(history, BlockPoolConfig())
-      clique    <- Clique(CliqueConfig(), history, keyPair)
-      consensus = new CliqueConsensus[IO](clique, blockPool)
-      peerManager <- PeerManagerPlatform[IO](config.peer, Some(keyPair), history)
-      executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
-      syncManager <- SyncManager(config.sync, executor)
-      keyStore    <- KeyStorePlatform[IO](config.keystoreDir, random)
-      miner       <- BlockMiner[IO](config.mining, syncManager)
+    implicit val chainId: BigInt = config.genesis.chainId
+    FileLock.lock[IO](Paths.get(s"${config.lock}")).flatMap { _ =>
+      Resource.liftF {
+        for {
+          history     <- History.forPath[IO](config.history.chainDataDir)
+          _           <- history.init().attempt
+          keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
+          keyPair     <- Signature[ECDSA].generateKeyPair[IO]()
+          peerManager <- PeerManagerPlatform[IO](config.peer, None, history)
+          blockPool   <- BlockPool(history, BlockPoolConfig())
+          clique      <- Clique(CliqueConfig(), history, keyPair)
+          consensus = new CliqueConsensus[IO](clique, blockPool)
+          executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
+          syncManager <- SyncManager(config.sync, executor)
+          miner       <- BlockMiner[IO](config.mining, syncManager)
 
-      // mount rpc
-      publicAPI <- PublicApiImpl(
-        history,
-        config.history,
-        config.mining,
-        miner,
-        keyStore,
-        1
-      )
-      privateAPI   <- PrivateApiImpl(keyStore, history, config.history, executor.txPool)
-      rpc          <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
-      server       = Server.websocket(config.rpc.addr, rpc.pipe)
-      haltWhenTrue <- SignallingRef[IO, Boolean](true)
-    } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
+          // mount rpc
+          publicAPI <- PublicApiImpl(
+            history,
+            config.history,
+            config.mining,
+            miner,
+            keyStore,
+            1
+          )
+          privateAPI <- PrivateApiImpl(keyStore, history, config.history, executor.txPool)
+          rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
+          server = Server.websocket(config.rpc.addr, rpc.pipe)
+          haltWhenTrue <- SignallingRef[IO, Boolean](true)
+        } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
+      }
+    }
   }
 
   def forConfigAndConsensus(config: FullNodeConfig, consensus: Consensus[IO])(
@@ -117,7 +119,7 @@ object FullNode {
       peerManager <- PeerManagerPlatform[IO](config.peer, Some(nodeKey), consensus.history)
       executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
       syncManager <- SyncManager(config.sync, executor)
-      keyStore    <- KeyStorePlatform[IO](config.keystoreDir, new SecureRandom())
+      keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
       miner       <- BlockMiner[IO](config.mining, syncManager)
 
       // mount rpc
@@ -129,9 +131,9 @@ object FullNode {
         keyStore,
         1
       )
-      privateAPI   <- PrivateApiImpl(keyStore, consensus.history, config.history, executor.txPool)
-      rpc          <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
-      server       = Server.websocket(config.rpc.addr, rpc.pipe)
+      privateAPI <- PrivateApiImpl(keyStore, consensus.history, config.history, executor.txPool)
+      rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
+      server = Server.websocket(config.rpc.addr, rpc.pipe)
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
   }

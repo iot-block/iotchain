@@ -82,6 +82,9 @@ abstract class History[F[_]](val db: KeyValueDB[F]) {
 }
 
 object History {
+  def forPath[F[_]: Sync](dbPath: String)(implicit chainId: BigInt): F[History[F]] =
+    KeyValueDB.forPath[F](dbPath).map(db => new HistoryImpl[F](db))
+
   def apply[F[_]: Sync](db: KeyValueDB[F])(implicit chainId: BigInt): F[History[F]] =
     Sync[F].pure {
       new HistoryImpl[F](db)

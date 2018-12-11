@@ -1,10 +1,14 @@
 package jbok.common
 
+import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Path, StandardOpenOption}
 
 import better.files.File
+import better.files.File.RandomAccessMode
 import cats.effect.{Resource, Sync}
 import cats.implicits._
+
+case class FileLockErr(path: Path) extends Exception(s"${path} is already locked")
 
 object FileLock {
   private[this] val log = org.log4s.getLogger("FileLock")
@@ -13,15 +17,18 @@ object FileLock {
     Resource
       .make {
         for {
-          file    <- F.delay(File(path).createIfNotExists(createParents = true))
-          channel <- F.delay(file.newFileChannel(StandardOpenOption.WRITE :: Nil))
-          lock    <- F.delay(channel.tryLock())
-          _       <- F.delay(log.debug(s"acquired file lock at ${path}"))
+          _ <- F.delay(log.info(s"acquiring file lock at ${path}"))
+          file <- F.delay(
+            File(path).createIfNotExists(createParents = true).newRandomAccess(RandomAccessMode.readWrite))
+          channel <- F.delay(file.getChannel)
+          lock <- F.delay(channel.tryLock()).adaptError {
+            case _: OverlappingFileLockException => FileLockErr(path)
+          }
+          _ <- if (lock == null) F.raiseError(FileLockErr(path)) else F.unit
         } yield lock
       } { lock =>
-        F.delay(log.debug(s"releasing file lock at ${path}")) >>
-          F.delay(File(path).delete()) >>
-          F.delay(lock.release())
+        F.delay(File(path).delete(swallowIOExceptions = true)) >> F.delay(lock.release()) <* F.delay(
+          log.info(s"released file lock at ${path}"))
       }
       .as(())
 }

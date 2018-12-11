@@ -31,7 +31,7 @@ object PeerManagerPlatform {
   def loadOrGenerateNodeKey[F[_]: Sync](path: String): F[KeyPair] =
     loadNodeKey[F](path).attempt.flatMap {
       case Left(e) =>
-        log.error(e)(s"read nodekey at ${path} failed, generating a random one")
+        log.info(s"read nodekey at ${path} failed, generating a random one")
         for {
           keyPair <- Signature[ECDSA].generateKeyPair[F]()
           _       <- saveNodeKey[F](path, keyPair)

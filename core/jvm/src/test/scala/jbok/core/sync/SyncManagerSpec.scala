@@ -16,6 +16,7 @@ import jbok.crypto.testkit._
 import scodec.bits.ByteVector
 import cats.implicits._
 import jbok.core.ledger.TypedBlock.SyncBlocks
+import jbok.core.config.referenceConfig
 
 import scala.concurrent.duration._
 
@@ -156,7 +157,7 @@ class SyncManagerSpec extends JbokSpec {
   "SyncManager FastSync" should {
 
     "fast sync to median state if best peer number - offset >= current best number" in {
-      val config = SyncConfig(fastEnabled = true, fastSyncOffset = 0)
+      val config = referenceConfig.sync.copy(fastEnabled = true, fastSyncOffset = 0)
       val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
       val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
       val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
@@ -183,7 +184,7 @@ class SyncManagerSpec extends JbokSpec {
     }
 
     "skip fast sync if best peer number - offset < current best number" in {
-      val config = SyncConfig(fastEnabled = true)
+      val config = referenceConfig.sync.copy(fastEnabled = true)
       val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
       val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
       val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
@@ -214,7 +215,7 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager" should {
     "start with FastSync then switch to FullSync" in {
-      val config = SyncConfig(fastEnabled = true, fastSyncOffset = 5)
+      val config = referenceConfig.sync.copy(fastEnabled = true, fastSyncOffset = 5)
       val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
       val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
       val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))

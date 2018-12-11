@@ -1,6 +1,5 @@
 package jbok.core.config
 
-import com.typesafe.config.ConfigFactory
 import jbok.JbokSpec
 
 class ConfigHelperSpec extends JbokSpec {

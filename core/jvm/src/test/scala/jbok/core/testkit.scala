@@ -24,6 +24,7 @@ import jbok.persistent.KeyValueDB
 import jbok.persistent.testkit._
 import org.scalacheck._
 import scodec.bits.ByteVector
+import jbok.core.config.referenceConfig
 
 import scala.concurrent.duration._
 
@@ -321,12 +322,12 @@ object testkit {
     BlockExecutor[IO](HistoryConfig(), consensus, pm).unsafeRunSync()
   }
 
-  def genFullSync(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[FullSync[IO]] = {
+  def genFullSync(config: SyncConfig = referenceConfig.sync)(implicit fixture: Fixture): Gen[FullSync[IO]] = {
     val executor = random[BlockExecutor[IO]]
     FullSync[IO](config, executor).unsafeRunSync()
   }
 
-  def genSyncManager(config: SyncConfig = SyncConfig())(implicit fixture: Fixture): Gen[SyncManager[IO]] = {
+  def genSyncManager(config: SyncConfig = referenceConfig.sync)(implicit fixture: Fixture): Gen[SyncManager[IO]] = {
     val executor = random[BlockExecutor[IO]]
     SyncManager[IO](config, executor).unsafeRunSync()
   }

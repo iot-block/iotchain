@@ -51,8 +51,8 @@ object ConfigLoader {
     ConvertHelpers.catchReadError(s => ByteVector.fromValidHex(s))
   )
 
-  implicit private val hint: ProductHint[GenesisConfig] =
-    ProductHint[GenesisConfig](fieldMapping = ConfigFieldMapping(CamelCase, CamelCase), allowUnknownKeys = false)
+  implicit def hint[A]: ProductHint[A] =
+    ProductHint[A](fieldMapping = ConfigFieldMapping(CamelCase, CamelCase), allowUnknownKeys = false)
 
   private def loadOrThrow[A: ClassTag](config: Config, namespace: String)(
       implicit reader: Derivation[ConfigReader[A]]): A =

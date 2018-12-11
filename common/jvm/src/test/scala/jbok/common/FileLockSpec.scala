@@ -19,7 +19,7 @@ class FileLockSpec extends JbokSpec {
       file.exists shouldBe false
     }
 
-    "raise OverlappingFileLockException if already locked" in {
+    "raise FileLockErr if already locked" in {
       val file = File.newTemporaryFile()
       val p = FileLock
         .lock[IO](file.path)
@@ -30,7 +30,7 @@ class FileLockSpec extends JbokSpec {
               IO.unit
             }
             .attempt
-            .map(x => x.left.get shouldBe a[OverlappingFileLockException])
+            .map(x => x.left.get shouldBe FileLockErr(file.path))
         }
         .attempt
       p.unsafeRunSync().isRight shouldBe true
