@@ -22,11 +22,11 @@ object PrivateApiImpl {
       history: History[IO],
       blockChainConfig: HistoryConfig,
       txPool: TxPool[IO],
-  )(implicit chainId: BigInt): IO[PrivateAPI] =
+  )(implicit chainId: BigInt): IO[PrivateAPI[IO]] =
     for {
       unlockedWallets <- Ref.of[IO, Map[Address, Wallet]](Map.empty)
     } yield
-      new PrivateAPI {
+      new PrivateAPI[IO] {
         override def importRawKey(privateKey: ByteVector, passphrase: String): IO[Address] =
           keyStore.importPrivateKey(privateKey, passphrase)
 

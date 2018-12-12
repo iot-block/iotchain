@@ -18,22 +18,22 @@ object EvmConfig {
   /**
     * returns the evm config that should be used for given block
     */
-  def forBlock(blockNumber: BigInt, blockchainConfig: HistoryConfig): EvmConfig = {
-    val transitionBlockToConfigMapping: Map[BigInt, EvmConfigBuilder] = Map(
-      blockchainConfig.frontierBlockNumber         -> FrontierConfigBuilder,
-      blockchainConfig.homesteadBlockNumber        -> HomesteadConfigBuilder,
-      blockchainConfig.tangerineWhistleBlockNumber -> TangerineWhistleConfigBuilder,
-      blockchainConfig.spuriousDragonBlockNumber   -> SpuriousDragonConfigBuilder,
-      blockchainConfig.byzantiumBlockNumber        -> ByzantiumConfigBuilder,
-      blockchainConfig.constantinopleBlockNumber   -> ConstantinopleConfigBuilder
+  def forBlock(blockNumber: BigInt, historyConfig: HistoryConfig): EvmConfig = {
+    val transitionBlockToConfigMapping: List[(BigInt, EvmConfigBuilder)] = List(
+      historyConfig.constantinopleBlockNumber   -> ConstantinopleConfigBuilder,
+      historyConfig.byzantiumBlockNumber        -> ByzantiumConfigBuilder,
+      historyConfig.spuriousDragonBlockNumber   -> SpuriousDragonConfigBuilder,
+      historyConfig.tangerineWhistleBlockNumber -> TangerineWhistleConfigBuilder,
+      historyConfig.homesteadBlockNumber        -> HomesteadConfigBuilder,
+      historyConfig.frontierBlockNumber         -> FrontierConfigBuilder
     )
 
     // highest transition block that is less/equal to `blockNumber`
     val evmConfigBuilder = transitionBlockToConfigMapping
-      .filterKeys(_ <= blockNumber)
-      .maxBy(_._1)
-      ._2
-    evmConfigBuilder(blockchainConfig.maxCodeSize)
+      .find(_._1 <= blockNumber)
+      .map(_._2)
+      .getOrElse(FrontierConfigBuilder)
+    evmConfigBuilder(historyConfig.maxCodeSize)
   }
 
   val FrontierConfigBuilder: EvmConfigBuilder = maxCodeSize =>

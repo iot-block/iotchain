@@ -7,7 +7,10 @@ import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import scodec.bits._
 import shapeless._
+import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
+@JSExportTopLevel("BlockHeader")
+@JSExportAll
 final case class BlockHeader(
     parentHash: ByteVector, // B32 pre
     ommersHash: ByteVector, // B32 body

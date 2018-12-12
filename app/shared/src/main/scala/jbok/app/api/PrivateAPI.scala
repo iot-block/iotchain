@@ -1,6 +1,5 @@
 package jbok.app.api
 
-import cats.effect.IO
 import io.circe.generic.JsonCodec
 import jbok.codec.json.implicits._
 import jbok.core.models.{Address, Transaction}
@@ -8,7 +7,9 @@ import jbok.crypto.signature._
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.Duration
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 
+@JSExportTopLevel("TransactionRequest")
 @JsonCodec
 case class TransactionRequest(
     from: Address,
@@ -34,26 +35,26 @@ case class TransactionRequest(
     )
 }
 
-trait PrivateAPI {
-  def importRawKey(privateKey: ByteVector, passphrase: String): IO[Address]
+trait PrivateAPI[F[_]] {
+  def importRawKey(privateKey: ByteVector, passphrase: String): F[Address]
 
-  def newAccount(passphrase: String): IO[Address]
+  def newAccount(passphrase: String): F[Address]
 
-  def delAccount(address: Address): IO[Boolean]
+  def delAccount(address: Address): F[Boolean]
 
-  def listAccounts: IO[List[Address]]
+  def listAccounts: F[List[Address]]
 
-  def unlockAccount(address: Address, passphrase: String, duration: Option[Duration]): IO[Boolean]
+  def unlockAccount(address: Address, passphrase: String, duration: Option[Duration]): F[Boolean]
 
-  def lockAccount(address: Address): IO[Boolean]
+  def lockAccount(address: Address): F[Boolean]
 
-  def sign(message: ByteVector, address: Address, passphrase: Option[String]): IO[CryptoSignature]
+  def sign(message: ByteVector, address: Address, passphrase: Option[String]): F[CryptoSignature]
 
-  def ecRecover(message: ByteVector, signature: CryptoSignature): IO[Address]
+  def ecRecover(message: ByteVector, signature: CryptoSignature): F[Address]
 
-  def sendTransaction(tx: TransactionRequest, passphrase: Option[String]): IO[ByteVector]
+  def sendTransaction(tx: TransactionRequest, passphrase: Option[String]): F[ByteVector]
 
-  def deleteWallet(address: Address): IO[Boolean]
+  def deleteWallet(address: Address): F[Boolean]
 
-  def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): IO[Boolean]
+  def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): F[Boolean]
 }

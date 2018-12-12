@@ -6,6 +6,8 @@ import jbok.codec.rlp.implicits._
 import scodec.Codec
 import scodec.bits.ByteVector
 
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
+
 /** Represents 256 bit unsigned integers with standard arithmetic, byte-wise operation and EVM-specific extensions */
 final class UInt256 private (private val n: BigInt) extends Ordered[UInt256] {
 
@@ -119,6 +121,7 @@ final class UInt256 private (private val n: BigInt) extends Ordered[UInt256] {
 
   override def hashCode: Int = n.hashCode()
 
+  @JSExport
   override def toString: String = toSignedDecString
 
   def toDecString: String =
@@ -127,6 +130,7 @@ final class UInt256 private (private val n: BigInt) extends Ordered[UInt256] {
   def toSignedDecString: String =
     signedN.toString
 
+  @JSExport
   def toHexString: String = {
     val hex = f"$n%x"
     //add zero if odd number of digits
@@ -135,19 +139,23 @@ final class UInt256 private (private val n: BigInt) extends Ordered[UInt256] {
   }
 
   // conversions
+  @JSExport
   def toBigInt: BigInt = n
 
   /**
     * @return an Int with MSB=0, thus a value in range [0, Int.MaxValue]
     */
+  @JSExport
   def toInt: Int = n.intValue & Int.MaxValue
 
   /**
     * @return a Long with MSB=0, thus a value in range [0, Long.MaxValue]
     */
+  @JSExport
   def toLong: Long = n.longValue & Long.MaxValue
 }
 
+@JSExportTopLevel("UInt256")
 object UInt256 {
   implicit val rlp: RlpCodec[UInt256] = rbytes.xmap[UInt256](UInt256.apply, _.unpaddedBytes)
   implicit val codec: Codec[UInt256]  = rlp.codec
@@ -168,6 +176,7 @@ object UInt256 {
 
   val Two: UInt256 = UInt256(2)
 
+  @JSExport("fromByteVector")
   def apply(bytes: ByteVector): UInt256 = {
     require(bytes.length <= Size, s"Input byte array cannot be longer than $Size: ${bytes.length}")
     UInt256(BigInt(1, bytes.toArray))
@@ -176,12 +185,14 @@ object UInt256 {
   def apply(array: Array[Byte]): UInt256 =
     UInt256(ByteVector(array))
 
+  @JSExport("fromBigInt")
   def apply(n: BigInt): UInt256 =
     new UInt256(boundBigInt(n))
 
   def apply(b: Boolean): UInt256 =
     if (b) One else Zero
 
+  @JSExport("fromLong")
   def apply(n: Long): UInt256 =
     apply(BigInt(n))
 

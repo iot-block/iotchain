@@ -18,6 +18,7 @@ object RpcClientMacro {
           import jbok.codec.json.implicits._
           import jbok.network.json._
           import cats.effect.IO
+          import scala.scalajs.js.annotation.JSExport
 
           ..$members
         }
@@ -67,6 +68,7 @@ object RpcClientMacro {
        """
 
       q"""
+        @JSExport
         override def $methodName(...$parameterLists): IO[${resultType}] = {
           $body
         }

@@ -14,6 +14,7 @@ import scalacache._
 import scodec.bits._
 import _root_.io.circe.generic.JsonCodec
 import jbok.codec.json.implicits._
+import jbok.core.config.GenesisConfig
 import jbok.persistent.CacheBuilder
 
 import scala.concurrent.duration._
@@ -107,12 +108,23 @@ object Clique {
 
   def apply[F[_]](
       config: CliqueConfig,
+      genesisConfig: GenesisConfig,
       history: History[F],
       keyPair: KeyPair
   )(implicit F: ConcurrentEffect[F], chainId: BigInt): F[Clique[F]] =
     for {
+      genesisBlock <- history.getBlockByNumber(0)
+      newHistory = if (genesisBlock.isEmpty) {
+        val gc = genesisConfig
+          .copy(extraData = fillExtraData(List(Address(keyPair))))
+        history.init(gc)
+//        history.dump()
+        history
+      } else {
+        history
+      }
       cache <- CacheBuilder.build[F, Snapshot](config.inMemorySnapshots)
-    } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache, chainId)
+    } yield new Clique[F](config, newHistory, Map.empty, keyPair)(F, cache, chainId)
 
   def fillExtraData(signers: List[Address]): ByteVector =
     ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(

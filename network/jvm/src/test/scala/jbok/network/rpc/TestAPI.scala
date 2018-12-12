@@ -7,17 +7,17 @@ import jbok.network.json.JsonRpcErrors
 @JsonCodec
 case class Person(name: String, age: Int)
 
-trait TestAPI {
-  def foo: IO[Int]
+trait TestAPI[F[_]] {
+  def foo: F[Int]
 
-  def bar: IO[String]
+  def bar: F[String]
 
-  def qux(name: String, age: Int): IO[Person]
+  def qux(name: String, age: Int): F[Person]
 
-  def error: IO[Unit]
+  def error: F[Unit]
 }
 
-class TestApiImpl extends TestAPI {
+class TestApiImpl extends TestAPI[IO] {
   override def foo: IO[Int] = IO.pure(42)
 
   override def bar: IO[String] = IO.pure("oho")

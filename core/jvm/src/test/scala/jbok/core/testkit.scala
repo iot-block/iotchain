@@ -45,7 +45,7 @@ final case class Fixture(
         _         <- history.init(genesisConfig)
         blockPool <- BlockPool[IO](history, BlockPoolConfig())
         cliqueConfig = CliqueConfig(period = 100.millis)
-        clique <- Clique[IO](cliqueConfig, history, miner.keyPair)
+        clique <- Clique[IO](cliqueConfig, genesisConfig, history, miner.keyPair)
       } yield new CliqueConsensus[IO](clique, blockPool)
 //
 //    case "ethash" =>

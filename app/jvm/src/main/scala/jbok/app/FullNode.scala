@@ -84,7 +84,7 @@ object FullNode {
           keyPair     <- Signature[ECDSA].generateKeyPair[IO]()
           peerManager <- PeerManagerPlatform[IO](config.peer, None, history)
           blockPool   <- BlockPool(history, BlockPoolConfig())
-          clique      <- Clique(CliqueConfig(), history, keyPair)
+          clique      <- Clique(CliqueConfig(), config.genesis, history, keyPair)
           consensus = new CliqueConsensus[IO](clique, blockPool)
           executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
           syncManager <- SyncManager(config.sync, executor)
