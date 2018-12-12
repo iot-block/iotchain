@@ -11,6 +11,11 @@
 
     <logger name="org.http4s" level="WARN" />
     <logger name="org.http4s.server" level="WARN" />
+    <logger name="com.offbynull.portmapper" level="INFO" />
+    <logger name="scalacache" level="INFO" />
+    <logger name="io.netty" level="WARN" />
+    <logger name="io.lettuce" level="WARN" />
+    <logger name="reactor" level="WARN" />
 
     <root level="INFO">
         <appender-ref ref="OUTPUT"/>

@@ -10,7 +10,7 @@ import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
-import jbok.common.FileLock
+import jbok.common.{logger, FileLock}
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.Consensus
@@ -78,16 +78,16 @@ object FullNode {
     FileLock.lock[IO](Paths.get(s"${config.lock}")).flatMap { _ =>
       Resource.liftF {
         for {
-          history     <- History.forPath[IO](config.history.chainDataDir)
-          _           <- history.initGenesis(config.genesis).attempt
-          keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
-          keyPair     <- Signature[ECDSA].generateKeyPair[IO]()
-          peerManager <- PeerManagerPlatform[IO](config.peer, None, history)
-          blockPool   <- BlockPool(history, BlockPoolConfig())
-          clique      <- Clique(CliqueConfig(), config.genesis, history, keyPair)
+          _         <- logger.setRootLevel[IO](config.logLevel)
+          history   <- History.forPath[IO](config.history.chainDataDir)
+          blockPool <- BlockPool(history, BlockPoolConfig())
+          keyPair   <- Signature[ECDSA].generateKeyPair[IO]()
+          clique    <- Clique(CliqueConfig(), config.genesis, history, keyPair)
           consensus = new CliqueConsensus[IO](clique, blockPool)
+          peerManager <- PeerManagerPlatform[IO](config.peer, None, history)
           executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
           syncManager <- SyncManager(config.sync, executor)
+          keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
           miner       <- BlockMiner[IO](config.mining, syncManager)
 
           // mount rpc

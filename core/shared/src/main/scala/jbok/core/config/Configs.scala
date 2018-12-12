@@ -12,6 +12,7 @@ object Configs {
   case class FullNodeConfig(
       datadir: String,
       identity: String,
+      logLevel: String,
       genesis: GenesisConfig,
       history: HistoryConfig,
       keystore: KeyStoreConfig,

@@ -1,7 +1,10 @@
 package jbok.app
 
 import cats.effect.{ExitCode, IO}
+import ch.qos.logback.classic.Level
+import com.typesafe.config.Config
 import fs2._
+import jbok.common.logger
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.{ConfigHelper, ConfigLoader}
 
@@ -17,10 +20,14 @@ object MainApp extends StreamApp {
                   ||/__\|   |/__\|   |/__\|   |/__\|
                   |""".stripMargin
 
-  def loadConfig(args: List[String]): IO[FullNodeConfig] =
+  def parseConfig(args: List[String]): IO[Config] =
     for {
       cmdConfig <- IO(ConfigHelper.parseConfig(args).right.get)
       config = ConfigHelper.overrideWith(cmdConfig)
+    } yield config
+
+  def loadConfig(config: Config): IO[FullNodeConfig] =
+    for {
       fullNodeConfig <- ConfigLoader.loadFullNodeConfig[IO](config)
       _              <- IO(println(version))
       _              <- IO(println(banner))
@@ -32,9 +39,30 @@ object MainApp extends StreamApp {
       case "node" :: tail =>
         runStream {
           for {
-            config   <- Stream.eval(loadConfig(tail))
-            fullNode <- Stream.resource(FullNode.forConfig(config))
-            _        <- fullNode.stream
+            config         <- Stream.eval(parseConfig(tail))
+            fullNodeConfig <- Stream.eval(loadConfig(config))
+            fullNode       <- Stream.resource(FullNode.forConfig(fullNodeConfig))
+            _              <- fullNode.stream
+          } yield ()
+        }
+
+      case "test-node" :: tail =>
+        runStream {
+          val testArgs = List(
+            "-logLevel",
+            "DEBUG",
+            "-mining.enabled",
+            "true",
+            "-rpc.enabled",
+            "true",
+            "-history.chainDataDir",
+            "inmem"
+          )
+          for {
+            config         <- Stream.eval(parseConfig(testArgs ++ tail))
+            fullNodeConfig <- Stream.eval(loadConfig(config))
+            fullNode       <- Stream.resource(FullNode.forConfig(fullNodeConfig))
+            _              <- fullNode.stream
           } yield ()
         }
 

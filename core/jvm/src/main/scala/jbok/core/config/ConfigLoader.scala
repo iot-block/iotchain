@@ -17,6 +17,7 @@ object ConfigLoader {
     for {
       datadir  <- F.delay(config.getString("datadir"))
       identity <- F.delay(config.getString("identity"))
+      logLevel <- F.delay(config.getString("logLevel"))
       genesis  <- F.delay(ConfigLoader.loadOrThrow[GenesisConfig](config, "genesis"))
       history  <- F.delay(ConfigLoader.loadOrThrow[HistoryConfig](config, "history"))
       keystore <- F.delay(ConfigLoader.loadOrThrow[KeyStoreConfig](config, "keystore"))
@@ -29,6 +30,7 @@ object ConfigLoader {
       FullNodeConfig(
         datadir,
         identity,
+        logLevel,
         genesis,
         history,
         keystore,
