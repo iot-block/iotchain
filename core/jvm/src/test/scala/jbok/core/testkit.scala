@@ -42,7 +42,7 @@ final case class Fixture(
       for {
         db        <- KeyValueDB.inmem[IO]
         history   <- History[IO](db)
-        _         <- history.init(genesisConfig)
+        _         <- history.initGenesis(genesisConfig)
         blockPool <- BlockPool[IO](history, BlockPoolConfig())
         cliqueConfig = CliqueConfig(period = 100.millis)
         clique <- Clique[IO](cliqueConfig, genesisConfig, history, miner.keyPair)

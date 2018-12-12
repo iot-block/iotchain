@@ -10,6 +10,7 @@ import jbok.common.testkit._
 import jbok.core.testkit._
 import jbok.crypto._
 import scodec.bits.ByteVector
+import jbok.core.config.reference
 
 class HistorySpec extends JbokSpec {
   implicit val fixture = defaultFixture()
@@ -55,6 +56,18 @@ class HistorySpec extends JbokSpec {
       history.putBlockBody(block.header.hash, block.body).unsafeRunSync()
       val location = history.getTransactionLocation(txs.head.hash).unsafeRunSync()
       location shouldBe Some(TransactionLocation(block.header.hash, 0))
+    }
+
+    "init and dump genesis" in {
+      val history       = random[History[IO]]
+      val genesisConfig = history.dumpGenesis.unsafeRunSync()
+      genesisConfig.nonce shouldBe reference.genesis.nonce
+      genesisConfig.difficulty shouldBe reference.genesis.difficulty
+      // genesisConfig.extraData shouldBe reference.genesis.extraData
+      genesisConfig.gasLimit shouldBe reference.genesis.gasLimit
+      genesisConfig.coinbase shouldBe reference.genesis.coinbase
+      genesisConfig.chainId shouldBe reference.genesis.chainId
+      // genesisConfig.alloc.toList should contain theSameElementsAs reference.genesis.alloc.toList
     }
   }
 }

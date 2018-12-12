@@ -30,7 +30,7 @@ trait SnapshotFixture {
     implicit val chainId = config.chainId
     val db               = KeyValueDB.inmem[IO].unsafeRunSync()
     val history          = History[IO](db).unsafeRunSync()
-    history.init(config).unsafeRunSync()
+    history.initGenesis(config).unsafeRunSync()
     history
   }
 
@@ -64,7 +64,7 @@ class SnapshotSpec extends JbokSpec {
     implicit val chainId = genesisConfig.chainId
     val db               = KeyValueDB.inmem[IO].unsafeRunSync()
     val history          = History[IO](db).unsafeRunSync()
-    history.init(genesisConfig).unsafeRunSync()
+    history.initGenesis(genesisConfig).unsafeRunSync()
 
     // Assemble a chain of headers from the cast votes
     val headers: List[BlockHeader] = test.votes.zipWithIndex.map {

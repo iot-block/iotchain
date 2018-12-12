@@ -66,7 +66,7 @@ class SimulationImpl(
           for {
             db        <- KeyValueDB.inmem[IO]
             history   <- History[IO](db)
-            _         <- history.init(newGenesisConfig)
+            _         <- history.initGenesis(newGenesisConfig)
             clique    <- Clique[IO](cliqueConfig, genesisConfig, history, signers(idx))
             blockPool <- BlockPool(history)
             consensus = new CliqueConsensus[IO](clique, blockPool)

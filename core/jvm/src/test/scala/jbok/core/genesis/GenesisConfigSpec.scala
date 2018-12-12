@@ -14,7 +14,7 @@ class GenesisConfigSpec extends JbokSpec {
     "load config alloc" in {
       val db      = KeyValueDB.inmem[IO].unsafeRunSync()
       val history = History[IO](db).unsafeRunSync()
-      history.init(reference.genesis).unsafeRunSync()
+      history.initGenesis(reference.genesis).unsafeRunSync()
       val addresses = reference.genesis.alloc.keysIterator.toList
       val accounts =
         addresses.flatMap(addr => history.getAccount(Address(ByteVector.fromValidHex(addr)), 0).unsafeRunSync())

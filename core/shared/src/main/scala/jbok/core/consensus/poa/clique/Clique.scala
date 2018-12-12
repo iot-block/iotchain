@@ -21,12 +21,12 @@ import scala.concurrent.duration._
 
 @JsonCodec
 case class CliqueConfig(
-    period: FiniteDuration = 15.seconds, // Number of seconds between blocks to enforce
-    epoch: BigInt = BigInt(30000), // Epoch length to reset votes and checkpoint
-    checkpointInterval: Int = 1024, // Number of blocks after which to save the vote snapshot to the database
-    inMemorySnapshots: Int = 128, // Number of recent vote snapshots to keep in memory
-    inMemorySignatures: Int = 1024, // Number of recent blocks to keep in memory
-    wiggleTime: FiniteDuration = 500.millis // Random delay (per signer) to allow concurrent signers
+    period: FiniteDuration = 15.seconds,
+    epoch: BigInt = BigInt(30000),
+    checkpointInterval: Int = 1024,
+    inMemorySnapshots: Int = 128,
+    inMemorySignatures: Int = 1024,
+    wiggleTime: FiniteDuration = 500.millis
 )
 
 class Clique[F[_]](
