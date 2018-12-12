@@ -8,7 +8,19 @@ object ConfigHelper {
   val minCellLen = 16
   val maxCellLen = 48
 
-  val reference: Config = ConfigFactory.load("reference.conf").getConfig("jbok")
+  private val system = ConfigFactory.systemProperties()
+
+  private val resource = ConfigFactory.parseResources("reference.conf")
+
+  val reference: Config =
+    resource
+      .resolveWith(resource.withFallback(system))
+      .getConfig("jbok")
+
+  def overrideWith(config: Config): Config =
+    config
+      .withFallback(resource.resolveWith(config.withFallback(resource).withFallback(system)))
+      .getConfig("jbok")
 
   private def pad(str: String, maxLen: Int): String =
     if (str.length > maxLen) {
@@ -93,18 +105,22 @@ object ConfigHelper {
   }
 
   def parseConfig(args: List[String]): Either[Throwable, Config] = {
-    val strings = args.sliding(2).toList.map {
+    val pairs = args.grouped(2).toList.map {
       case List(key, _) if !key.startsWith("-") =>
-        throw new Exception(s"${key} must start with '-'")
+        throw new Exception(s"$key {key} must start with '-'")
 
       case List(key) =>
-        throw new Exception(s"${key} no value provided")
+        throw new Exception(s"key ${key} has no value")
 
       case List(key, value) =>
-        s"${key.drop(1)}=${value}"
+        s"jbok.${key.drop(1)}=${value}"
     }
 
     Right(
-      ConfigFactory.parseString(strings.mkString, ConfigParseOptions.defaults().setOriginDescription("command line")))
+      ConfigFactory.parseString(
+        pairs.mkString("\n"),
+        ConfigParseOptions.defaults().setOriginDescription("command line")
+      )
+    )
   }
 }

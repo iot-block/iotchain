@@ -7,9 +7,6 @@ import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
 
 @JsonCodec
-case class GetWorkResponse(powHeaderHash: ByteVector, dagSeed: ByteVector, target: ByteVector)
-
-@JsonCodec
 sealed trait BlockParam
 object BlockParam {
   case class WithNumber(n: BigInt) extends BlockParam
@@ -27,12 +24,7 @@ case class CallTx(
     data: ByteVector
 )
 
-@JsonCodec
-case class SyncingStatus(startingBlock: BigInt, currentBlock: BigInt, highestBlock: BigInt)
-
 trait PublicAPI {
-  def protocolVersion: IO[String]
-
   def bestBlockNumber: IO[BigInt]
 
   def getBlockTransactionCountByHash(blockHash: ByteVector): IO[Option[Int]]
@@ -47,15 +39,13 @@ trait PublicAPI {
 
   def getTransactionByBlockHashAndIndexRequest(blockHash: ByteVector, txIndex: Int): IO[Option[SignedTransaction]]
 
-  def getUncleByBlockHashAndIndex(blockHash: ByteVector, uncleIndex: Int): IO[Option[BlockHeader]]
+  def getOmmerByBlockHashAndIndex(blockHash: ByteVector, uncleIndex: Int): IO[Option[BlockHeader]]
 
-  def getUncleByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): IO[Option[BlockHeader]]
+  def getOmmerByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): IO[Option[BlockHeader]]
 
   def getGasPrice: IO[BigInt]
 
   def isMining: IO[Boolean]
-
-  def getCoinbase: IO[Address]
 
   def sendRawTransaction(data: ByteVector): IO[ByteVector]
 
@@ -65,9 +55,9 @@ trait PublicAPI {
 
   def getCode(address: Address, blockParam: BlockParam): IO[ByteVector]
 
-  def getUncleCountByBlockNumber(blockParam: BlockParam): IO[Int]
+  def getOmmerCountByBlockNumber(blockParam: BlockParam): IO[Int]
 
-  def getUncleCountByBlockHash(blockHash: ByteVector): IO[Int]
+  def getOmmerCountByBlockHash(blockHash: ByteVector): IO[Int]
 
   def getBlockTransactionCountByNumber(blockParam: BlockParam): IO[Int]
 

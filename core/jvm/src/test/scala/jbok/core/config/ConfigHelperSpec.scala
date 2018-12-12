@@ -10,11 +10,11 @@ class ConfigHelperSpec extends JbokSpec {
     }
 
     "parse config" in {
-      val args             = List("-datadir", "oho")
+      val args             = List("-identity", "my-node-2")
       val Right(cmdConfig) = ConfigHelper.parseConfig(args)
-      val fullConfig       = cmdConfig.withFallback(ConfigHelper.reference)
-      println(fullConfig.root().render())
-      println(ConfigHelper.printConfig(fullConfig).render)
+
+      val config = ConfigHelper.overrideWith(cmdConfig)
+      println(ConfigHelper.printConfig(config).render)
     }
   }
 }

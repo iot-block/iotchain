@@ -91,14 +91,7 @@ object FullNode {
           miner       <- BlockMiner[IO](config.mining, syncManager)
 
           // mount rpc
-          publicAPI <- PublicApiImpl(
-            history,
-            config.history,
-            config.mining,
-            miner,
-            keyStore,
-            1
-          )
+          publicAPI = PublicApiImpl(config.history, miner)
           privateAPI <- PrivateApiImpl(keyStore, history, config.history, executor.txPool)
           rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
           server = Server.websocket(config.rpc.addr, rpc.pipe)
@@ -123,14 +116,7 @@ object FullNode {
       miner       <- BlockMiner[IO](config.mining, syncManager)
 
       // mount rpc
-      publicAPI <- PublicApiImpl(
-        consensus.history,
-        config.history,
-        config.mining,
-        miner,
-        keyStore,
-        1
-      )
+      publicAPI = PublicApiImpl(config.history, miner)
       privateAPI <- PrivateApiImpl(keyStore, consensus.history, config.history, executor.txPool)
       rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
       server = Server.websocket(config.rpc.addr, rpc.pipe)

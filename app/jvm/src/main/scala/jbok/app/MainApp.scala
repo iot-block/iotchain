@@ -20,7 +20,7 @@ object MainApp extends StreamApp {
   def loadConfig(args: List[String]): IO[FullNodeConfig] =
     for {
       cmdConfig <- IO(ConfigHelper.parseConfig(args).right.get)
-      config = cmdConfig.withFallback(ConfigHelper.reference)
+      config = ConfigHelper.overrideWith(cmdConfig)
       fullNodeConfig <- ConfigLoader.loadFullNodeConfig[IO](config)
       _              <- IO(println(version))
       _              <- IO(println(banner))
