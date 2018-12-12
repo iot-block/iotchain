@@ -4,7 +4,10 @@ import jbok.codec.json.implicits._
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits.ByteVector
+import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
+@JSExportTopLevel("Account")
+@JSExportAll
 case class Account(
     nonce: UInt256 = 0,
     balance: UInt256 = 0,

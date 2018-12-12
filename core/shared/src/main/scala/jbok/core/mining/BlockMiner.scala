@@ -130,5 +130,5 @@ case class BlockMiner[F[_]](
 object BlockMiner {
   def apply[F[_]](config: MiningConfig, syncManager: SyncManager[F])(implicit F: ConcurrentEffect[F],
                                                                      T: Timer[F]): F[BlockMiner[F]] =
-    SignallingRef[F, Boolean](true).map(halt => BlockMiner(config, syncManager, halt))
+    SignallingRef[F, Boolean](!config.enabled).map(halt => BlockMiner(config, syncManager, halt))
 }

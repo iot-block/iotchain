@@ -21,7 +21,7 @@ class RpcSpec extends JbokSpec {
   }
 
   val impl                 = new TestApiImpl
-  val rpcServer: RpcServer = RpcServer().unsafeRunSync().mountAPI[TestAPI](impl).mountAPI[API2](impl2)
+  val rpcServer: RpcServer = RpcServer().unsafeRunSync().mountAPI[TestAPI[IO]](impl).mountAPI[API2](impl2)
 
   import RpcServer._
   val bind                                 = new InetSocketAddress("localhost", 9002)
@@ -33,7 +33,7 @@ class RpcSpec extends JbokSpec {
     "mount and use API" ignore {
       val p = for {
         client <- WsClient[IO, String](uri)
-        api = RpcClient[IO](client).useAPI[TestAPI]
+        api = RpcClient[IO](client).useAPI[TestAPI[IO]]
         fiber <- Stream(server.stream, Stream.sleep(1.second) ++ client.stream).parJoinUnbounded.compile.drain.start
         _ = rpcServer.handlers.size shouldBe 5
         _ = api.foo.unsafeRunSync() shouldBe impl.foo.unsafeRunSync()

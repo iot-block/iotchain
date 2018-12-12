@@ -11,7 +11,10 @@ import scodec.bits.ByteVector
 import shapeless._
 import cats.implicits._
 import jbok.core.validators.TxInvalid.TxSignatureInvalid
+import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
+@JSExportTopLevel("SignedTransaction")
+@JSExportAll
 case class SignedTransaction(
     nonce: BigInt,
     gasPrice: BigInt,

@@ -14,7 +14,7 @@ import scodec.bits.ByteVector
 final class PublicApiImpl(
     historyConfig: HistoryConfig,
     miner: BlockMiner[IO]
-) extends PublicAPI {
+) extends PublicAPI[IO] {
 
   val history   = miner.history
   val txPool    = miner.executor.txPool
@@ -230,5 +230,6 @@ final class PublicApiImpl(
 }
 
 object PublicApiImpl {
-  def apply(historyConfig: HistoryConfig, miner: BlockMiner[IO]): PublicAPI = new PublicApiImpl(historyConfig, miner)
+  def apply(historyConfig: HistoryConfig, miner: BlockMiner[IO]): PublicAPI[IO] =
+    new PublicApiImpl(historyConfig, miner)
 }

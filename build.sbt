@@ -82,7 +82,9 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "com.github.pureconfig" %% "pureconfig" % "0.10.0",
       // test
       "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
-      "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test
+      "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test,
+      // scalajs-stubs
+      "org.scala-js" %% "scalajs-stubs" % "0.6.26"
     ) ++ dropwizard
   )
 
@@ -203,7 +205,7 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
     libraryDependencies ++= http4s ++ Seq(
       "com.spinoco"              %% "fs2-http"  % "0.4.0",
       "com.offbynull.portmapper" % "portmapper" % "2.0.5",
-      "org.bitlet"               % "weupnp"     % "0.1.4"
+      "org.bitlet"               % "weupnp"     % "0.1.4",
     )
   )
   .jsSettings(commonJsSettings)
