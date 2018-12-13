@@ -7,7 +7,7 @@ import jbok.core.testkit._
 import scodec.Codec
 
 class ModelCodecSpec extends JbokSpec {
-  implicit val consensus = defaultFixture()
+  implicit val config = testConfig
 
   def roundtrip[A: Codec](x: A) = {
     val bytes = x.encode[IO].unsafeRunSync()

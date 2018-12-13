@@ -21,7 +21,7 @@ import scala.concurrent.duration._
 
 @JsonCodec
 case class CliqueConfig(
-    period: FiniteDuration = 15.seconds,
+    period: FiniteDuration = 500.millis,
     epoch: BigInt = BigInt(30000),
     checkpointInterval: Int = 1024,
     inMemorySnapshots: Int = 128,
@@ -115,9 +115,7 @@ object Clique {
     for {
       genesisBlock <- history.getBlockByNumber(0)
       _ <- if (genesisBlock.isEmpty) {
-        val gc = genesisConfig
-          .copy(extraData = fillExtraData(List(Address(keyPair))))
-        history.initGenesis(gc)
+        history.initGenesis(genesisConfig)
       } else {
         F.unit
       }
@@ -133,8 +131,8 @@ object Clique {
     bytes.kec256
   }
 
+  /** Retrieve the signature from the header extra-data */
   def ecrecover(header: BlockHeader)(implicit chainId: BigInt): Option[Address] = {
-    // Retrieve the signature from the header extra-data
     val signature               = header.extraData.takeRight(extraSeal)
     val hash                    = sigHash(header)
     val sig                     = CryptoSignature(signature.toArray)

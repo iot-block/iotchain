@@ -7,9 +7,9 @@ import jbok.common.testkit._
 import jbok.core.testkit._
 
 class OmmerPoolSpec extends JbokSpec {
-  implicit val fixture = defaultFixture()
-
   "OmmerPool" should {
+    implicit val config = testConfig
+
     "accept ommers" in {
       val n       = 10
       val pool    = random[OmmerPool[IO]]

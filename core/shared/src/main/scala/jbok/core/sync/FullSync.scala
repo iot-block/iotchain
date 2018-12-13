@@ -54,26 +54,32 @@ case class FullSync[F[_]](
       current <- executor.consensus.history.getBestBlockNumber
       requestNumber = BigInt(1).max(current + 1 - config.fullSyncOffset)
       status <- peer.status.get
-      limit = config.maxBlockHeadersPerRequest min (status.bestNumber - requestNumber + 1).toInt
-      _ = log.debug(s"request BlockHeader [${requestNumber}, ${requestNumber + limit})")
-      start <- T.clock.monotonic(MILLISECONDS)
-      _ <- peer.conn
-        .request(GetBlockHeaders(Left(requestNumber), limit, 0, false))
-        .timeout(config.requestTimeout)
-        .attempt
-        .flatMap {
-          case Right(BlockHeaders(headers, _)) =>
-            if (headers.isEmpty) {
-              F.delay(log.debug(s"got empty headers from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
-            } else {
-              T.clock.monotonic(MILLISECONDS).map { end =>
-                log.debug(s"received ${headers.length} BlockHeader(s) in ${end - start}ms")
-              } >> handleBlockHeaders(peer, requestNumber, headers)
+      _ <- if (status.bestNumber < requestNumber) {
+        F.unit
+      } else {
+        val limit = config.maxBlockHeadersPerRequest min (status.bestNumber - requestNumber + 1).toInt
+        log.debug(s"request BlockHeader [${requestNumber}, ${requestNumber + limit})")
+        for {
+          start <- T.clock.monotonic(MILLISECONDS)
+          _ <- peer.conn
+            .request(GetBlockHeaders(Left(requestNumber), limit, 0, false))
+            .timeout(config.requestTimeout)
+            .attempt
+            .flatMap {
+              case Right(BlockHeaders(headers, _)) =>
+                if (headers.isEmpty) {
+                  F.delay(log.debug(s"got empty headers from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
+                } else {
+                  T.clock.monotonic(MILLISECONDS).map { end =>
+                    log.debug(s"received ${headers.length} BlockHeader(s) in ${end - start}ms")
+                  } >> handleBlockHeaders(peer, requestNumber, headers)
+                }
+              case _ =>
+                log.debug(s"got headers timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")
+                F.unit
             }
-          case _ =>
-            log.debug(s"got headers timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")
-            F.unit
-        }
+        } yield ()
+      }
     } yield ()
 
   private def handleBlockHeaders(peer: Peer[F], requestNumber: BigInt, headers: List[BlockHeader]): F[Unit] =

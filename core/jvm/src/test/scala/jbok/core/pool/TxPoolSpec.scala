@@ -4,10 +4,9 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.core.config.Configs.TxPoolConfig
-import jbok.core.models.SignedTransaction
 import jbok.common.testkit._
 import jbok.core.messages.SignedTransactions
+import jbok.core.models.SignedTransaction
 import jbok.core.testkit._
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.testkit._
@@ -15,9 +14,9 @@ import jbok.crypto.testkit._
 import scala.concurrent.duration._
 
 class TxPoolSpec extends JbokSpec {
-  implicit val consensusFixture = defaultFixture()
-
   "TxPool" should {
+    implicit val config = testConfig
+
     "store pending transactions" in {
       val txPool = random[TxPool[IO]]
       val txs    = random[List[SignedTransaction]](genTxs(1, 10))
@@ -67,8 +66,8 @@ class TxPoolSpec extends JbokSpec {
     }
 
     "remove transaction on timeout" in {
-      val config = TxPoolConfig().copy(transactionTimeout = 100.millis)
-      val txPool = random[TxPool[IO]](genTxPool(config))
+      val conf = testConfig.withTxPool(_.copy(transactionTimeout = 100.millis))
+      val txPool = random[TxPool[IO]](genTxPool(conf))
       val stx    = random[List[SignedTransaction]](genTxs(1, 1)).head
       val p = for {
         _  <- txPool.addTransactions(SignedTransactions(stx :: Nil))

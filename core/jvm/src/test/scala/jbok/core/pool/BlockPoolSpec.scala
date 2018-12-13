@@ -11,7 +11,7 @@ import jbok.core.testkit._
 
 class BlockPoolSpec extends JbokSpec {
   "BlockPool" should {
-    implicit val fixture = defaultFixture()
+    implicit val config = testConfig
 
     def randomTx = random[List[SignedTransaction]](genTxs(1, 1)).some
 

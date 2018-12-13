@@ -46,8 +46,8 @@ abstract class PeerManager[F[_]](
     fs2.io.tcp.Socket
       .serverWithLocalAddress[F](bind, maxQueued)
       .map {
-        case Left(bound) =>
-          Stream.eval(F.delay(log.info(s"Peer(${peerNode.id.toHex.take(7)}) successfully bound to ${bound}")))
+        case Left(_) =>
+          Stream.eval(F.delay(log.info(s"${peerNode.uri} successfully bound to ${bind}")))
 
         case Right(res) =>
           val stream = for {
@@ -65,13 +65,14 @@ abstract class PeerManager[F[_]](
 
           stream.handleErrorWith {
             case PeerErr.HandshakeTimeout => Stream.eval(F.delay(log.warn("timeout")))
-            case PeerErr.Incompatible     => Stream.eval(F.delay(log.warn("incompatible")))
+            case PeerErr.Incompatible     => Stream.eval(F.delay(log.warn("incompatible peer")))
             case e =>
               log.error(e)("unexpected listen error")
               Stream.raiseError[F](e)
           }
       }
       .parJoin(maxOpen)
+      .onFinalize(F.delay(log.info(s"stop listening to ${bind}")))
 
   def connect(maxOpen: Int = config.maxOutgoingPeers): Stream[F, Unit] =
     nodeQueue.dequeue
@@ -115,7 +116,11 @@ abstract class PeerManager[F[_]](
   }
 
   def stream: Stream[F, Unit] =
-    listen().concurrently(connect())
+    Stream(
+      listen(),
+      connect(),
+      Stream.eval(addPeerNode(config.bootNodes: _*))
+    ).parJoinUnbounded
 
   def addPeerNode(nodes: PeerNode*): F[Unit] =
     nodes.toList

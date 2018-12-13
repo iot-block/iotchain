@@ -18,6 +18,9 @@ case class GenesisConfig(
 ) {
   val timestamp: Long = System.currentTimeMillis()
 
+  def withAlloc(alloc: Map[Address, BigInt]): GenesisConfig =
+    copy(alloc = alloc.map { case (k, v) => k.toString -> v.toString() })
+
   lazy val header = BlockHeader(
     parentHash = ByteVector.empty,
     ommersHash = ByteVector.empty,
@@ -39,4 +42,17 @@ case class GenesisConfig(
   lazy val body = BlockBody(Nil, Nil)
 
   lazy val block = Block(header, body)
+}
+
+object GenesisConfig {
+  def generate(chainId: BigInt, alloc: Map[Address, Account]): GenesisConfig =
+    GenesisConfig(
+      nonce = hex"0x42",
+      difficulty = BigInt("1024"),
+      extraData = hex"",
+      gasLimit = BigInt("16716680"),
+      coinbase = hex"0x0000000000000000000000000000000000000000",
+      alloc = alloc.map { case (key, value) => key.toString -> value.balance.toDecString },
+      chainId = chainId
+    )
 }

@@ -9,7 +9,7 @@ import jbok.core.models._
 import jbok.core.validators.TxInvalid._
 import jbok.crypto.signature.{ECDSA, Signature}
 import scodec.bits._
-import jbok.core.config.reference
+import jbok.core.config.defaults.reference
 
 class TxValidatorSpec extends JbokSpec {
   val keyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()

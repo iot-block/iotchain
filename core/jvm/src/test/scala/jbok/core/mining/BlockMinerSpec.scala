@@ -8,9 +8,8 @@ import jbok.core.models.SignedTransaction
 import jbok.core.testkit._
 
 class BlockMinerSpec extends JbokSpec {
-  implicit val fixture = defaultFixture()
-
   "BlockMiner" should {
+    implicit val config = testConfig
     "mine block with no transaction" in {
       val miner  = random[BlockMiner[IO]]
       val parent = miner.history.getBestBlock.unsafeRunSync()

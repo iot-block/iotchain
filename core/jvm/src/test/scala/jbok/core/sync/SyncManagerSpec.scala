@@ -1,11 +1,13 @@
 package jbok.core.sync
 
 import cats.effect.IO
+import cats.implicits._
 import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.common.testkit._
-import jbok.core.config.Configs.{MiningConfig, SyncConfig}
+import jbok.core.config.defaults.reference
+import jbok.core.ledger.TypedBlock.SyncBlocks
 import jbok.core.messages._
 import jbok.core.mining.BlockMiner
 import jbok.core.models._
@@ -14,14 +16,11 @@ import jbok.core.testkit._
 import jbok.crypto.authds.mpt.MptNode
 import jbok.crypto.testkit._
 import scodec.bits.ByteVector
-import cats.implicits._
-import jbok.core.ledger.TypedBlock.SyncBlocks
-import jbok.core.config.reference
 
 import scala.concurrent.duration._
 
 class SyncManagerSpec extends JbokSpec {
-  implicit val fixture = defaultFixture()
+  implicit val config = testConfig
 
   "SyncManager Request Service" should {
     "return receipts by block hashes" in {
@@ -121,9 +120,11 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager FullSync" should {
     "sync to the highest state" in {
-      val sm1   = random[SyncManager[IO]](genSyncManager()(fixture))
-      val sm2   = random[SyncManager[IO]](genSyncManager()(fixture.copy(port = fixture.port + 1)))
-      val sm3   = random[SyncManager[IO]](genSyncManager()(fixture.copy(port = fixture.port + 2)))
+      val sm1 = random[SyncManager[IO]](genSyncManager(testConfig))
+      val sm2 =
+        random[SyncManager[IO]](genSyncManager(testConfig.withPeer(_.copy(port = testConfig.peer.port + 1))))
+      val sm3 =
+        random[SyncManager[IO]](genSyncManager(testConfig.withPeer(_.copy(port = testConfig.peer.port + 2))))
       val miner = BlockMiner[IO](reference.mining, sm1).unsafeRunSync()
 
       // let miner mine 10 blocks first
@@ -157,10 +158,10 @@ class SyncManagerSpec extends JbokSpec {
   "SyncManager FastSync" should {
 
     "fast sync to median state if best peer number - offset >= current best number" in {
-      val config = reference.sync.copy(fastEnabled = true, fastSyncOffset = 0)
-      val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
-      val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
-      val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
+      val conf = config.withSync(_.copy(fastEnabled = true, fastSyncOffset = 0))
+      val sm1  = random[SyncManager[IO]](genSyncManager(conf))
+      val sm2  = random[SyncManager[IO]](genSyncManager(conf.withPeer(_.copy(port = config.peer.port + 1))))
+      val sm3  = random[SyncManager[IO]](genSyncManager(conf.withPeer(_.copy(port = config.peer.port + 2))))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))
@@ -184,10 +185,10 @@ class SyncManagerSpec extends JbokSpec {
     }
 
     "skip fast sync if best peer number - offset < current best number" in {
-      val config = reference.sync.copy(fastEnabled = true)
-      val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
-      val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
-      val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
+      val conf = config.withSync(_.copy(fastEnabled = true))
+      val sm1  = random[SyncManager[IO]](genSyncManager(conf))
+      val sm2  = random[SyncManager[IO]](genSyncManager(conf.withPeer(_.copy(port = config.peer.port + 1))))
+      val sm3  = random[SyncManager[IO]](genSyncManager(conf.withPeer(_.copy(port = config.peer.port + 2))))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))
@@ -215,10 +216,12 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager" should {
     "start with FastSync then switch to FullSync" in {
-      val config = reference.sync.copy(fastEnabled = true, fastSyncOffset = 5)
-      val sm1    = random[SyncManager[IO]](genSyncManager(config)(fixture))
-      val sm2    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 1)))
-      val sm3    = random[SyncManager[IO]](genSyncManager(config)(fixture.copy(port = fixture.port + 2)))
+      val config1 = testConfig.withSync(_.copy(fastEnabled = true, fastSyncOffset = 5))
+      val config2 = config1.withPeer(_.copy(port = config1.peer.port + 1))
+      val config3 = config2.withPeer(_.copy(port = config2.peer.port + 1))
+      val sm1     = random[SyncManager[IO]](genSyncManager(config1))
+      val sm2     = random[SyncManager[IO]](genSyncManager(config2))
+      val sm3     = random[SyncManager[IO]](genSyncManager(config3))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))

@@ -1,23 +1,19 @@
 package jbok.app.simulations
 import java.util.concurrent.Executors
 
+import cats.effect.IO
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, IO, Timer}
 import cats.implicits._
 import fs2.concurrent.Topic
+import jbok.app.FullNode
 import jbok.app.simulations.SimulationImpl.NodeId
-import jbok.app.{ConfigGenerator, FullNode}
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.reference
-import jbok.core.consensus.Consensus
-import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
-import jbok.core.ledger.History
+import jbok.core.config.defaults.reference
+import jbok.core.consensus.poa.clique.{Clique, CliqueConfig}
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.{Account, Address}
-import jbok.core.pool.BlockPool
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
-import jbok.persistent.KeyValueDB
 
 import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.ExecutionContext
@@ -39,14 +35,14 @@ class SimulationImpl(
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
     NodeInfo(fullNode.id, fullNode.config.peer.host, fullNode.config.peer.port, fullNode.config.rpc.port)
 
-  private def newFullNode(
-      config: FullNodeConfig,
-      consensus: Consensus[IO]
-  )(implicit F: ConcurrentEffect[IO], EC: ExecutionContext, T: Timer[IO]): IO[FullNode[IO]] =
-    FullNode.forConfigAndConsensus(config, consensus)
+//  private def newFullNode(
+//      config: FullNodeConfig,
+//      consensus: Consensus[IO]
+//  )(implicit F: ConcurrentEffect[IO], EC: ExecutionContext, T: Timer[IO]): IO[FullNode[IO]] =
+//    FullNode.forConfigAndConsensus(config, consensus)
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val fullNodeConfigs = ConfigGenerator.fill(n)
+    val fullNodeConfigs = FullNodeConfig.fill(reference, n)
     val signers = (1 to n).toList
       .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
       .unsafeRunSync()
@@ -63,15 +59,7 @@ class SimulationImpl(
         case (config, idx) =>
           implicit val ec =
             ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2, namedThreadFactory(s"EC${idx}", true)))
-          for {
-            db        <- KeyValueDB.inmem[IO]
-            history   <- History[IO](db)
-            _         <- history.initGenesis(newGenesisConfig)
-            clique    <- Clique[IO](cliqueConfig, genesisConfig, history, signers(idx))
-            blockPool <- BlockPool(history)
-            consensus = new CliqueConsensus[IO](clique, blockPool)
-            fullNode <- newFullNode(config, consensus)
-          } yield fullNode
+          FullNode.forConfig(config)
       }
       _ <- nodes.update(_ ++ newNodes.map(x => x.id                                       -> x).toMap)
       _ <- miners.update(_ ++ newNodes.filter(n => n.config.mining.enabled).map(x => x.id -> x).toMap)

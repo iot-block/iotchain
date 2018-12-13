@@ -10,12 +10,12 @@ import jbok.common.testkit._
 import jbok.core.testkit._
 import jbok.crypto._
 import scodec.bits.ByteVector
-import jbok.core.config.reference
+import jbok.core.config.defaults.reference
 
 class HistorySpec extends JbokSpec {
-  implicit val fixture = defaultFixture()
-
   "History" should {
+    implicit val config = testConfig
+
     // accounts, storages and codes
     "put and get account node" in {
       val history = random[History[IO]]

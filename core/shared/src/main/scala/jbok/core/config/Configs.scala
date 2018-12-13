@@ -2,8 +2,10 @@ package jbok.core.config
 
 import java.net.InetSocketAddress
 
+import cats.effect.IO
 import jbok.core.models.{Address, UInt256}
-import jbok.persistent.KeyValueDB
+import jbok.core.peer.PeerNode
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits._
 
 import scala.concurrent.duration._
@@ -22,7 +24,35 @@ object Configs {
       mining: MiningConfig,
       rpc: RpcConfig
   ) {
-    val lock: String = s"${datadir}/LOCK"
+    val lockPath: String = s"${datadir}/LOCK"
+
+    val genesisPath: String = s"${datadir}/genesis.conf"
+
+    def withGenesis(f: GenesisConfig => GenesisConfig): FullNodeConfig =
+      copy(genesis = f(genesis))
+
+    def withPeer(f: PeerConfig => PeerConfig): FullNodeConfig =
+      copy(peer = f(peer))
+
+    def withSync(f: SyncConfig => SyncConfig): FullNodeConfig =
+      copy(sync = f(sync))
+
+    def withTxPool(f: TxPoolConfig => TxPoolConfig): FullNodeConfig =
+      copy(txPool = f(txPool))
+
+    def withIdentityAndPort(identity: String, port: Int): FullNodeConfig =
+      copy(identity = identity)
+        .withPeer(
+          _.copy(port = port,
+                 keyPair = Some(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()),
+                 discoveryPort = port + 1))
+  }
+
+  object FullNodeConfig {
+    def fill(template: FullNodeConfig, size: Int): List[FullNodeConfig] =
+      (0 until size).toList.map(i => {
+        template.withIdentityAndPort(s"test-node-${i}", 10000 + { i * 3 })
+      })
   }
 
   case class KeyStoreConfig(
@@ -48,6 +78,7 @@ object Configs {
   case class PeerConfig(
       port: Int,
       host: String,
+      keyPair: Option[KeyPair],
       enableDiscovery: Boolean,
       discoveryPort: Int,
       peerDataDir: String,
@@ -62,6 +93,7 @@ object Configs {
   ) {
     val bindAddr: InetSocketAddress      = new InetSocketAddress(host, port)
     val discoveryAddr: InetSocketAddress = new InetSocketAddress(host, discoveryPort)
+    val bootNodes: List[PeerNode]        = bootUris.flatMap(s => PeerNode.fromStr(s).toOption)
   }
 
   case class RpcConfig(
@@ -81,6 +113,7 @@ object Configs {
 
   case class MiningConfig(
       enabled: Boolean,
+      keyPair: Option[KeyPair],
       ommersPoolSize: Int,
       blockCacheSize: Int,
       coinbase: Address,

@@ -2,18 +2,17 @@ package jbok.core.consensus.pow.ethash
 
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.core.ledger.History
-import jbok.core.config.Configs.HistoryConfig
-import jbok.core.consensus.pow.ethash.EthashHeaderInvalid._
-import jbok.core.models._
 import jbok.common.testkit._
+import jbok.core.config.defaults.reference
+import jbok.core.consensus.pow.ethash.EthashHeaderInvalid._
+import jbok.core.ledger.History
+import jbok.core.models._
 import jbok.core.testkit._
 import scodec.bits._
-import jbok.core.config.reference
 
 class EthashHeaderValidatorSpec extends JbokSpec {
+  implicit val config = testConfig
   trait EthashHeaderValidatorFixture {
-    implicit val fixture = defaultFixture(algo = "ethash")
     val history          = random[History[IO]]
     val validBlockHeader = BlockHeader(
       parentHash = hex"d882d5c210bab4cb7ef0b9f3dc2130cb680959afcd9a8f9bf83ee6f13e2f9da3",

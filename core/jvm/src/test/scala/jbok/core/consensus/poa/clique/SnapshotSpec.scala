@@ -11,7 +11,7 @@ import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 import jbok.core.testkit._
-import jbok.core.config.reference
+import jbok.core.config.defaults.reference
 
 import scala.collection.mutable
 

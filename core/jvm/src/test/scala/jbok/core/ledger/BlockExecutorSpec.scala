@@ -11,10 +11,8 @@ import jbok.core.ledger.TypedBlock.{ReceivedBlock, SyncBlocks}
 import jbok.core.peer.Peer
 
 class BlockExecutorSpec extends JbokSpec {
-  implicit val fixture = defaultFixture()
-
   "BlockExecutor" should {
-
+    implicit val config = testConfig
     "calculate the value, gas and reward transfer" in {
       val executor = random[BlockExecutor[IO]]
       val txs      = random[List[SignedTransaction]](genTxs(1, 1))

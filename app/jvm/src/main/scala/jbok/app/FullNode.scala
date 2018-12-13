@@ -4,16 +4,18 @@ import java.net.InetSocketAddress
 import java.nio.file.Paths
 import java.security.SecureRandom
 
+import _root_.io.circe.generic.auto._
+import _root_.io.circe.syntax._
+import better.files.File
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
-import jbok.common.{logger, FileLock}
+import jbok.common.FileLock
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.{BlockExecutor, History}
@@ -58,7 +60,7 @@ case class FullNode[F[_]](
       ).parJoinUnbounded
         .interruptWhen(haltWhenTrue)
         .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)("FullNode error"))))
-        .onFinalize(haltWhenTrue.set(true) >> F.delay(log.debug("FullNode finalized")))
+        .onFinalize(haltWhenTrue.set(true) >> F.delay(log.info("ready to exit, bye bye...")))
 
   def start: F[Fiber[F, Unit]] =
     stream.compile.drain.start
@@ -72,44 +74,17 @@ object FullNode {
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
       CS: ContextShift[IO]
-  ): Resource[IO, FullNode[IO]] = {
-    // load genesis first and define chainId
-    implicit val chainId: BigInt = config.genesis.chainId
-    FileLock.lock[IO](Paths.get(s"${config.lock}")).flatMap { _ =>
-      Resource.liftF {
-        for {
-          _         <- logger.setRootLevel[IO](config.logLevel)
-          history   <- History.forPath[IO](config.history.chainDataDir)
-          blockPool <- BlockPool(history, BlockPoolConfig())
-          keyPair   <- Signature[ECDSA].generateKeyPair[IO]()
-          clique    <- Clique(CliqueConfig(), config.genesis, history, keyPair)
-          consensus = new CliqueConsensus[IO](clique, blockPool)
-          peerManager <- PeerManagerPlatform[IO](config.peer, None, history)
-          executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
-          syncManager <- SyncManager(config.sync, executor)
-          keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
-          miner       <- BlockMiner[IO](config.mining, syncManager)
-
-          // mount rpc
-          publicAPI = PublicApiImpl(config.history, miner)
-          privateAPI <- PrivateApiImpl(keyStore, history, config.history, executor.txPool)
-          rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
-          server = Server.websocket(config.rpc.addr, rpc.pipe)
-          haltWhenTrue <- SignallingRef[IO, Boolean](true)
-        } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
-      }
-    }
-  }
-
-  def forConfigAndConsensus(config: FullNodeConfig, consensus: Consensus[IO])(
-      implicit F: ConcurrentEffect[IO],
-      T: Timer[IO],
-      CS: ContextShift[IO]
   ): IO[FullNode[IO]] = {
-    implicit val chainId: BigInt = 1
+    implicit val chainId: BigInt = config.genesis.chainId
     for {
-      nodeKey     <- Signature[ECDSA].generateKeyPair()
-      peerManager <- PeerManagerPlatform[IO](config.peer, Some(nodeKey), consensus.history)
+      history   <- History.forPath[IO](config.history.chainDataDir)
+      blockPool <- BlockPool(history, BlockPoolConfig())
+      clique    <- Clique(CliqueConfig(), config.genesis, history, config.mining.keyPair.get)
+      consensus = new CliqueConsensus[IO](clique, blockPool)
+      _ <- history.dumpGenesis
+        .map(_.asJson.spaces2)
+        .map(s => File(config.genesisPath).createIfNotExists().overwrite(s))
+      peerManager <- PeerManagerPlatform[IO](config.peer, config.peer.keyPair, history)
       executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
       syncManager <- SyncManager(config.sync, executor)
       keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
@@ -117,10 +92,25 @@ object FullNode {
 
       // mount rpc
       publicAPI = PublicApiImpl(config.history, miner)
-      privateAPI <- PrivateApiImpl(keyStore, consensus.history, config.history, executor.txPool)
+      privateAPI <- PrivateApiImpl(keyStore, history, config.history, executor.txPool)
       rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
       server = Server.websocket(config.rpc.addr, rpc.pipe)
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
   }
+
+  def resource(config: FullNodeConfig)(
+      implicit F: ConcurrentEffect[IO],
+      T: Timer[IO],
+      CS: ContextShift[IO]
+  ): Resource[IO, FullNode[IO]] =
+    FileLock.lock[IO](Paths.get(s"${config.lockPath}")).flatMap[FullNode[IO]] { _ =>
+      Resource.liftF(forConfig(config))
+    }
+
+  def stream(config: FullNodeConfig)(
+      implicit F: ConcurrentEffect[IO],
+      T: Timer[IO],
+      CS: ContextShift[IO]
+  ): Stream[IO, FullNode[IO]] = Stream.resource(resource(config))
 }

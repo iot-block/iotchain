@@ -1,12 +1,19 @@
 package jbok.app
 
+import java.security.SecureRandom
+
+import _root_.io.circe.generic.auto._
+import _root_.io.circe.syntax._
+import better.files.File
 import cats.effect.{ExitCode, IO}
-import ch.qos.logback.classic.Level
 import com.typesafe.config.Config
 import fs2._
 import jbok.common.logger
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.{ConfigHelper, ConfigLoader}
+import jbok.core.consensus.poa.clique.Clique
+import jbok.core.keystore.KeyStorePlatform
+import jbok.core.models.Address
 
 object MainApp extends StreamApp {
   val buildVersion = getClass.getPackage.getImplementationVersion
@@ -29,6 +36,7 @@ object MainApp extends StreamApp {
   def loadConfig(config: Config): IO[FullNodeConfig] =
     for {
       fullNodeConfig <- ConfigLoader.loadFullNodeConfig[IO](config)
+      _              <- logger.setRootLevel[IO](fullNodeConfig.logLevel)
       _              <- IO(println(version))
       _              <- IO(println(banner))
       _              <- IO(println(ConfigHelper.printConfig(config).render))
@@ -41,7 +49,7 @@ object MainApp extends StreamApp {
           for {
             config         <- Stream.eval(parseConfig(tail))
             fullNodeConfig <- Stream.eval(loadConfig(config))
-            fullNode       <- Stream.resource(FullNode.forConfig(fullNodeConfig))
+            fullNode       <- FullNode.stream(fullNodeConfig)
             _              <- fullNode.stream
           } yield ()
         }
@@ -61,10 +69,30 @@ object MainApp extends StreamApp {
           for {
             config         <- Stream.eval(parseConfig(testArgs ++ tail))
             fullNodeConfig <- Stream.eval(loadConfig(config))
-            fullNode       <- Stream.resource(FullNode.forConfig(fullNodeConfig))
+            fullNode       <- FullNode.stream(fullNodeConfig)
             _              <- fullNode.stream
           } yield ()
         }
+
+      case "genesis" :: tail =>
+        for {
+          config         <- parseConfig(tail)
+          fullNodeConfig <- loadConfig(config)
+          keystore       <- KeyStorePlatform[IO](fullNodeConfig.keystore.keystoreDir, new SecureRandom())
+          address <- keystore.listAccounts.flatMap {
+            case Nil =>
+              for {
+                _          <- IO(println("please input your passphrase:"))
+                passphrase <- IO((new scala.tools.jline_embedded.console.ConsoleReader).readLine(Character.valueOf(0)))
+//                passphrase <- IO {System.console().readPassword().toString}
+                address <- keystore.newAccount(passphrase)
+              } yield address
+            case head :: _ => IO.pure(head)
+          }
+          miners: List[Address] = List(address)
+          genesis               = fullNodeConfig.genesis.copy(extraData = Clique.fillExtraData(miners))
+          _ <- IO(File(fullNodeConfig.genesisPath).createIfNotExists().overwrite(genesis.asJson.spaces2))
+        } yield ExitCode.Success
 
       case _ =>
         for {

@@ -11,35 +11,25 @@ import fs2._
 import scala.concurrent.duration._
 
 class FullNodeSpec extends JbokSpec {
-  implicit val fixture = defaultFixture()
-
-  def newFullNode(config: FullNodeConfig): FullNode[IO] = {
-    implicit val fix = fixture.copy(port = config.peer.port)
-    FullNode.forConfigAndConsensus(config, fix.consensus.unsafeRunSync()).unsafeRunSync()
-  }
+  implicit val config = testConfig
 
   "FullNode" should {
     "create a full node" in {
-      val fullNodeConfig = ConfigGenerator.withIdentityAndPort("1", 10001)
-      val fullNode       = newFullNode(fullNodeConfig)
-      val p = for {
-        _ <- fullNode.start
-        _ <- T.sleep(3.second)
-        _ <- fullNode.stop
-      } yield ()
-
-      p.unsafeRunSync()
+      FullNode
+        .stream(config)
+        .flatMap(_.stream)
+        .compile
+        .drain
+        .unsafeRunTimed(3.seconds)
     }
 
     "create a bunch of nodes and connect with ring" in {
-      val configs = ConfigGenerator.fill(10)
-      val nodes   = configs.map(config => newFullNode(config))
-
-      println(nodes.map(_.peerManager.peerNode.uri).mkString("\n"))
+      val configs = FullNodeConfig.fill(config, 10)
+      val nodes   = configs.map(config => FullNode.forConfig(config).unsafeRunSync())
 
       val p = for {
         fiber <- Stream.emits(nodes).map(_.stream).parJoinUnbounded.compile.drain.start
-        _ <- T.sleep(3.seconds)
+        _     <- T.sleep(3.seconds)
         _ <- (nodes :+ nodes.head).sliding(2).toList.traverse[IO, Unit] {
           case a :: b :: Nil =>
             a.peerManager.addPeerNode(b.peerNode)
@@ -56,11 +46,11 @@ class FullNodeSpec extends JbokSpec {
 
     "create a bunch of nodes and connect with star" in {
       val N       = 10
-      val configs = ConfigGenerator.fill(N)
-      val nodes   = configs.map(config => newFullNode(config))
+      val configs = FullNodeConfig.fill(config, N)
+      val nodes   = configs.map(config => FullNode.forConfig(config).unsafeRunSync())
 
       val p = for {
-        fiber <- Stream.emits(nodes).map(_.stream).parJoinUnbounded.compile.drain.start
+        fiber         <- Stream.emits(nodes).map(_.stream).parJoinUnbounded.compile.drain.start
         _             <- T.sleep(3.seconds)
         _             <- nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode))
         _             <- T.sleep(3.seconds)
@@ -75,15 +65,15 @@ class FullNodeSpec extends JbokSpec {
 
     "create a bunch of nodes and connect with star and broadcast some blocks" in {
       val N       = 4
-      val configs = ConfigGenerator.fill(N)
-      val nodes   = configs.map(config => newFullNode(config))
+      val configs = FullNodeConfig.fill(config, N)
+      val nodes   = configs.map(config => FullNode.forConfig(config).unsafeRunSync())
 
       val miner = nodes.head.miner
       val p = for {
         fiber <- Stream.emits(nodes).map(_.stream).parJoinUnbounded.compile.drain.start
-        _ <- T.sleep(3.seconds)
-        _ <- nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode))
-        _ <- T.sleep(3.seconds)
+        _     <- T.sleep(3.seconds)
+        _     <- nodes.traverse(_.peerManager.addPeerNode(nodes.head.peerNode))
+        _     <- T.sleep(3.seconds)
         _     = nodes.head.peerManager.connected.unsafeRunSync().size shouldBe N - 1
         mined = miner.stream.take(1).compile.toList.unsafeRunSync().head
         _ <- T.sleep(3.seconds)

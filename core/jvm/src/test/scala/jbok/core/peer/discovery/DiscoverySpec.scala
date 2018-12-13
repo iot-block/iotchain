@@ -40,8 +40,10 @@ class DiscoverySpec extends JbokSpec {
     }
 
     "handle Ping" in {
-      val d1 = random[Discovery[IO]](genDiscovery(10001))
-      val d2 = random[Discovery[IO]](genDiscovery(10002))
+      val config1 = testConfig.withPeer(_.copy(discoveryPort = 10001))
+      val config2 = testConfig.withPeer(_.copy(discoveryPort = 10002))
+      val d1 = random[Discovery[IO]](genDiscovery(config1))
+      val d2 = random[Discovery[IO]](genDiscovery(config2))
       val p = for {
         fiber <- Stream(d1, d2).map(_.serve).parJoinUnbounded.compile.drain.start
         _     <- T.sleep(1.second)
@@ -53,8 +55,10 @@ class DiscoverySpec extends JbokSpec {
     }
 
     "handle FindNode" in {
-      val d1    = random[Discovery[IO]](genDiscovery(10001))
-      val d2    = random[Discovery[IO]](genDiscovery(10002))
+      val config1 = testConfig.withPeer(_.copy(discoveryPort = 10001))
+      val config2 = testConfig.withPeer(_.copy(discoveryPort = 10002))
+      val d1    = random[Discovery[IO]](genDiscovery(config1))
+      val d2    = random[Discovery[IO]](genDiscovery(config2))
       val N     = 10
       val nodes = random[List[PeerNode]](Gen.listOfN(N, arbPeerNode.arbitrary))
 

@@ -7,7 +7,7 @@ import jbok.core.config.GenesisConfig
 import jbok.core.models.Address
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import jbok.core.config.reference
+import jbok.core.config.defaults.reference
 
 class GenesisConfigSpec extends JbokSpec {
   "GenesisConfig" should {

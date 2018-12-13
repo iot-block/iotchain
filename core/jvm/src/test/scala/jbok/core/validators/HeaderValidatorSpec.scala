@@ -10,7 +10,7 @@ import jbok.common.testkit._
 import jbok.core.testkit._
 
 class HeaderValidatorSpec extends JbokSpec {
-  implicit val fixture = defaultFixture()
+  implicit val config = testConfig
 
   val history = random[History[IO]]
 

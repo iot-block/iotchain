@@ -13,7 +13,7 @@ import jbok.core.pool.BlockPool
   *   - postProcess: post process a [[ExecutedBlock]] such as paying reward
   *   - mine: seal a [[ExecutedBlock]] into a [[MinedBlock]]
   *   - verify: check a block fields validity
-  *   - run: run a consensus upon a received [[BlockHeader]] and yield 3 possible [[Result]]s
+  *   - run: run a consensus upon a received [[Block]] and yield 4 possible [[Result]]s
   *     - [[Forward]] we should apply blocks and forward
   *     - [[Fork]] we should resolve to a new branch
   *     - [[Stash]]   we should stash this block since it is not decided yet
