@@ -15,7 +15,7 @@ object Configs {
       datadir: String,
       identity: String,
       logLevel: String,
-      genesis: GenesisConfig,
+      genesisOrPath: Either[GenesisConfig, String],
       history: HistoryConfig,
       keystore: KeyStoreConfig,
       peer: PeerConfig,
@@ -24,12 +24,20 @@ object Configs {
       mining: MiningConfig,
       rpc: RpcConfig
   ) {
+    val genesis = genesisOrPath match {
+      case Left(g)     => g
+      case Right(path) => GenesisConfig.fromFile(path).unsafeRunSync()
+    }
+
     val lockPath: String = s"${datadir}/LOCK"
 
     val genesisPath: String = s"${datadir}/genesis.conf"
 
     def withGenesis(f: GenesisConfig => GenesisConfig): FullNodeConfig =
-      copy(genesis = f(genesis))
+      copy(genesisOrPath = Left(f(genesis)))
+
+    def withGenesisPath(path: String): FullNodeConfig =
+      copy(genesisOrPath = Right(path))
 
     def withPeer(f: PeerConfig => PeerConfig): FullNodeConfig =
       copy(peer = f(peer))
@@ -43,9 +51,12 @@ object Configs {
     def withIdentityAndPort(identity: String, port: Int): FullNodeConfig =
       copy(identity = identity)
         .withPeer(
-          _.copy(port = port,
-                 keyPair = Some(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()),
-                 discoveryPort = port + 1))
+          _.copy(
+            port = port,
+            nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()),
+            discoveryPort = port + 1
+          )
+        )
   }
 
   object FullNodeConfig {
@@ -78,11 +89,10 @@ object Configs {
   case class PeerConfig(
       port: Int,
       host: String,
-      keyPair: Option[KeyPair],
+      nodekeyOrPath: Either[KeyPair, String],
       enableDiscovery: Boolean,
       discoveryPort: Int,
       peerDataDir: String,
-      nodekeyPath: String,
       bootUris: List[String],
       updatePeersInterval: FiniteDuration,
       maxOutgoingPeers: Int,
@@ -113,9 +123,9 @@ object Configs {
 
   case class MiningConfig(
       enabled: Boolean,
-      keyPair: Option[KeyPair],
       ommersPoolSize: Int,
       blockCacheSize: Int,
+      minerAddressOrKey: Either[Address, KeyPair],
       coinbase: Address,
       extraData: ByteVector,
       ethashDir: String,

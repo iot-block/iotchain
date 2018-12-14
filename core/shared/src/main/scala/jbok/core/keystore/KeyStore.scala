@@ -14,6 +14,8 @@ object KeyStoreError {
 trait KeyStore[F[_]] {
   def newAccount(passphrase: String): F[Address]
 
+  def readPassphrase(prompt: String): F[String]
+
   def importPrivateKey(key: ByteVector, passphrase: String): F[Address]
 
   def listAccounts: F[List[Address]]
@@ -27,4 +29,6 @@ trait KeyStore[F[_]] {
       oldPassphrase: String,
       newPassphrase: String
   ): F[Boolean]
+
+  def isEmpty: F[Boolean]
 }

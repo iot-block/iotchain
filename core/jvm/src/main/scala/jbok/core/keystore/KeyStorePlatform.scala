@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter
 import java.time.{ZoneOffset, ZonedDateTime}
 
 import better.files._
-import cats.effect.{Async, Sync}
+import cats.effect.Async
 import cats.implicits._
 import io.circe.parser._
 import io.circe.syntax._
@@ -26,6 +26,12 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       encKey  <- EncryptedKey(keyPair.secret, passphrase, secureRandom)
       _       <- save(encKey)
     } yield encKey.address
+
+  override def readPassphrase(prompt: String): F[String] =
+    for {
+      _          <- F.delay(println(prompt))
+      passphrase <- F.delay((new scala.tools.jline_embedded.console.ConsoleReader).readLine(Character.valueOf(0)))
+    } yield passphrase
 
   override def importPrivateKey(key: ByteVector, passphrase: String): F[Address] =
     if (key.length != keyLength) {
@@ -69,6 +75,9 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       _         <- overwrite(keyFile, newEncKey)
     } yield true
 
+  override def isEmpty: F[Boolean] =
+    listAccounts.map(_.isEmpty)
+
   private def save(encryptedKey: EncryptedKey): F[Unit] = {
     val json = encryptedKey.asJson.spaces2
     val name = fileName(encryptedKey)
@@ -79,7 +88,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       _ <- if (alreadyInKeyStore) {
         F.raiseError(KeyStoreError.KeyAlreadyExist)
       } else {
-        log.debug(s"saving key into ${file.pathAsString}")
+        log.info(s"saving key into ${file.pathAsString}")
         F.delay(file.createIfNotExists(createParents = true).writeText(json)).attempt.flatMap {
           case Left(e)  => F.raiseError[Unit](KeyStoreError.IOError(e.toString))
           case Right(_) => F.unit
@@ -144,17 +153,9 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
 }
 
 object KeyStorePlatform {
-  def apply[F[_]: Async](keyStoreDir: String, secureRandom: SecureRandom): F[KeyStorePlatform[F]] = {
-    val dir = File(keyStoreDir)
+  def apply[F[_]](keyStoreDir: String)(implicit F: Async[F]): F[KeyStorePlatform[F]] =
     for {
-      _ <- if (!dir.isDirectory) {
-        Sync[F].delay(dir.createIfNotExists(asDirectory = true, createParents = true)).attempt
-      } else {
-        Sync[F].unit
-      }
-    } yield {
-      require(dir.isDirectory, s"could not create keystore directory ($dir)")
-      new KeyStorePlatform[F](dir, secureRandom)
-    }
-  }
+      secureRandom <- F.delay(new SecureRandom())
+      dir          <- F.delay(File(keyStoreDir))
+    } yield new KeyStorePlatform[F](dir, secureRandom)
 }

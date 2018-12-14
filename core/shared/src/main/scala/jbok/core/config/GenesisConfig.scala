@@ -1,6 +1,13 @@
 package jbok.core.config
 
+import java.nio.file.Path
+
+import better.files.File
+import cats.effect.IO
+import io.circe.Json
 import io.circe.generic.JsonCodec
+import io.circe.parser._
+import io.circe.syntax._
 import jbok.codec.json.implicits._
 import jbok.core.models._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
@@ -14,9 +21,10 @@ case class GenesisConfig(
     gasLimit: BigInt,
     coinbase: ByteVector,
     alloc: Map[String, String],
-    chainId: BigInt
+    chainId: BigInt,
+    timestamp: Long
 ) {
-  val timestamp: Long = System.currentTimeMillis()
+  def json: Json = this.asJson
 
   def withAlloc(alloc: Map[Address, BigInt]): GenesisConfig =
     copy(alloc = alloc.map { case (k, v) => k.toString -> v.toString() })
@@ -45,14 +53,18 @@ case class GenesisConfig(
 }
 
 object GenesisConfig {
-  def generate(chainId: BigInt, alloc: Map[Address, Account]): GenesisConfig =
+  def generate(chainId: BigInt, alloc: Map[Address, BigInt]): GenesisConfig =
     GenesisConfig(
       nonce = hex"0x42",
       difficulty = BigInt("1024"),
       extraData = hex"",
       gasLimit = BigInt("16716680"),
       coinbase = hex"0x0000000000000000000000000000000000000000",
-      alloc = alloc.map { case (key, value) => key.toString -> value.balance.toDecString },
-      chainId = chainId
+      alloc = alloc.map { case (key, value) => key.toString -> value.toString },
+      chainId = chainId,
+      timestamp = 0
     )
+
+  def fromFile(path: String): IO[GenesisConfig] =
+    IO(File(path).lines.mkString("\n")).map(text => decode[GenesisConfig](text).right.get)
 }

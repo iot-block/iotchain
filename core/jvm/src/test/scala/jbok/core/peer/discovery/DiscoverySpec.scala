@@ -15,12 +15,15 @@ import jbok.crypto.testkit._
 import org.scalacheck.Gen
 import scodec.Codec
 import cats.implicits._
+import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.peer.discovery.KadPacket._
 
 import scala.concurrent.duration._
 
 class DiscoverySpec extends JbokSpec {
   "Discovery" should {
+    val List(config1, config2) = FullNodeConfig.fill(testConfig, 2)
+
     "roundtrip kad packets" in {
       def roundtrip[A <: KadPacket](a: A) = {
         val bits = Codec.encode[KadPacket](a).require
@@ -40,8 +43,6 @@ class DiscoverySpec extends JbokSpec {
     }
 
     "handle Ping" in {
-      val config1 = testConfig.withPeer(_.copy(discoveryPort = 10001))
-      val config2 = testConfig.withPeer(_.copy(discoveryPort = 10002))
       val d1 = random[Discovery[IO]](genDiscovery(config1))
       val d2 = random[Discovery[IO]](genDiscovery(config2))
       val p = for {
@@ -55,8 +56,6 @@ class DiscoverySpec extends JbokSpec {
     }
 
     "handle FindNode" in {
-      val config1 = testConfig.withPeer(_.copy(discoveryPort = 10001))
-      val config2 = testConfig.withPeer(_.copy(discoveryPort = 10002))
       val d1    = random[Discovery[IO]](genDiscovery(config1))
       val d2    = random[Discovery[IO]](genDiscovery(config2))
       val N     = 10

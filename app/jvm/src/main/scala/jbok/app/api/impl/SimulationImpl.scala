@@ -10,7 +10,7 @@ import jbok.app.simulations.SimulationImpl.NodeId
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.defaults.reference
-import jbok.core.consensus.poa.clique.{Clique, CliqueConfig}
+import jbok.core.consensus.poa.clique.CliqueConfig
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.{Account, Address}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
@@ -49,9 +49,6 @@ class SimulationImpl(
     val (configs, minerSingers) = selectMiner(n, m, fullNodeConfigs, signers)
 
     log.info(minerSingers.toString)
-    val newGenesisConfig =
-      genesisConfig
-        .copy(alloc = txGraphGen.alloc, extraData = Clique.fillExtraData(minerSingers.map(Address(_))))
     log.info(s"create ${n} node(s)")
 
     for {

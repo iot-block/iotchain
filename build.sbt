@@ -97,6 +97,15 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   )
   .dependsOn(common % CompileAndTest, codec, crypto % CompileAndTest, network, persistent % CompileAndTest)
 
+lazy val pow = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-pow"
+  )
+  .dependsOn(common % CompileAndTest, core % CompileAndTest)
+
 lazy val crypto = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
@@ -185,7 +194,8 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
 lazy val appJS = app.js
 lazy val appJVM = app.jvm.settings(
   scalaJSProjects := Seq(appJS),
-  pipelineStages in Assets := Seq(scalaJSPipeline)
+  pipelineStages in Assets := Seq(scalaJSPipeline),
+  isDevMode in Assets := true
 )
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)

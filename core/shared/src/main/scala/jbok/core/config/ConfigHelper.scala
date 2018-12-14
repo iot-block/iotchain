@@ -53,7 +53,7 @@ object ConfigHelper {
         pad("value", maxValueLen),
         pad("description", maxDescLen),
         pad("origin", maxOriginLen),
-      ).mkString("| ", " | ", " |")
+      ).mkString("|", "|", "|")
       val hr = "+" + ("-" * (header.length - 2)) + "+"
       val sb = StringBuilder.newBuilder
       sb ++= hr + "\n"
@@ -77,7 +77,7 @@ object ConfigHelper {
         pad(value, maxValueLen),
         pad(desc, maxDescLen),
         pad(origin, maxOriginLen)
-      ).mkString("| ", " | ", " |")
+      ).mkString("|", "|", "|")
   }
 
   def printConfig(config: Config): Help = {

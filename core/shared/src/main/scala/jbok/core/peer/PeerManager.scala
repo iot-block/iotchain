@@ -21,8 +21,8 @@ import jbok.network.common.TcpUtil
 
 sealed abstract class PeerErr(message: String) extends Exception(message)
 object PeerErr {
-  case object HandshakeTimeout extends PeerErr("handshake timeout")
-  case object Incompatible     extends PeerErr("incompatible peer")
+  case object HandshakeTimeout                         extends PeerErr("handshake timeout")
+  case class Incompatible(self: Status, other: Status) extends PeerErr(s"incompatible peer ${self} ${other}")
 }
 
 abstract class PeerManager[F[_]](
@@ -47,7 +47,7 @@ abstract class PeerManager[F[_]](
       .serverWithLocalAddress[F](bind, maxQueued)
       .map {
         case Left(_) =>
-          Stream.eval(F.delay(log.info(s"${peerNode.uri} successfully bound to ${bind}")))
+          Stream.eval(F.delay(log.info(s"successfully bound to ${bind}")))
 
         case Right(res) =>
           val stream = for {
@@ -65,7 +65,7 @@ abstract class PeerManager[F[_]](
 
           stream.handleErrorWith {
             case PeerErr.HandshakeTimeout => Stream.eval(F.delay(log.warn("timeout")))
-            case PeerErr.Incompatible     => Stream.eval(F.delay(log.warn("incompatible peer")))
+            case e: PeerErr.Incompatible  => Stream.eval(F.delay(log.warn(e.getMessage)))
             case e =>
               log.error(e)("unexpected listen error")
               Stream.raiseError[F](e)
@@ -99,7 +99,7 @@ abstract class PeerManager[F[_]](
 
       stream.handleErrorWith {
         case PeerErr.HandshakeTimeout => Stream.eval(F.delay(log.warn("timeout")))
-        case PeerErr.Incompatible     => Stream.eval(F.delay(log.warn("incompatible")))
+        case e: PeerErr.Incompatible  => Stream.eval(F.delay(log.warn(e.getMessage)))
         case e =>
           log.error(e)("unexpected connect error")
           Stream.raiseError[F](e)
@@ -116,11 +116,12 @@ abstract class PeerManager[F[_]](
   }
 
   def stream: Stream[F, Unit] =
-    Stream(
-      listen(),
-      connect(),
-      Stream.eval(addPeerNode(config.bootNodes: _*))
-    ).parJoinUnbounded
+    Stream.eval(F.delay(log.info(s"uri ${peerNode.uri}"))) ++
+      Stream(
+        listen(),
+        connect(),
+        Stream.eval(addPeerNode(config.bootNodes: _*))
+      ).parJoinUnbounded
 
   def addPeerNode(nodes: PeerNode*): F[Unit] =
     nodes.toList

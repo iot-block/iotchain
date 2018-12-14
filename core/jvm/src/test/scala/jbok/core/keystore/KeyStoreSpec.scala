@@ -13,7 +13,7 @@ import scodec.bits._
 class KeyStoreSpec extends JbokSpec {
   val secureRandom = new SecureRandom()
   val dir          = File.newTemporaryDirectory()
-  val keyStore     = KeyStorePlatform[IO](dir.pathAsString, secureRandom).unsafeRunSync()
+  val keyStore     = KeyStorePlatform[IO](dir.pathAsString).unsafeRunSync()
   val key1         = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
   val addr1        = Address(hex"aa6826f00d01fe4085f0c3dd12778e206ce4e2ac")
 
@@ -39,12 +39,6 @@ class KeyStoreSpec extends JbokSpec {
       val listOfNewAccounts = keyStore.listAccounts.unsafeRunSync()
       listOfNewAccounts.toSet shouldBe Set(newAddr1, newAddr2)
       listOfNewAccounts.length shouldBe 2
-    }
-
-    "return an error when the keystore dir cannot be initialized" in {
-      intercept[IllegalArgumentException] {
-        KeyStorePlatform[IO]("/root/keystore", secureRandom).unsafeRunSync()
-      }
     }
 
     "unlock an account provided a correct passphrase" in {

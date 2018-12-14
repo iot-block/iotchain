@@ -15,23 +15,23 @@ import scala.reflect.ClassTag
 object ConfigLoader {
   def loadFullNodeConfig[F[_]](config: Config)(implicit F: Sync[F]): F[FullNodeConfig] =
     for {
-      datadir  <- F.delay(config.getString("datadir"))
-      identity <- F.delay(config.getString("identity"))
-      logLevel <- F.delay(config.getString("logLevel"))
-      genesis  <- F.delay(ConfigLoader.loadOrThrow[GenesisConfig](config, "genesis"))
-      history  <- F.delay(ConfigLoader.loadOrThrow[HistoryConfig](config, "history"))
-      keystore <- F.delay(ConfigLoader.loadOrThrow[KeyStoreConfig](config, "keystore"))
-      peer     <- F.delay(ConfigLoader.loadOrThrow[PeerConfig](config, "peer"))
-      sync     <- F.delay(ConfigLoader.loadOrThrow[SyncConfig](config, "sync"))
-      txPool   <- F.delay(ConfigLoader.loadOrThrow[TxPoolConfig](config, "txPool"))
-      mining   <- F.delay(ConfigLoader.loadOrThrow[MiningConfig](config, "mining"))
-      rpc      <- F.delay(ConfigLoader.loadOrThrow[RpcConfig](config, "rpc"))
+      datadir       <- F.delay(config.getString("datadir"))
+      identity      <- F.delay(config.getString("identity"))
+      logLevel      <- F.delay(config.getString("logLevel"))
+      genesisOrPath <- F.delay(ConfigLoader.loadOrThrow[Either[GenesisConfig, String]](config, "genesisOrPath"))
+      history       <- F.delay(ConfigLoader.loadOrThrow[HistoryConfig](config, "history"))
+      keystore      <- F.delay(ConfigLoader.loadOrThrow[KeyStoreConfig](config, "keystore"))
+      peer          <- F.delay(ConfigLoader.loadOrThrow[PeerConfig](config, "peer"))
+      sync          <- F.delay(ConfigLoader.loadOrThrow[SyncConfig](config, "sync"))
+      txPool        <- F.delay(ConfigLoader.loadOrThrow[TxPoolConfig](config, "txPool"))
+      mining        <- F.delay(ConfigLoader.loadOrThrow[MiningConfig](config, "mining"))
+      rpc           <- F.delay(ConfigLoader.loadOrThrow[RpcConfig](config, "rpc"))
     } yield
       FullNodeConfig(
         datadir,
         identity,
         logLevel,
-        genesis,
+        genesisOrPath,
         history,
         keystore,
         peer,
@@ -56,6 +56,9 @@ object ConfigLoader {
   implicit private val addressReader: ConfigReader[Address] = ConfigReader.fromString[Address](
     ConvertHelpers.catchReadError(s => Address.fromHex(s))
   )
+
+  implicit private def eitherReader[A: ConfigReader, B: ConfigReader]: ConfigReader[Either[A, B]] =
+    ConfigReader[A].map(_.asLeft[B]).orElse(ConfigReader[B].map(_.asRight[A]))
 
   implicit def hint[A]: ProductHint[A] =
     ProductHint[A](fieldMapping = ConfigFieldMapping(CamelCase, CamelCase),

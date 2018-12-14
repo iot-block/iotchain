@@ -13,14 +13,13 @@ case class FileLockErr(path: Path) extends Exception(s"${path} is already locked
 object FileLock {
   private[this] val log = org.log4s.getLogger("FileLock")
 
-  def lock[F[_]](path: Path)(implicit F: Sync[F]): Resource[F, Unit] =
+  def lock[F[_]](path: Path, content: String = "")(implicit F: Sync[F]): Resource[F, Unit] =
     Resource
       .make {
         for {
-          _ <- F.delay(log.info(s"acquiring file lock at ${path}"))
-          file <- F.delay(
-            File(path).createIfNotExists(createParents = true).newRandomAccess(RandomAccessMode.readWrite))
-          channel <- F.delay(file.getChannel)
+          _       <- F.delay(log.info(s"acquiring file lock at ${path}"))
+          file    <- F.delay(File(path).createIfNotExists(createParents = true))
+          channel <- F.delay(file.newFileChannel(StandardOpenOption.WRITE :: Nil))
           lock <- F.delay(channel.tryLock()).adaptError {
             case _: OverlappingFileLockException => FileLockErr(path)
           }

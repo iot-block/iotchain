@@ -3,9 +3,8 @@ package jbok.core.peer
 import java.nio.channels.AsynchronousChannelGroup
 
 import better.files._
-import cats.data.OptionT
-import cats.effect.concurrent.Ref
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2.concurrent.Queue
 import jbok.common.concurrent.PriorityQueue
@@ -43,7 +42,6 @@ object PeerManagerPlatform {
 
   def apply[F[_]](
       config: PeerConfig,
-      keyPairOpt: Option[KeyPair],
       history: History[F],
       maxQueueSize: Int = 64
   )(
@@ -54,7 +52,10 @@ object PeerManagerPlatform {
       chainId: BigInt
   ): F[PeerManager[F]] =
     for {
-      keyPair      <- OptionT.fromOption[F](keyPairOpt).getOrElseF(loadOrGenerateNodeKey[F](config.nodekeyPath))
+      keyPair <- config.nodekeyOrPath match {
+        case Left(kp)    => F.pure(kp)
+        case Right(path) => loadOrGenerateNodeKey[F](path)
+      }
       incoming     <- Ref.of[F, Map[KeyPair.Public, Peer[F]]](Map.empty)
       outgoing     <- Ref.of[F, Map[KeyPair.Public, Peer[F]]](Map.empty)
       nodeQueue    <- PriorityQueue.bounded[F, PeerNode](maxQueueSize)
@@ -69,7 +70,7 @@ object PeerManagerPlatform {
             _            <- conn.write(localStatus)
             remoteStatus <- conn.read.map(_.asInstanceOf[Status])
             _ <- if (!localStatus.isCompatible(remoteStatus)) {
-              F.raiseError(PeerErr.Incompatible)
+              F.raiseError(PeerErr.Incompatible(localStatus, remoteStatus))
             } else {
               F.unit
             }
@@ -84,7 +85,7 @@ object PeerManagerPlatform {
             _            <- conn.write(localStatus)
             remoteStatus <- conn.read.map(_.asInstanceOf[Status])
             _ <- if (!localStatus.isCompatible(remoteStatus)) {
-              F.raiseError(PeerErr.Incompatible)
+              F.raiseError(PeerErr.Incompatible(localStatus, remoteStatus))
             } else {
               F.unit
             }

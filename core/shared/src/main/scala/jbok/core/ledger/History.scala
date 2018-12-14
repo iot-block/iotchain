@@ -16,8 +16,6 @@ abstract class History[F[_]](val db: KeyValueDB[F]) {
   // init
   def initGenesis(config: GenesisConfig): F[Unit]
 
-  def dumpGenesis: F[GenesisConfig]
-
   // header
   def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]]
 
@@ -94,6 +92,7 @@ object History {
 }
 
 class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt) extends History[F](db) {
+  private[this] val log = org.log4s.getLogger("History")
 
   // init
   override def initGenesis(config: GenesisConfig): F[Unit] =
@@ -101,6 +100,7 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
       _ <- getBlockHeaderByNumber(0)
         .map(_.isDefined)
         .ifM(F.raiseError(new Exception("genesis already defined")), F.unit)
+      _     <- F.delay(log.info(s"init with genesis config:\n${config.json.spaces2}"))
       state <- getWorldState()
       world <- config.alloc.toList
         .foldLeft(state) {
@@ -111,26 +111,6 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt)
       block = Block(config.header.copy(stateRoot = world.stateRootHash), config.body)
       _ <- putBlockAndReceipts(block, Nil, block.header.difficulty, asBestBlock = true)
     } yield ()
-
-  override def dumpGenesis: F[GenesisConfig] =
-    for {
-      header   <- genesisHeader
-      world    <- getWorldState(stateRootHash = Some(header.stateRoot))
-      accounts <- world.accountProxy.toMap
-      alloc = accounts.map {
-        case (addr, value) =>
-          addr.toString -> value.balance.toDecString
-      }
-    } yield
-      GenesisConfig(
-        header.nonce,
-        header.difficulty,
-        header.extraData,
-        header.gasLimit,
-        header.beneficiary,
-        alloc,
-        chainId
-      )
 
   // header
   override def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]] =

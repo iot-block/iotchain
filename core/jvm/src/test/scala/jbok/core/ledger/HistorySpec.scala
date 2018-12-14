@@ -57,17 +57,5 @@ class HistorySpec extends JbokSpec {
       val location = history.getTransactionLocation(txs.head.hash).unsafeRunSync()
       location shouldBe Some(TransactionLocation(block.header.hash, 0))
     }
-
-    "init and dump genesis" in {
-      val history       = random[History[IO]]
-      val genesisConfig = history.dumpGenesis.unsafeRunSync()
-      genesisConfig.nonce shouldBe reference.genesis.nonce
-      genesisConfig.difficulty shouldBe reference.genesis.difficulty
-      // genesisConfig.extraData shouldBe reference.genesis.extraData
-      genesisConfig.gasLimit shouldBe reference.genesis.gasLimit
-      genesisConfig.coinbase shouldBe reference.genesis.coinbase
-      genesisConfig.chainId shouldBe reference.genesis.chainId
-      // genesisConfig.alloc.toList should contain theSameElementsAs reference.genesis.alloc.toList
-    }
   }
 }

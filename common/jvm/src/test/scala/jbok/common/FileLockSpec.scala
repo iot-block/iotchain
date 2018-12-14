@@ -1,6 +1,4 @@
 package jbok.common
-import java.nio.channels.OverlappingFileLockException
-
 import better.files.File
 import cats.effect.IO
 import jbok.JbokSpec
@@ -34,6 +32,18 @@ class FileLockSpec extends JbokSpec {
         }
         .attempt
       p.unsafeRunSync().isRight shouldBe true
+      file.exists shouldBe false
+    }
+
+    "lock with content" in {
+      val file = File.newTemporaryFile()
+      val p = FileLock
+        .lock[IO](file.path, "oho")
+        .use { _ =>
+          IO(println(file.lines.head)).flatMap(_ => IO.raiseError(new Exception("boom")))
+        }
+        .attempt
+      p.unsafeRunSync()
       file.exists shouldBe false
     }
   }

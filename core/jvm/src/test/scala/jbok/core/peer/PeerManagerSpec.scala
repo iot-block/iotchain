@@ -6,7 +6,7 @@ import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.common.testkit._
-import jbok.core.config.defaults.reference
+import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.testkit._
 
 import scala.concurrent.duration._
@@ -22,12 +22,13 @@ class PeerManagerSpec extends JbokSpec {
 
   "PeerManager" should {
     implicit val config = testConfig
+    val List(config1, config2, config3) = FullNodeConfig.fill(config, 3)
 
     "keep incoming connections <= maxOpen" in {
       val pm1 =
-        random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10001, maxIncomingPeers = 1))))
-      val pm2 = random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10002))))
-      val pm3 = random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10003))))
+        random[PeerManager[IO]](genPeerManager(config1.withPeer(_.copy(port = 10001, maxIncomingPeers = 1))))
+      val pm2 = random[PeerManager[IO]](genPeerManager(config2))
+      val pm3 = random[PeerManager[IO]](genPeerManager(config3))
 
       val p = for {
         fiber    <- startAll(pm1, pm2, pm3)
@@ -39,9 +40,9 @@ class PeerManagerSpec extends JbokSpec {
     }
 
     "keep outgoing connections <= maxOpen" in {
-      val pm1     = random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10001))))
-      val pm2     = random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10002))))
-      val pm3     = random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10003))))
+      val pm1     = random[PeerManager[IO]](genPeerManager(config1))
+      val pm2     = random[PeerManager[IO]](genPeerManager(config2))
+      val pm3     = random[PeerManager[IO]](genPeerManager(config3))
       val maxOpen = 1
 
       val p = for {
@@ -65,10 +66,8 @@ class PeerManagerSpec extends JbokSpec {
     }
 
     "fail if peers are incompatible" in {
-      val pm1 = random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10001))))
-      val pm2 =
-        random[PeerManager[IO]](
-          genPeerManager(testConfig.withPeer(_.copy(port = 10002)).withGenesis(_.copy(chainId = 2))))
+      val pm1 = random[PeerManager[IO]](genPeerManager(config1))
+      val pm2 = random[PeerManager[IO]](genPeerManager(config2.withGenesis(_.copy(chainId = 2))))
 
       val p = for {
         fiber    <- startAll(pm1, pm2)
@@ -81,8 +80,8 @@ class PeerManagerSpec extends JbokSpec {
     }
 
     "close connection explicitly" in {
-      val pm1 = random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10001))))
-      val pm2 = random[PeerManager[IO]](genPeerManager(testConfig.withPeer(_.copy(port = 10002))))
+      val pm1 = random[PeerManager[IO]](genPeerManager(config1))
+      val pm2 = random[PeerManager[IO]](genPeerManager(config2))
 
       val p = for {
         fiber    <- startAll(pm1, pm2)

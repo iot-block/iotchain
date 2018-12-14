@@ -19,9 +19,8 @@ object SimuServer {
   val bind = new InetSocketAddress("localhost", 8888)
 
   // keystore
-  val secureRandom = new SecureRandom()
   val dir          = File.newTemporaryDirectory().deleteOnExit()
-  val keyStore     = KeyStorePlatform[IO](dir.pathAsString, secureRandom).unsafeRunSync()
+  val keyStore     = KeyStorePlatform[IO](dir.pathAsString).unsafeRunSync()
 
   val impl: SimulationAPI = SimulationImpl().unsafeRunSync()
   val rpcServer           = RpcServer().unsafeRunSync().mountAPI[SimulationAPI](impl)

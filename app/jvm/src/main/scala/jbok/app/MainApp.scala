@@ -6,14 +6,14 @@ import _root_.io.circe.generic.auto._
 import _root_.io.circe.syntax._
 import better.files.File
 import cats.effect.{ExitCode, IO}
+import cats.implicits._
 import com.typesafe.config.Config
 import fs2._
 import jbok.common.logger
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.{ConfigHelper, ConfigLoader}
-import jbok.core.consensus.poa.clique.Clique
+import jbok.core.consensus.poa.clique
 import jbok.core.keystore.KeyStorePlatform
-import jbok.core.models.Address
 
 object MainApp extends StreamApp {
   val buildVersion = getClass.getPackage.getImplementationVersion
@@ -78,19 +78,13 @@ object MainApp extends StreamApp {
         for {
           config         <- parseConfig(tail)
           fullNodeConfig <- loadConfig(config)
-          keystore       <- KeyStorePlatform[IO](fullNodeConfig.keystore.keystoreDir, new SecureRandom())
-          address <- keystore.listAccounts.flatMap {
-            case Nil =>
-              for {
-                _          <- IO(println("please input your passphrase:"))
-                passphrase <- IO((new scala.tools.jline_embedded.console.ConsoleReader).readLine(Character.valueOf(0)))
-//                passphrase <- IO {System.console().readPassword().toString}
-                address <- keystore.newAccount(passphrase)
-              } yield address
-            case head :: _ => IO.pure(head)
-          }
-          miners: List[Address] = List(address)
-          genesis               = fullNodeConfig.genesis.copy(extraData = Clique.fillExtraData(miners))
+          keystore       <- KeyStorePlatform[IO](fullNodeConfig.keystore.keystoreDir)
+          address <- keystore.listAccounts.flatMap(
+            _.headOption.fold(keystore.readPassphrase("please input your passphrase:") >>= keystore.newAccount)(IO.pure)
+          )
+          _ <- keystore.readPassphrase(s"unlock address ${address}:").flatMap(p => keystore.unlockAccount(address, p))
+          signers = List(address)
+          genesis = clique.generateGenesisConfig(fullNodeConfig.genesis, signers)
           _ <- IO(File(fullNodeConfig.genesisPath).createIfNotExists().overwrite(genesis.asJson.spaces2))
         } yield ExitCode.Success
 

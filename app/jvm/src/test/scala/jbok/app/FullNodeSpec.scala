@@ -11,16 +11,17 @@ import fs2._
 import scala.concurrent.duration._
 
 class FullNodeSpec extends JbokSpec {
-  implicit val config = testConfig
+  val config = testConfig
 
   "FullNode" should {
     "create a full node" in {
-      FullNode
-        .stream(config)
-        .flatMap(_.stream)
-        .compile
-        .drain
-        .unsafeRunTimed(3.seconds)
+      val p = for {
+        fullNode <- FullNode.forConfig(config)
+        fiber    <- fullNode.stream.compile.drain.start
+        _        <- T.sleep(3.seconds)
+        _        <- fiber.cancel
+      } yield ()
+      p.unsafeRunSync()
     }
 
     "create a bunch of nodes and connect with ring" in {

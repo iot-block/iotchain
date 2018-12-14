@@ -4,6 +4,7 @@ import cats.effect.IO
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
+import jbok.core.config.GenesisConfig
 import jbok.core.config.defaults.testReference
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus, _}
@@ -29,10 +30,13 @@ object testkit {
   val testAlloc =
     Map(testMiner.address -> testMiner.balance)
 
+  val testGenesis = GenesisConfig.generate(0, testAlloc)
+
   val testConfig =
     testReference.copy(
-      genesis = generateGenesisConfig(testReference.genesis.withAlloc(testAlloc), List(testMiner.address)),
-      mining = testReference.mining.copy(keyPair = Some(testMiner.keyPair))
+      genesisOrPath = Left(generateGenesisConfig(testGenesis, List(testMiner.address))),
+      mining = testReference.mining.copy(minerAddressOrKey = Right(testMiner.keyPair)),
+      peer = testReference.peer.copy(nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()))
     )
 
   def genConsensus(implicit config: FullNodeConfig): Gen[Consensus[IO]] = {
@@ -40,7 +44,7 @@ object testkit {
     val p = for {
       history   <- History.forPath[IO](config.history.chainDataDir)
       blockPool <- BlockPool(history, BlockPoolConfig())
-      clique    <- Clique(CliqueConfig(), config.genesis, history, testMiner.keyPair)
+      clique    <- Clique(CliqueConfig(), config.genesis, history, Some(testMiner.keyPair))
       consensus = new CliqueConsensus[IO](clique, blockPool)
     } yield consensus
     p.unsafeRunSync()
@@ -258,8 +262,7 @@ object testkit {
     implicit val chainId: BigInt = config.genesis.chainId
     val consensus                = random[Consensus[IO]]
     val history                  = consensus.history
-    val keyPair                  = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    PeerManagerPlatform[IO](config.peer, Some(keyPair), history).unsafeRunSync()
+    PeerManagerPlatform[IO](config.peer, history).unsafeRunSync()
   }
 
   def genBlockPool(implicit config: FullNodeConfig): Gen[BlockPool[IO]] = {
@@ -285,8 +288,7 @@ object testkit {
   implicit def arbBlockExecutor(implicit config: FullNodeConfig): Arbitrary[BlockExecutor[IO]] = Arbitrary {
     implicit val chainId = config.genesis.chainId
     val consensus        = random[Consensus[IO]]
-    val keyPair          = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val pm = PeerManagerPlatform[IO](config.peer, Some(keyPair), consensus.history)
+    val pm = PeerManagerPlatform[IO](config.peer, consensus.history)
       .unsafeRunSync()
     BlockExecutor[IO](config.history, consensus, pm).unsafeRunSync()
   }

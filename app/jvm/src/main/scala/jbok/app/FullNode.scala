@@ -4,9 +4,6 @@ import java.net.InetSocketAddress
 import java.nio.file.Paths
 import java.security.SecureRandom
 
-import _root_.io.circe.generic.auto._
-import _root_.io.circe.syntax._
-import better.files.File
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
@@ -23,7 +20,6 @@ import jbok.core.mining.BlockMiner
 import jbok.core.peer.PeerManagerPlatform
 import jbok.core.pool.{BlockPool, BlockPoolConfig}
 import jbok.core.sync.SyncManager
-import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
@@ -51,7 +47,7 @@ case class FullNode[F[_]](
     config.peer.bindAddr
 
   def stream: Stream[F, Unit] =
-    Stream.eval(haltWhenTrue.set(false)) ++
+    Stream.eval(haltWhenTrue.set(false) >> F.delay(log.info(s"(${config.identity}) start"))) ++
       Stream(
         peerManager.stream,
         syncManager.stream,
@@ -60,7 +56,7 @@ case class FullNode[F[_]](
       ).parJoinUnbounded
         .interruptWhen(haltWhenTrue)
         .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)("FullNode error"))))
-        .onFinalize(haltWhenTrue.set(true) >> F.delay(log.info("ready to exit, bye bye...")))
+        .onFinalize(haltWhenTrue.set(true) >> F.delay(log.info(s"(${config.identity}) ready to exit, bye bye...")))
 
   def start: F[Fiber[F, Unit]] =
     stream.compile.drain.start
@@ -70,33 +66,40 @@ case class FullNode[F[_]](
 }
 
 object FullNode {
+
   def forConfig(config: FullNodeConfig)(
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
       CS: ContextShift[IO]
   ): IO[FullNode[IO]] = {
-    implicit val chainId: BigInt = config.genesis.chainId
+    implicit val chainId = config.genesis.chainId
     for {
+      keystore <- KeyStorePlatform[IO](config.keystore.keystoreDir)
+      minerKey <- config.mining.minerAddressOrKey match {
+        case Left(address) if config.mining.enabled =>
+          keystore
+            .readPassphrase("unlock your mining account")
+            .flatMap(p => keystore.unlockAccount(address, p))
+            .map(_.keyPair.some)
+        case Left(_)   => IO.pure(None)
+        case Right(kp) => IO.pure(kp.some)
+      }
       history   <- History.forPath[IO](config.history.chainDataDir)
       blockPool <- BlockPool(history, BlockPoolConfig())
-      clique    <- Clique(CliqueConfig(), config.genesis, history, config.mining.keyPair.get)
+      clique    <- Clique(CliqueConfig(), config.genesis, history, minerKey)
       consensus = new CliqueConsensus[IO](clique, blockPool)
-      _ <- history.dumpGenesis
-        .map(_.asJson.spaces2)
-        .map(s => File(config.genesisPath).createIfNotExists().overwrite(s))
-      peerManager <- PeerManagerPlatform[IO](config.peer, config.peer.keyPair, history)
+      peerManager <- PeerManagerPlatform[IO](config.peer, history)
       executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
       syncManager <- SyncManager(config.sync, executor)
-      keyStore    <- KeyStorePlatform[IO](config.keystore.keystoreDir, new SecureRandom())
       miner       <- BlockMiner[IO](config.mining, syncManager)
 
       // mount rpc
       publicAPI = PublicApiImpl(config.history, miner)
-      privateAPI <- PrivateApiImpl(keyStore, history, config.history, executor.txPool)
+      privateAPI <- PrivateApiImpl(keystore, history, config.history, executor.txPool)
       rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
       server = Server.websocket(config.rpc.addr, rpc.pipe)
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
-    } yield FullNode[IO](config, syncManager, miner, keyStore, rpc, server, haltWhenTrue)
+    } yield FullNode[IO](config, syncManager, miner, keystore, rpc, server, haltWhenTrue)
   }
 
   def resource(config: FullNodeConfig)(

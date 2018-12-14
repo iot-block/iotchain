@@ -33,16 +33,16 @@ class Clique[F[_]](
     val config: CliqueConfig,
     val history: History[F],
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
-    val keyPair: KeyPair
+    val keyPair: Option[KeyPair]
 )(implicit F: ConcurrentEffect[F], C: Cache[Snapshot], chainId: BigInt) {
   private[this] val log = org.log4s.getLogger("Clique")
 
   import config._
 
-  val signer: Address = Address(keyPair)
+  lazy val signer: Address = Address(keyPair.get)
 
   def sign(bv: ByteVector): F[CryptoSignature] =
-    Signature[ECDSA].sign[F](bv.toArray, keyPair, chainId)
+    Signature[ECDSA].sign[F](bv.toArray, keyPair.get, chainId)
 
   def applyHeaders(
       number: BigInt,
@@ -110,7 +110,7 @@ object Clique {
       config: CliqueConfig,
       genesisConfig: GenesisConfig,
       history: History[F],
-      keyPair: KeyPair
+      keyPair: Option[KeyPair]
   )(implicit F: ConcurrentEffect[F], chainId: BigInt): F[Clique[F]] =
     for {
       genesisBlock <- history.getBlockByNumber(0)
@@ -122,7 +122,7 @@ object Clique {
       cache <- CacheBuilder.build[F, Snapshot](config.inMemorySnapshots)
     } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache, chainId)
 
-  def fillExtraData(signers: List[Address]): ByteVector =
+  private[clique] def fillExtraData(signers: List[Address]): ByteVector =
     ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
       extraSeal)(0.toByte)
 
