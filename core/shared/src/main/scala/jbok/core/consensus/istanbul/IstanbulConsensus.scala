@@ -66,6 +66,7 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
     for {
       _ <- if (header.number == 0) F.raiseError(BlockNumberInvalid) else F.unit
       proposalSeal = prepareCommittedSeal(header.hash)
+      // recover the original address by seal and block hash
       validSealAddrs <- extraData.committedSeals
         .map(seal =>
           F.fromOption(Signature[ECDSA].recoverPublic(proposalSeal.kec256.toArray, CryptoSignature(seal.toArray), None),
@@ -118,7 +119,6 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
           case None                  => ByteVector.empty
         },
         stateRoot = ByteVector.empty,
-        //we are not able to calculate transactionsRoot here because we do not know if they will fail
         transactionsRoot = ByteVector.empty,
         receiptsRoot = ByteVector.empty,
         logsBloom = ByteVector.empty,

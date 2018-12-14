@@ -1,8 +1,7 @@
 package jbok.core.consensus.istanbul
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, ConcurrentEffect, Sync}
 import jbok.codec.rlp.RlpCodec
-import jbok.core.consensus.istanbul.State._
 import jbok.codec.rlp.implicits._
 import cats.implicits._
 import jbok.core.models.{Address, Block}
@@ -11,12 +10,12 @@ import scodec.bits.ByteVector
 import scala.collection.mutable.{Map => MMap}
 
 trait State {
-  def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit]
+  def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit]
 
   /**
     * check the message payload subject is equal than current subject
     */
-  private def checkSubject[F[_]](message: Message, context: StateContext[F])(implicit F: Sync[F]): F[Boolean] =
+  private def checkSubject[F[_]](message: Message, context: StateContext[F])(implicit F: Concurrent[F]): F[Boolean] =
     for {
       subject <- context.currentSubject()
       result <- subject match {
@@ -31,17 +30,17 @@ trait State {
       }
     } yield result
 
-  def checkPrepare[F[_]](message: Message, context: StateContext[F])(implicit F: Sync[F]): F[Boolean] =
+  def checkPrepare[F[_]](message: Message, context: StateContext[F])(implicit F: Concurrent[F]): F[Boolean] =
     checkSubject(message, context)
 
-  def checkCommit[F[_]](message: Message, context: StateContext[F])(implicit F: Sync[F]): F[Boolean] =
+  def checkCommit[F[_]](message: Message, context: StateContext[F])(implicit F: Concurrent[F]): F[Boolean] =
     checkSubject(message, context)
 
 //  TODO: insert block
-  def insertBlock[F[_]](block: Block, committedSeals: List[ByteVector])(implicit F: Sync[F]): F[Boolean] =
+  def insertBlock[F[_]](block: Block, committedSeals: List[ByteVector])(implicit F: Concurrent[F]): F[Boolean] =
     F.pure(true)
 
-  def handleCommitAction[F[_]](message: Message, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  def handleCommitAction[F[_]](message: Message, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     for {
       check <- checkCommit(message, context)
       _ <- if (check) {
@@ -62,92 +61,18 @@ trait State {
     } yield ()
 
 }
-object State {
-
-//  TODO: do sign
-  private def sign(bytes: ByteVector): ByteVector = bytes
-
-  private def finalizeMessage[F[_]](msgCode: Int, payload: ByteVector, context: StateContext[F])(
-      implicit F: Sync[F]): F[Message] =
-    for {
-      proposal <- context.proposal
-      msgForSign = msgCode match {
-        case Message.msgCommitCode => {
-          val seal          = proposal.get.header.hash ++ ByteVector(Message.msgCommitCode)
-          val committedSeal = sign(seal)
-          Message(msgCode, payload, context.address, ByteVector.empty, committedSeal)
-        }
-        case _ => Message(msgCode, payload, context.address, ByteVector.empty, ByteVector.empty)
-      }
-      signature <- F.delay(RlpCodec.encode(msgForSign).require.bytes)
-
-    } yield msgForSign.copy(signature = signature)
-
-  def broadcast[F[_]](msgCode: Int, payload: ByteVector, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
-    for {
-      message <- finalizeMessage(msgCode, payload, context)
-//      TODO: broadcast
-    } yield ()
-
-  def sendPrepare[F[_]](context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
-    sendSubjectMessage(Message.msgPrepareCode, context)
-
-  def startNewRound[F[_]](round: BigInt, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
-    context.newRoundFunc(round, context)
-
-  /**
-    * send ROUND CHANGE message with current round+1
-    */
-  def sendNextRound[F[_]](context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
-    for {
-      roundState <- context.current.get
-      _          <- sendRoundChange(roundState.round + 1, context)
-    } yield ()
-
-  def sendRoundChange[F[_]](round: BigInt, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
-    for {
-      rs <- context.current.get
-//      compare current round with new round, if current is larger, we will not send the ROUND CHANGE message
-      _ <- if (rs.round >= round) {
-        F.unit
-      } else {
-//        update current round
-        context.updateCurrentRound(round) >>
-//        broadcast ROUND CHANGE message
-          broadcast(Message.msgRoundChange,
-                    RlpCodec.encode(Subject(View(round, rs.sequence), ByteVector.empty)).require.bytes,
-                    context)
-      }
-    } yield ()
-
-  def sendCommit[F[_]](context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
-    sendSubjectMessage(Message.msgCommitCode, context)
-
-  /**
-    * simple send current subject message
-    */
-  private def sendSubjectMessage[F[_]](msgCode: Int, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
-    for {
-      cs <- context.currentSubject()
-      _ <- cs match {
-        case Some(subject) => broadcast(msgCode, RlpCodec.encode(subject).require.bytes, context)
-        case None          => F.unit
-      }
-    } yield ()
-
-}
 
 case object StateNewRound extends State {
-  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     context.validatorSet.get.map(_.isProposer(context.address) match {
       case true => handleProposer(action, context)
       case _    => handleValidator(action, context)
     })
 
-//  proposer broadcast PRE-PREPARE message, then enters PREPREPARED state
-  private def handleProposer[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  private def handleProposer[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
       case ProposeAction(block) => {
+        // proposer broadcast PRE-PREPARE message, then enters PREPREPARED state
         for {
           view       <- context.view
           isProposer <- context.validatorSet.get.map(_.isProposer(context.address))
@@ -155,7 +80,7 @@ case object StateNewRound extends State {
             for {
               msg     <- F.pure(Preprepare(view, block))
               payload <- F.delay(RlpCodec.encode(msg).require.bytes)
-              _       <- broadcast(Message.msgPreprepareCode, payload, context)
+              _       <- Proxy.broadcast(Message.msgPreprepareCode, payload, context)
               _       <- context.setPreprepare(msg)
               _       <- context.setState(StatePreprepared)
             } yield ()
@@ -165,9 +90,11 @@ case object StateNewRound extends State {
       case _ => F.unit
     }
 
-//  check the proposal is a valid block
+  /**
+    * check the proposal is a valid block
+    */
   private def checkProposal[F[_]](message: Message, context: StateContext[F])(
-      implicit F: Sync[F]): F[ProposalCheckResult] =
+      implicit F: Concurrent[F]): F[ProposalCheckResult] =
     context.validatorSet.get.map(vs =>
       if (vs.isProposer(message.address)) {
         ProposalCheckResult.Success
@@ -175,10 +102,10 @@ case object StateNewRound extends State {
         ProposalCheckResult.UnauthorizedProposer
     })
 
-//  validator broadcast PREPARE message and enter PREPREPARED state upon receiving PRE-PREPARE message
-  private def handleValidator[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  private def handleValidator[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
       case PreprepareAction(message) => {
+        // validator broadcast PREPARE message and enter PREPREPARED state upon receiving PRE-PREPARE message
         for {
           current     <- context.current.get
           preprepare  <- F.delay(RlpCodec.decode[Preprepare](message.msg.bits).require.value)
@@ -204,14 +131,14 @@ case object StateNewRound extends State {
                     */
                   context.setPreprepare(preprepare) >>
                     context.setState(StatePrepared) >>
-                    sendCommit(context)
+                    Proxy.sendCommit(context)
                 } else {
 
                   /**
                     * Case 2.2, received PRE-PREPARE on B': Broadcasts ROUND CHANGE.
                     * LockedHash is not equal than the message's block hash, cause a ROUND CHANGE.
                     */
-                  sendNextRound(context)
+                  Proxy.sendNextRound(context)
                 }
               } else {
 
@@ -219,21 +146,21 @@ case object StateNewRound extends State {
                   * we have no locked proposal
                   * enter PREPREPARED and broadcast prepare
                   */
-                sendPrepare(context) >>
+                Proxy.sendPrepare(context) >>
                   context.setPreprepare(preprepare) >>
                   context.setState(StatePreprepared)
               }
             }
             case ProposalCheckResult.FutureBlock => {
-//              it's a future block,
+              // it's a future block,
               F.raiseError(new Exception("future block"))
             }
             case ProposalCheckResult.UnauthorizedProposer => {
               F.raiseError(new Exception("unauthorized proposer"))
             }
             case ProposalCheckResult.InvalidProposal => {
-//              invalid proposal, broadcast ROUND CHANGE message along with the proposed round number
-              sendNextRound(context)
+              // invalid proposal, broadcast ROUND CHANGE message along with the proposed round number
+              Proxy.sendNextRound(context)
             }
             case _ => F.raiseError(new Exception("check proposal exception"))
           }
@@ -245,7 +172,7 @@ case object StateNewRound extends State {
 }
 
 case object StatePreprepared extends State {
-  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
       case PrepareAction(message) => {
         for {
@@ -263,7 +190,7 @@ case object StatePreprepared extends State {
                   */
                 context.lockHash() >>
                   context.setState(StatePrepared) >>
-                  sendCommit(context)
+                  Proxy.sendCommit(context)
               } else F.unit
             } yield ()
           } else F.unit
@@ -288,7 +215,7 @@ case object StatePreprepared extends State {
               * the validator broadcasts ROUND CHANGE message again with the received number.
               */
             if (roundState.round < payload.view.round) {
-              sendRoundChange(payload.view.round, context)
+              Proxy.sendRoundChange(payload.view.round, context)
             } else {
               F.unit
             }
@@ -310,7 +237,7 @@ case object StatePreprepared extends State {
 
 }
 case object StatePrepared extends State {
-  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
       case CommitAction(message) => handleCommitAction(message, context)
       case _                     => F.unit
@@ -318,7 +245,7 @@ case object StatePrepared extends State {
 }
 case object StateCommitted extends State {
 
-  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
       case InsertBlockAction =>
         for {
@@ -332,7 +259,10 @@ case object StateCommitted extends State {
             case Some(block) =>
               for {
                 commits <- context.current.get.map(_.commits.messages.values.toList)
-                committedSeals = commits.map(_.committedSeal)
+                committedSeals = commits.map(msg => {
+                  if (msg.committedSeal.size >= Istanbul.extraSeal) msg.committedSeal.take(Istanbul.extraSeal)
+                  else msg.committedSeal ++ ByteVector.fill(Istanbul.extraSeal - msg.committedSeal.size)(0.toByte)
+                })
                 result <- insertBlock(block, committedSeals)
                 _ <- if (!result) {
 
@@ -340,7 +270,7 @@ case object StateCommitted extends State {
                     * unlock block and broadcast ROUND CHANGE when insertion fails
                     */
                   context.unlockHash() >>
-                    sendNextRound(context)
+                    Proxy.sendNextRound(context)
                 } else {
 
                   /**
@@ -358,24 +288,26 @@ case object StateCommitted extends State {
 }
 
 case object StateFinalCommitted extends State {
-  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
       case NewRoundAction(round) =>
         for {
-          _ <- context.setState(StateNewRound)
-          _ <- startNewRound(0, context)
+          _       <- context.setState(StateNewRound)
+          promise <- context.roundChangePromise.get
+          _       <- promise.complete(0)
         } yield ()
       case _ => F.unit
     }
 }
 
 case object StateRoundChange extends State {
-  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Sync[F]): F[Unit] =
+  override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
       case NewRoundAction(round) =>
         for {
-          _ <- context.setState(StateNewRound)
-          _ <- startNewRound(round, context)
+          _       <- context.setState(StateNewRound)
+          promise <- context.roundChangePromise.get
+          _       <- promise.complete(round)
         } yield ()
       case _ => F.unit
     }

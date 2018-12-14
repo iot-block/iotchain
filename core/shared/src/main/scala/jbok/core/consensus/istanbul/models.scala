@@ -1,14 +1,21 @@
 package jbok.core.consensus.istanbul
 
-import cats.effect.Sync
-import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, ConcurrentEffect, IO, Sync}
+import cats.effect.concurrent.{Deferred, Ref}
 import jbok.core.models.{Address, Block}
 import scodec.bits.ByteVector
 import cats.implicits._
 import jbok.core.History
+import jbok.crypto.signature.KeyPair
 
 import scala.collection.Iterable
 import scala.collection.mutable.{ArrayBuffer, Map => MMap, Set => MSet}
+
+case class IstanbulExtra(
+    validators: List[Address],
+    seal: ByteVector,
+    committedSeals: List[ByteVector]
+)
 
 sealed trait CheckResult
 object CheckResult {
@@ -48,13 +55,15 @@ object Message {
 
 //context for state transition
 case class StateContext[F[_]](
-    address: Address,
+    keyPair: KeyPair,
     validatorSet: Ref[F, ValidatorSet],
     current: Ref[F, RoundState],
     state: Ref[F, State],
     roundChanges: Ref[F, MMap[BigInt, MessageSet]],
-    newRoundFunc: (BigInt, StateContext[F]) => F[Unit]
-)(implicit F: Sync[F]) {
+    roundChangePromise: Ref[F, Deferred[F, BigInt]]
+)(implicit F: Concurrent[F]) {
+  def address: Address = Address(keyPair)
+
   def lockHash(): F[Unit] =
     current.update(s => {
       s.preprepare match {

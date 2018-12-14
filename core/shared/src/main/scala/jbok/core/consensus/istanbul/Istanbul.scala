@@ -1,44 +1,39 @@
 package jbok.core.consensus.istanbul
 
-import java.net.InetSocketAddress
-
 import cats.data.OptionT
-import cats.effect.{ConcurrentEffect, IO, Sync}
-import cats.effect.concurrent.Ref
-import cats.implicits._
-import fs2.{Pipe, Stream}
+import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.History
 import jbok.core.models.{Address, Block, BlockHeader}
+import scodec.bits.ByteVector
+import cats.implicits._
+import cats.effect.implicits._
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, ECDSA, Signature}
-import jbok.persistent.LruMap
 import scodec.bits._
+import jbok.core.History
+import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
+import jbok.persistent.LruMap
 
-import scala.collection.mutable.{Map => MMap, Set => MSet}
+import scala.concurrent.ExecutionContext.global
+import jbok.core.consensus.istanbul._
 
-case class IstanbulExtra(
-    validators: List[Address],
-    seal: ByteVector,
-    committedSeals: List[ByteVector]
-)
+import scala.collection.mutable.{ArrayBuffer, Map => MMap}
+import scala.concurrent.duration._
 
-case class Istanbul[F[_]](
-    val config: IstanbulConfig,
-    val history: History[F],
-    val recents: LruMap[ByteVector, Snapshot],
-    val candidates: MMap[Address, Boolean],
-    val signer: Address
-)(implicit F: ConcurrentEffect[F]) {
+case class Istanbul[F[_]](config: IstanbulConfig,
+                          history: History[F],
+                          recents: LruMap[ByteVector, Snapshot],
+                          candidates: MMap[Address, Boolean],
+                          backlogs: Ref[F, MMap[Address, ArrayBuffer[Message]]],
+                          keyPair: KeyPair,
+                          current: Ref[F, RoundState],
+                          roundChanges: Ref[F, MMap[BigInt, MessageSet]],
+                          validatorSet: Ref[F, ValidatorSet],
+                          roundChangePromise: Ref[F, Deferred[F, BigInt]],
+                          state: Ref[F, State])(implicit F: Concurrent[F], timer: Timer[F]) {
 
-  private[this] val log = org.log4s.getLogger("Istanbul")
-
-  private val waitingForRoundChange: Ref[F, Boolean] = Ref.unsafe[F, Boolean](false)
-  private val current: Ref[F, Option[RoundState]]    = Ref.unsafe[F, Option[RoundState]](Option.empty)
-  private val validatorSet: Ref[F, ValidatorSet]     = Ref.unsafe[F, ValidatorSet](ValidatorSet.empty)
-  private val roundChangeSet: Ref[F, RoundChangeSet] =
-    Ref.unsafe[F, RoundChangeSet](RoundChangeSet(ValidatorSet.empty, MMap.empty))
+  private[this] val log = org.log4s.getLogger("Istanbul core")
 
   def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
     // try to read snapshot from cache or db
@@ -61,7 +56,6 @@ case class Istanbul[F[_]](
     log.trace(s"making a genesis snapshot")
     for {
       genesis <- history.genesisHeader
-      n     = (genesis.extraData.length - Istanbul.extraVanity).toInt / 20
       extra = Istanbul.extractIstanbulExtra(genesis)
       snap  = Snapshot(config, 0, genesis.hash, ValidatorSet(extra.validators))
       _ <- Snapshot.storeSnapshot[F](snap, history.db)
@@ -102,115 +96,242 @@ case class Istanbul[F[_]](
     }
   }
 
-  private[jbok] def extract(msg: ByteVector): F[Message] = F.delay {
-    RlpCodec.decode[Message](msg.bits).require.value
-  }
-//  val pipe: Pipe[F, (InetSocketAddress, ByteVector), Unit] = { input =>
-//    val output = input
-//      .evalMap {
-//        case (remote, msg) => extract(msg)
-//      }
-//      .evalMap[F, Unit](handle(_))
-//
-//    output
-//      .flatMap(xs => Stream(xs: _*).covary[F])
-//      .evalMap {
-//        case (remote, kad) => encode(kad).map(udp => remote -> udp)
-//      }
-//  }
-
-  private def handle(msg: Message): F[Unit] =
-    msg.code match {
-      case Message.msgPreprepareCode => handlePreprepare(msg)
-      case Message.msgPrepareCode    => handlePrepare(msg)
-      case _                         => F.unit
-    }
-
-  private def handlePrepare(msg: Message): F[Unit] =
-    F.unit
-  private def handlePreprepare(msg: Message): F[Unit] =
-    broadcast(Message(Message.msgPrepareCode))
-
-  private def broadcast(msg: Message): F[Unit] =
-    F.unit
-
-//  def start(): F[Unit] =
-//    startNewRound(0)
-
-  private def shouldChangeRound(lastProposal: Block, round: BigInt): F[Boolean] =
-    for {
-      currentState <- this.current.get
-      roundChange <- currentState match {
-        case Some(rs) if lastProposal.header.number >= rs.sequence                         => F.pure(false)
-        case Some(rs) if lastProposal.header.number == rs.sequence - 1 && round > rs.round => F.pure(true)
-        case Some(rs) if lastProposal.header.number == rs.sequence - 1 =>
-          F.raiseError(
-            new Exception(s"New round should not be smaller than current round:new ${round},current ${rs.round}"))
-        case Some(rs) => F.raiseError(new Exception("New sequence should be larger than current sequence"))
-        case _        => F.pure(false)
-      }
-    } yield roundChange
-
   def getValidators(number: BigInt, hash: ByteVector): F[ValidatorSet] =
     snapshot(number, hash, List.empty).map(_.validatorSet)
 
-//  set RoundState for new round, with checking block is locked or not
-//  def updateRoundState(view: View, roundChange: Boolean): F[Unit] =
+  def checkMessage(message: Message): F[CheckResult] =
+    message.code match {
+      case Message.msgPreprepareCode => {
+        val preprepare = RlpCodec.decode[Preprepare](message.msg.bits).require.value
+        checkMessage(message, preprepare.view)
+      }
+      case _ => {
+        val subject = RlpCodec.decode[Subject](message.msg.bits).require.value
+        checkMessage(message, subject.view)
+      }
+    }
+
+  /**
+    * this function make sure the message for processing later is in CURRENT sequence
+    * if the message's SEQUENCE is not equal than CURRENT SEQUENCE, this function will never return CheckResult.Success
+    */
+  def checkMessage(message: Message, view: View): F[CheckResult] =
+    for {
+      vs           <- validatorSet.get
+      currentState <- current.get
+//      FIXME: this check is not so right because the message may be a old message, current validatorSet may not contain the history validator
+      result <- if (!vs.contains(message.address)) {
+        F.pure(CheckResult.UnauthorizedAddress)
+      } else if (message.code == Message.msgRoundChange) {
+//        ROUND CHANGE message
+        if (view.sequence > currentState.sequence) {
+//          message's sequence bigger than current state
+          F.pure(CheckResult.FutureMessage)
+        } else if (view.sequence < currentState.sequence || (view.sequence == currentState.sequence && view.round < currentState.round)) {
+          F.pure(CheckResult.OldMessage)
+        } else {
+          F.pure(CheckResult.Success)
+        }
+      } else if (view.sequence > currentState.sequence || (view.sequence == currentState.sequence && view.round > currentState.round)) {
+        F.pure(CheckResult.FutureMessage)
+      } else if (view.sequence < currentState.sequence || (view.sequence == currentState.sequence && view.round < currentState.round)) {
+        F.pure(CheckResult.OldMessage)
+      } else if (currentState.waitingForRoundChange) {
+        F.pure(CheckResult.FutureMessage)
+      } else {
+        state.get.map(s =>
+          s match {
+            case StateNewRound => {
+              if (message.code > Message.msgPreprepareCode) CheckResult.FutureMessage else CheckResult.Success
+            }
+            case _ => CheckResult.Success
+        })
+      }
+    } yield result
+
+  //  store future message for process later
+  def storeBacklog(address: Address, message: Message): F[Unit] =
+    backlogs.get.map(_.getOrElseUpdate(address, ArrayBuffer.empty).append(message))
+
+  private def processBacklog(): Unit = {}
+
+  private def checkAndTransform(message: Message): F[Either[Action, Throwable]] =
+    for {
+      result <- checkMessage(message)
+      action <- result match {
+        case CheckResult.Success => {
+          transformAction(message)
+        }
+        case CheckResult.FutureMessage => {
+          storeBacklog(message.address, message)
+          F.pure(Right(new Exception("future message")))
+        }
+        case _ => F.pure(Right(new Exception("check message error")))
+      }
+    } yield action
+
+  private def transformAction(message: Message): F[Either[Action, Throwable]] =
+    message.code match {
+      case Message.msgPreprepareCode => F.pure(Left(PreprepareAction(message)))
+      case Message.msgPrepareCode    => F.pure(Left(PrepareAction(message)))
+      case Message.msgCommitCode     => F.pure(Left(CommitAction(message)))
+      case Message.msgRoundChange    => F.pure(Left(RoundChangeAction(message)))
+      case _                         => F.pure(Right(new Exception("invalid message")))
+    }
+
+//  def start():F[Unit] = {
 //    for {
-//      state  <- this.current.get
-//      valSet <- this.validatorSet.get
-//      (preprepare, proposal, lockedHash) = if (roundChange && state.isDefined) {
-//        if (state.get.isLocked()) {
-//          (state.get.preprepare, state.get.proposal, state.get.lockedHash)
-//        } else {
-//          (None, state.get.proposal, ByteVector.empty)
-//        }
-//      } else {
-//        (None, None, ByteVector.empty)
-//      }
-//      _ = this.current.update(
-//        rs =>
-//          Option(
-//            RoundState(
-//              view.round,
-//              view.sequence,
-//              preprepare,
-//              MessageSet.empty.copy(validatorSet = valSet),
-//              MessageSet.empty.copy(validatorSet = valSet),
-//              lockedHash,
-//              proposal
-//            )))
-//    } yield ()
 //
-//  def startNewRound(round: BigInt): F[Unit] = {
-//    for {
-//      lastProposal <- history.getBestBlock
-//      roundChange  <- shouldChangeRound(lastProposal, round)
-//      currentState <- this.current.get
-//      view = if (roundChange) {
-//        View(sequence = currentState.get.sequence, round = round)
-//      } else {
-//        getValidators(lastProposal.header.number, lastProposal.header.hash).map(validatorSet.set(_))
-//        View(sequence = lastProposal.header.number + 1, round = 0)
-//      }
-//
-//      valSet <- validatorSet.get
-//      _      <- roundChangeSet.set(RoundChangeSet(valSet, MMap.empty)) //reset RoungChange messages
-//      proposer <- valSet.calculateProposer(Istanbul.ecrecover(lastProposal.header), view.round, config.proposerPolicy) match {
-//        case Some(p) => F.pure(p)
-//        case None    => F.raiseError(new Exception("proposer not found"))
-//      }
-//      _ <- updateRoundState(view, roundChange)
-//      _ = validatorSet.update(vs => vs.copy(proposer = proposer))
-//      _ = waitingForRoundChange.set(false)
-//    } yield ()
-//
-//    F.unit
+//    }yield()
 //  }
 
+  def handleMessage(message: Message): F[Unit] =
+    for {
+      action <- checkAndTransform(message)
+      _ <- action match {
+        case Left(a)  => transition(a)
+        case Right(e) => F.unit
+      }
+    } yield ()
+
+  def transition(action: Action): F[Unit] =
+    for {
+      s <- state.get
+      context = StateContext(keyPair, validatorSet, current, state, roundChanges, roundChangePromise)
+      _ <- s.handle(action, context)
+    } yield ()
+
+  private def shouldChangeRound(lastProposal: Block, round: BigInt): F[Boolean] =
+    for {
+      rs <- this.current.get
+      roundChange <- if (lastProposal.header.number >= rs.sequence) F.pure(false)
+      else if (lastProposal.header.number == rs.sequence - 1) {
+        if (round < rs.round)
+          F.raiseError(
+            new Exception(s"New round should not be smaller than current round:new ${round},current ${rs.round}"))
+        else F.pure(true)
+      } else F.pure(false)
+    } yield roundChange
+
+  def startNewRound(round: BigInt): F[Unit] =
+    /**
+      * set current RoundState,(round,sequence,validatorSet,waitingForRoundChange,etc.)
+      * set current state to StateNewRound
+      * reset roundChange messages
+      */
+    for {
+      lastProposal <- history.getBestBlock
+      context = StateContext(keyPair, validatorSet, current, state, roundChanges, roundChangePromise)
+      roundChange  <- shouldChangeRound(lastProposal, round)
+      currentState <- this.current.get
+      view <- if (roundChange) {
+        F.pure(View(sequence = currentState.sequence, round = round))
+      } else {
+
+        /**
+          * calculate new ValidatorSet for this round
+          */
+        getValidators(lastProposal.header.number, lastProposal.header.hash)
+          .map(validatorSet.set(_))
+          .as(View(sequence = lastProposal.header.number + 1, round = 0))
+      }
+
+      _ <- roundChanges.set(MMap.empty)
+      proposer <- validatorSet.get.flatMap(
+        _.calculateProposer(Istanbul.ecrecover(lastProposal.header), view.round, config.proposerPolicy) match {
+          case Some(p) => F.pure[Address](p)
+          case None    => F.raiseError[Address](new Exception("proposer not found"))
+        })
+
+      _ <- if (roundChange) {
+        context.updateCurrentRound(view.round)
+      } else {
+        context.current.update(
+          _.copy(round = view.round,
+                 sequence = view.sequence,
+                 preprepare = None,
+                 lockedHash = ByteVector.empty,
+                 prepares = MessageSet.empty,
+                 commits = MessageSet.empty))
+      }
+      _      <- roundChanges.set(MMap.empty)
+      _      <- validatorSet.update(vs => vs.copy(proposer = proposer))
+      _      <- context.current.update(_.copy(waitingForRoundChange = false))
+      _      <- context.setState(StateNewRound)
+      valSet <- validatorSet.get
+      _ <- if (roundChange) {
+        if (valSet.isProposer(Address(keyPair))) {
+          for {
+            proposal <- context.proposal
+            _ <- proposal match {
+              case Some(block) => StateNewRound.handle(ProposeAction(block), context)
+              case None        => F.unit
+            }
+          } yield ()
+        } else F.unit
+      } else F.unit
+
+      _ <- waitTimeout()
+    } yield ()
+
+  private def waitTimeout(): F[Unit] =
+    for {
+      d      <- Deferred[F, BigInt]
+      _      <- roundChangePromise.set(d)
+      result <- d.get.timeout(config.requestTimeout.millis).attempt
+      _ <- result match {
+        case Left(e) =>
+          // this means timeout
+          for {
+            vs           <- validatorSet.get
+            currentState <- current.get
+            rcs          <- roundChanges.get
+            lastProposal <- history.getBestBlock
+            context  = StateContext(keyPair, validatorSet, current, state, roundChanges, roundChangePromise)
+            maxRound = rcs.filter(_._2.messages.size > vs.f).toList.map(_._1).maximumOption.getOrElse(BigInt(0))
+            _ <- if (!currentState.waitingForRoundChange && maxRound > currentState.round) {
+
+              /**
+                * we're not waiting for round change yet.
+                * if the validator has received ROUND CHANGE messages from its peers,
+                * it picks the largest round number which has F + 1 of ROUND CHANGE messages.
+                */
+              Proxy.sendRoundChange(maxRound, context)
+            } else {
+              if (lastProposal.header.number >= currentState.sequence) {
+                // this means timeout and we receives verified block(s) through peer synchronization,
+                // in this case we must start a new round
+                startNewRound(0)
+              } else {
+                // otherwise, it picks 1 + current round number as the proposed round number.
+                Proxy.sendNextRound(context)
+              }
+            }
+          } yield ()
+        case Right(round) => startNewRound(round)
+      }
+    } yield ()
+
+  private[jbok] def extract(msg: ByteVector): F[Message] = F.delay {
+    RlpCodec.decode[Message](msg.bits).require.value
+  }
+  //  val pipe: Pipe[F, (InetSocketAddress, ByteVector), Unit] = { input =>
+  //    val output = input
+  //      .evalMap {
+  //        case (remote, msg) => extract(msg)
+  //      }
+  //      .evalMap[F, Unit](handle(_))
+  //
+  //    output
+  //      .flatMap(xs => Stream(xs: _*).covary[F])
+  //      .evalMap {
+  //        case (remote, kad) => encode(kad).map(udp => remote -> udp)
+  //      }
+  //  }
 }
 
 object Istanbul {
+
   val extraVanity   = 32 // Fixed number of extra-data bytes reserved for validator vanity
   val extraSeal     = 65 // Fixed number of extra-data bytes reserved for validator seal
   val uncleHash     = RlpCodec.encode(()).require.bytes.kec256 // Always Keccak256(RLP([]))
@@ -221,17 +342,31 @@ object Istanbul {
   def extractIstanbulExtra(header: BlockHeader): IstanbulExtra =
     RlpCodec.decode[IstanbulExtra](header.extraData.bits.drop(Istanbul.extraVanity)).require.value
 
+  def filteredHeader(header: BlockHeader, keepSeal: Boolean): BlockHeader = {
+    val extra = extractIstanbulExtra(header)
+    val newExtra = if (!keepSeal) {
+      extra.copy(seal = ByteVector.empty, committedSeals = List.empty)
+    } else {
+      extra.copy(committedSeals = List.empty)
+    }
+    val payload   = RlpCodec.encode(newExtra).require.bytes
+    val newHeader = header.copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ payload)
+    newHeader
+  }
+
   def sigHash(header: BlockHeader): ByteVector = {
-    val bytes = RlpCodec.encode(header.copy(extraData = header.extraData.drop(extraVanity))).require.bytes
-    bytes.kec256
+    val istanbulExtra = Istanbul.extractIstanbulExtra(header)
+    val newHeaderPayload =
+      RlpCodec.encode(istanbulExtra.copy(committedSeals = List.empty, seal = ByteVector.empty)).require.bytes
+    val newHeader = header.copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ newHeaderPayload)
+    RlpCodec.encode(newHeader).require.bytes
   }
   def ecrecover(header: BlockHeader): Address = {
     // Retrieve the signature from the header extra-data
-    val signature = header.extraData.drop(extraVanity)
-    val hash      = sigHash(header)
+    val signature = extractIstanbulExtra(header).seal
+    val hash      = sigHash(header).kec256
     val sig       = CryptoSignature(signature.toArray)
     val public    = Signature[ECDSA].recoverPublic(hash.toArray, sig, None).get
     Address(public.bytes.kec256)
   }
-
 }
