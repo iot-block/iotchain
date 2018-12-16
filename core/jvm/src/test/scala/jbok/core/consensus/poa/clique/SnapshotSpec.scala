@@ -3,7 +3,6 @@ package jbok.core.consensus.poa.clique
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.core.config.GenesisConfig
 import jbok.core.ledger.History
 import jbok.core.models.{Address, BlockHeader}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
@@ -11,7 +10,6 @@ import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 import jbok.core.testkit._
-import jbok.core.config.defaults.reference
 
 import scala.collection.mutable
 
@@ -26,7 +24,7 @@ case class Test(signers: List[String], votes: List[TestVote], results: List[Stri
 trait SnapshotFixture {
   def mkHistory(signers: List[Address]) = {
     val extra            = Clique.fillExtraData(signers)
-    val config           = reference.genesis.copy(extraData = extra)
+    val config           = testGenesis.copy(extraData = extra)
     implicit val chainId = config.chainId
     val db               = KeyValueDB.inmem[IO].unsafeRunSync()
     val history          = History[IO](db).unsafeRunSync()
@@ -60,7 +58,7 @@ class SnapshotSpec extends JbokSpec {
     val config           = CliqueConfig().copy(epoch = test.epoch)
     val signers          = test.signers.map(signer => address(signer))
     val extra            = Clique.fillExtraData(signers)
-    val genesisConfig    = reference.genesis.copy(extraData = extra)
+    val genesisConfig    = testGenesis.copy(extraData = extra)
     implicit val chainId = genesisConfig.chainId
     val db               = KeyValueDB.inmem[IO].unsafeRunSync()
     val history          = History[IO](db).unsafeRunSync()

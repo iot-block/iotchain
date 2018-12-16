@@ -24,7 +24,7 @@ object Configs {
       mining: MiningConfig,
       rpc: RpcConfig
   ) {
-    val genesis = genesisOrPath match {
+    lazy val genesis = genesisOrPath match {
       case Left(g)     => g
       case Right(path) => GenesisConfig.fromFile(path).unsafeRunSync()
     }
