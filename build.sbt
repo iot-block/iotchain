@@ -307,7 +307,8 @@ lazy val commonJsSettings = Seq(
     "org.scala-js"             %%% "scalajs-dom"   % "0.9.6",
     "com.thoughtworks.binding" %%% "dom"           % "11.0.1",
     "com.thoughtworks.binding" %%% "futurebinding" % "11.0.1"
-  )
+  ),
+  coverageEnabled := false // workaround
 )
 
 lazy val CompileAndTest = "compile->compile;test->test"
