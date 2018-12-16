@@ -15,7 +15,7 @@ class ExecutorBenchmark extends JbokBenchmark {
   val logger        = loggerContext.getLogger("root")
   logger.setLevel(Level.OFF)
 
-  implicit val fixture = defaultFixture()
+  implicit val config = testConfig
   val executor         = random[BlockExecutor[IO]]
   val tx               = random[List[SignedTransaction]](genTxs(1, 1))
   val block            = random[Block](genBlock(stxsOpt = Some(tx)))

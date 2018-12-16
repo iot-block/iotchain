@@ -118,16 +118,18 @@ object LevelDB {
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
   )(implicit F: Sync[F]): F[KeyValueDB[F]] =
-    jni[F](path, options, readOptions, writeOptions).attemptT.getOrElseF(
-      iq80[F](path, options, readOptions, writeOptions)
-    )
+    jni[F](path, options, readOptions, writeOptions).attemptT
+      .getOrElseF(
+        iq80[F](path, options, readOptions, writeOptions)
+      )
+      .map(_.asInstanceOf[KeyValueDB[F]])
 
   private[jbok] def iq80[F[_]](
       path: String,
       options: Options = defaultOptions,
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
-  )(implicit F: Sync[F]): F[KeyValueDB[F]] =
+  )(implicit F: Sync[F]): F[LevelDB[F]] =
     for {
       db <- F.delay(factory.open(new File(path), options))
       _  <- F.delay(log.info(s"open db at ${path}"))
@@ -138,7 +140,7 @@ object LevelDB {
       options: Options = defaultOptions,
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
-  )(implicit F: Sync[F]): F[KeyValueDB[F]] =
+  )(implicit F: Sync[F]): F[LevelDB[F]] =
     for {
       db <- F.delay(JNIFactory.open(new File(path), options))
       _  <- F.delay(log.info(s"open db at ${path}"))

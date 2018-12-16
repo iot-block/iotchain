@@ -27,8 +27,8 @@ class KeyValueDBBenchmark extends JbokBenchmark {
   val dirIq80 = File.newTemporaryDirectory()
   val dirJni  = File.newTemporaryDirectory()
 
-  val dbIq80 = LevelDB[IO](dirIq80.pathAsString, useJni = false).unsafeRunSync()
-  val dbJni  = LevelDB[IO](dirJni.pathAsString, useJni = true).unsafeRunSync()
+  val dbIq80 = LevelDB.iq80[IO](dirIq80.pathAsString).unsafeRunSync()
+  val dbJni  = LevelDB.jni[IO](dirJni.pathAsString).unsafeRunSync()
   var dbMem  = KeyValueDB.inmem[IO].unsafeRunSync()
 
   @Benchmark
