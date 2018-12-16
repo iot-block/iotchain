@@ -11,7 +11,7 @@ import com.typesafe.config.Config
 import fs2._
 import jbok.common.logger
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.{ConfigHelper, ConfigLoader}
+import jbok.core.config.{ConfigHelper, ConfigLoader, GenesisConfig}
 import jbok.core.consensus.poa.clique
 import jbok.core.keystore.KeyStorePlatform
 
@@ -84,7 +84,7 @@ object MainApp extends StreamApp {
           )
           _ <- keystore.readPassphrase(s"unlock address ${address}:").flatMap(p => keystore.unlockAccount(address, p))
           signers = List(address)
-          genesis = clique.generateGenesisConfig(fullNodeConfig.genesis, signers)
+          genesis = clique.generateGenesisConfig(GenesisConfig.generate(0, Map.empty), signers)
           _ <- IO(File(fullNodeConfig.genesisPath).createIfNotExists().overwrite(genesis.asJson.spaces2))
         } yield ExitCode.Success
 

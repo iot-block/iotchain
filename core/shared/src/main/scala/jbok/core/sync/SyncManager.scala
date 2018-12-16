@@ -17,8 +17,7 @@ final case class SyncManager[F[_]](
     config: SyncConfig,
     executor: BlockExecutor[F],
     fullSync: FullSync[F],
-    fastSync: FastSync[F],
-    haltWhenTrue: SignallingRef[F, Boolean]
+    fastSync: FastSync[F]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = org.log4s.getLogger("SyncManager")
 
@@ -118,11 +117,7 @@ final case class SyncManager[F[_]](
   }
 
   val stream: Stream[F, Unit] =
-    Stream
-      .eval(haltWhenTrue.set(false))
-      .flatMap(_ => Stream(serve, sync.drain).parJoinUnbounded)
-      .interruptWhen(haltWhenTrue)
-      .onFinalize(haltWhenTrue.set(true))
+    Stream(serve, sync.drain).parJoinUnbounded
 
   def broadcastBlock(block: Block): List[(PeerSelectStrategy[F], Message)] =
     List(
@@ -143,8 +138,7 @@ object SyncManager {
       executor: BlockExecutor[F],
   )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[SyncManager[F]] =
     for {
-      fastSync     <- FastSync[F](config, executor.peerManager)
-      fullSync     <- FullSync[F](config, executor)
-      haltWhenTrue <- SignallingRef[F, Boolean](true)
-    } yield SyncManager[F](config, executor, fullSync, fastSync, haltWhenTrue)
+      fastSync <- FastSync[F](config, executor.peerManager)
+      fullSync <- FullSync[F](config, executor)
+    } yield SyncManager[F](config, executor, fullSync, fastSync)
 }
