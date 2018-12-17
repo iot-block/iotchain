@@ -34,7 +34,7 @@ class Clique[F[_]](
     val history: History[F],
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
     val keyPair: Option[KeyPair]
-)(implicit F: ConcurrentEffect[F], C: Cache[Snapshot], chainId: BigInt) {
+)(implicit F: ConcurrentEffect[F], C: Cache[Snapshot]) {
   private[this] val log = jbok.common.log.getLogger("Clique")
 
   import config._
@@ -42,7 +42,7 @@ class Clique[F[_]](
   lazy val signer: Address = Address(keyPair.get)
 
   def sign(bv: ByteVector): F[CryptoSignature] =
-    Signature[ECDSA].sign[F](bv.toArray, keyPair.get, chainId)
+    Signature[ECDSA].sign[F](bv.toArray, keyPair.get, history.chainId)
 
   def applyHeaders(
       number: BigInt,
@@ -111,7 +111,7 @@ object Clique {
       genesisConfig: GenesisConfig,
       history: History[F],
       keyPair: Option[KeyPair]
-  )(implicit F: ConcurrentEffect[F], chainId: BigInt): F[Clique[F]] =
+  )(implicit F: ConcurrentEffect[F]): F[Clique[F]] =
     for {
       genesisBlock <- history.getBlockByNumber(0)
       _ <- if (genesisBlock.isEmpty) {
@@ -120,7 +120,7 @@ object Clique {
         F.unit
       }
       cache <- CacheBuilder.build[F, Snapshot](config.inMemorySnapshots)
-    } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache, chainId)
+    } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache)
 
   private[clique] def fillExtraData(signers: List[Address]): ByteVector =
     ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
@@ -132,7 +132,7 @@ object Clique {
   }
 
   /** Retrieve the signature from the header extra-data */
-  def ecrecover(header: BlockHeader)(implicit chainId: BigInt): Option[Address] = {
+  def ecrecover(header: BlockHeader): Option[Address] = {
     val signature               = header.extraData.takeRight(extraSeal)
     val hash                    = sigHash(header)
     val sig                     = CryptoSignature(signature.toArray)

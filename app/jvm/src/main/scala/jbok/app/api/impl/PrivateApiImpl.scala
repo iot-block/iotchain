@@ -7,6 +7,7 @@ import jbok.core.config.Configs.HistoryConfig
 import jbok.core.keystore.{KeyStorePlatform, Wallet}
 import jbok.core.ledger.History
 import jbok.core.models.Address
+import jbok.core.peer.{PeerManager, PeerNode}
 import jbok.core.pool.TxPool
 import jbok.crypto._
 import jbok.crypto.signature._
@@ -22,7 +23,8 @@ object PrivateApiImpl {
       history: History[IO],
       blockChainConfig: HistoryConfig,
       txPool: TxPool[IO],
-  )(implicit chainId: BigInt): IO[PrivateAPI[IO]] =
+      peerManager: PeerManager[IO]
+  ): IO[PrivateAPI[IO]] =
     for {
       unlockedWallets <- Ref.of[IO, Map[Address, Wallet]](Map.empty)
     } yield
@@ -55,13 +57,13 @@ object PrivateApiImpl {
             } else {
               unlockedWallets.get.map(_(address))
             }
-            sig <- Signature[ECDSA].sign[IO](getMessageToSign(message).toArray, wallet.keyPair, chainId)
+            sig <- Signature[ECDSA].sign[IO](getMessageToSign(message).toArray, wallet.keyPair, history.chainId)
           } yield sig
 
         override def ecRecover(message: ByteVector, signature: CryptoSignature): IO[Address] =
           IO {
             Signature[ECDSA]
-              .recoverPublic(getMessageToSign(message).toArray, signature, chainId)
+              .recoverPublic(getMessageToSign(message).toArray, signature, history.chainId)
               .map(public => Address(public.bytes.kec256))
               .get
           }
@@ -92,13 +94,18 @@ object PrivateApiImpl {
         override def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): IO[Boolean] =
           keyStore.changePassphrase(address, oldPassphrase, newPassphrase)
 
+        override def addPeer(peerNode: PeerNode): IO[Unit] = peerManager.addPeerNode(peerNode)
+
+        override def dropPeer(peerNode: PeerNode): IO[Unit] = ???
+
         private[jbok] def getMessageToSign(message: ByteVector) = {
           val prefixed: Array[Byte] =
             0x19.toByte +: s"Ethereum Signed Message:\n${message.length}".getBytes ++: message.toArray
           ByteVector(prefixed.kec256)
         }
 
-        private[jbok] def sendTransaction(request: TransactionRequest, wallet: Wallet): IO[ByteVector] =
+        private[jbok] def sendTransaction(request: TransactionRequest, wallet: Wallet): IO[ByteVector] = {
+          implicit val chainId: BigInt = history.chainId
           for {
             pending <- txPool.getPendingTransactions
             latestNonceOpt = Try(pending.collect {
@@ -108,8 +115,10 @@ object PrivateApiImpl {
             currentNonceOpt <- history.getAccount(request.from, bn).map(_.map(_.nonce.toBigInt))
             maybeNextTxNonce = latestNonceOpt.map(_ + 1).orElse(currentNonceOpt)
             tx               = request.toTransaction(maybeNextTxNonce.getOrElse(blockChainConfig.accountStartNonce))
+
             stx <- wallet.signTx[IO](tx)
             _   <- txPool.addOrUpdateTransaction(stx)
           } yield stx.hash
+        }
       }
 }

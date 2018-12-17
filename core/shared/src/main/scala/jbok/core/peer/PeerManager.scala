@@ -18,6 +18,7 @@ import jbok.core.peer.PeerSelectStrategy.PeerSelectStrategy
 import jbok.crypto.signature.KeyPair
 import jbok.network.Connection
 import jbok.network.common.TcpUtil
+import scala.concurrent.duration._
 
 sealed abstract class PeerErr(message: String) extends Exception(message)
 object PeerErr {
@@ -33,7 +34,7 @@ abstract class PeerManager[F[_]](
     val outgoing: Ref[F, Map[KeyPair.Public, Peer[F]]],
     val nodeQueue: PriorityQueue[F, PeerNode],
     val messageQueue: Queue[F, Request[F]]
-)(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F], AG: AsynchronousChannelGroup, chainId: BigInt) {
+)(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F], AG: AsynchronousChannelGroup) {
   private[this] val log = jbok.common.log.getLogger("PeerManager")
 
   val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port, config.discoveryPort)
@@ -91,8 +92,11 @@ abstract class PeerManager[F[_]](
         _ = log.debug(s"${peer.id} handshaked")
         _ <- eval(outgoing.update(_ + (peer.pk -> peer)))
         _ <- peer.conn.reads
-          .map(msg => Request(peer, msg))
-          .to(messageQueue.enqueue)
+          .evalMap { msg =>
+            val request = Request(peer, msg)
+            F.delay(log.trace(s"peer manager receive request: ${request}")) >>
+              messageQueue.enqueue1(request).timeout(5.seconds)
+          }
           .onFinalize(outgoing.update(_ - peer.pk) >> F.delay(log.debug(s"${peer.id} disconnected")))
       } yield ()
 
@@ -149,7 +153,7 @@ abstract class PeerManager[F[_]](
     for {
       genesis <- history.genesisHeader
       number  <- history.getBestBlockNumber
-    } yield Status(chainId, genesis.hash, number)
+    } yield Status(history.chainId, genesis.hash, number)
 
   private[jbok] def handshakeIncoming(conn: Connection[F, Message]): F[Peer[F]]
 

@@ -201,8 +201,7 @@ object Snapshot {
     }
 
   /** apply creates a new authorization snapshot by applying the given headers to the original one */
-  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader])(implicit F: Sync[F],
-                                                                         chainId: BigInt): F[Snapshot] =
+  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader])(implicit F: Sync[F]): F[Snapshot] =
     if (headers.isEmpty) {
       snapshot.pure[F]
     } else {
@@ -225,8 +224,7 @@ object Snapshot {
     }
 
   /** create a new snapshot by applying a given header */
-  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F],
-                                                                     chainId: BigInt): F[Snapshot] = F.delay {
+  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F]): F[Snapshot] = F.delay {
     val number      = header.number
     val beneficiary = Address(header.beneficiary)
 

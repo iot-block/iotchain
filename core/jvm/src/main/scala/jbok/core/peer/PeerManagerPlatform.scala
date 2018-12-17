@@ -48,8 +48,7 @@ object PeerManagerPlatform {
       implicit F: ConcurrentEffect[F],
       CS: ContextShift[F],
       T: Timer[F],
-      AG: AsynchronousChannelGroup,
-      chainId: BigInt
+      AG: AsynchronousChannelGroup
   ): F[PeerManager[F]] =
     for {
       keyPair <- config.nodekeyOrPath match {
