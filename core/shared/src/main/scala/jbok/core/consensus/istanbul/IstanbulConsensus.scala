@@ -3,14 +3,18 @@ package jbok.core.consensus.istanbul
 import cats.effect.ConcurrentEffect
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.consensus.{Consensus, ConsensusResult}
+import jbok.core.consensus.Consensus
 import jbok.core.models.{Address, Block, BlockHeader}
 import jbok.core.pool.BlockPool
 import scodec.bits.ByteVector
 import jbok.core.consensus.istanbul.IstanbulInvalid._
 import cats.implicits._
+import jbok.core.consensus.Consensus.Result
+import jbok.core.ledger.TypedBlock
+import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
 import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
+
 import scala.util.Random
 
 object IstanbulInvalid {
@@ -54,7 +58,7 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
             case Some(n) => if (n >= 0) F.unit else F.raiseError(BlockNumberInvalid)
             case None    => F.raiseError(BlockNumberInvalid)
           }
-          snap      <- istanbul.snapshot(header.number - 1, parentHeader.hash, Nil)
+          snap      <- istanbul.applyHeaders(header.number - 1, parentHeader.hash, Nil, Nil)
           _         <- validateSigner(header, snap)
           extraData <- validateExtra(header, snap)
         } yield ()
@@ -68,9 +72,10 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
       proposalSeal = prepareCommittedSeal(header.hash)
       // recover the original address by seal and block hash
       validSealAddrs <- extraData.committedSeals
-        .map(seal =>
-          F.fromOption(Signature[ECDSA].recoverPublic(proposalSeal.kec256.toArray, CryptoSignature(seal.toArray), None),
-                       CommittedSealInvalid))
+        .map(
+          seal =>
+            F.fromOption(Signature[ECDSA].recoverPublic(proposalSeal.kec256.toArray, CryptoSignature(seal.toArray), 0),
+                         CommittedSealInvalid))
         .sequence
       validSeals = validSealAddrs.filter(pk => snapshot.validatorSet.contains(Address(pk.bytes.kec256))).distinct
       _ <- if (validSeals.size <= 2 * snapshot.f) F.raiseError(CommittedSealInvalid) else F.unit
@@ -86,23 +91,27 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
       _      <- if (snapshot.validatorSet.contains(signer)) F.unit else F.raiseError(SignerUnauthorizedInvalid)
     } yield ()
 
-  override def semanticValidate(parentHeader: BlockHeader, block: Block): F[Unit] =
-    validateHeader(parentHeader, block.header)
+  override def verify(block: Block): F[Unit] =
+    history.getBlockHeaderByHash(block.header.parentHash).flatMap {
+      case Some(parentHeader) => validateHeader(parentHeader, block.header)
+      case None               => F.raiseError(HeaderParentNotFoundInvalid)
+    }
 
-  override def calcDifficulty(blockTime: Long, parentHeader: BlockHeader): F[BigInt] =
+  private def calcDifficulty(blockTime: Long, parentHeader: BlockHeader): F[BigInt] =
     F.pure(istanbul.config.defaultDifficulty)
 
-  override def calcBlockMinerReward(blockNumber: BigInt, ommersCount: Int): F[BigInt] = F.pure(BigInt(0))
+  private def calcBlockMinerReward(blockNumber: BigInt, ommersCount: Int): F[BigInt] = F.pure(BigInt(0))
 
-  override def calcOmmerMinerReward(blockNumber: BigInt, ommerNumber: BigInt): F[BigInt] = F.pure(BigInt(0))
+  private def calcOmmerMinerReward(blockNumber: BigInt, ommerNumber: BigInt): F[BigInt] = F.pure(BigInt(0))
 
-  override def getTimestamp: F[Long] = F.pure(System.currentTimeMillis())
+  private def getTimestamp: F[Long] = F.pure(System.currentTimeMillis())
 
-  override def prepareHeader(parent: Block, ommers: List[BlockHeader]): F[BlockHeader] = {
-    val blockNumber = parent.header.number + 1
-    val timestamp   = parent.header.unixTimestamp + istanbul.config.period.toMillis
+  def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader] = Nil): F[BlockHeader] =
     for {
-      snap       <- istanbul.snapshot(blockNumber - 1, parent.header.hash, Nil)
+      parent <- parentOpt.fold(history.getBestBlock)(_.pure[F])
+      blockNumber = parent.header.number + 1
+      timestamp   = parent.header.unixTimestamp + istanbul.config.period.toMillis
+      snap       <- istanbul.applyHeaders(blockNumber - 1, parent.header.hash, Nil, Nil)
       difficulty <- calcDifficulty(timestamp, parent.header)
       candicate = Random.shuffle(istanbul.candidates.toSeq).headOption
       extraData = prepareExtra(snap)
@@ -130,6 +139,11 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
         extraData = extraData,
         mixHash = Istanbul.mixDigest
       )
+
+  private def calcGasLimit(parentGas: BigInt): BigInt = {
+    val GasLimitBoundDivisor: Int = 1024
+    val gasLimitDifference        = parentGas / GasLimitBoundDivisor
+    parentGas + gasLimitDifference - 1
   }
 
   private def prepareExtra(snapshot: Snapshot): ByteVector = {
@@ -141,7 +155,11 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
     return ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes
   }
 
-  override def run(parent: Block, current: Block): F[ConsensusResult] = ???
+  override def postProcess(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.ExecutedBlock[F]] = ???
 
-  override def mine(block: Block): F[Block] = ???
+  override def mine(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.MinedBlock] = ???
+
+  override def run(block: Block): F[Result] = ???
+
+  override def resolveBranch(headers: List[BlockHeader]): F[Consensus.BranchResult] = ???
 }

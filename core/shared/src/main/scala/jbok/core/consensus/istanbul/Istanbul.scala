@@ -11,19 +11,15 @@ import cats.implicits._
 import cats.effect.implicits._
 import jbok.crypto._
 import scodec.bits._
-import jbok.core.History
-import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
-import jbok.persistent.LruMap
-
-import scala.concurrent.ExecutionContext.global
-import jbok.core.consensus.istanbul._
+import jbok.crypto.signature._
+import jbok.core.ledger.History
+import scalacache.Cache
 
 import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.concurrent.duration._
 
 case class Istanbul[F[_]](config: IstanbulConfig,
                           history: History[F],
-                          recents: LruMap[ByteVector, Snapshot],
                           candidates: MMap[Address, Boolean],
                           backlogs: Ref[F, MMap[Address, ArrayBuffer[Message]]],
                           keyPair: KeyPair,
@@ -31,26 +27,26 @@ case class Istanbul[F[_]](config: IstanbulConfig,
                           roundChanges: Ref[F, MMap[BigInt, MessageSet]],
                           validatorSet: Ref[F, ValidatorSet],
                           roundChangePromise: Ref[F, Deferred[F, BigInt]],
-                          state: Ref[F, State])(implicit F: Concurrent[F], timer: Timer[F]) {
+                          state: Ref[F, State])(implicit F: Concurrent[F], C: Cache[Snapshot], timer: Timer[F]) {
 
   private[this] val log = org.log4s.getLogger("Istanbul core")
 
-  def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
-    // try to read snapshot from cache or db
-    log.trace(s"try to read snapshot(${number}) from cache")
-    OptionT
-      .fromOption[F](recents.get(hash)) // If an in-memory snapshot was found, use that
-      .orElseF(
-        if (number % config.checkpointInterval == 0) {
-          // If an on-disk checkpoint snapshot can be found, use that
-          log.trace(s"not found in cache, try to read snapshot(${number}) from db")
-          Snapshot.loadSnapshot[F](history.db, hash)
-        } else {
-          log.trace(s"snapshot(${number}) not found in cache and db")
-          F.pure(None)
-        }
-      )
-  }
+//  def readSnapshot(number: BigInt, hash: ByteVector): OptionT[F, Snapshot] = {
+//    // try to read snapshot from cache or db
+//    log.trace(s"try to read snapshot(${number}) from cache")
+//    OptionT
+//      .fromOption[F](recents.get(hash)) // If an in-memory snapshot was found, use that
+//      .orElseF(
+//        if (number % config.checkpointInterval == 0) {
+//          // If an on-disk checkpoint snapshot can be found, use that
+//          log.trace(s"not found in cache, try to read snapshot(${number}) from db")
+//          Snapshot.loadSnapshot[F](history.db, hash)
+//        } else {
+//          log.trace(s"snapshot(${number}) not found in cache and db")
+//          F.pure(None)
+//        }
+//      )
+//  }
 
   def genesisSnapshot: F[Snapshot] = {
     log.trace(s"making a genesis snapshot")
@@ -58,31 +54,32 @@ case class Istanbul[F[_]](config: IstanbulConfig,
       genesis <- history.genesisHeader
       extra = Istanbul.extractIstanbulExtra(genesis)
       snap  = Snapshot(config, 0, genesis.hash, ValidatorSet(extra.validators))
-      _ <- Snapshot.storeSnapshot[F](snap, history.db)
+      _ <- Snapshot.storeSnapshot[F](snap, history.db, config.epoch)
       _ = log.trace(s"stored genesis with ${extra.validators.size} validators")
     } yield snap
   }
 
-  private[jbok] def snapshot(number: BigInt,
-                             hash: ByteVector,
-                             parents: List[BlockHeader],
-                             headers: List[BlockHeader] = Nil): F[Snapshot] = {
-    val snap = readSnapshot(number, hash)
-      .orElseF(if (number == 0) genesisSnapshot.map(_.some) else F.pure(None))
+  def applyHeaders(
+      number: BigInt,
+      hash: ByteVector,
+      parents: List[BlockHeader],
+      headers: List[BlockHeader] = Nil
+  ): F[Snapshot] = {
+    val snap =
+      OptionT(Snapshot.loadSnapshot[F](history.db, hash))
+        .orElseF(if (number == 0) genesisSnapshot.map(_.some) else F.pure(None))
 
     snap.value flatMap {
       case Some(s) =>
         // Previous snapshot found, apply any pending headers on top of it
         log.trace(s"applying ${headers.length} headers")
-        val newSnap = Snapshot.applyHeaders(s, headers)
-        recents.put(newSnap.hash, newSnap)
-        // If we've generated a new checkpoint snapshot, save to disk
-        if (newSnap.number % config.checkpointInterval == 0 && headers.nonEmpty) {
-          Snapshot.storeSnapshot[F](newSnap, history.db).map(_ => newSnap)
-        } else {
-          F.pure(newSnap)
-        }
-      case None => // No snapshot for this header, gather the header and move backward(recur)
+        for {
+          newSnap <- Snapshot.applyHeaders[F](s, headers)
+          _       <- Snapshot.storeSnapshot[F](newSnap, history.db, config.epoch)
+        } yield newSnap
+
+      case None =>
+        // No snapshot for this header, gather the header and move backward(recur)
         for {
           (h, p) <- if (parents.nonEmpty) {
             // If we have explicit parents, pick from there (enforced)
@@ -91,24 +88,22 @@ case class Istanbul[F[_]](config: IstanbulConfig,
             // No explicit parents (or no more left), reach out to the database
             history.getBlockHeaderByHash(hash).map(header => header.get -> parents)
           }
-          snap <- snapshot(number - 1, h.parentHash, p, h :: headers)
+          snap <- applyHeaders(number - 1, h.parentHash, p, h :: headers)
         } yield snap
     }
   }
 
   def getValidators(number: BigInt, hash: ByteVector): F[ValidatorSet] =
-    snapshot(number, hash, List.empty).map(_.validatorSet)
+    applyHeaders(number, hash, List.empty, List.empty).map(_.validatorSet)
 
   def checkMessage(message: Message): F[CheckResult] =
     message.code match {
-      case Message.msgPreprepareCode => {
+      case Message.msgPreprepareCode =>
         val preprepare = RlpCodec.decode[Preprepare](message.msg.bits).require.value
         checkMessage(message, preprepare.view)
-      }
-      case _ => {
+      case _ =>
         val subject = RlpCodec.decode[Subject](message.msg.bits).require.value
         checkMessage(message, subject.view)
-      }
     }
 
   /**
@@ -139,13 +134,11 @@ case class Istanbul[F[_]](config: IstanbulConfig,
       } else if (currentState.waitingForRoundChange) {
         F.pure(CheckResult.FutureMessage)
       } else {
-        state.get.map(s =>
-          s match {
-            case StateNewRound => {
-              if (message.code > Message.msgPreprepareCode) CheckResult.FutureMessage else CheckResult.Success
-            }
-            case _ => CheckResult.Success
-        })
+        state.get.map {
+          case StateNewRound =>
+            if (message.code > Message.msgPreprepareCode) CheckResult.FutureMessage else CheckResult.Success
+          case _ => CheckResult.Success
+        }
       }
     } yield result
 
@@ -159,13 +152,10 @@ case class Istanbul[F[_]](config: IstanbulConfig,
     for {
       result <- checkMessage(message)
       action <- result match {
-        case CheckResult.Success => {
+        case CheckResult.Success =>
           transformAction(message)
-        }
-        case CheckResult.FutureMessage => {
-          storeBacklog(message.address, message)
-          F.pure(Right(new Exception("future message")))
-        }
+        case CheckResult.FutureMessage =>
+          storeBacklog(message.address, message).as(Right(new Exception("future message")))
         case _ => F.pure(Right(new Exception("check message error")))
       }
     } yield action
@@ -190,7 +180,7 @@ case class Istanbul[F[_]](config: IstanbulConfig,
       action <- checkAndTransform(message)
       _ <- action match {
         case Left(a)  => transition(a)
-        case Right(e) => F.unit
+        case Right(_) => F.unit
       }
     } yield ()
 
@@ -208,7 +198,7 @@ case class Istanbul[F[_]](config: IstanbulConfig,
       else if (lastProposal.header.number == rs.sequence - 1) {
         if (round < rs.round)
           F.raiseError(
-            new Exception(s"New round should not be smaller than current round:new ${round},current ${rs.round}"))
+            new Exception(s"New round should not be smaller than current round:new $round,current ${rs.round}"))
         else F.pure(true)
       } else F.pure(false)
     } yield roundChange
@@ -232,7 +222,7 @@ case class Istanbul[F[_]](config: IstanbulConfig,
           * calculate new ValidatorSet for this round
           */
         getValidators(lastProposal.header.number, lastProposal.header.hash)
-          .map(validatorSet.set(_))
+          .map(validatorSet.set)
           .as(View(sequence = lastProposal.header.number + 1, round = 0))
       }
 
@@ -280,7 +270,7 @@ case class Istanbul[F[_]](config: IstanbulConfig,
       _      <- roundChangePromise.set(d)
       result <- d.get.timeout(config.requestTimeout.millis).attempt
       _ <- result match {
-        case Left(e) =>
+        case Left(_) =>
           // this means timeout
           for {
             vs           <- validatorSet.get
@@ -340,7 +330,7 @@ object Istanbul {
   val mixDigest     = hex"0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365"
 
   def extractIstanbulExtra(header: BlockHeader): IstanbulExtra =
-    RlpCodec.decode[IstanbulExtra](header.extraData.bits.drop(Istanbul.extraVanity)).require.value
+    RlpCodec.decode[IstanbulExtra](header.extraData.drop(Istanbul.extraVanity).bits).require.value
 
   def filteredHeader(header: BlockHeader, keepSeal: Boolean): BlockHeader = {
     val extra = extractIstanbulExtra(header)
@@ -366,7 +356,8 @@ object Istanbul {
     val signature = extractIstanbulExtra(header).seal
     val hash      = sigHash(header).kec256
     val sig       = CryptoSignature(signature.toArray)
-    val public    = Signature[ECDSA].recoverPublic(hash.toArray, sig, None).get
+    val chainId   = ECDSAChainIdConvert.getChainId(sig.v)
+    val public    = Signature[ECDSA].recoverPublic(hash.toArray, sig, chainId.get).get
     Address(public.bytes.kec256)
   }
 }

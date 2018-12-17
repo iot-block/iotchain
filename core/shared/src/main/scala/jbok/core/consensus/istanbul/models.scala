@@ -5,7 +5,7 @@ import cats.effect.concurrent.{Deferred, Ref}
 import jbok.core.models.{Address, Block}
 import scodec.bits.ByteVector
 import cats.implicits._
-import jbok.core.History
+import io.circe.generic.JsonCodec
 import jbok.crypto.signature.KeyPair
 
 import scala.collection.Iterable
@@ -141,6 +141,7 @@ object View {
   val empty = View(0, 0)
 }
 
+@JsonCodec
 case class ValidatorSet(
     proposer: Address,
     validators: ArrayBuffer[Address]

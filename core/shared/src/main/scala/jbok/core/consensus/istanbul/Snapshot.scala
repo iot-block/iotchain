@@ -1,22 +1,25 @@
 package jbok.core.consensus.istanbul
 
-import cats.effect.Sync
+import cats.effect.{Async, Sync}
 import cats.implicits._
-import io.circe.Decoder.Result
-import io.circe._
-import io.circe.parser._
-import io.circe.syntax._
+import _root_.io.circe._
+import _root_.io.circe.generic.JsonCodec
+import _root_.io.circe.parser._
+import _root_.io.circe.syntax._
 import jbok.codec.json.implicits._
 import jbok.core.models.{Address, BlockHeader}
 import jbok.persistent.KeyValueDB
 import jbok.core.consensus.istanbul.Snapshot._
 import scodec.bits._
 import jbok.codec.rlp.implicits._
+import scalacache.Cache
+import scalacache.CatsEffect.modes._
 
 import scala.collection.mutable.{ArrayBuffer, Map => MMap, Set => MSet}
 
 // Vote represents a single vote that an authorized signer made to modify the
 // list of authorizations.
+@JsonCodec
 case class Vote(
     signer: Address, // Authorized signer that cast this vote
     block: BigInt, // Block number the vote was cast in (expire old votes)
@@ -26,6 +29,7 @@ case class Vote(
 
 // Tally is a simple vote tally to keep the current score of votes. Votes that
 // go against the proposal aren't counted since it's equivalent to not voting.
+@JsonCodec
 case class Tally(
     authorize: Boolean, // Whether the vote is about authorizing or kicking someone
     votes: Int // Number of votes until now wanting to pass the proposal
@@ -78,44 +82,21 @@ case class Snapshot(
 object Snapshot {
   val namespace = ByteVector("istanbul".getBytes)
 
-  implicit private val addressKeyEncoder =
+  implicit val addressKeyEncoder =
     KeyEncoder.instance[Address](_.bytes.asJson.noSpaces)
-  implicit private val addressKeyDecoder =
+
+  implicit val addressKeyDecoder =
     KeyDecoder.instance[Address](s => decode[ByteVector](s).map(bytes => Address(bytes)).right.toOption)
-  implicit private val bigIntKeyEncoder =
+
+  implicit val bigIntKeyEncoder =
     KeyEncoder.instance[BigInt](_.asJson.noSpaces)
-  implicit private val bigIntKeyDecoder =
+
+  implicit val bigIntKeyDecoder =
     KeyDecoder.instance[BigInt](s => decode[BigInt](s).right.toOption)
-  implicit private val encoder: io.circe.Encoder[Snapshot] = new Encoder[Snapshot] {
-    override def apply(a: Snapshot): Json = Json.obj(
-      "config"  -> a.config.asJson,
-      "number"  -> a.number.asJson,
-      "hash"    -> a.hash.asJson,
-      "validatorSet" -> a.validatorSet.asJson,
-      "votes"   -> a.votes.toList.asJson,
-      "tally"   -> a.tally.toMap.asJson
-    )
-  }
-  implicit private val decoder: io.circe.Decoder[Snapshot] = new Decoder[Snapshot] {
-    override def apply(c: HCursor): Result[Snapshot] =
-      for {
-        config  <- c.downField("config").as[IstanbulConfig]
-        number  <- c.downField("number").as[BigInt]
-        hash    <- c.downField("hash").as[ByteVector]
-        validatorSet <- c.downField("validatorSet").as[ValidatorSet]
-        votes   <- c.downField("votes").as[List[Vote]]
-        tally   <- c.downField("tally").as[Map[Address, Tally]]
-      } yield {
-        Snapshot(
-          config,
-          number,
-          hash,
-          ValidatorSet.empty,
-          ArrayBuffer(votes: _*),
-          MMap(tally.toSeq: _*)
-        )
-      }
-  }
+
+  implicit val snapshotJsonEncoder: Encoder[Snapshot] = deriveEncoder[Snapshot]
+
+  implicit val snapshotJsonDecoder: Decoder[Snapshot] = deriveDecoder[Snapshot]
 
   implicit private[jbok] val byteArrayOrd: Ordering[Array[Byte]] = new Ordering[Array[Byte]] {
     def compare(a: Array[Byte], b: Array[Byte]): Int =
@@ -139,39 +120,54 @@ object Snapshot {
 
   implicit private[jbok] val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
-  def storeSnapshot[F[_]: Sync](snapshot: Snapshot, db: KeyValueDB[F]): F[Unit] =
-    db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace)
+  def storeSnapshot[F[_]: Async](snapshot: Snapshot, db: KeyValueDB[F], checkpointInterval: Int)(
+    implicit C: Cache[Snapshot]): F[Unit] =
+    if (snapshot.number % checkpointInterval == 0) {
+      db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace) <* C.put[F](snapshot.hash)(snapshot)
+    } else {
+      C.put[F](snapshot.hash)(snapshot).void
+    }
 
-  def loadSnapshot[F[_]: Sync](db: KeyValueDB[F], hash: ByteVector): F[Option[Snapshot]] =
-    db.getOpt[ByteVector, String](hash, namespace).map(_.map(json => io.circe.parser.decode[Snapshot](json).right.get))
+  def loadSnapshot[F[_]: Sync](db: KeyValueDB[F], hash: ByteVector)(implicit F: Async[F],
+                                                                    C: Cache[Snapshot]): F[Option[Snapshot]] =
+    C.get[F](hash).flatMap {
+      case Some(snap) => Sync[F].pure(snap.some)
+      case None =>
+        db.getOpt[ByteVector, String](hash, namespace)
+          .map(_.map(json => decode[Snapshot](json).right.get))
+          .flatMap {
+            case Some(snap) => C.put[F](hash)(snap).as(Some(snap))
+            case None       => Sync[F].pure(None)
+          }
+    }
 
   def apply(config: IstanbulConfig, number: BigInt, hash: ByteVector, validatorSet: ValidatorSet): Snapshot =
     new Snapshot(config, number, hash, validatorSet, ArrayBuffer.empty, MMap.empty)
 
   // apply creates a new authorization snapshot by
   // applying the given headers to the original one.
-  def applyHeaders(snapshot: Snapshot, headers: List[BlockHeader]): Snapshot =
+  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader])(implicit F: Sync[F]): F[Snapshot] =
     if (headers.isEmpty) {
-      snapshot
+      snapshot.pure[F]
     } else {
       // sanity check that the headers can be applied
       if (headers.sliding(2).exists {
             case left :: right :: Nil => left.number + 1 != right.number
             case _                    => false
           }) {
-        throw new Exception("invalid voting chain")
+        F.raiseError(new Exception("invalid voting chain"))
       }
 
       if (headers.head.number != snapshot.number + 1) {
-        throw new Exception("invalid voting chain")
+        F.raiseError(new Exception("invalid voting chain"))
       }
 
       val snap = snapshot.copy()
-      headers.foldLeft(snap)((snap, header) => Snapshot.applyHeader(snap, header))
+      headers.foldLeftM(snap)((snap, header) => Snapshot.applyHeader(snap, header))
     }
 
   // create a new snapshot by applying a given header
-  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader): Snapshot = {
+  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F]): F[Snapshot] = F.delay{
     val number      = header.number
     val beneficiary = Address(header.beneficiary)
 
