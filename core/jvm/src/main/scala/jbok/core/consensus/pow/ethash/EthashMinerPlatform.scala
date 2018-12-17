@@ -25,7 +25,7 @@ class EthashMinerPlatform[F[_]](
     currentEpochDag: Ref[F, Option[Array[Array[Int]]]]
 )(implicit F: Effect[F])
     extends EthashMiner[F] {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = jbok.common.log.getLogger("EthashMiner")
 
   override def mine(block: Block): F[Block] = {
     val epoch = Ethash.epoch(block.header.number.toLong)

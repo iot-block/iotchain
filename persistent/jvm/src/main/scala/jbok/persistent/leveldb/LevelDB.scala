@@ -103,7 +103,7 @@ final class LevelDB[F[_]](
 }
 
 object LevelDB {
-  private[this] val log = org.log4s.getLogger("LevelDB")
+  private[this] val log = jbok.common.log.getLogger("LevelDB")
 
   val defaultOptions = (new Options).createIfMissing(true)
 

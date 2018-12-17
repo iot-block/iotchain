@@ -33,7 +33,7 @@ case class FullNode[F[_]](
     server: Server[F],
     haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger("FullNode")
+  private[this] val log = jbok.common.log.getLogger("FullNode")
 
   val executor    = syncManager.executor
   val history     = executor.history
@@ -55,7 +55,7 @@ case class FullNode[F[_]](
         if (config.mining.enabled) miner.stream.drain else Stream.empty
       ).parJoinUnbounded
         .interruptWhen(haltWhenTrue)
-        .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)("FullNode error"))))
+        .handleErrorWith(e => Stream.eval(F.delay(log.warn("FullNode error", e))))
         .onFinalize(haltWhenTrue.set(true) >> F.delay(log.info(s"(${config.identity}) ready to exit, bye bye...")))
 
   def start: F[Fiber[F, Unit]] =

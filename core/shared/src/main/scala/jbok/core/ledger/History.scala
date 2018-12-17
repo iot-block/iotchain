@@ -92,7 +92,7 @@ object History {
 }
 
 class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt) extends History[F](db) {
-  private[this] val log = org.log4s.getLogger("History")
+  private[this] val log = jbok.common.log.getLogger("History")
 
   // init
   override def initGenesis(config: GenesisConfig): F[Unit] =

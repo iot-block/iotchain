@@ -24,14 +24,16 @@ object Configs {
       mining: MiningConfig,
       rpc: RpcConfig
   ) {
-    lazy val genesis = genesisOrPath match {
+    def genesis = genesisOrPath match {
       case Left(g)     => g
       case Right(path) => GenesisConfig.fromFile(path).unsafeRunSync()
     }
 
-    val lockPath: String = s"${datadir}/LOCK"
+    def logsDir: String = s"${datadir}/logs"
 
-    val genesisPath: String = s"${datadir}/genesis.conf"
+    def lockPath: String = s"${datadir}/LOCK"
+
+    def genesisPath: String = s"${datadir}/genesis.conf"
 
     def withGenesis(f: GenesisConfig => GenesisConfig): FullNodeConfig =
       copy(genesisOrPath = Left(f(genesis)))

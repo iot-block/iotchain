@@ -7,7 +7,7 @@ import jbok.core.ledger.History
 import jbok.core.models.BlockHeader
 
 final case class OmmerPool[F[_]: Sync](history: History[F], poolSize: Int, ommersList: Ref[F, List[BlockHeader]]) {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = jbok.common.log.getLogger("OmmerPool")
 
   import OmmerPool._
 

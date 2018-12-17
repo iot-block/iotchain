@@ -1,7 +1,5 @@
 package jbok.app
 
-import java.security.SecureRandom
-
 import _root_.io.circe.generic.auto._
 import _root_.io.circe.syntax._
 import better.files.File
@@ -9,7 +7,7 @@ import cats.effect.{ExitCode, IO}
 import cats.implicits._
 import com.typesafe.config.Config
 import fs2._
-import jbok.common.logger
+import jbok.common.log.{Level, ScribeLog, ScribeLogPlatform}
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.{ConfigHelper, ConfigLoader, GenesisConfig}
 import jbok.core.consensus.poa.clique
@@ -36,10 +34,13 @@ object MainApp extends StreamApp {
   def loadConfig(config: Config): IO[FullNodeConfig] =
     for {
       fullNodeConfig <- ConfigLoader.loadFullNodeConfig[IO](config)
-      _              <- logger.setRootLevel[IO](fullNodeConfig.logLevel)
-      _              <- IO(println(version))
-      _              <- IO(println(banner))
-      _              <- IO(println(ConfigHelper.printConfig(config).render))
+      _ <- ScribeLog.setHandlers[IO](
+        ScribeLog.consoleHandler(Some(Level.fromName(fullNodeConfig.logLevel))),
+        ScribeLogPlatform.fileHandler(fullNodeConfig.logsDir, Some(Level.fromName(fullNodeConfig.logLevel)))
+      )
+      _ <- IO(println(version))
+      _ <- IO(println(banner))
+      _ <- IO(println(ConfigHelper.printConfig(config).render))
     } yield fullNodeConfig
 
   override def run(args: List[String]): IO[ExitCode] =

@@ -34,7 +34,7 @@ abstract class PeerManager[F[_]](
     val nodeQueue: PriorityQueue[F, PeerNode],
     val messageQueue: Queue[F, Request[F]]
 )(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F], AG: AsynchronousChannelGroup, chainId: BigInt) {
-  private[this] val log = org.log4s.getLogger("PeerManager")
+  private[this] val log = jbok.common.log.getLogger("PeerManager")
 
   val peerNode: PeerNode = PeerNode(keyPair.public, config.host, config.port, config.discoveryPort)
 
@@ -67,7 +67,7 @@ abstract class PeerManager[F[_]](
             case PeerErr.HandshakeTimeout => Stream.eval(F.delay(log.warn("timeout")))
             case e: PeerErr.Incompatible  => Stream.eval(F.delay(log.warn(e.getMessage)))
             case e =>
-              log.error(e)("unexpected listen error")
+              log.error("unexpected listen error", e)
               Stream.raiseError[F](e)
           }
       }
@@ -101,7 +101,7 @@ abstract class PeerManager[F[_]](
         case PeerErr.HandshakeTimeout => Stream.eval(F.delay(log.warn("timeout")))
         case e: PeerErr.Incompatible  => Stream.eval(F.delay(log.warn(e.getMessage)))
         case e =>
-          log.error(e)("unexpected connect error")
+          log.error("unexpected connect error", e)
           Stream.raiseError[F](e)
       }
     }

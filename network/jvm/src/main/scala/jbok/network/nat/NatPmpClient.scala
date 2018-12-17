@@ -24,7 +24,7 @@ object NatPmpClient {
       _           <- F.delay(process.getBus.send(new KillProcessRequest()))
     } yield
       new Nat[F] {
-        private[this] val log = org.log4s.getLogger("NatPmpClient")
+        private[this] val log = jbok.common.log.getLogger("NatPmpClient")
 
         override def addMapping(internalPort: Int, externalPort: Int, lifetime: Long): F[Unit] =
           for {
@@ -32,7 +32,7 @@ object NatPmpClient {
             port <- F
               .delay(mapper.mapPort(PortType.TCP, internalPort, externalPort, lifetime))
               .handleErrorWith { e =>
-                log.error(e)(s"add port mapping from ${internalPort} to ${externalPort} failed")
+                log.error(s"add port mapping from ${internalPort} to ${externalPort} failed", e)
                 F.raiseError(e)
               }
             _ <- mappedPorts.update(_ + (externalPort -> port))

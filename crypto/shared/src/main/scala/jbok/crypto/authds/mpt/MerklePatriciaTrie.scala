@@ -19,7 +19,7 @@ final class MerklePatriciaTrie[F[_]](
     val rootHash: Ref[F, Option[ByteVector]]
 )(implicit F: Sync[F])
     extends KeyValueDB[F] {
-  private[this] val log = org.log4s.getLogger("MerklePatriciaTrie")
+  private[this] val log = jbok.common.log.getLogger("MerklePatriciaTrie")
 
   import MerklePatriciaTrie._
 

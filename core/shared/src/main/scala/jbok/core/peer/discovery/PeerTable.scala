@@ -18,7 +18,7 @@ case class PeerTable[F[_]](
     buckets: Ref[F, Vector[Bucket]]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
 
-  private[this] val log = org.log4s.getLogger("PeerTable")
+  private[this] val log = jbok.common.log.getLogger("PeerTable")
 
   def getBuckets: F[Vector[Bucket]] =
     buckets.get

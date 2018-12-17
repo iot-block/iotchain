@@ -17,7 +17,7 @@ class RpcServer(
     val handlers: Map[String, String => IO[String]],
     val queue: Queue[IO, String]
 )(implicit F: Concurrent[IO]) {
-  private[this] val log = org.log4s.getLogger("RpcServer")
+  private[this] val log = jbok.common.log.getLogger("RpcServer")
 
   def mountAPI[API](api: API): RpcServer = macro RpcServerMacro.mountAPI[RpcServer, API]
 

@@ -30,7 +30,7 @@ case class BlockExecutor[F[_]](
     ommerPool: OmmerPool[F],
     semaphore: Semaphore[F]
 )(implicit F: Sync[F], T: Timer[F], chainId: BigInt) {
-  private[this] val log = org.log4s.getLogger("BlockExecutor")
+  private[this] val log = jbok.common.log.getLogger("BlockExecutor")
 
   import BlockExecutor._
 
@@ -184,7 +184,7 @@ case class BlockExecutor[F[_]](
       for {
         result <- executeTransaction(stx, header, world, accGas).attempt.flatMap {
           case Left(e) =>
-            log.warn(e)(s"execute ${stx} error")
+            log.warn(s"execute ${stx} error", e)
             if (shortCircuit) {
               F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
             } else {

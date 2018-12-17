@@ -26,7 +26,7 @@ final case class WorldState[F[_]](
     accountStartNonce: UInt256 = UInt256.Zero,
     noEmptyAccounts: Boolean = true
 )(implicit F: Sync[F]) {
-  private[this] val log = org.log4s.getLogger("WorldState")
+  private[this] val log = jbok.common.log.getLogger("WorldState")
 
   // FIXME
   def getBlockHash(number: UInt256): F[Option[UInt256]] =

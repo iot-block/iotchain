@@ -21,7 +21,7 @@ case class CliqueConsensus[F[_]](
     blockPool: BlockPool[F]
 )(implicit F: ConcurrentEffect[F], T: Timer[F])
     extends Consensus[F](clique.history, blockPool) {
-  private[this] val log = org.log4s.getLogger("CliqueConsensus")
+  private[this] val log = jbok.common.log.getLogger("CliqueConsensus")
 
   override def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader]): F[BlockHeader] =
     for {

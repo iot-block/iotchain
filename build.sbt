@@ -76,6 +76,7 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       // logging
       "ch.qos.logback" % "logback-classic" % "1.2.3",
       "org.log4s"      %% "log4s"          % "1.6.1",
+      "com.outr"       %%% "scribe"        % "2.7.0",
       // files
       "com.github.pathikrit" %% "better-files" % "3.5.0",
       // config

@@ -24,7 +24,7 @@ case class FullSync[F[_]](
     executor: BlockExecutor[F],
     isSyncing: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger("FullSync")
+  private[this] val log = jbok.common.log.getLogger("FullSync")
 
   val peerManager = executor.peerManager
 

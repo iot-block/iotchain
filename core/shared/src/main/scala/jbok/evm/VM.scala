@@ -8,7 +8,7 @@ import cats.implicits._
   * Entry point to executing a program.
   */
 object VM {
-  private[this] val log = org.log4s.getLogger("VM")
+  private[this] val log = jbok.common.log.getLogger("VM")
 
   /**
     * Executes a program

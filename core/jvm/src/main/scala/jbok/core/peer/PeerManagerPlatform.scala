@@ -16,7 +16,7 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.network.Connection
 
 object PeerManagerPlatform {
-  private[this] val log = org.log4s.getLogger("PeerManager")
+  private[this] val log = jbok.common.log.getLogger("PeerManager")
 
   def loadNodeKey[F[_]: Sync](path: String): F[KeyPair] =
     for {

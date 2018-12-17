@@ -19,7 +19,7 @@ final case class SyncManager[F[_]](
     fullSync: FullSync[F],
     fastSync: FastSync[F]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger("SyncManager")
+  private[this] val log = jbok.common.log.getLogger("SyncManager")
 
   val peerManager = executor.peerManager
 

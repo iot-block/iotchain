@@ -29,7 +29,7 @@ case class BlockMiner[F[_]](
     syncManager: SyncManager[F],
     haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger("BlockMiner")
+  private[this] val log = jbok.common.log.getLogger("BlockMiner")
 
   val executor = syncManager.executor
 

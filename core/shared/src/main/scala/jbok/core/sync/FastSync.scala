@@ -37,7 +37,7 @@ final class FastSync[F[_]](
     jobQueue: InspectableQueue[F, Option[Message]],
     running: Ref[F, Int]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger("FastSync")
+  private[this] val log = jbok.common.log.getLogger("FastSync")
 
   import FastSync._
 
@@ -282,7 +282,7 @@ final class FastSync[F[_]](
           }
 
         case Left(e) =>
-          log.warn(e)("handle block headers error")
+          log.warn("handle block headers error", e)
           jobQueue.enqueue1(request.some)
       }
 
@@ -311,7 +311,7 @@ final class FastSync[F[_]](
               .to(bodyQueue.enqueue)).compile.drain
 
         case Left(e) =>
-          log.warn(e)("handle block bodies error")
+          log.warn("handle block bodies error", e)
           jobQueue.enqueue1(Some(request))
       }
 
@@ -340,7 +340,7 @@ final class FastSync[F[_]](
               .to(receiptQueue.enqueue)).compile.drain
 
         case Left(e) =>
-          log.warn(e)("handle receipts error")
+          log.warn("handle receipts error", e)
           jobQueue.enqueue1(Some(request))
       }
 

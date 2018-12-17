@@ -15,7 +15,7 @@ final class TxPool[F[_]] private (
     val peerManager: PeerManager[F],
     private val pending: Ref[F, Map[SignedTransaction, Long]],
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = org.log4s.getLogger("TxPool")
+  private[this] val log = jbok.common.log.getLogger("TxPool")
 
   def addTransactions(stxs: SignedTransactions, notify: Boolean = false): F[Unit] =
     for {

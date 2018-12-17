@@ -25,7 +25,7 @@ final class BlockPool[F[_]](
     blocks: Ref[F, Map[ByteVector, PooledBlock]], // blockHash -> block
     parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]] // blockHash -> childrenHashes
 )(implicit F: ConcurrentEffect[F])  {
-  private[this] val log = org.log4s.getLogger("BlockPool")
+  private[this] val log = jbok.common.log.getLogger("BlockPool")
 
   def contains(blockHash: ByteVector): F[Boolean] =
     blocks.get.map(_.contains(blockHash))

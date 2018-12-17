@@ -16,7 +16,7 @@ import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
 
 class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
-  private[this] val log = org.log4s.getLogger("KeyStore")
+  private[this] val log = jbok.common.log.getLogger("KeyStore")
 
   private val keyLength = 32
 

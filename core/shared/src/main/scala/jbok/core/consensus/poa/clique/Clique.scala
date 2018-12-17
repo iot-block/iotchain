@@ -35,7 +35,7 @@ class Clique[F[_]](
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
     val keyPair: Option[KeyPair]
 )(implicit F: ConcurrentEffect[F], C: Cache[Snapshot], chainId: BigInt) {
-  private[this] val log = org.log4s.getLogger("Clique")
+  private[this] val log = jbok.common.log.getLogger("Clique")
 
   import config._
 

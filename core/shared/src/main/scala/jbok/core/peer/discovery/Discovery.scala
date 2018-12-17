@@ -40,7 +40,7 @@ final class Discovery[F[_]](
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   import Discovery._
 
-  private[this] val log = org.log4s.getLogger("Discovery")
+  private[this] val log = jbok.common.log.getLogger("Discovery")
 
   val store = table.store
 
@@ -102,7 +102,7 @@ final class Discovery[F[_]](
         case Left(e) =>
           for {
             _ <- store.putFails(remote.id, fails + 1)
-            _ = log.warn(e)(s"findNode ${remote.id} failed, ${fails + 1} time(s)")
+            _ = log.warn(s"findNode ${remote.id} failed, ${fails + 1} time(s)", e)
             _ <- if (fails + 1 >= maxFindNodeFailures) {
               log.warn(s"too many findNode failures, delete ${remote.id}")
               table.delNode(remote)

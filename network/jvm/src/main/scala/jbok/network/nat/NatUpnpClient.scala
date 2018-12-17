@@ -12,7 +12,7 @@ object NatUpnpClient {
       device = discover.getValidGateway
     } yield
       new Nat[F] {
-        private[this] val log = org.log4s.getLogger("NatUpnpClient")
+        private[this] val log = jbok.common.log.getLogger("NatUpnpClient")
 
         override def addMapping(internalPort: Int, externalPort: Int, lifetime: Long): F[Unit] =
           for {

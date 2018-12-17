@@ -41,7 +41,7 @@ case class AuthHandshaker[F[_]](
 )(implicit F: Concurrent[F], T: Timer[F], chainId: BigInt) {
   import AuthHandshaker._
 
-  private[this] val log = org.log4s.getLogger(s"AuthHandshaker")
+  private[this] val log = jbok.common.log.getLogger(s"AuthHandshaker")
 
   implicit val codec: Codec[ByteVector] = pure.codec
 

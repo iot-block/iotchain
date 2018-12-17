@@ -4,14 +4,13 @@ import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Path, StandardOpenOption}
 
 import better.files.File
-import better.files.File.RandomAccessMode
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 
 case class FileLockErr(path: Path) extends Exception(s"${path} is already locked")
 
 object FileLock {
-  private[this] val log = org.log4s.getLogger("FileLock")
+  private[this] val log = jbok.common.log.getLogger("FileLock")
 
   def lock[F[_]](path: Path, content: String = "")(implicit F: Sync[F]): Resource[F, Unit] =
     Resource

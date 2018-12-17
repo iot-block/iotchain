@@ -13,7 +13,7 @@ import scodec.Codec
 final class UdpTransport[F[_]](socket: Socket[F])(implicit F: ConcurrentEffect[F],
                                                   CS: ContextShift[F],
                                                   AG: AsynchronousSocketGroup) {
-  private[this] val log = org.log4s.getLogger("UdpTransport")
+  private[this] val log = jbok.common.log.getLogger("UdpTransport")
 
   def serve[A: Codec](pipe: Pipe[F, (InetSocketAddress, A), (InetSocketAddress, A)]): Stream[F, Unit] =
     Stream
@@ -36,7 +36,7 @@ final class UdpTransport[F[_]](socket: Socket[F])(implicit F: ConcurrentEffect[F
           }
           .to(socket.writes())
       }
-      .handleErrorWith(e => Stream.eval(F.delay(log.warn(e)(s"transport error"))))
+      .handleErrorWith(e => Stream.eval(F.delay(log.warn(s"transport error", e))))
       .onFinalize(F.delay(log.trace(s"serving terminated")))
 
   def send[A: Codec](remote: InetSocketAddress, a: A): F[Unit] =

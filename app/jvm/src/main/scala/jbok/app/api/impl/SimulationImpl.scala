@@ -25,7 +25,7 @@ class SimulationImpl(
     val nodes: Ref[IO, Map[NodeId, FullNode[IO]]],
     val miners: Ref[IO, Map[NodeId, FullNode[IO]]]
 ) extends SimulationAPI {
-  private[this] val log = org.log4s.getLogger
+  private[this] val log = jbok.common.log.getLogger("SimulationImpl")
 
   val cliqueConfig     = CliqueConfig(period = 5.seconds)
   val genesisConfig    = reference.genesis

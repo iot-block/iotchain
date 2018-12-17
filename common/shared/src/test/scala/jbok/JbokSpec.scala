@@ -2,6 +2,7 @@ package jbok
 
 import fs2._
 import cats.effect.IO
+import jbok.common.log.{Level, ScribeLog}
 import org.scalatest.prop.PropertyChecks
 import org.scalatest._
 import org.scalatest.concurrent.{AsyncTimeLimitedTests, TimeLimitedTests}
@@ -26,6 +27,8 @@ trait JbokSpec
       .getOrElse(throw new TimeoutException("IO run timed out"))
 
   implicit val chainId: BigInt = 1
+
+  ScribeLog.setHandlers[IO](ScribeLog.consoleHandler(minimumLevel = Some(Level.Debug))).unsafeRunSync()
 }
 
 trait JbokAsyncSpec extends AsyncWordSpec with Matchers with AsyncTimeLimitedTests {
