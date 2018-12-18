@@ -12,6 +12,7 @@ import fs2.concurrent.SignallingRef
 import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
 import jbok.common.FileLock
 import jbok.common.execution._
+import jbok.common.metrics.Metrics
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
@@ -74,6 +75,7 @@ object FullNode {
   ): IO[FullNode[IO]] = {
     implicit val chainId = config.genesis.chainId
     for {
+      metrics <- Metrics.default[IO]
       keystore <- KeyStorePlatform[IO](config.keystore.keystoreDir)
       minerKey <- config.mining.minerAddressOrKey match {
         case Left(address) if config.mining.enabled =>
@@ -84,7 +86,7 @@ object FullNode {
         case Left(_)   => IO.pure(None)
         case Right(kp) => IO.pure(kp.some)
       }
-      history   <- History.forPath[IO](config.history.chainDataDir)
+      history   <- History.forPath[IO](config.history.chainDataDir)(F, chainId, T, metrics)
       blockPool <- BlockPool(history, BlockPoolConfig())
       clique    <- Clique(CliqueConfig(), config.genesis, history, minerKey)
       consensus = new CliqueConsensus[IO](clique, blockPool)

@@ -2,6 +2,7 @@ package jbok.core.ledger
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.evm.WorldState
@@ -11,8 +12,9 @@ import scodec.bits._
 
 class WorldStateSpec extends JbokSpec {
   trait Fixture {
-    val db           = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history   = History[IO](db).unsafeRunSync()
+    import jbok.common.testkit._
+    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history = History[IO](db).unsafeRunSync()
 
     val world = history
       .getWorldState(noEmptyAccounts = false)
@@ -246,17 +248,20 @@ class WorldStateSpec extends JbokSpec {
 
       val root = w1
         .putAccount(address1, Account(0, 1000))
-        .persisted.unsafeRunSync().stateRootHash
+        .persisted
+        .unsafeRunSync()
+        .stateRootHash
 
-      val w2=  history.getWorldState().unsafeRunSync()
+      val w2 = history.getWorldState().unsafeRunSync()
 
       val root2 =
-        w2
-          .putAccount(address1, Account(0, 999))
+        w2.putAccount(address1, Account(0, 999))
           .putAccount(address2, Account(0, 998))
-          .persisted.unsafeRunSync().stateRootHash
+          .persisted
+          .unsafeRunSync()
+          .stateRootHash
 
-      val w3=  history.getWorldState(stateRootHash = Some(root2)).unsafeRunSync()
+      val w3 = history.getWorldState(stateRootHash = Some(root2)).unsafeRunSync()
     }
   }
 }

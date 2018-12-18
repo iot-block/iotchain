@@ -1,6 +1,7 @@
 package jbok.persistent
 
 import cats.effect.IO
+import jbok.common.execution._
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.codec.rlp.implicits._

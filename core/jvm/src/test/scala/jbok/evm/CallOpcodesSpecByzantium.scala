@@ -6,6 +6,7 @@ import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
+import jbok.common.testkit._
 
 class CallOpcodesSpecByzantium extends JbokSpec {
 

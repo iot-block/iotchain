@@ -7,6 +7,7 @@ import jbok.core.models._
 import jbok.crypto._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
+import jbok.common.testkit._
 
 class CallOpcodesSpec extends JbokSpec {
 

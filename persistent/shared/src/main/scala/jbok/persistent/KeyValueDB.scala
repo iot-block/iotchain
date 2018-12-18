@@ -1,8 +1,9 @@
 package jbok.persistent
 
 import cats.data.OptionT
-import cats.effect.Sync
+import cats.effect.{Sync, Timer}
 import cats.implicits._
+import jbok.common.metrics.Metrics
 import scodec.Codec
 import scodec.bits.ByteVector
 
@@ -82,5 +83,5 @@ object KeyValueDB extends KeyValueDBPlatform {
 
   def inmem[F[_]: Sync]: F[KeyValueDB[F]] = InmemKeyValueDB[F]
 
-  def forPath[F[_]: Sync](path: String): F[KeyValueDB[F]] = _forPath[F](path)
+  def forPath[F[_]: Sync](path: String)(implicit T: Timer[F], M: Metrics[F]): F[KeyValueDB[F]] = _forPath[F](path)
 }

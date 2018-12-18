@@ -24,6 +24,7 @@ lazy val V = new {
   val catsCollections = "0.7.0"
   val scalacache      = "0.26.0"
   val dropwizard      = "4.0.3"
+  val prometheus      = "0.6.0"
   val fs2redis        = "0.5.1"
 }
 
@@ -86,7 +87,7 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test,
       // scalajs-stubs
       "org.scala-js" %% "scalajs-stubs" % "0.6.26"
-    ) ++ dropwizard
+    ) ++ dropwizard ++ prometheus
   )
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
@@ -284,6 +285,12 @@ lazy val dropwizard = Seq(
   "io.dropwizard.metrics" % "metrics-json",
   "io.dropwizard.metrics" % "metrics-jmx",
 ).map(_ % V.dropwizard)
+
+lazy val prometheus = Seq(
+  "io.prometheus" % "simpleclient",
+  "io.prometheus" % "simpleclient_common",
+  "io.prometheus" % "simpleclient_hotspot"
+).map(_ % V.prometheus)
 
 lazy val commonSettings = Seq(
   addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),

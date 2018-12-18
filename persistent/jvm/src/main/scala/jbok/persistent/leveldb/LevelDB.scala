@@ -5,6 +5,7 @@ import java.io.File
 import cats.effect._
 import cats.implicits._
 import fs2._
+import jbok.common.metrics.Metrics
 import jbok.persistent.KeyValueDB
 import org.fusesource.leveldbjni.JniDBFactory.{factory => JNIFactory}
 import org.iq80.leveldb._
@@ -18,20 +19,23 @@ final class LevelDB[F[_]](
     options: Options,
     readOptions: ReadOptions,
     writeOptions: WriteOptions
-)(implicit F: Sync[F])
+)(implicit F: Sync[F], T: Timer[F], M: Metrics[F])
     extends KeyValueDB[F] {
 
   def close: F[Unit] =
     F.delay(db.close())
 
-  override protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]] =
+  override protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]] = M.time("leveldb_get") {
     F.delay(db.get(key.toArray, readOptions)).map(ByteVector.apply).attemptT.toOption.value
+  }
 
-  override protected[jbok] def putRaw(key: ByteVector, newVal: ByteVector): F[Unit] =
+  override protected[jbok] def putRaw(key: ByteVector, newVal: ByteVector): F[Unit] = M.time("leveldb_put") {
     F.delay(db.put(key.toArray, newVal.toArray, writeOptions))
+  }
 
-  override protected[jbok] def delRaw(key: ByteVector): F[Unit] =
+  override protected[jbok] def delRaw(key: ByteVector): F[Unit] = M.time("leveldb_del") {
     F.delay(db.delete(key.toArray))
+  }
 
   override protected[jbok] def hasRaw(key: ByteVector): F[Boolean] =
     getRaw(key).map(_.isDefined)
@@ -59,14 +63,16 @@ final class LevelDB[F[_]](
     } yield xs.toMap
 
   override protected[jbok] def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit] =
-    for {
-      batch <- createWriteBatch
-      _     <- F.delay(put.map { case (k, v) => batch.put(k.toArray, v.toArray) })
-      _ <- F.delay(del.map { k =>
-        batch.delete(k.toArray)
-      })
-      _ <- write(batch)
-    } yield ()
+    M.time("leveldb_batch") {
+      for {
+        batch <- createWriteBatch
+        _     <- F.delay(put.map { case (k, v) => batch.put(k.toArray, v.toArray) })
+        _ <- F.delay(del.map { k =>
+          batch.delete(k.toArray)
+        })
+        _ <- write(batch)
+      } yield ()
+    }
 
   private def createWriteBatch: F[WriteBatch] =
     F.delay(db.createWriteBatch())
@@ -117,7 +123,7 @@ object LevelDB {
       options: Options = defaultOptions,
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
-  )(implicit F: Sync[F]): F[KeyValueDB[F]] =
+  )(implicit F: Sync[F], T: Timer[F], M: Metrics[F]): F[KeyValueDB[F]] =
     jni[F](path, options, readOptions, writeOptions).attemptT
       .getOrElseF(
         iq80[F](path, options, readOptions, writeOptions)
@@ -129,7 +135,7 @@ object LevelDB {
       options: Options = defaultOptions,
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
-  )(implicit F: Sync[F]): F[LevelDB[F]] =
+  )(implicit F: Sync[F], T: Timer[F], M: Metrics[F]): F[LevelDB[F]] =
     for {
       db <- F.delay(factory.open(new File(path), options))
       _  <- F.delay(log.info(s"open db at ${path}"))
@@ -140,7 +146,7 @@ object LevelDB {
       options: Options = defaultOptions,
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
-  )(implicit F: Sync[F]): F[LevelDB[F]] =
+  )(implicit F: Sync[F], T: Timer[F], M: Metrics[F]): F[LevelDB[F]] =
     for {
       db <- F.delay(JNIFactory.open(new File(path), options))
       _  <- F.delay(log.info(s"open db at ${path}"))

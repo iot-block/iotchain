@@ -7,6 +7,7 @@ import fs2._
 import jbok.JbokSpec
 import jbok.codec.rlp.implicits._
 import jbok.common.execution._
+import jbok.common.testkit._
 import jbok.core.messages.Message
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.common.{RequestId, TcpUtil}

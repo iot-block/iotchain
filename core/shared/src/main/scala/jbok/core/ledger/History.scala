@@ -1,9 +1,10 @@
 package jbok.core.ledger
 
 import cats.data.OptionT
-import cats.effect.Sync
+import cats.effect.{Sync, Timer}
 import cats.implicits._
 import jbok.codec.rlp.implicits._
+import jbok.common.metrics.Metrics
 import jbok.core.config.GenesisConfig
 import jbok.core.models._
 import jbok.core.store._
@@ -82,7 +83,7 @@ abstract class History[F[_]](val db: KeyValueDB[F]) {
 }
 
 object History {
-  def forPath[F[_]: Sync](dbPath: String)(implicit chainId: BigInt): F[History[F]] =
+  def forPath[F[_]: Sync](dbPath: String)(implicit chainId: BigInt, T: Timer[F], M: Metrics[F]): F[History[F]] =
     KeyValueDB.forPath[F](dbPath).map(db => new HistoryImpl[F](db))
 
   def apply[F[_]: Sync](db: KeyValueDB[F])(implicit chainId: BigInt): F[History[F]] =

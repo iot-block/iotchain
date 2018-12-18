@@ -17,6 +17,7 @@ import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits.ByteVector
+import jbok.common.testkit._
 
 import scala.collection.JavaConverters._
 

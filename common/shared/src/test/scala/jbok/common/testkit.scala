@@ -2,11 +2,20 @@ package jbok.common
 
 import java.math.BigInteger
 
+import cats.effect.IO
+import jbok.common.log.{Level, ScribeLog}
+import jbok.common.metrics.Metrics
 import org.scalacheck._
 import org.scalacheck.Arbitrary._
 import scodec.bits.ByteVector
 
 object testkit {
+  ScribeLog.setHandlers[IO](ScribeLog.consoleHandler(minimumLevel = Some(Level.Debug))).unsafeRunSync()
+
+  implicit val chainId: BigInt = 1
+
+  implicit val metrics: Metrics[IO] = Metrics.default[IO].unsafeRunSync()
+
   def random[A](implicit arbA: Arbitrary[A]): A =
     arbA.arbitrary.sample.get
 

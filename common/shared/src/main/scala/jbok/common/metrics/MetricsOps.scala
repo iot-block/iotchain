@@ -1,30 +1,11 @@
 package jbok.common.metrics
 
-/** algebra for writing metrics to a metrics registry(e.g. `Dropwizard` or `Prometheus`) */
-trait MetricsOps[F[_]] {
+import cats.effect.{Sync, Timer}
 
-  /** Increases the count for some classifier */
-  def increaseCount(classifier: Option[String]): F[Unit]
+final class MetricsOps[F[_], A](val fa: F[A]) extends AnyVal {
+  def timed(name: String, labels: String*)(implicit F: Sync[F], T: Timer[F], M: Metrics[F]): F[A] =
+    M.time(name, labels: _*)(fa)
 
-  /** Decreases the count for some classifier */
-  def decreaseCount(classifier: Option[String]): F[Unit]
-
-  /** Records the time for some classifier */
-  def recordTime(classifier: Option[String], elapsed: Long): F[Unit]
-
-  /** Record abnormal, like errors, timeouts or just other abnormal terminations */
-  def recordAbnormalTermination(
-      classifier: Option[String],
-      elapsed: Long,
-      terminationType: TerminationType
-  ): F[Unit]
-
-  /** Describes the type of abnormal termination*/
-  sealed trait TerminationType
-
-  object TerminationType {
-    case object Abnormal extends TerminationType
-    case object Error    extends TerminationType
-    case object Timeout  extends TerminationType
-  }
+  def gauged(name: String, labels: String*)(implicit F: Sync[F], M: Metrics[F]): F[A] =
+    M.gauge(name, labels: _*)(fa)
 }

@@ -62,7 +62,6 @@ abstract class PeerManager[F[_]](
               .to(messageQueue.enqueue)
               .onFinalize(incoming.update(_ - peer.pk) >> F.delay(log.debug(s"${peer.id} disconnected")))
           } yield ()
-
           stream.handleErrorWith {
             case PeerErr.HandshakeTimeout => Stream.eval(F.delay(log.warn("timeout")))
             case e: PeerErr.Incompatible  => Stream.eval(F.delay(log.warn(e.getMessage)))
