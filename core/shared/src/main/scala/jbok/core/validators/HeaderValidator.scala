@@ -10,15 +10,18 @@ import jbok.core.validators.HeaderInvalid._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits.ByteVector
 
+import scala.math.BigDecimal.RoundingMode
+
 object HeaderInvalid {
   case object HeaderParentNotFoundInvalid extends Exception("HeaderParentNotFoundInvalid")
   case object HeaderBeneficiaryInvalid    extends Exception("HeaderBeneficiaryInvalid")
   case object HeaderReceiptsHashInvalid   extends Exception("HeaderReceiptsHashInvalid")
   case object HeaderLogBloomInvalid       extends Exception("HeaderLogBloomInvalid")
   case object HeaderNumberInvalid         extends Exception("HeaderNumberInvalid")
-  case object HeaderGasLimitInvalid       extends Exception("HeaderGasLimitInvalid")
-  case object HeaderGasUsedInvalid        extends Exception("HeaderGasUsedInvalid")
-  case object HeaderTimestampInvalid      extends Exception("HeaderTimestampInvalid")
+  case class HeaderGasLimitInvalid(min: BigInt, max: BigInt, parent: BigInt, delta: BigInt, cur: BigInt)
+      extends Exception(s"HeaderGasLimitInvalid: min=${min}, max=${max}, parent=${parent}, delta=${delta}, cur=${cur}")
+  case object HeaderGasUsedInvalid   extends Exception("HeaderGasUsedInvalid")
+  case object HeaderTimestampInvalid extends Exception("HeaderTimestampInvalid")
 }
 
 object HeaderValidator {
@@ -112,15 +115,16 @@ object HeaderValidator {
     if (timestamp > parentTimestamp) F.unit
     else F.raiseError(HeaderTimestampInvalid)
 
-  private def validateGasLimit[F[_]](gasLimit: BigInt, parentGasLimit: BigInt)(implicit F: Sync[F]): F[Unit] =
+  private def validateGasLimit[F[_]](gasLimit: BigInt, parentGasLimit: BigInt)(implicit F: Sync[F]): F[Unit] = {
+    val delta: BigInt = BigDecimal(parentGasLimit / GasLimitBoundDivisor).setScale(0, RoundingMode.FLOOR).toBigInt
     if (gasLimit > MaxGasLimit)
-      F.raiseError(HeaderGasLimitInvalid)
+      F.raiseError(HeaderGasLimitInvalid(MinGasLimit, MaxGasLimit, parentGasLimit, delta, gasLimit))
     else {
-      val magic = BigInt(math.floor((parentGasLimit / GasLimitBoundDivisor).toDouble).toInt)
-      if (gasLimit >= MinGasLimit && gasLimit < parentGasLimit + magic && gasLimit > parentGasLimit - magic)
+      if (gasLimit >= MinGasLimit && gasLimit < parentGasLimit + delta && gasLimit > parentGasLimit - delta)
         F.unit
-      else F.raiseError(HeaderGasLimitInvalid)
+      else F.raiseError(HeaderGasLimitInvalid(MinGasLimit, MaxGasLimit, parentGasLimit, delta, gasLimit))
     }
+  }
 
   private def validateGasUsed[F[_]](gasUsed: BigInt, gasLimit: BigInt)(implicit F: Sync[F]): F[Unit] =
     if (gasUsed < gasLimit) F.unit

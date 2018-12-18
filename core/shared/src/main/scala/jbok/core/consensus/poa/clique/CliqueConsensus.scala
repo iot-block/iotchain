@@ -231,9 +231,7 @@ case class CliqueConsensus[F[_]](
     if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn
 
   private def calcGasLimit(parentGas: BigInt): BigInt = {
-    val GasLimitBoundDivisor: Int = 1024
-    val gasLimitDifference        = parentGas / GasLimitBoundDivisor
-    parentGas + gasLimitDifference - 1
+    parentGas
   }
 
   private def amongstRecent(currentNumber: BigInt, seen: BigInt, N: Int): Boolean = {
