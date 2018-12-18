@@ -15,12 +15,28 @@ object Prometheus {
 
   final case class MetricName(name: String) extends AnyVal
 
-  def apply[F[_]](registry: CollectorRegistry)(implicit F: Sync[F]): F[Metrics[F]] =
+  def apply[F[_]](_registry: CollectorRegistry)(implicit F: Sync[F]): F[Metrics[F]] =
     for {
       histograms <- Ref.of[F, Map[MetricName, Histogram]](Map.empty)
       gauges     <- Ref.of[F, Map[MetricName, Gauge]](Map.empty)
     } yield
       new Metrics[F] {
+        override type Registry = CollectorRegistry
+
+        override val registry: Registry = _registry
+
+        override def time(name: String, labels: List[String])(nanos: Long): F[Unit] =
+          for {
+            hist <- getOrCreateHistogram(name, labels.toSet)
+            _ = hist.labels(labels: _*).observe(SimpleTimer.elapsedSecondsFromNanos(0, nanos))
+          } yield ()
+
+        override def gauge(name: String, labels: List[String])(delta: Double): F[Unit] =
+          for {
+            gauge <- getOrCreateGauge(name, labels.toSet)
+            _ = gauge.inc(delta)
+          } yield ()
+
         def histName(name: String): MetricName =
           MetricName(s"${METRIC_PREFIX}_${name}_${TIMER_SUFFIX}")
 
@@ -49,17 +65,6 @@ object Prometheus {
             }
           })
 
-        override def time(name: String, labels: List[String])(nanos: Long): F[Unit] =
-          for {
-            hist <- getOrCreateHistogram(name, labels.toSet)
-            _ = hist.labels(labels: _*).observe(SimpleTimer.elapsedSecondsFromNanos(0, nanos))
-          } yield ()
-
-        override def gauge(name: String, labels: List[String])(delta: Double): F[Unit] =
-          for {
-            gauge <- getOrCreateGauge(name, labels.toSet)
-            _ = gauge.inc(delta)
-          } yield ()
       }
 
   def textReport[F[_]](registry: CollectorRegistry)(implicit F: Sync[F]): F[String] = F.delay {

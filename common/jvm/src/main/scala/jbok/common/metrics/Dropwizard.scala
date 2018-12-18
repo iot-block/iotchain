@@ -11,7 +11,11 @@ import fs2._
 import scala.concurrent.duration.FiniteDuration
 
 object Dropwizard {
-  def apply[F[_]](registry: MetricRegistry)(implicit F: Sync[F]): Metrics[F] = new Metrics[F] {
+  def apply[F[_]](_registry: MetricRegistry)(implicit F: Sync[F]): Metrics[F] = new Metrics[F] {
+    override type Registry = MetricRegistry
+
+    override val registry: Registry = _registry
+
     override def time(name: String, labels: List[String])(nanos: Long): F[Unit] = F.delay {
       registry
         .timer(name)

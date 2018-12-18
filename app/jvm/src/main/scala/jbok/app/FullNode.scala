@@ -2,7 +2,6 @@ package jbok.app
 
 import java.net.InetSocketAddress
 import java.nio.file.Paths
-import java.security.SecureRandom
 
 import cats.effect._
 import cats.effect.implicits._
@@ -75,7 +74,7 @@ object FullNode {
   ): IO[FullNode[IO]] = {
     implicit val chainId = config.genesis.chainId
     for {
-      metrics <- Metrics.default[IO]
+      metrics  <- Metrics.default[IO]
       keystore <- KeyStorePlatform[IO](config.keystore.keystoreDir)
       minerKey <- config.mining.minerAddressOrKey match {
         case Left(address) if config.mining.enabled =>
@@ -99,7 +98,7 @@ object FullNode {
       publicAPI = PublicApiImpl(config.history, miner)
       privateAPI <- PrivateApiImpl(keystore, history, config.history, executor.txPool)
       rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
-      server = Server.websocket(config.rpc.addr, rpc.pipe)
+      server = Server.websocket(config.rpc.addr, rpc.pipe, metrics)
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keystore, rpc, server, haltWhenTrue)
   }

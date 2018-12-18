@@ -58,6 +58,10 @@ trait StreamMetrics[F[_]] { self: Metrics[F] =>
 }
 
 trait Metrics[F[_]] extends EffectMetrics[F] with StreamMetrics[F] {
+  type Registry
+
+  def registry: Registry
+
   def time(name: String, labels: List[String])(elapsed: Long): F[Unit]
 
   def gauge(name: String, labels: List[String])(delta: Double): F[Unit]
