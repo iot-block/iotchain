@@ -2,7 +2,7 @@ package jbok.app.api.impl
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
-import jbok.app.api.{PrivateAPI, TransactionRequest}
+import jbok.app.api.{PersonalAPI, TransactionRequest}
 import jbok.core.config.Configs.HistoryConfig
 import jbok.core.keystore.{KeyStorePlatform, Wallet}
 import jbok.core.ledger.History
@@ -17,18 +17,17 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration.Duration
 import scala.util.Try
 
-object PrivateApiImpl {
+object PersonalApiImpl {
   def apply(
       keyStore: KeyStorePlatform[IO],
       history: History[IO],
       blockChainConfig: HistoryConfig,
-      txPool: TxPool[IO],
-      peerManager: PeerManager[IO]
-  ): IO[PrivateAPI[IO]] =
+      txPool: TxPool[IO]
+  ): IO[PersonalAPI[IO]] =
     for {
       unlockedWallets <- Ref.of[IO, Map[Address, Wallet]](Map.empty)
     } yield
-      new PrivateAPI[IO] {
+      new PersonalAPI[IO] {
         override def importRawKey(privateKey: ByteVector, passphrase: String): IO[Address] =
           keyStore.importPrivateKey(privateKey, passphrase)
 
@@ -93,10 +92,6 @@ object PrivateApiImpl {
 
         override def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): IO[Boolean] =
           keyStore.changePassphrase(address, oldPassphrase, newPassphrase)
-
-        override def addPeer(peerNode: PeerNode): IO[Unit] = peerManager.addPeerNode(peerNode)
-
-        override def dropPeer(peerNode: PeerNode): IO[Unit] = ???
 
         private[jbok] def getMessageToSign(message: ByteVector) = {
           val prefixed: Array[Byte] =

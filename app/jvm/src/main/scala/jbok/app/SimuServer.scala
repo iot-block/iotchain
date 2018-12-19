@@ -2,11 +2,9 @@ package jbok.app
 
 import java.net.InetSocketAddress
 
-import better.files.File
 import cats.effect.IO
 import jbok.app.simulations.{SimulationAPI, SimulationImpl}
 import jbok.common.execution._
-import jbok.core.keystore.KeyStorePlatform
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
@@ -17,20 +15,15 @@ import scala.io.StdIn
 object SimuServer {
   val bind = new InetSocketAddress("localhost", 8888)
 
-  // keystore
-  val dir          = File.newTemporaryDirectory().deleteOnExit()
-  val keyStore     = KeyStorePlatform[IO](dir.pathAsString).unsafeRunSync()
-
   val impl: SimulationAPI = SimulationImpl().unsafeRunSync()
   val rpcServer           = RpcServer().unsafeRunSync().mountAPI[SimulationAPI](impl)
-  val server              = Server.websocket(bind, rpcServer.pipe, ???)
-  val peerCount           = 10
+  val server              = Server.websocket(bind, rpcServer.pipe)
+  val peerCount           = 4
   val minerCount          = 1
 
   val init = for {
     _ <- impl.createNodesWithMiner(peerCount, minerCount)
-    _ <- impl.startNetwork
-    _ <- impl.connect("ring")
+    _ = println("connect done....")
     _ = T.sleep(5000.millis)
     _ <- impl.submitStxsToNetwork(10, "valid")
   } yield ()
@@ -44,10 +37,6 @@ object SimuServer {
     StdIn.readLine()
 
     println("stop simulation")
-    val cleanUp = for {
-      _ <- impl.stopNetwork
-    } yield ()
-    cleanUp.unsafeRunSync()
 
     fiber.cancel.unsafeRunSync()
   }

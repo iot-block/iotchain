@@ -38,7 +38,7 @@ case class SendTxView(state: AppState) {
 
   private def fetch() = {
     val p = for {
-      accounts <- client.traverse(_.admin.listAccounts)
+      accounts <- client.traverse(_.personal.listAccounts)
       _ = accounts.map(nodeAccounts.value ++= _)
     } yield ()
     p.unsafeToFuture()
@@ -71,7 +71,7 @@ case class SendTxView(state: AppState) {
 
       val p = for {
         gasPrice <- client.get.public.getGasPrice
-        hash     <- client.get.admin.sendTransaction(txRequest.copy(gasPrice = Some(gasPrice)), password)
+        hash     <- client.get.personal.sendTransaction(txRequest.copy(gasPrice = Some(gasPrice)), password)
         stx      <- client.get.public.getTransactionByHash(hash)
         _ = stx.map(state.stxs.value(currentId.get).value += _)
         _ = state.receipts.value(currentId.get).value += (hash -> Var(None))

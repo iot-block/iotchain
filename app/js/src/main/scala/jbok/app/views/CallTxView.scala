@@ -37,7 +37,7 @@ case class CallTxView(state: AppState) {
 
   private def fetch() = {
     val p = for {
-      accounts <- client.traverse(_.admin.listAccounts)
+      accounts <- client.traverse(_.personal.listAccounts)
       _ = accounts.map(nodeAccounts.value ++= _)
     } yield ()
     p.unsafeToFuture()
@@ -173,7 +173,7 @@ case class CallTxView(state: AppState) {
           gasLimit <- client.get.public.estimateGas(callTx, BlockParam.Latest)
           gasPrice <- client.get.public.getGasPrice
           _ = txStatus.value = s"gas limit: $gasLimit, gas price: $gasPrice"
-          txHash <- client.get.admin
+          txHash <- client.get.personal
             .sendTransaction(
               txRequest.copy(nonce = Some(account.nonce), gasLimit = Some(gasLimit), gasPrice = Some(gasPrice)),
               password)

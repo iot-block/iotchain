@@ -1,44 +1,15 @@
 package jbok.app
 
-import java.net.URI
-
 import cats.effect.IO
-import jbok.app.api.{PrivateAPI, PublicAPI}
 import jbok.common.execution._
-import jbok.network.client.{Client, WsClient}
-import jbok.network.rpc.RpcClient
 import scodec.bits.ByteVector
 
 import scala.concurrent.Future
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
-import scala.scalajs.js.{Promise, UndefOr}
-import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
-
-@JSExportTopLevel("JbokClientClass")
-@JSExportAll
-case class JbokClient(uri: URI, client: Client[IO, String], admin: PrivateAPI[IO], public: PublicAPI[IO]) {
-  def status: IO[Boolean] = client.haltWhenTrue.get.map(!_)
-}
-
-@JSExportTopLevel("JBokClient")
-object JbokClient {
-  import jbok.network.rpc.RpcServer._
-
-  def apply(uri: URI): IO[JbokClient] =
-    for {
-      client <- WsClient[IO, String](uri)
-      admin  = RpcClient(client).useAPI[PrivateAPI[IO]]
-      public = RpcClient(client).useAPI[PublicAPI[IO]]
-      _ <- client.start
-    } yield JbokClient(uri, client, admin, public)
-
-  @JSExport
-  def webSocket(url: String): IO[JbokClient] = {
-    val uri = new URI(url)
-    apply(uri)
-  }
-}
+import scala.scalajs.js.Promise
+import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
+import scala.scalajs.js.typedarray.{byteArray2Int8Array, Int8Array}
 
 @JSExportTopLevel("Option")
 @JSExportAll
@@ -71,7 +42,7 @@ object JSPromise {
 object JSByteVector {
   def toString(bv: ByteVector): String = bv.toHex
 
-  def toArray(bv: ByteVector): js.Array[Byte] = bv.toArray.toJSArray
+  def toArray(bv: ByteVector): Int8Array = byteArray2Int8Array(bv.toArray)
 
   def fromString(data: String): ByteVector = ByteVector.fromValidHex(data)
 

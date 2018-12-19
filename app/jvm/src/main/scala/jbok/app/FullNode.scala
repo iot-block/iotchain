@@ -8,7 +8,7 @@ import cats.effect.implicits._
 import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
-import jbok.app.api.impl.{PrivateApiImpl, PublicApiImpl}
+import jbok.app.api.impl.{AdminApiImpl, PersonalApiImpl, PublicApiImpl}
 import jbok.common.FileLock
 import jbok.common.execution._
 import jbok.common.metrics.Metrics
@@ -96,8 +96,9 @@ object FullNode {
 
       // mount rpc
       publicAPI = PublicApiImpl(config.history, miner)
-      privateAPI <- PrivateApiImpl(keystore, history, config.history, executor.txPool)
-      rpc        <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI))
+      privateAPI <- PersonalApiImpl(keystore, history, config.history, executor.txPool)
+      adminAPI = AdminApiImpl(peerManager)
+      rpc <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI).mountAPI(adminAPI))
       server = Server.websocket(config.rpc.addr, rpc.pipe, metrics)
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keystore, rpc, server, haltWhenTrue)

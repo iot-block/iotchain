@@ -2,7 +2,6 @@ package jbok.app
 
 import java.net.URI
 
-import cats.effect.IO
 import com.thoughtworks.binding.Binding._
 import com.thoughtworks.binding.Binding.Var
 import com.thoughtworks.binding._
@@ -14,13 +13,11 @@ import org.scalajs.dom._
 import fs2._
 import jbok.app.api.BlockParam
 import jbok.core.models.Address
-import org.scalajs.dom.raw.{HTMLAnchorElement, HTMLLinkElement}
+import org.scalajs.dom.raw.HTMLAnchorElement
 import scodec.bits.ByteVector
 
 import scala.scalajs.js
-import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel, JSImport}
-import scala.util.{Failure, Success}
-import scala.concurrent.duration._
+import scala.scalajs.js.annotation.JSImport
 
 @JSImport("css/normalize.css", JSImport.Namespace)
 @js.native
@@ -61,16 +58,6 @@ object JbokApp {
   val blockTab    = Tab("Block", blockView, "fa-square")
   val contractTab = Tab("Contract", contractView, "fa-file-contract")
   val configTab   = Tab("", configView, "fa-cogs")
-//  val tabs = Vars(
-//    Tab("Accounts", accountsView, "fa-user-circle"),
-//    Tab("Blocks", blocksView, "fa-th-large"),
-//    Tab("Transactions", transactionsView, "fa-arrow-circle-right"),
-////    Tab("Simulations", simulationsView, "fa-stethoscope"),
-//    accountTab,
-//    blockTab,
-//    Tab("Contract", contractView, "fa-file-contract"),
-//    Tab("", configView, "fa-cogs")
-//  )
   val tabs: Vars[Tab] = Vars(
     accountsTab,
     blocksTab,
@@ -184,10 +171,6 @@ object JbokApp {
     <footer>
       {Copyright.render.bind}
     </footer>
-
-  def task() =
-    if (state.update.value) { state.updateTask() }
-  org.scalajs.dom.window.setInterval(() => task(), 5000)
 
   def main(args: Array[String]): Unit =
     dom.render(document.body, render)

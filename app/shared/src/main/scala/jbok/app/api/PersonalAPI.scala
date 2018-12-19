@@ -3,6 +3,7 @@ package jbok.app.api
 import io.circe.generic.JsonCodec
 import jbok.codec.json.implicits._
 import jbok.core.models.{Address, Transaction}
+import jbok.core.peer.PeerNode
 import jbok.crypto.signature._
 import scodec.bits.ByteVector
 
@@ -35,7 +36,7 @@ case class TransactionRequest(
     )
 }
 
-trait PrivateAPI[F[_]] {
+trait PersonalAPI[F[_]] {
   def importRawKey(privateKey: ByteVector, passphrase: String): F[Address]
 
   def newAccount(passphrase: String): F[Address]

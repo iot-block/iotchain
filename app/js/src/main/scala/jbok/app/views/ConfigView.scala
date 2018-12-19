@@ -1,11 +1,21 @@
 package jbok.app.views
 
+import java.net._
+
+import cats.effect.IO
 import com.thoughtworks.binding
-import com.thoughtworks.binding.Binding
-import com.thoughtworks.binding.Binding.{Var, Vars}
-import jbok.app.AppState
+import com.thoughtworks.binding.{Binding, FutureBinding}
+import com.thoughtworks.binding.Binding.{Constant, Var, Vars}
+import jbok.app.{AppState, BlockHistory, ClientStatus}
+import jbok.app.client.JbokClient
+import jbok.app.components.Spinner
+import jbok.app.simulations.NodeInfo
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw._
+import jbok.common.execution._
+
+import scala.concurrent.duration._
+import scala.util.Try
 
 case class ConfigView(state: AppState) {
   val interfaces: Vars[String]       = Vars.empty[String]
@@ -27,7 +37,7 @@ case class ConfigView(state: AppState) {
 
   init()
 
-  val onToggleHandler = { event: Event =>
+  private val onToggleHandler = { event: Event =>
     event.currentTarget match {
       case input: HTMLInputElement =>
         httpServerSwitch.value = input.checked
@@ -96,9 +106,9 @@ case class ConfigView(state: AppState) {
       <div></div>
     }
 
-  val onInputHandler = { event: Event =>
+  private val onInputHandler = { event: Event =>
     event.currentTarget match {
-      case input: HTMLInputElement => {
+      case input: HTMLInputElement =>
         input.name match {
           case "hostname" => host.value = input.value.trim
           case "port" =>
@@ -112,16 +122,14 @@ case class ConfigView(state: AppState) {
             httpPortIsValid.value = InputValidator.isValidPort(httpServerPort.value)
         }
         port.value = input.value.trim
-      }
       case _ =>
     }
   }
 
-  val onClickAdvance = { event: Event =>
+  private val onClickAdvance = { event: Event =>
     event.currentTarget match {
-      case _: HTMLButtonElement => {
+      case _: HTMLButtonElement =>
         moreOption.value = !moreOption.value
-      }
       case _ =>
     }
   }
@@ -167,6 +175,104 @@ case class ConfigView(state: AppState) {
       <div class="config-row">
         <button>Restart</button>
         <button>Cancel</button>
+      </div>
+
+      {renderSimulationAdd.bind}
+    </div>
+
+  val addHost: Var[String]                     = Var("127.0.0.1")
+  val addHostIsValid: Var[Boolean]             = Var(true)
+  val addPort: Var[String]                     = Var("30316")
+  val addPortIsValid: Var[Boolean]             = Var(true)
+  val connectedStatus: Var[Option[IO[String]]] = Var(None)
+
+  private val onInputHandlerAdd = { event: Event =>
+    event.currentTarget match {
+      case input: HTMLInputElement =>
+        input.name match {
+          case "add-hostname" =>
+            addHost.value = input.value.trim
+            addHostIsValid.value = InputValidator.isValidIPv4(addHost.value)
+          case "add-port" =>
+            addPort.value = input.value.trim
+            addPortIsValid.value = InputValidator.isValidPort(addPort.value)
+        }
+        port.value = input.value.trim
+      case _ =>
+    }
+  }
+
+  private val onClickAdd = { event: Event =>
+    event.currentTarget match {
+      case _: HTMLButtonElement =>
+        if (addHostIsValid.value && addPortIsValid.value) {
+          val id       = s"${addHost.value}:${addPort.value}"
+          val nodeInfo = NodeInfo(id, addHost.value, addPort.value.toInt)
+          val p = for {
+            jbokClient  <- JbokClient(new URI(nodeInfo.rpcAddr)).timeout(2.seconds)
+            peerNodeUri <- jbokClient.admin.peerNodeUri.timeout(2.seconds)
+            _ = state.nodeInfos.value += (id -> nodeInfo)
+            _ = state.clients.value += (id   -> jbokClient)
+            _ = state.blocks.value += (id    -> BlockHistory())
+            _ = state.status.value += (id    -> ClientStatus())
+          } yield "connected."
+
+          connectedStatus.value = Some(p)
+        }
+      case _ =>
+    }
+  }
+
+  @binding.dom
+  def renderSimulationAdd: Binding[Element] =
+    <div>
+      <h1>simulation</h1>
+  
+      <div class ="config-row">
+        <div class ="config-row-item">
+          <label for="add-hostname">
+            <b>
+              hostname
+            </b>
+          </label>
+          <input name="add-hostname" type="text" oninput={onInputHandlerAdd} value={addHost.bind} class={if(addHostIsValid.bind) "valid" else "invalid"} />
+        </div>
+        <div class ="config-row-item">
+          <p> <br/><br/>The server to connect host. </p>
+        </div>
+      </div>
+  
+      <div class="config-row">
+        <div class ="config-row-item">
+          <label for="add-port">
+            <b>
+              port
+            </b>
+          </label>
+          <input name="add-port" type="text" oninput={onInputHandlerAdd} value={addPort.bind} class={if(addPortIsValid.bind) "valid" else "invalid"} />
+        </div>
+        <div class ="config-row-item">
+          <p> <br/><br/>The server to connect port. </p>
+        </div>
+      </div>
+
+      {
+        connectedStatus.bind match {
+          case None => <div/>
+          case Some(status) =>
+            <div class="config-row">
+              <div class="config-row-item">
+                <b> status: </b>
+              </div>
+              <div class="config-row-item">
+              {Spinner.render(FutureBinding(status.unsafeToFuture())).bind}
+              </div>
+            </div>
+        }
+      }
+      
+      <div class="config-row">
+        <button onclick={onClickAdd} disabled={!(addHostIsValid.bind && addPortIsValid.bind)}>Add</button>
       </div>
     </div>
 }

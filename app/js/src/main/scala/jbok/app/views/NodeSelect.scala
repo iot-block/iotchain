@@ -15,7 +15,7 @@ case class NodeSelect(state: AppState) {
         case select: HTMLSelectElement =>
           val v = select.options(select.selectedIndex).value
           state.currentId.value = state.nodeInfos.value.get(v).map(_.id)
-          println(s"currId: ${state.currentId.value.get}")
+          println(s"currId: ${state.currentId.value}")
         case _ =>
       }
     }
@@ -27,7 +27,7 @@ case class NodeSelect(state: AppState) {
           isSelected = if (state.currentId.value.isDefined && state.currentId.value.get == node._1) true else false
         } yield {
           <option value={node._1} selected={isSelected}>
-            {node._2.addr.toString} {node._1.take(7)}
+            {node._2.rpcAddr.toString} {node._1.take(7)}
           </option>
         }}
         <option value="defalut" selected={true}>please select a node.</option>

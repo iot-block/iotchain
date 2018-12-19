@@ -2,6 +2,7 @@ package jbok.app.simulations
 
 import cats.effect.IO
 import jbok.common.GraphUtil
+import jbok.core.config.GenesisConfig
 import jbok.core.config.defaults.reference
 import jbok.core.models._
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
@@ -16,7 +17,7 @@ import scodec.bits.ByteVector
 import scala.collection.mutable.{ListBuffer => MList, Map => MMap}
 import scala.util.Random
 
-class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000))(implicit chainId: BigInt) {
+class TxGraphGen(beforeGenesisConfig: GenesisConfig, nAddr: Int = 3, gasLimit: BigInt = BigInt(21000)) {
   case class SimTransaction(id: Int, sender: Address, receiver: Address)
 
   object SimTransaction {
@@ -26,6 +27,8 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000))(implicit chai
   case class SimAddress(keyPair: KeyPair) {
     def address = Address(keyPair)
   }
+
+  implicit val chainId = beforeGenesisConfig.chainId
 
   val initBalance = "1000000000000000000000000000000"
 
@@ -38,7 +41,7 @@ class TxGraphGen(nAddr: Int = 3, gasLimit: BigInt = BigInt(21000))(implicit chai
 
   val alloc: Map[String, String] = keyPairs.map(x => x.address.toString -> initBalance).toMap
 
-  val genesisConfig = reference.genesis.copy(alloc = alloc)
+  val genesisConfig = beforeGenesisConfig.copy(alloc = alloc)
 
   val keyPairMap: Map[Address, KeyPair] = keyPairs.map(x => x.address -> x.keyPair).toMap
 

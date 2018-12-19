@@ -11,12 +11,10 @@ case class SimulationEvent(source: String, target: String, message: String, time
 case class NodeInfo(
     id: String,
     interface: String,
-    port: Int,
     rpcPort: Int
 ) {
-  val addr                      = s"$interface:$port"
   val rpcAddr                   = s"ws://$interface:$rpcPort"
-  override def toString: String = s"NodeInfo(id=${id}, addr=${addr}, rpcAddr=${rpcAddr})"
+  override def toString: String = s"NodeInfo(identity=${id}, rpcAddr=${rpcAddr})"
 }
 
 trait SimulationAPI {
@@ -25,27 +23,29 @@ trait SimulationAPI {
 
   def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]]
 
+  def addNode(uri: String): IO[String]
+
   def deleteNode(id: String): IO[Unit]
 
-  def startNetwork: IO[Unit]
-
-  def stopNetwork: IO[Unit]
-
-  def setMiner(ids: List[String]): IO[Unit]
-
-  def getMiners: IO[List[NodeInfo]]
-
-  def stopMiners(ids: List[String]): IO[Unit]
+//  def startNetwork: IO[Unit]
+//
+//  def stopNetwork: IO[Unit]
+//
+//  def setMiner(ids: List[String]): IO[Unit]
+//
+//  def getMiners: IO[List[NodeInfo]]
+//
+//  def stopMiners(ids: List[String]): IO[Unit]
 
   def getNodes: IO[List[NodeInfo]]
 
-  def getNodeInfo(id: String): IO[NodeInfo]
+  def getNodeInfo(id: String): IO[Option[NodeInfo]]
 
-  def startNode(id: String): IO[Unit]
+//  def startNode(id: String): IO[Unit]
 
   def stopNode(id: String): IO[Unit]
 
-  def connect(topology: String): IO[Unit]
+//  def connect(topology: String): IO[Unit]
 
   // simulation txs
   def submitStxsToNetwork(nStx: Int, t: String): IO[Unit]
