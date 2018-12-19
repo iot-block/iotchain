@@ -2,7 +2,7 @@ package jbok.app.views
 
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
-import com.thoughtworks.binding.Binding.Vars
+import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.AppState
 import jbok.app.views.Nav.Tab
 import jbok.core.models._
@@ -11,6 +11,7 @@ import org.scalajs.dom._
 import scala.scalajs.js.Date
 
 case class BlockView(state: AppState) {
+
   @binding.dom
   val overview: Binding[Element] =
     <div>
@@ -20,7 +21,7 @@ case class BlockView(state: AppState) {
             <table class="table-view"> {
               val header = block.header
               val size = block.body.transactionList.size
-              <tr>
+                <tr>
                 <th>Height:</th>
                 <td>{header.number.toString}
                 </td>
@@ -87,16 +88,19 @@ case class BlockView(state: AppState) {
     </div>
 
   val tabs = Vars(
-    Tab("Overview", overview, ""),
-    Tab("Transactions", txsView, ""),
+    Tab("Overview", Var(overview), ""),
+    Tab("Transactions", Var(txsView), ""),
   )
 
   val tabView = new TabsView(
-    Tab("Overview", overview, ""),
-    Tab("Transactions", txsView, "")
+    Tab("Overview", Var(overview), ""),
+    Tab("Transactions", Var(txsView), "")
   )
 
   @binding.dom
   def render: Binding[Element] =
-    <div>{tabView.render.bind}</div>
+    <div>
+      <button id="block-back" class="btn-back" onclick={state.hrefHandler}>back</button>
+      {tabView.render.bind}
+    </div>
 }

@@ -14,6 +14,7 @@ case class AccountView(state: AppState) {
 
   val stxs: Vars[SignedTransaction] = Vars.empty
 
+
   @binding.dom
   val overview: Binding[Element] =
     <div>
@@ -59,12 +60,15 @@ case class AccountView(state: AppState) {
     </div>
 
   val tabView = new TabsView(
-    Tab("Overview", overview, ""),
-    Tab("Transactions", txsView, "")
+    Tab("Overview", Var(overview), ""),
+    Tab("Transactions", Var(txsView), "")
   )
 
   @binding.dom
   def render: Binding[Element] =
-    <div>{tabView.render.bind}</div>
+    <div>
+      <button id="account-back"  class="btn-back" onclick={state.hrefHandler}>back</button>
+      {tabView.render.bind}
+    </div>
 
 }

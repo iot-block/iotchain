@@ -21,7 +21,7 @@ import scala.concurrent.duration._
 
 @JsonCodec
 case class CliqueConfig(
-    period: FiniteDuration = 500.millis,
+    period: FiniteDuration = 5000.millis,
     epoch: BigInt = BigInt(30000),
     checkpointInterval: Int = 1024,
     inMemorySnapshots: Int = 128,

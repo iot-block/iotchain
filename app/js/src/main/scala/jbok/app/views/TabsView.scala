@@ -39,7 +39,7 @@ class TabsView(tab: Tab*) {
         } yield {
           val isSelected = tabList.selected.bind == tab
           <div class={s"tab-content ${if (isSelected) "selected" else ""}"}>
-            {tab.content.bind}
+            {tab.content.value.bind}
           </div>
         }
         }
