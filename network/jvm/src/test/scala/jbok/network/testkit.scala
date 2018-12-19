@@ -1,4 +1,5 @@
 package jbok.network
+
 import java.net.{InetSocketAddress, URI}
 import java.util.UUID
 
@@ -6,6 +7,7 @@ import cats.effect.IO
 import fs2._
 import jbok.codec.rlp.implicits._
 import jbok.common.execution._
+import jbok.common.testkit._
 import jbok.network.client.{Client, TcpClient, WsClient}
 import jbok.network.common.{RequestId, RequestMethod}
 import jbok.network.server.Server
@@ -35,7 +37,7 @@ object testkit {
     TcpClient[IO, Data](new URI(s"tcp://localhost:${port}")).unsafeRunSync()
 
   def genWsServer(port: Int): Gen[Server[IO]] =
-    Server.websocket[IO, Data](new InetSocketAddress(port), echoPipe)
+    Server.websocket[IO, Data](new InetSocketAddress(port), echoPipe, metrics)
 
   def genWsClient(port: Int): Gen[Client[IO, Data]] =
     WsClient[IO, Data](new URI(s"tcp://localhost:${port}")).unsafeRunSync()

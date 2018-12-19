@@ -1,7 +1,6 @@
 package jbok.app
 
 import java.net.InetSocketAddress
-import java.security.SecureRandom
 
 import better.files.File
 import cats.effect.IO
@@ -24,7 +23,7 @@ object SimuServer {
 
   val impl: SimulationAPI = SimulationImpl().unsafeRunSync()
   val rpcServer           = RpcServer().unsafeRunSync().mountAPI[SimulationAPI](impl)
-  val server              = Server.websocket(bind, rpcServer.pipe)
+  val server              = Server.websocket(bind, rpcServer.pipe, ???)
   val peerCount           = 10
   val minerCount          = 1
 

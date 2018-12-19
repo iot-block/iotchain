@@ -6,6 +6,7 @@ import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
+import jbok.common.testkit._
 import jbok.network.client.WsClient
 import jbok.network.server.Server
 
@@ -27,7 +28,7 @@ class RpcSpec extends JbokSpec {
   val bind                                 = new InetSocketAddress("localhost", 9002)
   val uri                                  = new URI("ws://localhost:9002")
   val serverPipe: Pipe[IO, String, String] = rpcServer.pipe
-  val server                               = Server.websocket(bind, serverPipe)
+  val server                               = Server.websocket(bind, serverPipe, metrics)
 
   "RPC Client & Server" should {
     "mount and use API" ignore {

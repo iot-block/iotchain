@@ -44,6 +44,9 @@ object Configs {
     def withPeer(f: PeerConfig => PeerConfig): FullNodeConfig =
       copy(peer = f(peer))
 
+    def withRpc(f: RpcConfig => RpcConfig): FullNodeConfig =
+      copy(rpc = f(rpc))
+
     def withSync(f: SyncConfig => SyncConfig): FullNodeConfig =
       copy(sync = f(sync))
 
@@ -59,6 +62,7 @@ object Configs {
             discoveryPort = port + 1
           )
         )
+        .withRpc(_.copy(port = port + 2))
   }
 
   object FullNodeConfig {

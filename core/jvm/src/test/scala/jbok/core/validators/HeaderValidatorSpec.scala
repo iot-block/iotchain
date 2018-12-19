@@ -73,7 +73,7 @@ class HeaderValidatorSpec extends JbokSpec {
         val gasLimitHeader = validHeader.copy(gasLimit = gasLimit)
         val result         = HeaderValidator.preExecValidate[IO](validParent, gasLimitHeader).attempt.unsafeRunSync()
         if (gasLimit <= upperGasLimit && gasLimit >= lowerGasLimit) result shouldBe Right(gasLimitHeader)
-        else result shouldBe Left(HeaderGasLimitInvalid)
+        else result.left.get shouldBe a[HeaderGasLimitInvalid]
       }
     }
 
