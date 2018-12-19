@@ -17,7 +17,6 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.common.logger
 import jbok.core.peer.PeerNode
 import scodec.bits.ByteVector
 import scala.concurrent.duration._
@@ -55,7 +54,6 @@ class SimulationImpl(
     log.info(s"create $n node(s)")
 
     for {
-      _ <- logger.setRootLevel[IO]("DEBUG")
       newNodes <- configs.zipWithIndex.traverse[IO, FullNode[IO]] {
         case (config, idx) =>
           implicit val ec: ExecutionContextExecutor =

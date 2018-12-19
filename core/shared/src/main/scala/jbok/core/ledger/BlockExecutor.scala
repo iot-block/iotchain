@@ -185,7 +185,7 @@ case class BlockExecutor[F[_]](
       for {
         result <- executeTransaction(stx, header, world, accGas).attempt.flatMap {
           case Left(e) =>
-            log.warn(e)(s"execute ${stx} error")
+            log.warn(s"execute ${stx} error", e)
             if (shortCircuit) {
               F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
             } else {

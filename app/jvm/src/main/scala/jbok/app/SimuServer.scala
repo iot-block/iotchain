@@ -5,6 +5,7 @@ import java.net.InetSocketAddress
 import cats.effect.IO
 import jbok.app.simulations.{SimulationAPI, SimulationImpl}
 import jbok.common.execution._
+import jbok.common.metrics.Metrics
 import jbok.network.rpc.RpcServer
 import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
@@ -17,7 +18,8 @@ object SimuServer {
 
   val impl: SimulationAPI = SimulationImpl().unsafeRunSync()
   val rpcServer           = RpcServer().unsafeRunSync().mountAPI[SimulationAPI](impl)
-  val server              = Server.websocket(bind, rpcServer.pipe)
+  val metrics             = Metrics.default[IO].unsafeRunSync()
+  val server              = Server.websocket(bind, rpcServer.pipe, metrics)
   val peerCount           = 4
   val minerCount          = 1
 
