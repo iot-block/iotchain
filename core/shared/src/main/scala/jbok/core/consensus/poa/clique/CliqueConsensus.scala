@@ -79,8 +79,7 @@ case class CliqueConsensus[F[_]](
               val delay: Long = wait +
                 (if (executed.block.header.difficulty == Clique.diffNoTurn) {
                    // It's not our turn explicitly to sign, delay it a bit
-                   val wiggle
-                     : Long = Random.nextLong().abs % ((snap.signers.size / 2 + 1) * clique.config.wiggleTime.toMillis)
+                   val wiggle: Long = Random.nextLong().abs % ((snap.signers.size / 2 + 1) * Clique.wiggleTime.toMillis)
                    log.trace(s"${clique.signer} it is not our turn, delay ${wiggle}")
                    wiggle
                  } else {
@@ -230,9 +229,8 @@ case class CliqueConsensus[F[_]](
   private def calcDifficulty(snapshot: Snapshot, signer: Address, number: BigInt): BigInt =
     if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn
 
-  private def calcGasLimit(parentGas: BigInt): BigInt = {
+  private def calcGasLimit(parentGas: BigInt): BigInt =
     parentGas
-  }
 
   private def amongstRecent(currentNumber: BigInt, seen: BigInt, N: Int): Boolean = {
     val limit = N / 2 + 1

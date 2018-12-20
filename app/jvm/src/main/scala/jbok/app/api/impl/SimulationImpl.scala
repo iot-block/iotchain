@@ -44,7 +44,7 @@ class SimulationImpl(
   val genesisConfigWithAlloc: GenesisConfig = txGraphGen.genesisConfig
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val fullNodeConfigs = FullNodeConfig.fill(testReference, n)
+    val fullNodeConfigs = FullNodeConfig.fill(testReference.withMining(_.copy(period = 5.seconds)), n)
     val signers = (1 to n).toList
       .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
       .unsafeRunSync()

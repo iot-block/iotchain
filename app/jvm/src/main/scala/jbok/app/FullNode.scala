@@ -13,7 +13,7 @@ import jbok.common.FileLock
 import jbok.common.execution._
 import jbok.common.metrics.Metrics
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus}
+import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.mining.BlockMiner
@@ -87,7 +87,7 @@ object FullNode {
       }
       history   <- History.forPath[IO](config.history.chainDataDir)(F, chainId, T, metrics)
       blockPool <- BlockPool(history, BlockPoolConfig())
-      clique    <- Clique(CliqueConfig(), config.genesis, history, minerKey)
+      clique    <- Clique(config.mining, config.genesis, history, minerKey)
       consensus = new CliqueConsensus[IO](clique, blockPool)
       peerManager <- PeerManagerPlatform[IO](config.peer, history)
       executor    <- BlockExecutor[IO](config.history, consensus, peerManager)

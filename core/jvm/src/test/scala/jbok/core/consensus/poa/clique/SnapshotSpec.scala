@@ -10,7 +10,6 @@ import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 import jbok.core.testkit._
-
 import scala.collection.mutable
 
 case class TestVote(
@@ -55,7 +54,7 @@ trait SnapshotFixture {
 
 class SnapshotSpec extends JbokSpec {
   def check(test: Test) = new SnapshotFixture {
-    val config           = CliqueConfig().copy(epoch = test.epoch)
+    val miningConfig     = testConfig.mining.copy(epoch = test.epoch)
     val signers          = test.signers.map(signer => address(signer))
     val extra            = Clique.fillExtraData(signers)
     val genesisConfig    = testGenesis.copy(extraData = extra)
@@ -68,7 +67,7 @@ class SnapshotSpec extends JbokSpec {
     val headers: List[BlockHeader] = test.votes.zipWithIndex.map {
       case (v, i) =>
         val number   = BigInt(i) + 1
-        val time     = i * config.period.toSeconds
+        val time     = i * miningConfig.period.toSeconds
         val coinbase = address(v.voted)
         val extra    = ByteVector.fill(Clique.extraVanity + Clique.extraSeal)(0)
         val header = random[BlockHeader]
@@ -85,7 +84,7 @@ class SnapshotSpec extends JbokSpec {
     val head           = headers.last
     val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
     val keyPair        = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val clique         = Clique[IO](config, genesisConfig, history, Some(keyPair)).unsafeRunSync()
+    val clique         = Clique[IO](miningConfig, genesisConfig, history, Some(keyPair)).unsafeRunSync()
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd

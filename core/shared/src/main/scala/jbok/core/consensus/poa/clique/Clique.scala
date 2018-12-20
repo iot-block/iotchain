@@ -12,25 +12,14 @@ import jbok.crypto._
 import jbok.crypto.signature._
 import scalacache._
 import scodec.bits._
-import _root_.io.circe.generic.JsonCodec
-import jbok.codec.json.implicits._
+import jbok.core.config.Configs.MiningConfig
 import jbok.core.config.GenesisConfig
 import jbok.persistent.CacheBuilder
 
 import scala.concurrent.duration._
 
-@JsonCodec
-case class CliqueConfig(
-    period: FiniteDuration = 5000.millis,
-    epoch: BigInt = BigInt(30000),
-    checkpointInterval: Int = 1024,
-    inMemorySnapshots: Int = 128,
-    inMemorySignatures: Int = 1024,
-    wiggleTime: FiniteDuration = 500.millis
-)
-
 class Clique[F[_]](
-    val config: CliqueConfig,
+    val config: MiningConfig,
     val history: History[F],
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
     val keyPair: Option[KeyPair]
@@ -106,8 +95,12 @@ object Clique {
   val nonceAuthVote = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
   val nonceDropVote = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
 
+  val inMemorySnapshots: Int     = 128
+  val inMemorySignatures: Int    = 1024
+  val wiggleTime: FiniteDuration = 500.millis
+
   def apply[F[_]](
-      config: CliqueConfig,
+      config: MiningConfig,
       genesisConfig: GenesisConfig,
       history: History[F],
       keyPair: Option[KeyPair]
@@ -119,7 +112,7 @@ object Clique {
       } else {
         F.unit
       }
-      cache <- CacheBuilder.build[F, Snapshot](config.inMemorySnapshots)
+      cache <- CacheBuilder.build[F, Snapshot](inMemorySnapshots)
     } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache)
 
   private[clique] def fillExtraData(signers: List[Address]): ByteVector =

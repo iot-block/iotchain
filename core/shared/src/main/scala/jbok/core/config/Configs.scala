@@ -3,10 +3,12 @@ package jbok.core.config
 import java.net.InetSocketAddress
 
 import cats.effect.IO
+import io.circe.generic.JsonCodec
 import jbok.core.models.{Address, UInt256}
 import jbok.core.peer.PeerNode
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits._
+import jbok.codec.json.implicits._
 
 import scala.concurrent.duration._
 
@@ -140,7 +142,10 @@ object Configs {
       coinbase: Address,
       extraData: ByteVector,
       ethashDir: String,
-      mineRounds: Int
+      mineRounds: Int,
+      period: FiniteDuration = 15.seconds,
+      epoch: BigInt = BigInt("30000"),
+      checkpointInterval: Int = 1024
   )
 
   final case class TxPoolConfig(
