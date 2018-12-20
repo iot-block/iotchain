@@ -20,12 +20,12 @@ object execution {
   implicit val AG: AsynchronousChannelGroup =
     AsynchronousChannelProvider
       .provider()
-      .openAsynchronousChannelGroup(8, namedThreadFactory("fs2-ag-tcp", true))
+      .openAsynchronousChannelGroup(8, namedThreadFactory("fs2-ag-tcp", daemon = true))
 
   def namedThreadFactory(threadPrefix: String, daemon: Boolean, exitJvmOnFatalError: Boolean = true): ThreadFactory =
     new ThreadFactory {
-      val defaultFactory = Executors.defaultThreadFactory()
-      val idx            = new AtomicInteger(0)
+      val defaultFactory: ThreadFactory = Executors.defaultThreadFactory()
+      val idx                           = new AtomicInteger(0)
       def newThread(r: Runnable): Thread = {
         val t = defaultFactory.newThread(r)
         t.setDaemon(daemon)

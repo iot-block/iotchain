@@ -185,6 +185,9 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
       "webpack-merge"       -> "4.1.2",
       "electron-builder"    -> "20.28.4"
     ),
+    npmDependencies in Compile ++= Seq(
+      "jsdom" -> "13.0.0"
+    ),
     version in webpack := "4.8.1",
     version in startWebpackDevServer := "3.1.4",
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
@@ -311,6 +314,8 @@ lazy val commonJsSettings = Seq(
   scalaJSUseMainModuleInitializer in Test := false,
   webpackBundlingMode := BundlingMode.LibraryOnly(),
   scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
+  jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv(),
+  jsDependencies += RuntimeDOM,
   libraryDependencies ++= Seq(
     "org.scala-js"             %%% "scalajs-dom"   % "0.9.6",
     "com.thoughtworks.binding" %%% "dom"           % "11.0.1",

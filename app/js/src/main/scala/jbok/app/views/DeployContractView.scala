@@ -30,7 +30,7 @@ case class DeployContractView(state: AppState) {
 
   private def fetch() = {
     val p = for {
-      accounts <- client.traverse(_.admin.listAccounts)
+      accounts <- client.traverse(_.personal.listAccounts)
       _ = accounts.map(nodeAccounts.value ++= _)
     } yield ()
     p.unsafeToFuture()
@@ -61,7 +61,7 @@ case class DeployContractView(state: AppState) {
       val p = for {
         account  <- client.get.public.getAccount(fromSubmit, BlockParam.Latest)
         gasPrice <- client.get.public.getGasPrice
-        hash <- client.get.admin.sendTransaction(txRequest.copy(nonce = Some(account.nonce),
+        hash <- client.get.personal.sendTransaction(txRequest.copy(nonce = Some(account.nonce),
                                                                 gasPrice = Some(gasPrice.max(1)),
                                                                 gasLimit = Some(defaultGasLimit)),
                                                  password)

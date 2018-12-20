@@ -21,7 +21,7 @@ class PeerManagerSpec extends JbokSpec {
     } yield fiber
 
   "PeerManager" should {
-    implicit val config = testConfig
+    implicit val config                 = testConfig
     val List(config1, config2, config3) = FullNodeConfig.fill(config, 3)
 
     "keep incoming connections <= maxOpen" in {

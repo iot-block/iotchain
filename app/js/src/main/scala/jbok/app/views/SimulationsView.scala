@@ -2,7 +2,7 @@ package jbok.app.views
 
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
-import jbok.app.{IOBinding, JbokClient}
+import jbok.app.IOBinding
 import org.scalajs.dom._
 
 object SimulationsView {

@@ -3,10 +3,12 @@ package jbok.core.config
 import java.net.InetSocketAddress
 
 import cats.effect.IO
+import io.circe.generic.JsonCodec
 import jbok.core.models.{Address, UInt256}
 import jbok.core.peer.PeerNode
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits._
+import jbok.codec.json.implicits._
 
 import scala.concurrent.duration._
 
@@ -44,14 +46,17 @@ object Configs {
     def withPeer(f: PeerConfig => PeerConfig): FullNodeConfig =
       copy(peer = f(peer))
 
-    def withRpc(f: RpcConfig => RpcConfig): FullNodeConfig =
-      copy(rpc = f(rpc))
-
     def withSync(f: SyncConfig => SyncConfig): FullNodeConfig =
       copy(sync = f(sync))
 
     def withTxPool(f: TxPoolConfig => TxPoolConfig): FullNodeConfig =
       copy(txPool = f(txPool))
+
+    def withRpc(f: RpcConfig => RpcConfig): FullNodeConfig =
+      copy(rpc = f(rpc))
+
+    def withMining(f: MiningConfig => MiningConfig): FullNodeConfig =
+      copy(mining = f(mining))
 
     def withIdentityAndPort(identity: String, port: Int): FullNodeConfig =
       copy(identity = identity)
@@ -62,7 +67,9 @@ object Configs {
             discoveryPort = port + 1
           )
         )
-        .withRpc(_.copy(port = port + 2))
+        .withRpc(
+          _.copy(enabled = true, port = port + 2)
+        )
   }
 
   object FullNodeConfig {
@@ -135,7 +142,10 @@ object Configs {
       coinbase: Address,
       extraData: ByteVector,
       ethashDir: String,
-      mineRounds: Int
+      mineRounds: Int,
+      period: FiniteDuration = 15.seconds,
+      epoch: BigInt = BigInt("30000"),
+      checkpointInterval: Int = 1024
   )
 
   final case class TxPoolConfig(

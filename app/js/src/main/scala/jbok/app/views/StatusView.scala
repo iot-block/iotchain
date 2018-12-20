@@ -46,7 +46,10 @@ case class StatusView(state: AppState) {
           <p class="status-title">rpc server</p>
           <p class="status-value">
             {
-              state.currentId.value.map(id => state.nodeInfos.value(id).rpcAddr.toString).getOrElse("No Select Node")}{state.clients.value.exists(c => c._1 == state.currentId.value.get) match {
+              state.currentId.value.map(id => state.nodeInfos.value(id).rpcAddr.toString).getOrElse("No Select Node")
+            }
+            {
+              state.clients.value.exists(c => c._1 == state.currentId.value.getOrElse("")) match {
                 case true => <span class="led-green"></span>
                 case false => <span class="led-red"></span>
               }

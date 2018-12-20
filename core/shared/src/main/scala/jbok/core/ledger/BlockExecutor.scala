@@ -29,7 +29,7 @@ case class BlockExecutor[F[_]](
     txPool: TxPool[F],
     ommerPool: OmmerPool[F],
     semaphore: Semaphore[F]
-)(implicit F: Sync[F], T: Timer[F], chainId: BigInt) {
+)(implicit F: Sync[F], T: Timer[F]) {
   private[this] val log = jbok.common.log.getLogger("BlockExecutor")
 
   import BlockExecutor._
@@ -40,7 +40,8 @@ case class BlockExecutor[F[_]](
 
   def handleReceivedBlock(received: ReceivedBlock[F]): F[List[Block]] =
     for {
-      _      <- received.peer.markBlock(received.block.header.hash)
+      _ <- received.peer.markBlock(received.block.header.hash)
+      _ = log.trace(s"handle receive block: ${received.block.tag}")
       result <- importBlock(received.block)
     } yield result
 
@@ -410,7 +411,7 @@ object BlockExecutor {
       config: HistoryConfig,
       consensus: Consensus[F],
       peerManager: PeerManager[F],
-  )(implicit F: ConcurrentEffect[F], T: Timer[F], chainId: BigInt): F[BlockExecutor[F]] =
+  )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[BlockExecutor[F]] =
     for {
       txPool    <- TxPool[F](TxPoolConfig(), peerManager)
       ommerPool <- OmmerPool[F](consensus.history)

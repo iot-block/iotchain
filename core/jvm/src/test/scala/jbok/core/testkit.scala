@@ -7,7 +7,7 @@ import jbok.core.config.Configs._
 import jbok.core.config.GenesisConfig
 import jbok.core.config.defaults.testReference
 import jbok.core.consensus.Consensus
-import jbok.core.consensus.poa.clique.{Clique, CliqueConfig, CliqueConsensus, _}
+import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus, _}
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.messages._
 import jbok.core.mining.{BlockMiner, SimAccount, TxGenerator}
@@ -22,6 +22,7 @@ import jbok.network.transport.UdpTransport
 import jbok.persistent.KeyValueDB
 import jbok.persistent.testkit._
 import org.scalacheck._
+import scala.concurrent.duration._
 
 object testkit {
   val testMiner =
@@ -35,7 +36,7 @@ object testkit {
   val testConfig =
     testReference.copy(
       genesisOrPath = Left(generateGenesisConfig(testGenesis, List(testMiner.address))),
-      mining = testReference.mining.copy(minerAddressOrKey = Right(testMiner.keyPair)),
+      mining = testReference.mining.copy(minerAddressOrKey = Right(testMiner.keyPair), period = 500.millis),
       peer = testReference.peer.copy(nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()))
     )
 
@@ -44,7 +45,7 @@ object testkit {
     val p = for {
       history   <- History.forPath[IO](config.history.chainDataDir)
       blockPool <- BlockPool(history, BlockPoolConfig())
-      clique    <- Clique(CliqueConfig(), config.genesis, history, Some(testMiner.keyPair))
+      clique    <- Clique(config.mining, config.genesis, history, Some(testMiner.keyPair))
       consensus = new CliqueConsensus[IO](clique, blockPool)
     } yield consensus
     p.unsafeRunSync()

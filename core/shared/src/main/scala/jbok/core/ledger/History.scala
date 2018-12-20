@@ -13,7 +13,7 @@ import jbok.evm.WorldState
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits._
 
-abstract class History[F[_]](val db: KeyValueDB[F]) {
+abstract class History[F[_]](val db: KeyValueDB[F])(implicit val chainId: BigInt) {
   // init
   def initGenesis(config: GenesisConfig): F[Unit]
 

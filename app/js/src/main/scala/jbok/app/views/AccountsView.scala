@@ -15,9 +15,7 @@ case class AccountsView(state: AppState) {
       if (data.values.forall(_.isValid))
         state.currentId.value.map { id =>
           val p = for {
-            address <- state.clients.value(id).admin.newAccount(data("Password").value)
-            _ = if (state.addressInNode.value.contains(id)) state.addressInNode.value(id).value += address
-            else state.addressInNode.value += (id -> Vars(address))
+            address <- state.clients.value(id).personal.newAccount(data("Password").value)
           } yield address
           p.unsafeToFuture()
         }

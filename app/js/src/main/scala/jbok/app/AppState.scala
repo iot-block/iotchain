@@ -2,14 +2,19 @@ package jbok.app
 
 import java.net.URI
 
+import cats.effect.IO
 import cats.implicits._
 import com.thoughtworks.binding.Binding.{Var, Vars}
+import fs2.Stream
 import jbok.app.api.BlockParam
+import jbok.app.client.JbokClient
 import jbok.app.simulations.NodeInfo
 import jbok.core.models._
 import jbok.evm.abi.Description
 import scodec.bits.ByteVector
 import org.scalajs.dom.Event
+import scala.concurrent.duration._
+import jbok.common.execution._
 
 case class ClientStatus(number: Var[BigInt] = Var(0),
                         gasPrice: Var[BigInt] = Var(0),
@@ -41,31 +46,40 @@ case class AppState(
 ) {
   def init() = {
     val p = for {
-      sc    <- SimuClient(config.value.uri)
-      nodes <- sc.simulation.getNodes
-      _ = nodeInfos.value = nodes.map(node => node.id -> node).toMap
-      simuAccounts <- sc.simulation.getAccounts()
+      sc           <- SimuClient(config.value.uri)
+      nodes        <- sc.simulation.getNodes
+      simuAccounts <- sc.simulation.getAccounts
       _ = simuAddress.value ++= simuAccounts.map(_._1)
-      _ = nodes.foreach { node =>
-        blocks.value += (node.id        -> BlockHistory())
-        status.value += (node.id        -> ClientStatus())
-        accounts.value += (node.id      -> Var(Map.empty[Address, Var[Account]]))
-        contracts.value += (node.id     -> Var(Map.empty[Address, Var[Account]]))
-        receipts.value += (node.id      -> Var(Map.empty[ByteVector, Var[Option[Receipt]]]))
-        stxs.value += (node.id          -> Vars.empty[SignedTransaction])
-        addressInNode.value += (node.id -> Vars.empty[Address])
-      }
-      jbokClients <- nodes.traverse(node => JbokClient(new URI(node.rpcAddr.toString)))
+      _ = nodes.foreach(addNodeInfo)
+      jbokClients <- nodes.traverse[IO, JbokClient](node => JbokClient(new URI(node.rpcAddr.toString)))
       _ = clients.value = nodes.map(_.id).zip(jbokClients).toMap
-      nodeAddresses <- clients.value.toList.traverse(c => c._2.admin.listAccounts.map(c._1 -> _))
-      _ = println(s"nodeAddress: $nodeAddresses")
-      _ = nodeAddresses.map {
-        case (id, addresses) =>
-          addressInNode.value(id).value ++= addresses
-      }
     } yield ()
 
     p.unsafeToFuture()
+    stream.compile.drain.unsafeToFuture()
+  }
+
+  def addNodeInfo(node: NodeInfo): Unit = {
+    nodeInfos.value += (node.id)    -> node
+    blocks.value += (node.id        -> BlockHistory())
+    status.value += (node.id        -> ClientStatus())
+    accounts.value += (node.id      -> Var(Map.empty[Address, Var[Account]]))
+    contracts.value += (node.id     -> Var(Map.empty[Address, Var[Account]]))
+    receipts.value += (node.id      -> Var(Map.empty[ByteVector, Var[Option[Receipt]]]))
+    stxs.value += (node.id          -> Vars.empty[SignedTransaction])
+    addressInNode.value += (node.id -> Vars.empty[Address])
+  }
+
+  def removeNodeInfo(node: NodeInfo): Unit = {
+    nodeInfos.value -= node.id
+    blocks.value -= node.id
+    status.value -= node.id
+    accounts.value -= node.id
+    contracts.value -= node.id
+    receipts.value -= node.id
+    stxs.value -= node.id
+    addressInNode.value -= node.id
+    clients.value -= node.id
   }
 
 //  def initAccountsTx = {
@@ -79,8 +93,8 @@ case class AppState(
 //    }
 //  }
 
-  def updateStatus(id: String, client: JbokClient) = {
-    val p = for {
+  def updateStatus(id: String, client: JbokClient): IO[Unit] =
+    for {
       bestBlockNumber <- client.public.bestBlockNumber
       block           <- client.public.getBlockByNumber(bestBlockNumber)
       isMining        <- client.public.isMining
@@ -103,21 +117,20 @@ case class AppState(
         status.value += (id -> cs)
       }
     } yield ()
-    p.unsafeToFuture()
-  }
 
-  def updateBlocks(id: String, client: JbokClient) = {
-    val p = for {
+  def updateBlocks(id: String, client: JbokClient): IO[Unit] =
+    for {
       bestBlockNumber <- client.public.bestBlockNumber
       localBestBlockNumber = blocks.value.find(p => p._1 == id).map(_._2.bestBlockNumber.value.toInt).getOrElse(-1)
       expire               = bestBlockNumber - 100
-      start                = localBestBlockNumber.max(expire.toInt)
-      xs <- (localBestBlockNumber.toInt until bestBlockNumber.toInt)
-        .map(i => BigInt(i + 1))
+      start                = (localBestBlockNumber + 1).max(expire.toInt)
+      xs <- (start.toInt to bestBlockNumber.toInt)
+        .map(BigInt(_))
         .toList
         .traverse(client.public.getBlockByNumber)
       _ = if (blocks.value.contains(id)) {
         blocks.value(id).bestBlockNumber.value = bestBlockNumber
+        blocks.value(id).history.value --= blocks.value(id).history.value.filter(_.header.number < expire)
         blocks.value(id).history.value ++= xs.flatten
       } else {
         val blockHistory = BlockHistory(bestBlockNumber = Var(bestBlockNumber))
@@ -125,16 +138,25 @@ case class AppState(
         blocks.value += (id -> blockHistory)
       }
     } yield ()
-    p.unsafeToFuture()
-  }
 
-  def updateAccounts(id: String, client: JbokClient) = {
+  def updateAddresses(id: String, client: JbokClient): IO[Unit] =
+    for {
+      addresses <- client.personal.listAccounts
+      _ = if (addressInNode.value.contains(id)) {
+        addressInNode.value(id).value ++= addresses
+        addressInNode.value(id).value.distinct
+      } else {
+        addressInNode.value += id -> Vars(addresses: _*)
+      }
+    } yield ()
+
+  def updateAccounts(id: String, client: JbokClient): IO[Unit] = {
     val addresses = simuAddress.value.toList ++ addressInNode.value
       .get(id)
       .map(_.value.toList)
       .getOrElse(List.empty[Address])
-    val p = for {
-      simuAccounts <- addresses.traverse(addr => client.public.getAccount(addr, BlockParam.Latest))
+    for {
+      simuAccounts <- addresses.traverse[IO, Account](addr => client.public.getAccount(addr, BlockParam.Latest))
       _ = if (accounts.value.contains(id)) {
         val mAccount = accounts.value(id)
         addresses.zip(simuAccounts).foreach {
@@ -156,13 +178,12 @@ case class AppState(
         accounts.value += (id -> Var(mAccount))
       }
     } yield ()
-    p.unsafeToFuture()
   }
 
-  def updateReceipts(id: String, client: JbokClient) = {
+  def updateReceipts(id: String, client: JbokClient): IO[Unit] = {
     val txHashes = stxs.value.get(id).map(_.value.toList.map(_.hash)).getOrElse(List.empty[ByteVector])
-    val p = for {
-      txReceipts <- txHashes.traverse(hash => client.public.getTransactionReceipt(hash))
+    for {
+      txReceipts <- txHashes.traverse[IO, Option[Receipt]](hash => client.public.getTransactionReceipt(hash))
       _ = if (receipts.value.contains(id)) {
         txHashes.zip(txReceipts).foreach {
           case (hash, receipt) => {
@@ -184,13 +205,12 @@ case class AppState(
         receipts.value += (id -> Var(receipt))
       }
     } yield ()
-    p.unsafeToFuture()
   }
 
-  def updateContracts(id: String, client: JbokClient) = {
+  def updateContracts(id: String, client: JbokClient): IO[Unit] = {
     val addresses = contractInfo.value.toList.map(_.address)
-    val p = for {
-      simuAccounts <- addresses.traverse(addr => client.public.getAccount(addr, BlockParam.Latest))
+    for {
+      simuAccounts <- addresses.traverse[IO, Account](addr => client.public.getAccount(addr, BlockParam.Latest))
       _ = if (contracts.value.contains(id)) {
         val mContract = contracts.value(id)
         addresses.zip(simuAccounts).foreach {
@@ -212,19 +232,36 @@ case class AppState(
         contracts.value += (id -> Var(mContract))
       }
     } yield ()
-    p.unsafeToFuture()
   }
 
-  def updateTask() =
-    nodeInfos.value.values
-      .find(_.id == currentId.value.getOrElse(""))
-      .map { nodeInfo =>
-        clients.value.get(nodeInfo.id).map { client =>
-          updateStatus(nodeInfo.id, client)
-          updateBlocks(nodeInfo.id, client)
-          updateAccounts(nodeInfo.id, client)
-          updateContracts(nodeInfo.id, client)
-          updateReceipts(nodeInfo.id, client)
+  def updateTask(): IO[Unit] =
+    if (update.value) {
+      (for {
+        currId   <- currentId.value
+        nodeInfo <- nodeInfos.value.get(currId)
+        client   <- clients.value.get(nodeInfo.id)
+      } yield nodeInfo -> client)
+        .map {
+          case (nodeInfo, client) =>
+            for {
+              _ <- updateStatus(nodeInfo.id, client)
+              _ <- updateBlocks(nodeInfo.id, client)
+              _ <- updateAddresses(nodeInfo.id, client)
+              _ <- updateAccounts(nodeInfo.id, client)
+              _ <- updateContracts(nodeInfo.id, client)
+              _ <- updateReceipts(nodeInfo.id, client)
+            } yield ()
         }
-      }
+        .getOrElse(
+          IO.unit
+        )
+    } else {
+      IO.unit
+    }
+
+  def stream: Stream[IO, Unit] =
+    Stream
+      .awakeEvery[IO](5.seconds)
+      .evalMap(_ => updateTask())
+
 }

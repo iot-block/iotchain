@@ -14,6 +14,8 @@ import jbok.persistent.KeyValueDB
 import scodec.bits._
 import scalacache.Cache
 import cats.implicits._
+import jbok.core.config.Configs.MiningConfig
+import jbok.crypto.signature.KeyPair
 import scalacache.CatsEffect.modes._
 
 @JsonCodec
@@ -35,7 +37,7 @@ case class Tally(
   * the snapshot should be `immutable` once it has been created
   */
 case class Snapshot(
-    config: CliqueConfig,
+    config: MiningConfig,
     number: BigInt, // Block number where the snapshot was created
     hash: ByteVector, // Block hash where the snapshot was created
     signers: Set[Address], // Set of authorized signers at this moment
@@ -153,6 +155,16 @@ object Snapshot {
   implicit val bigIntKeyDecoder =
     KeyDecoder.instance[BigInt](s => decode[BigInt](s).right.toOption)
 
+  implicit val ee: Encoder[Either[Address, KeyPair]] =
+    Encoder.encodeEither[Address, KeyPair]("left", "right")
+
+  implicit val ed: Decoder[Either[Address, KeyPair]] =
+    Decoder.decodeEither[Address, KeyPair]("left", "right")
+
+  implicit val miningConfigJsonEncoder: Encoder[MiningConfig] = deriveEncoder[MiningConfig]
+
+  implicit val miningConfigJsonDecoder: Decoder[MiningConfig] = deriveDecoder[MiningConfig]
+
   implicit val snapshotJsonEncoder: Encoder[Snapshot] = deriveEncoder[Snapshot]
 
   implicit val snapshotJsonDecoder: Decoder[Snapshot] = deriveDecoder[Snapshot]
@@ -201,8 +213,7 @@ object Snapshot {
     }
 
   /** apply creates a new authorization snapshot by applying the given headers to the original one */
-  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader])(implicit F: Sync[F],
-                                                                         chainId: BigInt): F[Snapshot] =
+  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader])(implicit F: Sync[F]): F[Snapshot] =
     if (headers.isEmpty) {
       snapshot.pure[F]
     } else {
@@ -225,8 +236,7 @@ object Snapshot {
     }
 
   /** create a new snapshot by applying a given header */
-  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F],
-                                                                     chainId: BigInt): F[Snapshot] = F.delay {
+  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F]): F[Snapshot] = F.delay {
     val number      = header.number
     val beneficiary = Address(header.beneficiary)
 

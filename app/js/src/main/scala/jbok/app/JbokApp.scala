@@ -2,7 +2,6 @@ package jbok.app
 
 import java.net.URI
 
-import cats.effect.IO
 import com.thoughtworks.binding.Binding._
 import com.thoughtworks.binding.Binding.Var
 import com.thoughtworks.binding._
@@ -11,16 +10,13 @@ import jbok.app.views.Nav.{Tab, TabList}
 import jbok.app.views._
 import jbok.common.execution._
 import org.scalajs.dom._
-import fs2._
 import jbok.app.api.BlockParam
 import jbok.core.models.Address
-import org.scalajs.dom.raw.{HTMLAnchorElement, HTMLLinkElement}
+import org.scalajs.dom.raw.HTMLAnchorElement
 import scodec.bits.ByteVector
 
 import scala.scalajs.js
-import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel, JSImport}
-import scala.util.{Failure, Success}
-import scala.concurrent.duration._
+import scala.scalajs.js.annotation.JSImport
 
 @JSImport("css/normalize.css", JSImport.Namespace)
 @js.native
@@ -54,87 +50,82 @@ object JbokApp {
   val contractView     = ContractView(state).render
   val configView       = ConfigView(state).render()
 
-  val accountsTab = Tab("Accounts", accountsView, "fa-user-circle")
-  val blocksTab   = Tab("Blocks", blocksView, "fa-th-large")
-  val txsTab      = Tab("Transactions", transactionsView, "fa-arrow-circle-right")
-  val accountTab  = Tab("Account", accountView, "fa-user-circle")
-  val blockTab    = Tab("Block", blockView, "fa-square")
-  val contractTab = Tab("Contract", contractView, "fa-file-contract")
-  val configTab   = Tab("", configView, "fa-cogs")
-//  val tabs = Vars(
-//    Tab("Accounts", accountsView, "fa-user-circle"),
-//    Tab("Blocks", blocksView, "fa-th-large"),
-//    Tab("Transactions", transactionsView, "fa-arrow-circle-right"),
-////    Tab("Simulations", simulationsView, "fa-stethoscope"),
-//    accountTab,
-//    blockTab,
-//    Tab("Contract", contractView, "fa-file-contract"),
-//    Tab("", configView, "fa-cogs")
-//  )
+  val accountsTab = Tab("Accounts", Var(accountsView), "fa-user-circle")
+  val blocksTab   = Tab("Blocks", Var(blocksView), "fa-th-large")
+  val txsTab      = Tab("Transactions", Var(transactionsView), "fa-arrow-circle-right")
+  //val accountTab  = Tab("Account", accountView, "fa-user-circle")
+  //val blockTab    = Tab("Block", blockView, "fa-square")
+  val contractTab = Tab("Contract", Var(contractView), "fa-file-contract")
+  val configTab   = Tab("", Var(configView), "fa-cogs")
   val tabs: Vars[Tab] = Vars(
     accountsTab,
     blocksTab,
-    txsTab,
-    accountTab,
-    blockTab,
+    txsTab ,
+  //  accountTab,
+   // blockTab,
     contractTab,
     configTab,
   )
 
   def handleHref: Event => Unit =
-    (event: Event) =>
-      event.target match {
-        case link: HTMLAnchorElement if link.`type` == "address" =>
-          println("in address href")
-          val address = Address(ByteVector.fromValidHex(link.text.trim.substring(2)))
-          state.currentId.value
-            .flatMap { id =>
-              state.clients.value.get(id)
-            }
-            .foreach { client =>
-              val p = for {
-                account <- client.public.getAccount(address, BlockParam.Latest)
-                number  <- client.public.bestBlockNumber
-                txs     <- client.public.getAccountTransactions(address, 0, number)
-                _ = state.selectedAccount.value = Some((address, account, txs))
-                _ = tabList.selected.value = accountTab
-              } yield ()
+    (event: Event) => {
+    event.target match {
+    case button:Element if button.id == "block-back"   =>
+      tabList.selected.value.content.value_=(blocksView)
+    case button:Element if button.id == "account-back" =>
+      tabList.selected.value.content.value_=(accountsView)
+    case link: HTMLAnchorElement if link.`type` == "address" =>
+      println("in address href")
+      val address = Address(ByteVector.fromValidHex(link.text.trim.substring(2)))
+      state.currentId.value
+        .flatMap { id =>
+          state.clients.value.get(id)
+        }
+        .foreach { client =>
+          val p = for {
+            account <- client.public.getAccount(address, BlockParam.Latest)
+            number  <- client.public.bestBlockNumber
 
-              p.unsafeToFuture()
-            }
-        case link: HTMLAnchorElement if link.`type` == "block" =>
-          println("in block href")
-          val hash = ByteVector.fromValidHex(link.text.trim)
-          state.currentId.value
-            .flatMap { id =>
-              state.clients.value.get(id)
-            }
-            .foreach { client =>
-              val p = for {
-                block <- client.public.getBlockByHash(hash)
-                _ = state.selectedBlock.value = block
-                _ = tabList.selected.value = blockTab
-              } yield ()
+            txs     <- client.public.getAccountTransactions(address, 0, number)
+            _ = state.selectedAccount.value = Some((address, account, txs))
+            _ = tabList.selected.value.content.value_=(accountView)
+          } yield ()
+          p.unsafeToFuture()
+        }
+    case link: HTMLAnchorElement if link.`type` == "block" =>
+      println("in block href")
+      val hash = ByteVector.fromValidHex(link.text.trim)
+      state.currentId.value
+        .flatMap { id =>
+          state.clients.value.get(id)
+        }
+        .foreach { client =>
+          val p = for {
+            block <- client.public.getBlockByHash(hash)
+            _ = state.selectedBlock.value = block
+            _ = tabList.selected.value.content.value_=(blockView)
+          } yield ()
 
-              p.unsafeToFuture()
-            }
-        case link: HTMLAnchorElement if link.`type` == "tx" =>
-          println("in tx href")
-          val hash = ByteVector.fromValidHex(link.text.trim)
-          state.currentId.value
-            .flatMap { id =>
-              state.clients.value.get(id)
-            }
-            .foreach { client =>
-              val p = for {
-                block <- client.public.getTransactionByHash(hash)
+          p.unsafeToFuture()
+        }
+    case link: HTMLAnchorElement if link.`type` == "tx" =>
+      println("in tx href")
+      val hash = ByteVector.fromValidHex(link.text.trim)
+      state.currentId.value
+        .flatMap { id =>
+          state.clients.value.get(id)
+        }
+        .foreach { client =>
+          val p = for {
+            block <- client.public.getTransactionByHash(hash)
 //                _ = state.selectedBlock.value = block
 //                _ = tabList.selected.value = blockTab
-              } yield ()
+          } yield ()
 
-              p.unsafeToFuture()
-            }
-        case _ =>
+          p.unsafeToFuture()
+        }
+    case _ =>
+  }
     }
 
   val tabList   = TabList(tabs, Var(tabs.value.head))
@@ -176,7 +167,7 @@ object JbokApp {
       } yield {
         val isSelected = tabList.selected.bind == tab
         <div class={s"tab-content ${if (isSelected) "selected" else ""}"}>
-          {tab.content.bind}
+          {tab.content.bind.bind}
         </div>
       }
     }
@@ -184,10 +175,6 @@ object JbokApp {
     <footer>
       {Copyright.render.bind}
     </footer>
-
-  def task() =
-    if (state.update.value) { state.updateTask() }
-  org.scalajs.dom.window.setInterval(() => task(), 5000)
 
   def main(args: Array[String]): Unit =
     dom.render(document.body, render)
