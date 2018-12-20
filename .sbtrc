@@ -1,4 +1,4 @@
 alias dev=;project appJS;fastOptJS::startWebpackDevServer;~fastOptJS
 alias buildJS=;project appJS;fullOptJS::webpack
 alias buildJVM=;project appJVM;docker:publishLocal
-alias ci=;clean;coverage;test;coverageOff;coverageAggregate;coverageReport;docs/makeMicrosite
+alias ci=;clean;coverage;test;coverageOff;coverageAggregate;coverageReport
