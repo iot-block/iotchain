@@ -10,7 +10,6 @@ import jbok.app.views.Nav.{Tab, TabList}
 import jbok.app.views._
 import jbok.common.execution._
 import org.scalajs.dom._
-import fs2._
 import jbok.app.api.BlockParam
 import jbok.core.models.Address
 import org.scalajs.dom.raw.HTMLAnchorElement

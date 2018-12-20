@@ -9,6 +9,7 @@ final class AdminApiImpl(
 ) extends AdminAPI[IO] {
   private[this] val log = org.log4s.getLogger("AdminAPI")
 
+  // fullNode.stop
   override def stop: IO[Unit] = ???
 
   override def peerNodeUri: IO[String] = IO.pure(peerManager.peerNode.uri.toString)

@@ -17,7 +17,6 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.peer.PeerNode
 import scodec.bits.ByteVector
 import scala.concurrent.duration._
 
@@ -27,7 +26,7 @@ import scala.util.Random
 
 case class Node(
     nodeInfo: NodeInfo,
-    peerNode: PeerNode,
+    peerNodeUri: String,
     jbokClient: JbokClient
 )
 
@@ -36,6 +35,7 @@ class SimulationImpl(
     id2NodeNetwrok: Ref[IO, Map[String, Node]],
     id2Node: Ref[IO, Map[String, Node]]
 ) extends SimulationAPI {
+  import SimulationImpl._
   private[this] val log = jbok.common.log.getLogger("SimulationImpl")
 
   implicit val chainId: BigInt              = 1
@@ -71,62 +71,54 @@ class SimulationImpl(
           .zip(jbokClients)
           .map {
             case (fullNode, jbokClient) =>
-              fullNode.config.identity -> Node(infoFromNode(fullNode), fullNode.peerManager.peerNode, jbokClient)
+              fullNode.peerManager.peerNode.uri.toString -> Node(infoFromNode(fullNode),
+                                                                 fullNode.peerManager.peerNode.uri.toString,
+                                                                 jbokClient)
           }
           .toMap)
     } yield newNodes.map(x => infoFromNode(x))
   }
 
-  override def addNode(uri: String): IO[String] =
-    // rpc uri
-    // get client
-    // get peerNode uri
-    // ok return peerNode?
-    ???
-
-  override def deleteNode(uri: String): IO[Unit] = ???
-
   override def getNodes: IO[List[NodeInfo]] = id2NodeNetwrok.get.map(_.values.toList.map(_.nodeInfo))
 
-  override def getNodeInfo(id: String): IO[Option[NodeInfo]] = ???
+  override def getNodeInfo(id: String): IO[Option[NodeInfo]] =
+    id2NodeNetwrok.get.map(_.get(id).map(_.nodeInfo))
 
   override def stopNode(id: String): IO[Unit] =
-    // rpc adminAPI stop
-    ???
+    for {
+      nodes <- id2NodeNetwrok.get
+      _     <- nodes.get(id).traverse(_.jbokClient.admin.stop)
+    } yield ()
 
-//  override def connect(topology: String): IO[Unit] = topology match {
-//    case "ring" =>
-//      for {
-//        jbokClients <- id2Client.get.map(_.toList.sortBy(_._1).map(_._2))
-//        _ <- (jbokClients :+ jbokClients.head).sliding(2).toList.traverse[IO, Unit] {
-//          case a :: b :: Nil =>
-////            a.jbokClient.admin.addPeer(b.peerNode)
-//            ???
-//          case _ =>
-//            IO.unit
-//        }
-//      } yield ()
-//
-//    case "star" => ???
-//      for {
-//        jbokClients <- id2Client.get.map(_.toList.sortBy(_._1).map(_._2))
-//        _ = log.info("connect star")
-//        statuses <- jbokClients.traverse[IO, Boolean](_.jbokClient.status)
-//        _        = log.info(s"${statuses}")
-//        peerNode = jbokClients.head.peerNode
-//        _ <- jbokClients.tail.traverse[IO, Unit] { client =>
-//          log.info("in traverse")
-//          log.info(s"${client.jbokClient.admin}")
-//          for {
-//            _ <- client.jbokClient.admin.addPeer(peerNode)
-//            _ = log.info("traverse end.")
-//          } yield ()
-//        }
-//        _ = log.info("connnect start done.")
-//      } yield ()
-//
-//    case _ => IO.raiseError(new RuntimeException(s"${topology} not supported"))
-//  }
+  override def getAccounts: IO[List[(Address, Account)]] = IO { txGraphGen.accountMap.toList }
+
+  override def getCoin(address: Address, value: BigInt): IO[Unit] =
+    for {
+      nodeIdList <- id2NodeNetwrok.get.map(_.keys.toList)
+      nodeId = Random.shuffle(nodeIdList).take(1).head
+      jbokClientOpt <- id2NodeNetwrok.get.map(_.get(nodeId).map(_.jbokClient))
+      _ <- jbokClientOpt.traverse[IO, ByteVector](jbokClient =>
+        jbokClient.public.sendRawTransaction(RlpCodec.encode(txGraphGen.getCoin(address, value)).require.bytes))
+    } yield ()
+
+  override def addNode(interface: String, port: Int): IO[Option[String]] =
+    for {
+      jbokClient <- JbokClient(new URI(s"ws://$interface:$port"))
+      peerNodeUriOpt <- jbokClient.admin.peerNodeUri.timeout(requestTimeout).attempt.map {
+        case Left(_)            => None
+        case Right(peerNodeUri) => peerNodeUri.some
+      }
+      _ <- peerNodeUriOpt.traverse[IO, Unit] { peerNodeUri =>
+        id2Node.update { id2NodeMap =>
+          id2NodeMap + (peerNodeUri -> Node(NodeInfo(peerNodeUri, interface, port), peerNodeUri, jbokClient))
+        }
+      }
+    } yield peerNodeUriOpt
+
+  override def deleteNode(peerNodeUri: String): IO[Unit] =
+    for {
+      _ <- id2Node.update(_ - peerNodeUri)
+    } yield ()
 
   override def submitStxsToNetwork(nStx: Int, t: String): IO[Unit] =
     for {
@@ -150,19 +142,8 @@ class SimulationImpl(
         .getOrElse(IO.unit)
     } yield ()
 
-  override def getAccounts(): IO[List[(Address, Account)]] = IO { txGraphGen.accountMap.toList }
-
-  override def getCoin(address: Address, value: BigInt): IO[Unit] =
-    for {
-      nodeIdList <- id2NodeNetwrok.get.map(_.keys.toList)
-      nodeId = Random.shuffle(nodeIdList).take(1).head
-      jbokClientOpt <- id2NodeNetwrok.get.map(_.get(nodeId).map(_.jbokClient))
-      _ <- jbokClientOpt.traverse[IO, ByteVector](jbokClient =>
-        jbokClient.public.sendRawTransaction(RlpCodec.encode(txGraphGen.getCoin(address, value)).require.bytes))
-    } yield ()
-
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
-    NodeInfo(fullNode.id, fullNode.config.peer.host, fullNode.config.rpc.port)
+    NodeInfo(fullNode.peerManager.peerNode.uri.toString, fullNode.config.peer.host, fullNode.config.rpc.port)
 
   private def selectMiner(
       n: Int,
@@ -185,11 +166,11 @@ class SimulationImpl(
       }
       (configs, miners.toList)
     }
-
 }
 
 object SimulationImpl {
-  type NodeId = String
+  val requestTimeout: FiniteDuration = 5.seconds
+
   def apply()(implicit ec: ExecutionContext): IO[SimulationImpl] =
     for {
       topic          <- Topic[IO, Option[SimulationEvent]](None)

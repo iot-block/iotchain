@@ -6,7 +6,7 @@ import cats.effect.IO
 import com.thoughtworks.binding
 import com.thoughtworks.binding.{Binding, FutureBinding}
 import com.thoughtworks.binding.Binding.{Constant, Var, Vars}
-import jbok.app.{AppState, BlockHistory, ClientStatus}
+import jbok.app.{AppState, BlockHistory, ClientStatus, SimuClient}
 import jbok.app.client.JbokClient
 import jbok.app.components.Spinner
 import jbok.app.simulations.NodeInfo
@@ -206,21 +206,27 @@ case class ConfigView(state: AppState) {
     event.currentTarget match {
       case _: HTMLButtonElement =>
         if (addHostIsValid.value && addPortIsValid.value) {
-          val id       = s"${addHost.value}:${addPort.value}"
-          val nodeInfo = NodeInfo(id, addHost.value, addPort.value.toInt)
+          val rpcAddr = s"${addHost.value}:${addPort.value}"
           val p = for {
-            jbokClient  <- JbokClient(new URI(nodeInfo.rpcAddr)).timeout(2.seconds)
-            peerNodeUri <- jbokClient.admin.peerNodeUri.timeout(2.seconds)
-            _ = state.nodeInfos.value += (id -> nodeInfo)
-            _ = state.clients.value += (id   -> jbokClient)
-            _ = state.blocks.value += (id    -> BlockHistory())
-            _ = state.status.value += (id    -> ClientStatus())
-          } yield "connected."
+            sc             <- SimuClient(state.config.value.uri)
+            peerNodeUriOpt <- sc.simulation.addNode(addHost.value, addPort.value.toInt)
+            tip <- if (peerNodeUriOpt.isEmpty) {
+              IO.pure("connect failed.")
+            } else {
+              val nodeInfo = NodeInfo(peerNodeUriOpt.get, addHost.value, addPort.value.toInt)
+              state.addNodeInfo(nodeInfo)
+              for {
+                jbokClient <- JbokClient(new URI(nodeInfo.rpcAddr))
+                _ = state.clients.value += (peerNodeUriOpt.get -> jbokClient)
+              } yield "connected."
+            }
+          } yield tip
 
           connectedStatus.value = Some(p)
         }
       case _ =>
     }
+
   }
 
   @binding.dom

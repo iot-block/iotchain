@@ -46,20 +46,13 @@ case class AppState(
 ) {
   def init() = {
     val p = for {
-      sc    <- SimuClient(config.value.uri)
-      nodes <- sc.simulation.getNodes
-      _ = nodeInfos.value = nodes.map(node => node.id -> node).toMap
-      simuAccounts <- sc.simulation.getAccounts()
+      sc           <- SimuClient(config.value.uri)
+      nodes        <- sc.simulation.getNodes
+      simuAccounts <- sc.simulation.getAccounts
       _ = simuAddress.value ++= simuAccounts.map(_._1)
       _ = nodes.foreach(addNodeInfo)
       jbokClients <- nodes.traverse[IO, JbokClient](node => JbokClient(new URI(node.rpcAddr.toString)))
       _ = clients.value = nodes.map(_.id).zip(jbokClients).toMap
-//      nodeAddresses <- clients.value.toList.traverse[IO, (String, List[Address])](c =>
-//        c._2.personal.listAccounts.map(c._1 -> _))
-//      _ = nodeAddresses.map {
-//        case (id, addresses) =>
-//          addressInNode.value(id).value ++= addresses
-//      }
     } yield ()
 
     p.unsafeToFuture()
@@ -67,6 +60,7 @@ case class AppState(
   }
 
   def addNodeInfo(node: NodeInfo): Unit = {
+    nodeInfos.value += (node.id)    -> node
     blocks.value += (node.id        -> BlockHistory())
     status.value += (node.id        -> ClientStatus())
     accounts.value += (node.id      -> Var(Map.empty[Address, Var[Account]]))
@@ -77,6 +71,7 @@ case class AppState(
   }
 
   def removeNodeInfo(node: NodeInfo): Unit = {
+    nodeInfos.value -= node.id
     blocks.value -= node.id
     status.value -= node.id
     accounts.value -= node.id
