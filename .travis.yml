@@ -1,3 +1,4 @@
+sudo: false
 language: scala
 
 scala:
@@ -5,20 +6,6 @@ scala:
 
 jdk:
   - openjdk11
-
-sudo: false
-dist: trusty
-
-# microsites
-before_install:
-  - export PATH=${PATH}:./vendor/bundle
-
-# microsites
-install:
-  - rvm use 2.2.8 --install --fuzzy
-  - gem update --system
-  - gem install sass
-  - gem install jekyll -v 3.2.1
 
 script:
   - sbt ++$TRAVIS_SCALA_VERSION ci
@@ -30,11 +17,9 @@ after_success:
 
 cache:
   directories:
-    - $HOME/.ivy2/cache
-    - $HOME/.coursier/cache
+    - $HOME/.ivy2
+    - $HOME/.coursier
     - $HOME/.sbt
-    - $HOME/.rvm/
-    - vendor/bundle
 
 before_cache:
   - find $HOME/.sbt -name "*.lock" -type f -delete
