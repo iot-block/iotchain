@@ -22,20 +22,19 @@ import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.concurrent.duration._
 
 case class Istanbul[F[_]](
-    config: IstanbulConfig,
-    history: History[F],
-    keyPair: KeyPair,
-    roundChangePromise: Ref[F, Deferred[F, BigInt]],
-    state: Ref[F, State])(implicit F: Concurrent[F], C: Cache[Snapshot], timer: Timer[F], chainId: BigInt) {
+    val config: IstanbulConfig,
+    val history: History[F],
+    val keyPair: KeyPair,
+    val roundChangePromise: Ref[F, Deferred[F, BigInt]],
+    val state: Ref[F, State],
+    val backlogs: Ref[F, Map[Address, List[IstanbulMessage]]],
+    val current: Ref[F, RoundState],
+    val roundChanges: Ref[F, Map[BigInt, MessageSet]],
+    val validatorSet: Ref[F, ValidatorSet],
+    val candidates: Ref[F, Map[Address, Boolean]]
+)(implicit F: Concurrent[F], C: Cache[Snapshot], timer: Timer[F], chainId: BigInt) {
 
-  val signer: Address = Address(keyPair)
-
-  val candidates: MMap[Address, Boolean]                    = MMap.empty
-  val backlogs: Ref[F, Map[Address, List[IstanbulMessage]]] = Ref.unsafe(Map.empty)
-  val current: Ref[F, RoundState] =
-    Ref.unsafe(RoundState(0, 0, None, MessageSet.empty, MessageSet.empty, ByteVector.empty, false))
-  val roundChanges: Ref[F, Map[BigInt, MessageSet]] = Ref.unsafe(Map.empty)
-  val validatorSet: Ref[F, ValidatorSet]             = Ref.unsafe(ValidatorSet.empty)
+  def signer: Address = Address(keyPair)
 
   private[this] val log = org.log4s.getLogger("Istanbul core")
 
@@ -139,36 +138,46 @@ case class Istanbul[F[_]](
       }
     } yield result
 
-  //  store future message for process later
+  /**
+    * store future message for process later
+    */
   def storeBacklog(addr: Address, msg: IstanbulMessage): F[Unit] =
     backlogs.update(m => m + (addr -> (m.getOrElse(addr, List.empty[IstanbulMessage]) :+ msg)))
 
+  /**
+    * process messages in backlog,
+    * stop processing if backlog is empty or the first message in queue is a future message
+    */
   private def processBacklog(): F[Unit] = {
-    def process(messages: List[IstanbulMessage]): F[Unit] =
+    def process(address: Address, messages: List[IstanbulMessage]): F[Unit] =
       messages match {
         case message :: tail =>
           for {
             checkResult <- checkMessage(message)
             _ <- checkResult match {
-              case CheckResult.Success => {
-                // TODO: remove message from backlogs
-                handleMessage(message) >>
-                  process(tail)
-              }
-              case CheckResult.FutureMessage => {
+              case CheckResult.Success =>
+                // remove message from backlogs
+                backlogs.update(m => m + (address -> tail)) >>
+                  handleMessage(message) >>
+                  process(address, tail)
+              case CheckResult.FutureMessage =>
                 F.unit
-              }
-              case _ => process(tail)
+              case _ =>
+                backlogs.update(m => m + (address -> tail)) >>
+                  process(address, tail)
             }
           } yield ()
         case _ => F.unit
       }
     for {
       logs <- backlogs.get
-      _    <- logs.values.toList.map(backlog => process(backlog.toList)).sequence
+      _    <- logs.toList.map(backlog => process(backlog._1, backlog._2)).sequence
     } yield ()
   }
 
+  /**
+    * check and transform a IstanbulMessage to Action
+    */
   private def checkAndTransform(message: IstanbulMessage): F[Either[Action, Throwable]] =
     for {
       result <- checkMessage(message)
@@ -190,12 +199,18 @@ case class Istanbul[F[_]](
       case _                                 => F.pure(Right(new Exception("invalid message")))
     }
 
+  /**
+    * handle received message
+    * after process the received message, we need to process messages in backlog if it's possible
+    */
   def handleMessage(message: IstanbulMessage): F[Unit] =
     for {
       action <- checkAndTransform(message)
       _ = log.debug(s"receive action:$action, message: $message")
       _ <- action match {
-        case Left(a)  => transition(a)
+        case Left(a) =>
+          transition(a) >>
+            processBacklog()
         case Right(_) => F.unit
       }
     } yield ()
@@ -211,6 +226,11 @@ case class Istanbul[F[_]](
       _ <- state.get.map(newState => log.debug(s"after state:$newState"))
     } yield ()
 
+  /**
+    * check the given round and lastProposal should be trigger a New proposal or not
+    * return true means we are in old round, and we should work on current sequence
+    * return false means the old round is passed, we should propose a new block and work on new sequence
+    */
   private def shouldChangeRound(lastProposal: Block, round: BigInt): F[Boolean] =
     for {
       rs <- this.current.get
@@ -225,7 +245,7 @@ case class Istanbul[F[_]](
 
   /**
     *
-    * start a new round which means
+    * start a new round when
     * 1.we have received 2F+1 roundChange messages,start a new round to exits the round change loop,calculates the new proposer
     * 2.last proposal has succeeded, start a new round to generate a new block proposal
     */
@@ -279,7 +299,7 @@ case class Istanbul[F[_]](
       _      <- context.current.update(_.copy(waitingForRoundChange = false))
       _      <- context.setState(StateNewRound)
       valSet <- validatorSet.get
-      _ <- if (valSet.isProposer(Address(keyPair))) {
+      _ <- if (valSet.isProposer(signer)) {
         for {
           proposal <- context.proposal
           _ = log.debug(s"proposal:$proposal")
@@ -348,12 +368,39 @@ case class Istanbul[F[_]](
 
 object Istanbul {
 
-  val extraVanity   = 32 // Fixed number of extra-data bytes reserved for validator vanity
-  val extraSeal     = 65 // Fixed number of extra-data bytes reserved for validator seal
-  val uncleHash     = RlpCodec.encode(()).require.bytes.kec256 // Always Keccak256(RLP([]))
-  val nonceAuthVote = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
-  val nonceDropVote = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
-  val mixDigest     = hex"0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365"
+  val extraVanity: Int          = 32 // Fixed number of extra-data bytes reserved for validator vanity
+  val extraSeal: Int            = 65 // Fixed number of extra-data bytes reserved for validator seal
+  val uncleHash: ByteVector     = RlpCodec.encode(()).require.bytes.kec256 // Always Keccak256(RLP([]))
+  val nonceAuthVote: ByteVector = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
+  val nonceDropVote: ByteVector = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
+  val mixDigest: ByteVector     = hex"0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365"
+
+  def apply[F[_]](config: IstanbulConfig, history: History[F], keyPair: KeyPair, state: State)(
+      implicit F: Concurrent[F],
+      C: Cache[Snapshot],
+      timer: Timer[F],
+      chainId: BigInt): F[Istanbul[F]] =
+    for {
+      promise    <- Deferred[F, BigInt]
+      refPromise <- Ref.of(promise)
+      refState   <- Ref.of[F, State](state)
+      backlogs   <- Ref.of[F, Map[Address, List[IstanbulMessage]]](Map.empty)
+      rs = RoundState(0, 0, None, MessageSet.empty, MessageSet.empty, ByteVector.empty, false)
+      current      <- Ref.of[F, RoundState](rs)
+      roundChanges <- Ref.of[F, Map[BigInt, MessageSet]](Map.empty)
+      validatorSet <- Ref.of[F, ValidatorSet](ValidatorSet.empty)
+      candidates   <- Ref.of[F, Map[Address, Boolean]](Map.empty)
+    } yield
+      new Istanbul[F](config,
+                      history,
+                      keyPair,
+                      refPromise,
+                      refState,
+                      backlogs,
+                      current,
+                      roundChanges,
+                      validatorSet,
+                      candidates)
 
   def extractIstanbulExtra(header: BlockHeader): IstanbulExtra =
     RlpCodec.decode[IstanbulExtra](header.extraData.drop(Istanbul.extraVanity).bits).require.value

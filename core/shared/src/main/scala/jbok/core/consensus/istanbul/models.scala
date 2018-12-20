@@ -10,7 +10,7 @@ import jbok.core.messages.{IstanbulMessage, Message}
 import jbok.crypto.signature.{CryptoSignature, KeyPair}
 
 import scala.collection.Iterable
-import scala.collection.mutable.{ArrayBuffer, Map => MMap, Set => MSet}
+import scala.collection.mutable.ArrayBuffer
 
 case class IstanbulExtra(
     validators: List[Address],
@@ -223,16 +223,14 @@ object ValidatorSet {
 }
 
 case class MessageSet(
-    view: View,
-    messages: MMap[Address, IstanbulMessage]
+    messages: Map[Address, IstanbulMessage]
 ) {
-  def addMessage(message: IstanbulMessage): MessageSet = {
-    messages.put(message.address, message)
-    this
-  }
+  def addMessage(message: IstanbulMessage): MessageSet =
+    copy(messages = messages + (message.address -> message))
+
 }
 object MessageSet {
-  def empty: MessageSet = MessageSet(View.empty, MMap.empty)
+  def empty: MessageSet = MessageSet(Map.empty)
 }
 
 case class RoundState(
@@ -246,9 +244,3 @@ case class RoundState(
 ) {
   def isLocked: Boolean = lockedHash != ByteVector.empty
 }
-
-case class RoundChangeSet(
-    val validatorSet: ValidatorSet,
-    // round -> messages
-    val roundChanges: MMap[BigInt, MessageSet]
-)

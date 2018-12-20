@@ -115,7 +115,8 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
       timestamp   = parent.header.unixTimestamp + istanbul.config.period.toMillis
       snap       <- istanbul.applyHeaders(blockNumber - 1, parent.header.hash, Nil, Nil)
       difficulty <- calcDifficulty(timestamp, parent.header)
-      candicate = Random.shuffle(istanbul.candidates.toSeq).headOption
+      candidates <- istanbul.candidates.get
+      candicate = Random.shuffle(candidates.toSeq).headOption
       extraData = prepareExtra(snap)
     } yield
       BlockHeader(

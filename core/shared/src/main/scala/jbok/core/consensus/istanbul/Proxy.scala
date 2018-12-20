@@ -10,7 +10,7 @@ import jbok.core.messages.IstanbulMessage
 object Proxy {
   private val log = org.log4s.getLogger("Proxy")
 
-  private def finalizeMessage[F[_]](msgCode: Int, payload: ByteVector, context: StateContext[F])(
+  def finalizeMessage[F[_]](msgCode: Int, payload: ByteVector, context: StateContext[F])(
       implicit F: Concurrent[F]): F[IstanbulMessage] =
     for {
       proposal <- context.proposal
