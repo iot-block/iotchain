@@ -81,9 +81,9 @@ object MainApp extends StreamApp {
           fullNodeConfig <- loadConfig(config)
           keystore       <- KeyStorePlatform[IO](fullNodeConfig.keystore.keystoreDir)
           address <- keystore.listAccounts.flatMap(
-            _.headOption.fold(keystore.readPassphrase("please input your passphrase:") >>= keystore.newAccount)(IO.pure)
+            _.headOption.fold(keystore.readPassphrase("please input your passphrase>") >>= keystore.newAccount)(IO.pure)
           )
-          _ <- keystore.readPassphrase(s"unlock address ${address}:").flatMap(p => keystore.unlockAccount(address, p))
+          _ <- keystore.readPassphrase(s"unlock address ${address}>").flatMap(p => keystore.unlockAccount(address, p))
           signers = List(address)
           genesis = clique.generateGenesisConfig(GenesisConfig.generate(0, Map.empty), signers)
           _ <- IO(File(fullNodeConfig.genesisPath).createIfNotExists().overwrite(genesis.asJson.spaces2))

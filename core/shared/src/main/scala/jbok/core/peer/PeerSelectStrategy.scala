@@ -44,10 +44,10 @@ object PeerSelectStrategy {
       .map(_.flatten)
   }
 
-  def bestPeer[F[_]: Sync]: PeerSelectStrategy[F] = PeerSelectStrategy { peers =>
+  def bestPeer[F[_]: Sync](minNumber: BigInt): PeerSelectStrategy[F] = PeerSelectStrategy { peers =>
     peers
       .traverse(p => p.status.get.map(_.bestNumber).map(bn => bn -> p))
-      .map(_.sortBy(-_._1).map(_._2))
+      .map(_.filter(_._1 >= minNumber).sortBy(-_._1).map(_._2))
   }
 
   def randomSelectSqrt[F[_]: Sync](min: Int): PeerSelectStrategy[F] = PeerSelectStrategy { peers =>

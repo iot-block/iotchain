@@ -50,10 +50,13 @@ final class TxPool[F[_]] private (
       _ <- broadcast(SignedTransactions(newStx :: Nil))
     } yield ()
 
-  def removeTransactions(signedTransactions: List[SignedTransaction]): F[Unit] = {
-    log.debug(s"remove ${signedTransactions.length} txs")
-    pending.update(_.filterNot { case (tx, _) => signedTransactions.contains(tx) })
-  }
+  def removeTransactions(signedTransactions: List[SignedTransaction]): F[Unit] =
+    if (signedTransactions.nonEmpty) {
+      log.debug(s"remove ${signedTransactions.length} txs")
+      pending.update(_.filterNot { case (tx, _) => signedTransactions.contains(tx) })
+    } else {
+      F.unit
+    }
 
   def getPendingTransactions: F[Map[SignedTransaction, Long]] =
     for {

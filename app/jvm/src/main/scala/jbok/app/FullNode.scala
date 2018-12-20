@@ -79,7 +79,7 @@ object FullNode {
       minerKey <- config.mining.minerAddressOrKey match {
         case Left(address) if config.mining.enabled =>
           keystore
-            .readPassphrase("unlock your mining account")
+            .readPassphrase("unlock your mining account>")
             .flatMap(p => keystore.unlockAccount(address, p))
             .map(_.keyPair.some)
         case Left(_)   => IO.pure(None)

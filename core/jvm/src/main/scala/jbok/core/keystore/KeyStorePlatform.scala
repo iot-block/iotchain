@@ -14,6 +14,7 @@ import jbok.core.models.Address
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
+import jbok.common.Terminal
 
 class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
   private[this] val log = jbok.common.log.getLogger("KeyStore")
@@ -29,8 +30,8 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
 
   override def readPassphrase(prompt: String): F[String] =
     for {
-      _          <- F.delay(println(prompt))
-      passphrase <- F.delay((new scala.tools.jline_embedded.console.ConsoleReader).readLine(Character.valueOf(0)))
+      _          <- Terminal.putStr[F](prompt)
+      passphrase <- Terminal.readPassword[F]("Passphrase:")
     } yield passphrase
 
   override def importPrivateKey(key: ByteVector, passphrase: String): F[Address] =

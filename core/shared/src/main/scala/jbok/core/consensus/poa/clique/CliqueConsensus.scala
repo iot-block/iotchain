@@ -107,14 +107,18 @@ case class CliqueConsensus[F[_]](
       _        <- if (blockOpt.isDefined) F.raiseError(new Exception("duplicate block")) else F.unit
       _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap[Unit] {
         case Some(parent) =>
-          F.pure {
-              Set(Clique.diffInTurn, Clique.diffNoTurn).contains(block.header.difficulty) &&
-              calcGasLimit(parent.gasLimit) == block.header.gasLimit &&
-              block.header.unixTimestamp == parent.unixTimestamp + clique.config.period.toMillis &&
-              block.header.mixHash == ByteVector.empty &&
-              Set(Clique.nonceAuthVote, Clique.nonceDropVote).contains(block.header.nonce)
-            }
-            .ifM(F.unit, F.raiseError(new Exception("block verified invalid")))
+          val result = for {
+            _ <- check(Set(Clique.diffInTurn, Clique.diffNoTurn).contains(block.header.difficulty), "wrong difficulty")
+            _ <- check(calcGasLimit(parent.gasLimit) == block.header.gasLimit, "wrong gasLimit")
+            _ <- check(block.header.unixTimestamp == parent.unixTimestamp + clique.config.period.toMillis,
+                       "wrong timestamp")
+            _ <- check(block.header.mixHash == ByteVector.empty, "wrong mixHash")
+            _ <- check(Set(Clique.nonceAuthVote, Clique.nonceDropVote).contains(block.header.nonce), "wrong nonce")
+          } yield ()
+          result match {
+            case Left(e)  => F.raiseError(new Exception(s"block verified invalid because ${e}"))
+            case Right(_) => F.unit
+          }
 
         case None => F.raiseError(HeaderParentNotFoundInvalid)
       }
@@ -181,7 +185,6 @@ case class CliqueConsensus[F[_]](
           val currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
           val newBranchDifficulty     = newBranch.map(_.difficulty).sum
           if (currentBranchDifficulty < newBranchDifficulty) {
-            log.debug(s"resolved better branch ${newBranch.map(_.tag)}")
             Consensus.BetterBranch(NonEmptyList.fromListUnsafe(newBranch))
           } else {
             Consensus.NoChainSwitch
@@ -192,6 +195,13 @@ case class CliqueConsensus[F[_]](
 
   //////////////////////////////////
   //////////////////////////////////
+
+  private def check(b: Boolean, message: String): Either[String, Unit] =
+    if (b) {
+      Right(())
+    } else {
+      Left(message)
+    }
 
   private def removeBlocksUntil(parent: ByteVector, fromNumber: BigInt): F[List[(Block, List[Receipt], BigInt)]] =
     history.getBlockByNumber(fromNumber).flatMap[List[(Block, List[Receipt], BigInt)]] {

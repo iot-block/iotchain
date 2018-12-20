@@ -18,6 +18,6 @@ object ScribeLogPlatform {
 
   private def fileFormatter: Formatter = {
     import scribe.format._
-    formatter"$date [$threadName] [$levelPaddedRight] - $message$mdc$newLine"
+    formatter"$date [$levelPaddedRight] [$threadName] - $message$mdc$newLine"
   }
 }

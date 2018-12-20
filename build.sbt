@@ -301,8 +301,7 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7"),
   //  addCompilerPlugin("ch.epfl.scala"   %% "scalac-profiling"   % "1.0.0"),
   //  addCompilerPlugin(scalafixSemanticdb),
-  fork := true,
-  connectInput := true,
+  connectInput in run := true,
   fork in Test := false,
   parallelExecution in test := false,
   scalacOpts
