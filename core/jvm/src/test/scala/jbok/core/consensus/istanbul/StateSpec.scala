@@ -1,105 +1,411 @@
 package jbok.core.consensus.istanbul
 
-import cats.effect.IO
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.{Concurrent, IO}
+import jbok.codec.rlp.implicits._
 import jbok.JbokSpec
 import jbok.codec.rlp.RlpCodec
-import jbok.core.models.Address
+import jbok.core.models.{Address, Block}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
-import jbok.persistent.{CacheBuilder, KeyValueDB}
-import scodec.bits.ByteVector
-import jbok.codec.rlp.implicits._
-import cats.implicits._
-import cats.effect.implicits._
-import jbok.core.ledger.History
-import jbok.core.config.reference
 import jbok.crypto._
-import fs2._
+import jbok.common.testkit.random
+import jbok.core.testkit._
+import jbok.common.execution._
+import jbok.core.Fixture
+import jbok.core.consensus.istanbul.Snapshot._
+import jbok.core.messages.IstanbulMessage
+import scodec.bits.ByteVector
 
-import scala.concurrent.ExecutionContext.global
-import scala.collection.mutable.{ArrayBuffer, Map => MMap}
-import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, Map => MMap, Set => MSet}
+
+case class Expect(
+    state: State,
+    proposer: Address,
+    validators: List[Address],
+    prepares: List[Address],
+    commits: List[Address],
+    isLocked: Boolean,
+    waitingForRoundChange: Boolean,
+    round: BigInt,
+    sequence: BigInt,
+    preprepare: Option[Preprepare]
+)
+object Expect {
+  def apply(
+      state: State,
+      proposer: Address,
+      validators: List[Address],
+      prepares: List[Address],
+      commits: List[Address],
+      isLocked: Boolean,
+      waitingForRoundChange: Boolean,
+      round: BigInt,
+      sequence: BigInt,
+      preprepare: Option[Preprepare]
+  ): Expect =
+    new Expect(state,
+               proposer,
+               validators,
+               prepares,
+               commits,
+               isLocked,
+               waitingForRoundChange,
+               round,
+               sequence,
+               preprepare)
+
+  def apply(
+      istanbul: Istanbul[IO]
+  ): Expect = {
+    val validatorSet           = istanbul.validatorSet.get.unsafeRunSync()
+    val roundState: RoundState = istanbul.currentContext.current.get.unsafeRunSync()
+
+    Expect(
+      state = istanbul.currentContext.state.get.unsafeRunSync(),
+      proposer = validatorSet.proposer,
+      validators = validatorSet.validators.toList.sorted,
+      prepares = roundState.prepares.messages.toList.map(_._1).sorted,
+      commits = roundState.commits.messages.toList.map(_._1).sorted,
+      isLocked = roundState.isLocked,
+      waitingForRoundChange = roundState.waitingForRoundChange,
+      round = roundState.round,
+      sequence = roundState.sequence,
+      preprepare = roundState.preprepare
+    )
+  }
+}
 
 class StateSpec extends JbokSpec {
-  implicit val cs    = IO.contextShift(global)
-  implicit val timer = IO.timer(global)
+  val accounts: MMap[String, KeyPair] = MMap.empty
 
-  private def fillExtraData(signers: List[Address], pk: KeyPair): ByteVector = {
-    val extra = IstanbulExtra(signers, ByteVector.empty, List.empty)
+  val validators: List[KeyPair] = List(account("A"), account("B"), account("C"), account("D"))
+  val miner: KeyPair            = account("A")
 
-    val seal = ByteVector(
-      Signature[ECDSA].sign[IO](RlpCodec.encode(extra).require.bytes.kec256.toArray, pk, 0).unsafeRunSync().bytes)
+  implicit val fixture: Fixture =
+    istanbulFixture(validators, miner, 2001)
 
-    ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra.copy(seal = seal)).require.bytes
-  }
-
-  def mkHistory(signers: List[Address], pk: KeyPair) = {
-    val extra   = fillExtraData(signers, pk)
-    val config  = reference.genesis.copy(extraData = extra)
-    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history = History[IO](db).unsafeRunSync()
-    history.initGenesis(config).unsafeRunSync()
-    history
-  }
-
-  val accounts: mutable.Map[String, KeyPair] = mutable.Map.empty
-
-  def address(account: String): Address = {
-    if (!accounts.contains(account)) {
-      accounts += (account -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
+  def account(name: String): KeyPair = {
+    if (!accounts.contains(name)) {
+      accounts += (name -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
     }
-    Address(accounts(account))
+    accounts(name)
   }
 
-  def mkClient(validators: List[String], proposer: String, self: String): Istanbul[IO] = {
-    val signers    = validators.map(address(_))
-    val backlogs   = Ref.unsafe[IO, MMap[Address, ArrayBuffer[Message]]](MMap.empty)
-    val proposerPk = accounts.get(proposer).get
-    val selfPk     = accounts.get(self).get
-    val current =
-      Ref.unsafe[IO, RoundState](RoundState(0, 1, None, MessageSet.empty, MessageSet.empty, ByteVector.empty, false))
-    val roundChanges   = Ref.unsafe[IO, MMap[BigInt, MessageSet]](MMap.empty)
-    val validatorSet   = Ref.unsafe[IO, ValidatorSet](ValidatorSet(address(proposer), ArrayBuffer.empty ++ signers))
-    val promise        = Ref.unsafe[IO, Deferred[IO, BigInt]](Deferred[IO, BigInt].unsafeRunSync())
-    val state          = Ref.unsafe[IO, State](StateNewRound)
-    implicit val cache = CacheBuilder.build[IO, Snapshot](128).unsafeRunSync()
-    Istanbul[IO](IstanbulConfig(),
-                 mkHistory(signers, selfPk),
-                 MMap.empty,
-                 backlogs,
-                 selfPk,
-                 current,
-                 roundChanges,
-                 validatorSet,
-                 promise,
-                 state)
+  def fakeSubjectMsg(code: Int, subject: Subject, context: StateContext[IO]): IO[Unit] =
+    Proxy.broadcast(code, RlpCodec.encode(subject).require.bytes, context)
+
+  def check(istanbul: Istanbul[IO], expect: Expect): Unit = {
+    val acutal = Expect(istanbul)
+    acutal.state shouldBe expect.state
+    acutal.proposer shouldBe expect.proposer
+    acutal.validators shouldBe expect.validators
+    acutal.prepares shouldBe expect.prepares
+    acutal.commits shouldBe expect.commits
+    acutal.isLocked shouldBe expect.isLocked
+    acutal.waitingForRoundChange shouldBe expect.waitingForRoundChange
+    acutal.round shouldBe expect.round
+    acutal.sequence shouldBe expect.sequence
+    acutal.preprepare shouldBe expect.preprepare
   }
 
-  "istanbul" should {
-    "extra data" in {
-      val signers = List("A", "B", "C").map(address(_))
-
-      val extra     = IstanbulExtra(signers, ByteVector.empty, List.empty)
-      val rlpData   = RlpCodec.encode(extra).require.bytes
-      val extraFill = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ rlpData
-
-      val dropedData = extraFill.drop(Istanbul.extraVanity).bits
-      val extraData  = RlpCodec.decode[IstanbulExtra](dropedData).require.value
-      println(extraData)
-    }
-  }
+  def address(name: String): Address = Address(account(name))
 
   "state" should {
-    "timeout" in {
-      val validators = List("A", "B", "C")
-      val clientA    = mkClient(validators, "A", "A")
-      val clientB    = mkClient(validators, "A", "B")
-      val clientC    = mkClient(validators, "A", "C")
-      for {
-        _ <- Stream(clientA, clientB, clientC)
-      }
-//      clientA.startNewRound(0).unsafeRunSync()
-      println("complete")
+    "[proposer]NewRound -> Pre-prepared" in {
+      val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+      val block                            = random[List[Block]](genBlocks(1, 1)).head
+      val preprepare                       = Preprepare(View(0, 1), block)
+
+      val istanbul = consensus.istanbul
+      istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+      check(
+        istanbul,
+        Expect(
+          state = StatePreprepared,
+          proposer = address("A"),
+          validators = validators.map(Address(_)).sorted,
+          prepares = List(address("A")),
+          commits = List.empty,
+          isLocked = false,
+          waitingForRoundChange = false,
+          round = 0,
+          sequence = 1,
+          preprepare = Some(preprepare)
+        )
+      )
     }
+
+    "future message" in {
+      val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+      val block                            = random[List[Block]](genBlocks(1, 1)).head
+      val preprepare                       = Preprepare(View(0, 1), block)
+
+      val istanbul = consensus.istanbul
+      istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+      val bContext = istanbul.currentContext.copy(keyPair = account("B"))
+
+      val subject: Subject = istanbul.currentContext.currentSubject().unsafeRunSync().get
+      val fakeSubject      = subject.copy(view = subject.view.copy(round = subject.view.round + 1))
+      fakeSubjectMsg(IstanbulMessage.msgPrepareCode, fakeSubject, bContext).unsafeRunSync()
+
+      check(
+        istanbul,
+        Expect(
+          state = StatePreprepared,
+          proposer = address("A"),
+          validators = validators.map(Address(_)).sorted,
+          prepares = List(address("A")).sorted,
+          commits = List.empty,
+          isLocked = false,
+          waitingForRoundChange = false,
+          round = 0,
+          sequence = 1,
+          preprepare = Some(preprepare)
+        )
+      )
+
+      istanbul.backlogs.get.unsafeRunSync().map(log => (log._1, log._2.size)) shouldBe Map((address("B"), 1))
+    }
+
+    "receive 2 prepare message, still Pre-prepared" in {
+      val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+      val block                            = random[List[Block]](genBlocks(1, 1)).head
+      val preprepare                       = Preprepare(View(0, 1), block)
+
+      val istanbul = consensus.istanbul
+      istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+      /**
+        * fake a [B] context
+        * sendPrepare will simulate a message from [B] to [A] through the faked context
+        */
+      val bContext = istanbul.currentContext.copy(keyPair = account("B"))
+      Proxy.sendPrepare(bContext).unsafeRunSync()
+
+      check(
+        istanbul,
+        Expect(
+          state = StatePreprepared,
+          proposer = address("A"),
+          validators = validators.map(Address(_)).sorted,
+          prepares = List(address("A"), address("B")).sorted,
+          commits = List.empty,
+          isLocked = false,
+          waitingForRoundChange = false,
+          round = 0,
+          sequence = 1,
+          preprepare = Some(preprepare)
+        )
+      )
+    }
+
+    "receive 3 prepare message, Pre-prepared -> Prepared" in {
+      val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+      val block                            = random[List[Block]](genBlocks(1, 1)).head
+      val preprepare                       = Preprepare(View(0, 1), block)
+
+      val istanbul = consensus.istanbul
+      istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+      val bContext = istanbul.currentContext.copy(keyPair = account("B"))
+      val cContext = istanbul.currentContext.copy(keyPair = account("C"))
+
+      Proxy.sendPrepare(bContext).unsafeRunSync()
+      Proxy.sendPrepare(cContext).unsafeRunSync()
+
+      check(
+        istanbul,
+        Expect(
+          state = StatePrepared,
+          proposer = address("A"),
+          validators = validators.map(Address(_)).sorted,
+          prepares = List(address("A"), address("B"), address("C")).sorted,
+          commits = List(address("A")),
+          isLocked = true,
+          waitingForRoundChange = false,
+          round = 0,
+          sequence = 1,
+          preprepare = Some(preprepare)
+        )
+      )
+    }
+
+    "receive 4 prepare message, Pre-prepared -> Prepared" in {
+      val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+      val block                            = random[List[Block]](genBlocks(1, 1)).head
+      val preprepare                       = Preprepare(View(0, 1), block)
+
+      val istanbul = consensus.istanbul
+      istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+      val bContext = istanbul.currentContext.copy(keyPair = account("B"))
+      val cContext = istanbul.currentContext.copy(keyPair = account("C"))
+      val dContext = istanbul.currentContext.copy(keyPair = account("D"))
+
+      Proxy.sendPrepare(bContext).unsafeRunSync()
+      Proxy.sendPrepare(cContext).unsafeRunSync()
+      Proxy.sendPrepare(dContext).unsafeRunSync()
+
+      check(
+        istanbul,
+        Expect(
+          state = StatePrepared,
+          proposer = address("A"),
+          validators = validators.map(Address(_)).sorted,
+          prepares = List(address("A"), address("B"), address("C"), address("D")).sorted,
+          commits = List(address("A")),
+          isLocked = true,
+          waitingForRoundChange = false,
+          round = 0,
+          sequence = 1,
+          preprepare = Some(preprepare)
+        )
+      )
+    }
+
+    "receive 2 commit message, still Prepared" in {
+      val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+      val block                            = random[List[Block]](genBlocks(1, 1)).head
+      val preprepare                       = Preprepare(View(0, 1), block)
+
+      val istanbul = consensus.istanbul
+      istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+      val bContext = istanbul.currentContext.copy(keyPair = account("B"))
+      val cContext = istanbul.currentContext.copy(keyPair = account("C"))
+
+      Proxy.sendPrepare(bContext).unsafeRunSync()
+      Proxy.sendPrepare(cContext).unsafeRunSync()
+
+      Proxy.sendCommit(bContext).unsafeRunSync()
+
+      check(
+        istanbul,
+        Expect(
+          state = StatePrepared,
+          proposer = address("A"),
+          validators = validators.map(Address(_)).sorted,
+          prepares = List(address("A"), address("B"), address("C")).sorted,
+          commits = List(address("A"), address("B")).sorted,
+          isLocked = true,
+          waitingForRoundChange = false,
+          round = 0,
+          sequence = 1,
+          preprepare = Some(preprepare)
+        )
+      )
+    }
+
+    "receive 3 commit message" should {
+      "block insertion success, Prepared -> Committed -> Final Committed -> NewRound" in {
+        val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+        val block                            = random[List[Block]](genBlocks(1, 1)).head
+        val preprepare                       = Preprepare(View(0, 1), block)
+
+        val istanbul = consensus.istanbul
+        istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+        val bContext = istanbul.currentContext.copy(keyPair = account("B"))
+        val cContext = istanbul.currentContext.copy(keyPair = account("C"))
+
+        Proxy.sendPrepare(bContext).unsafeRunSync()
+        Proxy.sendPrepare(cContext).unsafeRunSync()
+
+        Proxy.sendCommit(bContext).unsafeRunSync()
+        Proxy.sendCommit(cContext).unsafeRunSync()
+
+        check(
+          istanbul,
+          Expect(
+            state = StateNewRound,
+            proposer = address("A"),
+            validators = validators.map(Address(_)).sorted,
+            prepares = List(address("A"),address("B"),address("C")).sorted,
+            commits = List(address("A"),address("B"),address("C")).sorted,
+            isLocked = false,
+            waitingForRoundChange = false,
+            round = 0,
+            sequence = 1,
+            preprepare = Some(preprepare)
+          )
+        )
+      }
+
+      "block insertion fail, Prepared -> Committed -> Round Change" in {
+        val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+        val block                            = random[List[Block]](genBlocks(1, 1)).head
+        val preprepare                       = Preprepare(View(0, 1), block)
+
+        val istanbul = consensus.istanbul
+        istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+        val bContext = istanbul.currentContext.copy(keyPair = account("B"))
+        val cContext = istanbul.currentContext.copy(keyPair = account("C"))
+
+        Proxy.sendPrepare(bContext).unsafeRunSync()
+        Proxy.sendPrepare(cContext).unsafeRunSync()
+
+        Proxy.sendCommit(bContext).unsafeRunSync()
+        Proxy.sendCommit(cContext).unsafeRunSync()
+
+        check(
+          istanbul,
+          Expect(
+            state = StateRoundChange,
+            proposer = address("A"),
+            validators = validators.map(Address(_)).sorted,
+            prepares = List.empty,
+            commits = List.empty,
+            isLocked = false,
+            waitingForRoundChange = true,
+            round = 1,
+            sequence = 1,
+            preprepare = None
+          )
+        )
+      }
+    }
+
+    "receive roundChange message during transition flow" in {
+      val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
+      val block                            = random[List[Block]](genBlocks(1, 1)).head
+      val preprepare                       = Preprepare(View(0, 1), block)
+
+      val istanbul = consensus.istanbul
+      istanbul.startNewRound(0, Some(preprepare), false).unsafeRunSync()
+
+      val bContext = istanbul.currentContext.copy(keyPair = account("B"))
+      val cContext = istanbul.currentContext.copy(keyPair = account("C"))
+      val dContext = istanbul.currentContext.copy(keyPair = account("D"))
+
+      val subject: Subject = istanbul.currentContext.currentSubject().unsafeRunSync().get
+      val fakeSubject      = subject.copy(view = subject.view.copy(round = 2))
+      fakeSubjectMsg(IstanbulMessage.msgRoundChange, fakeSubject, bContext).unsafeRunSync()
+      fakeSubjectMsg(IstanbulMessage.msgRoundChange, fakeSubject, cContext).unsafeRunSync()
+
+      istanbul.state.get.unsafeRunSync() shouldBe StatePreprepared
+      istanbul.roundChanges.get.unsafeRunSync().get(2).get.messages.size shouldBe 2
+
+      fakeSubjectMsg(IstanbulMessage.msgRoundChange, fakeSubject, dContext).unsafeRunSync()
+
+      istanbul.roundChanges.get.unsafeRunSync().get(2).get.messages.size shouldBe 3
+      check(
+        istanbul,
+        Expect(
+          state = StateNewRound,
+          proposer = address("A"),
+          validators = validators.map(Address(_)).sorted,
+          prepares = List(address("A")),
+          commits = List.empty,
+          isLocked = false,
+          waitingForRoundChange = false,
+          round = 0,
+          sequence = 1,
+          preprepare = Some(preprepare)
+        )
+      )
+    }
+
   }
 }

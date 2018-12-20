@@ -6,7 +6,8 @@ import jbok.core.models.{Address, Block}
 import scodec.bits.ByteVector
 import cats.implicits._
 import io.circe.generic.JsonCodec
-import jbok.crypto.signature.KeyPair
+import jbok.core.messages.{IstanbulMessage, Message}
+import jbok.crypto.signature.{CryptoSignature, KeyPair}
 
 import scala.collection.Iterable
 import scala.collection.mutable.{ArrayBuffer, Map => MMap, Set => MSet}
@@ -34,24 +35,30 @@ object ProposalCheckResult {
   case object Success              extends ProposalCheckResult
 }
 
-case class Message(
-    val code: Int,
-    val msg: ByteVector = ByteVector.empty,
-    val address: Address = Address.empty,
-    val signature: ByteVector = ByteVector.empty,
-    val committedSeal: ByteVector = ByteVector.empty
-)
+//case class IstanbulMessage(
+//  msgCode: Int,
+//  msg: ByteVector = ByteVector.empty,
+//  address: Address = Address.empty,
+//  signature: ByteVector = ByteVector.empty,
+//  ommittedSeal: ByteVector = ByteVector.empty
+//) extends Message(0x5000)
+
+//object IstanbulMessage {
+//  val msgPreprepareCode = 0
+//  val msgPrepareCode    = 1
+//  val msgCommitCode     = 2
+//  val msgRoundChange    = 3
+//  val msgAll            = 4
+//}
 
 case class Preprepare(view: View, block: Block)
-case class Subject(view: View, digest: ByteVector)
 
-object Message {
-  val msgPreprepareCode = 0
-  val msgPrepareCode    = 1
-  val msgCommitCode     = 2
-  val msgRoundChange    = 3
-  val msgAll            = 4
-}
+/**
+  *
+  * @param view
+  * @param digest proposal hash
+  */
+case class Subject(view: View, digest: ByteVector)
 
 //context for state transition
 case class StateContext[F[_]](
@@ -59,8 +66,10 @@ case class StateContext[F[_]](
     validatorSet: Ref[F, ValidatorSet],
     current: Ref[F, RoundState],
     state: Ref[F, State],
-    roundChanges: Ref[F, MMap[BigInt, MessageSet]],
-    roundChangePromise: Ref[F, Deferred[F, BigInt]]
+    roundChanges: Ref[F, Map[BigInt, MessageSet]],
+    roundChangePromise: Ref[F, Deferred[F, BigInt]],
+    signFunc: ByteVector => F[CryptoSignature],
+    eventHandler: IstanbulMessage => F[Unit]
 )(implicit F: Concurrent[F]) {
   def address: Address = Address(keyPair)
 
@@ -71,19 +80,38 @@ case class StateContext[F[_]](
         case None    => s
       }
     })
-  def unlockHash(): F[Unit]       = current.update(_.copy(lockedHash = ByteVector.empty))
-  def prepareReady: F[Boolean]    = current.get.map(_.prepares.hasEnoughMessages)
-  def commitReady: F[Boolean]     = current.get.map(_.commits.hasEnoughMessages)
+  def unlockHash(): F[Unit] = current.update(_.copy(lockedHash = ByteVector.empty))
+
+  def prepareReady: F[Boolean] =
+    for {
+      rs <- current.get
+      vs <- validatorSet.get
+      enough = rs.prepares.messages.size > 2 * vs.f
+    } yield enough
+
+  def commitReady: F[Boolean] =
+    for {
+      rs <- current.get
+      vs <- validatorSet.get
+      enough = rs.commits.messages.size > 2 * vs.f
+    } yield enough
+
   def view: F[View]               = current.get.map(s => View(s.round, s.sequence))
   def proposal: F[Option[Block]]  = current.get.map(_.preprepare.map(p => p.block))
   def setState(s: State): F[Unit] = state.set(s)
 
-  def addPrepare(message: Message): F[Unit] = current.get.map(_.prepares.addMessage(message))
+  def addPrepare(message: IstanbulMessage): F[Unit] =
+    current.update(rs => rs.copy(prepares = rs.prepares.addMessage(message)))
 
-  def addCommit(message: Message): F[Unit] = current.get.map(_.commits.addMessage(message))
+  def addCommit(message: IstanbulMessage): F[Unit] =
+    current.update(rs => rs.copy(commits = rs.commits.addMessage(message)))
 
-  def addRoundChange(round: BigInt, message: Message): F[Unit] =
-    roundChanges.get.map(_.getOrElseUpdate(round, MessageSet.empty).addMessage(message))
+  def addRoundChange(round: BigInt, message: IstanbulMessage): F[Unit] =
+    roundChanges.update(m => m + (round -> (m.getOrElse(round, MessageSet.empty).addMessage(message))))
+//    roundChanges.update(messages => {
+//      messages.getOrElseUpdate(round, MessageSet.empty).addMessage(message)
+//      messages
+//    })
 
   /**
     * delete the messages with smaller round
@@ -106,7 +134,7 @@ case class StateContext[F[_]](
   def updateCurrentRound(round: BigInt): F[Unit] =
     for {
       _ <- current.update(s => {
-        if (s.isLocked())
+        if (s.isLocked)
           s.copy(round = round, waitingForRoundChange = true, prepares = MessageSet.empty, commits = MessageSet.empty)
         else
           s.copy(round = round,
@@ -138,7 +166,7 @@ case class View(
     val sequence: BigInt
 )
 object View {
-  val empty = View(0, 0)
+  def empty: View = View(0, 0)
 }
 
 @JsonCodec
@@ -148,7 +176,10 @@ case class ValidatorSet(
 ) {
 
   def isProposer(address: Address): Boolean = contains(address) && proposer == address
-//  f represent the constant F in Istanbul BFT defined
+
+  /**
+    * f represent the constant F in Istanbul BFT defined
+    */
   def f = Math.ceil(validators.size / 3.0).toInt - 1
 
   def contains(address: Address): Boolean = validators.contains(address)
@@ -179,7 +210,7 @@ case class ValidatorSet(
 
 }
 object ValidatorSet {
-  val empty = ValidatorSet(proposer = Address.empty, validators = ArrayBuffer.empty)
+  def empty: ValidatorSet = ValidatorSet(proposer = Address.empty, validators = ArrayBuffer.empty)
 
   def apply(
       proposer: Address,
@@ -193,22 +224,19 @@ object ValidatorSet {
 
 case class MessageSet(
     view: View,
-    validatorSet: ValidatorSet,
-    messages: MMap[Address, Message]
+    messages: MMap[Address, IstanbulMessage]
 ) {
-  def hasEnoughMessages: Boolean = messages.size > 2 * validatorSet.f
-  def addMessage(message: Message): MessageSet = {
+  def addMessage(message: IstanbulMessage): MessageSet = {
     messages.put(message.address, message)
     this
   }
 }
 object MessageSet {
-  val empty = MessageSet(View.empty, ValidatorSet.empty, MMap.empty)
+  def empty: MessageSet = MessageSet(View.empty, MMap.empty)
 }
 
 case class RoundState(
     round: BigInt,
-    // sequence is the block number we'd like to commit.
     sequence: BigInt,
     preprepare: Option[Preprepare],
     prepares: MessageSet,
@@ -216,7 +244,7 @@ case class RoundState(
     lockedHash: ByteVector,
     waitingForRoundChange: Boolean = false
 ) {
-  def isLocked(): Boolean = lockedHash != ByteVector.empty
+  def isLocked: Boolean = lockedHash != ByteVector.empty
 }
 
 case class RoundChangeSet(

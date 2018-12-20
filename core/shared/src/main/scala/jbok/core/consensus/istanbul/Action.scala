@@ -1,5 +1,6 @@
 package jbok.core.consensus.istanbul
 
+import jbok.core.messages.IstanbulMessage
 import jbok.core.models.Block
 
 trait Action
@@ -19,13 +20,13 @@ case class ProposeAction(block: Block) extends Action
   *
   * @param message
   */
-case class PreprepareAction(message: Message) extends Action
+case class PreprepareAction(message: IstanbulMessage) extends Action
 
-case class PrepareAction(message: Message) extends Action
+case class PrepareAction(message: IstanbulMessage) extends Action
 
-case class CommitAction(message: Message) extends Action
+case class CommitAction(message: IstanbulMessage) extends Action
 
-case class RoundChangeAction(message: Message) extends Action
+case class RoundChangeAction(message: IstanbulMessage) extends Action
 
 /**
   * NewRoundAction means need to start a new round

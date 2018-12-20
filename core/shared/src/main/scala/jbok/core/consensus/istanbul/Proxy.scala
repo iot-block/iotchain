@@ -5,36 +5,38 @@ import jbok.codec.rlp.RlpCodec
 import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
 import cats.implicits._
-
+import jbok.core.messages.IstanbulMessage
 
 object Proxy {
-  // TODO: do sign
-  private def sign(bytes: ByteVector): ByteVector = bytes
+  private val log = org.log4s.getLogger("Proxy")
 
   private def finalizeMessage[F[_]](msgCode: Int, payload: ByteVector, context: StateContext[F])(
-      implicit F: Concurrent[F]): F[Message] =
+      implicit F: Concurrent[F]): F[IstanbulMessage] =
     for {
       proposal <- context.proposal
-      msgForSign = msgCode match {
-        case Message.msgCommitCode => {
-          val seal          = proposal.get.header.hash ++ ByteVector(Message.msgCommitCode)
-          val committedSeal = sign(seal)
-          Message(msgCode, payload, context.address, ByteVector.empty, committedSeal)
-        }
-        case _ => Message(msgCode, payload, context.address, ByteVector.empty, ByteVector.empty)
+      msgForSign <- msgCode match {
+        case IstanbulMessage.msgCommitCode =>
+          for {
+            seal <- F.pure(proposal.get.header.hash ++ ByteVector(IstanbulMessage.msgCommitCode))
+            sig  <- context.signFunc(seal)
+            committedSeal = ByteVector(sig.bytes)
+          } yield IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, committedSeal)
+        case _ => F.pure(IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, ByteVector.empty))
       }
-      signature <- F.delay(RlpCodec.encode(msgForSign).require.bytes)
-
-    } yield msgForSign.copy(signature = signature)
+      rlp  <- F.delay(RlpCodec.encode(msgForSign).require.bytes)
+      sign <- context.signFunc(rlp)
+    } yield msgForSign.copy(signature = ByteVector(sign.bytes))
 
   def broadcast[F[_]](msgCode: Int, payload: ByteVector, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     for {
       message <- finalizeMessage(msgCode, payload, context)
-      // TODO: broadcast
+      _ = log.debug(s"broadcast $message")
+      _ <- context.eventHandler(message) //send to self
+      // TODO: send to others
     } yield ()
 
   def sendPrepare[F[_]](context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
-    sendSubjectMessage(Message.msgPrepareCode, context)
+    sendSubjectMessage(IstanbulMessage.msgPrepareCode, context)
 
   /**
     * send ROUND CHANGE message with current round+1
@@ -55,14 +57,14 @@ object Proxy {
         // update current round
         context.updateCurrentRound(round) >>
           // broadcast ROUND CHANGE message
-          broadcast(Message.msgRoundChange,
+          broadcast(IstanbulMessage.msgRoundChange,
                     RlpCodec.encode(Subject(View(round, rs.sequence), ByteVector.empty)).require.bytes,
                     context)
       }
     } yield ()
 
   def sendCommit[F[_]](context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
-    sendSubjectMessage(Message.msgCommitCode, context)
+    sendSubjectMessage(IstanbulMessage.msgCommitCode, context)
 
   /**
     * simple send current subject message

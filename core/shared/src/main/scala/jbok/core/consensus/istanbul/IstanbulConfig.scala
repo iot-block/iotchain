@@ -11,7 +11,7 @@ case class IstanbulConfig(
     defaultDifficulty: BigInt = BigInt(1), // Default block difficulty
     checkpointInterval: BigInt = BigInt(3000),
     proposerPolicy:Int = IstanbulConfig.roundRobin,
-    requestTimeout:Int = 10*1000
+    requestTimeout:Int = 3*1000
 )
 object IstanbulConfig{
   val roundRobin = 0;

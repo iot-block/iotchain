@@ -4,18 +4,22 @@ import cats.effect.{Concurrent, ConcurrentEffect, Sync}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import cats.implicits._
+import jbok.core.messages.IstanbulMessage
 import jbok.core.models.{Address, Block}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable.{Map => MMap}
 
 trait State {
+  val log = org.log4s.getLogger("State")
+
   def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit]
 
   /**
     * check the message payload subject is equal than current subject
     */
-  private def checkSubject[F[_]](message: Message, context: StateContext[F])(implicit F: Concurrent[F]): F[Boolean] =
+  private def checkSubject[F[_]](message: IstanbulMessage, context: StateContext[F])(
+      implicit F: Concurrent[F]): F[Boolean] =
     for {
       subject <- context.currentSubject()
       result <- subject match {
@@ -30,23 +34,36 @@ trait State {
       }
     } yield result
 
-  def checkPrepare[F[_]](message: Message, context: StateContext[F])(implicit F: Concurrent[F]): F[Boolean] =
+  def checkPrepare[F[_]](message: IstanbulMessage, context: StateContext[F])(implicit F: Concurrent[F]): F[Boolean] =
     checkSubject(message, context)
 
-  def checkCommit[F[_]](message: Message, context: StateContext[F])(implicit F: Concurrent[F]): F[Boolean] =
+  def checkCommit[F[_]](message: IstanbulMessage, context: StateContext[F])(implicit F: Concurrent[F]): F[Boolean] =
     checkSubject(message, context)
 
 //  TODO: insert block
   def insertBlock[F[_]](block: Block, committedSeals: List[ByteVector])(implicit F: Concurrent[F]): F[Boolean] =
-    F.pure(true)
+    F.pure(false)
 
-  def handleCommitAction[F[_]](message: Message, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
+  def acceptPrepare[F[_]](message: IstanbulMessage, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
+    for {
+      check <- checkPrepare(message, context)
+      _     <- if (check) context.addPrepare(message) else F.unit
+    } yield ()
+
+  def acceptCommit[F[_]](message: IstanbulMessage, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
+    for {
+      check <- checkCommit(message, context)
+      _     <- if (check) context.addCommit(message) else F.unit
+    } yield ()
+
+  def handleCommitAction[F[_]](message: IstanbulMessage, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     for {
       check <- checkCommit(message, context)
       _ <- if (check) {
         for {
           _     <- context.addCommit(message)
           ready <- context.commitReady
+
           _ <- if (ready) {
 
             /**
@@ -60,40 +77,136 @@ trait State {
       } else F.unit
     } yield ()
 
+  def handleRoundChange[F[_]](message: IstanbulMessage, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
+    for {
+      payload      <- F.delay(RlpCodec.decode[Subject](message.msg.bits).require.value)
+      _            <- context.addRoundChange(payload.view.round, message)
+      roundState   <- context.current.get
+      validatorSet <- context.validatorSet.get
+      num          <- context.roundChanges.get.map(m => m.getOrElse(payload.view.round, MessageSet.empty).messages.size)
+      _ <- if (roundState.waitingForRoundChange && num == validatorSet.f + 1) {
+
+        /**
+          * Whenever a validator receives F + 1 of ROUND CHANGE messages on the same proposed round number,
+          * it compares the received one with its own. If the received is larger,
+          * the validator broadcasts ROUND CHANGE message again with the received number.
+          */
+        if (roundState.round < payload.view.round) {
+          Proxy.sendRoundChange(payload.view.round, context)
+        } else {
+          F.unit
+        }
+      } else if (num == 2 * validatorSet.f + 1 && (roundState.waitingForRoundChange || roundState.round < payload.view.round)) {
+
+        /**
+          * we've received 2f+1 ROUND CHANGE messages
+          * 1.set current state to ROUND CHANGE
+          * 2.manual trigger NewRoundAction to start a new round
+          */
+        context.setState(StateRoundChange) >>
+          StateRoundChange.handle(NewRoundAction(payload.view.round), context)
+      } else {
+        F.unit
+      }
+    } yield ()
 }
 
 case object StateNewRound extends State {
+
   override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
-    context.validatorSet.get.map(_.isProposer(context.address) match {
-      case true => handleProposer(action, context)
-      case _    => handleValidator(action, context)
-    })
+    for {
+      vals <- context.validatorSet.get
+      _    <- if (vals.isProposer(context.address)) handleProposer(action, context) else handleValidator(action, context)
+    } yield ()
+
+  private def handlePreprepareAction[F[_]](message: IstanbulMessage, context: StateContext[F])(
+      implicit F: Concurrent[F]): F[Unit] =
+    for {
+      current <- context.current.get
+      _ = log.debug(s"handlePreprepareAction")
+      preprepare  <- F.delay(RlpCodec.decode[Preprepare](message.msg.bits).require.value)
+      checkResult <- checkProposal(message, context)
+      _ <- checkResult match {
+        case ProposalCheckResult.Success => {
+
+          /**
+            * I think this IF situation will never happen, don't know why Ethereum do this check
+            */
+          if (current.isLocked) {
+            if (preprepare.block.header.hash == current.lockedHash) {
+
+              /**
+                * Case 2.1, received PRE-PREPARE on B: Broadcasts COMMIT on B
+                * this situation may happened when some message delayed in the network,
+                * and locked on the PRE-PREPARE message's block means we have received enough PREPARE or COMMIT messages,
+                * so we can enter PREPARED state and broadcast COMMIT message directly,
+                * because when receive enough PREPARE or COMMIT messages we will enter PREPARED at least
+                *
+                * article in github says it broadcasts a PREPARE message here, I think it's a mistake,
+                * and code in Ethereum broadcasts a COMMIT message too.
+                */
+              context.setPreprepare(preprepare) >>
+                context.setState(StatePrepared) >>
+                Proxy.sendCommit(context)
+            } else {
+
+              /**
+                * Case 2.2, received PRE-PREPARE on B': Broadcasts ROUND CHANGE.
+                * LockedHash is not equal than the message's block hash, cause a ROUND CHANGE.
+                */
+              Proxy.sendNextRound(context)
+            }
+          } else {
+
+            /**
+              * we have no locked proposal
+              * enter PREPREPARED and broadcast prepare
+              */
+            context.setPreprepare(preprepare) >>
+              context.setState(StatePreprepared) >>
+              Proxy.sendPrepare(context)
+          }
+        }
+        case ProposalCheckResult.FutureBlock => {
+          // it's a future block,
+          F.raiseError(new Exception("future block"))
+        }
+        case ProposalCheckResult.UnauthorizedProposer => {
+          F.raiseError(new Exception("unauthorized proposer"))
+        }
+        case ProposalCheckResult.InvalidProposal => {
+          // invalid proposal, broadcast ROUND CHANGE message along with the proposed round number
+          Proxy.sendNextRound(context)
+        }
+        case _ => F.raiseError(new Exception("check proposal exception"))
+      }
+    } yield ()
 
   private def handleProposer[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
-      case ProposeAction(block) => {
+      case ProposeAction(block) =>
         // proposer broadcast PRE-PREPARE message, then enters PREPREPARED state
         for {
-          view       <- context.view
+          view <- context.view
+          _ = log.debug(s"handleProposer")
           isProposer <- context.validatorSet.get.map(_.isProposer(context.address))
           _ <- if (block.header.number == view.sequence && isProposer) {
             for {
               msg     <- F.pure(Preprepare(view, block))
               payload <- F.delay(RlpCodec.encode(msg).require.bytes)
-              _       <- Proxy.broadcast(Message.msgPreprepareCode, payload, context)
-              _       <- context.setPreprepare(msg)
-              _       <- context.setState(StatePreprepared)
+              _       <- Proxy.broadcast(IstanbulMessage.msgPreprepareCode, payload, context)
             } yield ()
           } else F.unit
         } yield ()
-      }
-      case _ => F.unit
+      case PreprepareAction(message)  => handlePreprepareAction(message, context)
+      case RoundChangeAction(message) => handleRoundChange(message, context)
+      case _                          => F.unit
     }
 
   /**
     * check the proposal is a valid block
     */
-  private def checkProposal[F[_]](message: Message, context: StateContext[F])(
+  private def checkProposal[F[_]](message: IstanbulMessage, context: StateContext[F])(
       implicit F: Concurrent[F]): F[ProposalCheckResult] =
     context.validatorSet.get.map(vs =>
       if (vs.isProposer(message.address)) {
@@ -104,77 +217,16 @@ case object StateNewRound extends State {
 
   private def handleValidator[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
-      case PreprepareAction(message) => {
-        // validator broadcast PREPARE message and enter PREPREPARED state upon receiving PRE-PREPARE message
-        for {
-          current     <- context.current.get
-          preprepare  <- F.delay(RlpCodec.decode[Preprepare](message.msg.bits).require.value)
-          checkResult <- checkProposal(message, context)
-          _ <- checkResult match {
-            case ProposalCheckResult.Success => {
-
-              /**
-                * I think this IF situation will never happen, don't know why Ethereum do this check
-                */
-              if (current.isLocked()) {
-                if (preprepare.block.header.hash == current.lockedHash) {
-
-                  /**
-                    * Case 2.1, received PRE-PREPARE on B: Broadcasts COMMIT on B
-                    * this situation may happened when some message delayed in the network,
-                    * and locked on the PRE-PREPARE message's block means we have received enough PREPARE or COMMIT messages,
-                    * so we can enter PREPARED state and broadcast COMMIT message directly,
-                    * because when receive enough PREPARE or COMMIT messages we will enter PREPARED at least
-                    *
-                    * article in github says it broadcasts a PREPARE message here, I think it's a mistake,
-                    * and code in Ethereum broadcasts a COMMIT message too.
-                    */
-                  context.setPreprepare(preprepare) >>
-                    context.setState(StatePrepared) >>
-                    Proxy.sendCommit(context)
-                } else {
-
-                  /**
-                    * Case 2.2, received PRE-PREPARE on B': Broadcasts ROUND CHANGE.
-                    * LockedHash is not equal than the message's block hash, cause a ROUND CHANGE.
-                    */
-                  Proxy.sendNextRound(context)
-                }
-              } else {
-
-                /**
-                  * we have no locked proposal
-                  * enter PREPREPARED and broadcast prepare
-                  */
-                Proxy.sendPrepare(context) >>
-                  context.setPreprepare(preprepare) >>
-                  context.setState(StatePreprepared)
-              }
-            }
-            case ProposalCheckResult.FutureBlock => {
-              // it's a future block,
-              F.raiseError(new Exception("future block"))
-            }
-            case ProposalCheckResult.UnauthorizedProposer => {
-              F.raiseError(new Exception("unauthorized proposer"))
-            }
-            case ProposalCheckResult.InvalidProposal => {
-              // invalid proposal, broadcast ROUND CHANGE message along with the proposed round number
-              Proxy.sendNextRound(context)
-            }
-            case _ => F.raiseError(new Exception("check proposal exception"))
-          }
-
-        } yield ()
-      }
-      case _ => F.unit
+      case PreprepareAction(message)  => handlePreprepareAction(message, context)
+      case RoundChangeAction(message) => handleRoundChange(message, context)
+      case _                          => F.unit
     }
 }
 
 case object StatePreprepared extends State {
   override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
-      case PrepareAction(message) => {
+      case PrepareAction(message) =>
         for {
           check <- checkPrepare(message, context)
           _ <- if (check) {
@@ -195,58 +247,27 @@ case object StatePreprepared extends State {
             } yield ()
           } else F.unit
         } yield ()
-      }
-      case CommitAction(message) => handleCommitAction(message, context)
-      case RoundChangeAction(message) =>
-        for {
-          payload <- F.delay(RlpCodec.decode[Subject](message.msg.bits).require.value)
-          _ <- context.roundChanges.update(m => {
-            m.getOrElse(payload.view.round, MessageSet.empty).addMessage(message)
-            m
-          })
-          roundState   <- context.current.get
-          validatorSet <- context.validatorSet.get
-          num          <- context.roundChanges.get.map(m => m.getOrElse(payload.view.round, MessageSet.empty).messages.size)
-          _ <- if (roundState.waitingForRoundChange && num == validatorSet.f + 1) {
-
-            /**
-              * Whenever a validator receives F + 1 of ROUND CHANGE messages on the same proposed round number,
-              * it compares the received one with its own. If the received is larger,
-              * the validator broadcasts ROUND CHANGE message again with the received number.
-              */
-            if (roundState.round < payload.view.round) {
-              Proxy.sendRoundChange(payload.view.round, context)
-            } else {
-              F.unit
-            }
-          } else if (num == 2 * validatorSet.f + 1 && (roundState.waitingForRoundChange || roundState.round < payload.view.round)) {
-
-            /**
-              * we've received 2f+1 ROUND CHANGE messages
-              * 1.set current state to ROUND CHANGE
-              * 2.manual trigger NewRoundAction to start a new round
-              */
-            context.setState(StateRoundChange) >>
-              StateRoundChange.handle(NewRoundAction(payload.view.round), context)
-          } else {
-            F.unit
-          }
-        } yield ()
-      case _ => F.unit
+      case CommitAction(message)      => handleCommitAction(message, context)
+      case RoundChangeAction(message) => handleRoundChange(message, context)
+      case _                          => F.unit
     }
 
 }
 case object StatePrepared extends State {
   override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
-      case CommitAction(message) => handleCommitAction(message, context)
-      case _                     => F.unit
+      case PrepareAction(message)     => acceptPrepare(message, context)
+      case CommitAction(message)      => handleCommitAction(message, context)
+      case RoundChangeAction(message) => handleRoundChange(message, context)
+      case _                          => F.unit
     }
 }
 case object StateCommitted extends State {
 
   override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
+      case PrepareAction(message) => acceptPrepare(message, context)
+      case CommitAction(message)  => acceptCommit(message, context)
       case InsertBlockAction =>
         for {
 
@@ -269,7 +290,8 @@ case object StateCommitted extends State {
                   /**
                     * unlock block and broadcast ROUND CHANGE when insertion fails
                     */
-                  context.unlockHash() >>
+                  context.setState(StateRoundChange) >>
+                    context.unlockHash() >>
                     Proxy.sendNextRound(context)
                 } else {
 
@@ -283,16 +305,18 @@ case object StateCommitted extends State {
             case None => F.unit
           }
         } yield ()
-      case _ => F.unit
+      case RoundChangeAction(message) => handleRoundChange(message, context)
+      case _                          => F.unit
     }
 }
 
 case object StateFinalCommitted extends State {
   override def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     action match {
-      case NewRoundAction(round) =>
+      case NewRoundAction(_) =>
         for {
           _       <- context.setState(StateNewRound)
+          _       <- context.unlockHash()
           promise <- context.roundChangePromise.get
           _       <- promise.complete(0)
         } yield ()
@@ -309,6 +333,7 @@ case object StateRoundChange extends State {
           promise <- context.roundChangePromise.get
           _       <- promise.complete(round)
         } yield ()
-      case _ => F.unit
+      case RoundChangeAction(message) => handleRoundChange(message, context)
+      case _                          => F.unit
     }
 }

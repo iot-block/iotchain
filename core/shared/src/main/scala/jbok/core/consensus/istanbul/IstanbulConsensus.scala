@@ -11,6 +11,8 @@ import jbok.core.consensus.istanbul.IstanbulInvalid._
 import cats.implicits._
 import jbok.core.consensus.Consensus.Result
 import jbok.core.ledger.TypedBlock
+import jbok.core.ledger.TypedBlock.MinedBlock
+import jbok.core.messages.IstanbulMessage
 import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
 import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
@@ -30,7 +32,7 @@ object IstanbulInvalid {
   case object CommittedSealInvalid      extends Exception("CommittedSealInvalid")
 }
 
-class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(implicit F: ConcurrentEffect[F])
+class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbul[F])(implicit F: ConcurrentEffect[F])
     extends Consensus[F](istanbul.history, blockPool) {
 
   private def validateExtra(header: BlockHeader, snapshot: Snapshot): F[IstanbulExtra] =
@@ -74,7 +76,7 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
       validSealAddrs <- extraData.committedSeals
         .map(
           seal =>
-            F.fromOption(Signature[ECDSA].recoverPublic(proposalSeal.kec256.toArray, CryptoSignature(seal.toArray), 0),
+            F.fromOption(istanbul.ecrecover(proposalSeal,CryptoSignature(seal.toArray)),
                          CommittedSealInvalid))
         .sequence
       validSeals = validSealAddrs.filter(pk => snapshot.validatorSet.contains(Address(pk.bytes.kec256))).distinct
@@ -82,7 +84,7 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
     } yield ()
 
   private def prepareCommittedSeal(hash: ByteVector): ByteVector =
-    hash ++ ByteVector(Message.msgCommitCode)
+    hash ++ ByteVector(IstanbulMessage.msgCommitCode)
 
   private def validateSigner(header: BlockHeader, snapshot: Snapshot): F[Unit] =
     for {
@@ -155,11 +157,30 @@ class IstanbulConsensus[F[_]](blockPool: BlockPool[F], istanbul: Istanbul[F])(im
     return ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes
   }
 
-  override def postProcess(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.ExecutedBlock[F]] = ???
+  override def postProcess(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.ExecutedBlock[F]] = F.pure(executed)
 
-  override def mine(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.MinedBlock] = ???
+  override def mine(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.MinedBlock] =
+    if (executed.block.header.number == 0) {
+      F.raiseError(new Exception("mining the genesis block is not supported"))
+    } else {
+      for {
+        snap <- istanbul.applyHeaders(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
+        mined <- if (!snap.validatorSet.contains(istanbul.signer)) {
+          F.raiseError(new Exception("unauthorized"))
+        } else {
+          for {
+            sigHash <- F.delay(Istanbul.sigHash(executed.block.header))
+            seal    <- istanbul.sign(sigHash)
+            extra = IstanbulExtra(snap.getValidators, ByteVector(seal.bytes), List.empty)
+            header = Istanbul
+              .filteredHeader(executed.block.header, false)
+              .copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes)
+          } yield MinedBlock(executed.block.copy(header = header), executed.receipts)
+        }
+      } yield mined
+    }
 
-  override def run(block: Block): F[Result] = ???
+  override def run(block: Block): F[Result] = F.pure(Consensus.Stash(block))
 
-  override def resolveBranch(headers: List[BlockHeader]): F[Consensus.BranchResult] = ???
+  override def resolveBranch(headers: List[BlockHeader]): F[Consensus.BranchResult] = F.pure(Consensus.NoChainSwitch)
 }

@@ -55,6 +55,22 @@ case class Receipts(receiptsForBlocks: List[List[Receipt]], override val id: Str
 
 case class AuthPacket(bytes: ByteVector) extends Message(0x2000)
 
+case class IstanbulMessage(
+    msgCode: Int,
+    msg: ByteVector = ByteVector.empty,
+    address: Address = Address.empty,
+    signature: ByteVector = ByteVector.empty,
+    committedSeal: ByteVector = ByteVector.empty
+) extends Message(0x5000)
+
+object IstanbulMessage {
+  val msgPreprepareCode = 0
+  val msgPrepareCode    = 1
+  val msgCommitCode     = 2
+  val msgRoundChange    = 3
+  val msgAll            = 4
+}
+
 object Message {
   implicit val codec: Codec[Message] = {
     discriminated[Message]
@@ -115,6 +131,10 @@ object Message {
         case x: AuthPacket => Some(x)
         case _             => None
       }(Codec[AuthPacket])
+      .subcaseO(0x5000) {
+        case x: IstanbulMessage => Some(x)
+        case _                  => None
+      }(Codec[IstanbulMessage])
   }
 
   implicit val I: RequestId[Message] = new RequestId[Message] {
