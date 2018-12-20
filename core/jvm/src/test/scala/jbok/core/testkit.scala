@@ -303,7 +303,7 @@ object testkit {
 
   def genSyncManager(status: SyncStatus = SyncStatus.Booting)(implicit config: FullNodeConfig): Gen[SyncManager[IO]] = {
     val executor = random[BlockExecutor[IO]]
-    SyncManager[IO](config.sync, executor).unsafeRunSync()
+    SyncManager[IO](config.sync, executor, status).unsafeRunSync()
   }
 
   implicit def arbSyncManager(implicit config: FullNodeConfig): Arbitrary[SyncManager[IO]] = Arbitrary {

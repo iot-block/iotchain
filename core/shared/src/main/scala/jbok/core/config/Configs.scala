@@ -75,7 +75,7 @@ object Configs {
   object FullNodeConfig {
     def fill(template: FullNodeConfig, size: Int): List[FullNodeConfig] =
       (0 until size).toList.map(i => {
-        template.withIdentityAndPort(s"test-node-${i}", 10000 + { i * 3 })
+        template.withIdentityAndPort(s"test-node-${i}", 20000 + { i * 3 })
       })
   }
 
