@@ -101,7 +101,7 @@ class SyncManagerSpec extends JbokSpec {
       val blocks = random[List[Block]](genBlocks(1, 1))
       val peer   = random[Peer[IO]]
       val peers  = random[List[Peer[IO]]](genPeers(1, 10))
-      peers.traverse(_.markBlock(blocks.head.header.hash)).unsafeRunSync()
+      peers.traverse(_.markBlock(blocks.head.header.hash, blocks.head.header.number)).unsafeRunSync()
       val request                 = Request(peer, NewBlock(blocks.head))
       val List(newHash, newBlock) = sm.service.run(request).unsafeRunSync()
       newHash._1.run(peers).unsafeRunSync().length shouldBe 0

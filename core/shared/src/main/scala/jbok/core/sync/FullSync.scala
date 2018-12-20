@@ -1,5 +1,6 @@
 package jbok.core.sync
 
+import cats.data.OptionT
 import cats.effect.concurrent.Ref
 import cats.effect.implicits._
 import cats.effect.{ConcurrentEffect, Timer}
@@ -12,6 +13,7 @@ import jbok.core.ledger.TypedBlock.SyncBlocks
 import jbok.core.messages._
 import jbok.core.models._
 import jbok.core.peer.{Peer, PeerSelectStrategy}
+import jbok.core.sync.SyncStatus.FullSyncing
 
 import scala.concurrent.duration._
 
@@ -29,53 +31,59 @@ case class FullSync[F[_]](
   val peerManager = executor.peerManager
 
   val stream: Stream[F, Option[Unit]] = {
-    val check = for {
-      connected <- peerManager.connected
-      current   <- executor.consensus.history.getBestBlockNumber
-      startNumber = BigInt(1).max(current + 1 - config.fullSyncOffset)
-      bestPeerOpt <- PeerSelectStrategy.bestPeer[F](startNumber).run(connected).map(_.headOption)
-      result <- bestPeerOpt match {
-        case Some(peer) =>
-          for {
-            _      <- syncStatus.set(SyncStatus.FullSyncing(startNumber))
-            result <- requestPeer(peer, startNumber).map(_.some)
-          } yield result
+    val checkPeer: F[Option[FullSyncing[F]]] =
+      (for {
+        connected <- OptionT.liftF(peerManager.connected)
+        current   <- OptionT.liftF(executor.consensus.history.getBestBlockNumber)
+        startNumber = BigInt(1).max(current + 1 - config.fullSyncOffset)
+        bestPeer <- OptionT(PeerSelectStrategy.bestPeer[F](startNumber).run(connected).map(_.headOption))
+        status   <- OptionT.liftF(bestPeer.status.get)
+        syncing = FullSyncing(bestPeer, startNumber, status.bestNumber)
+      } yield syncing).value
 
-        case None =>
-          log.debug(s"no suitable peer for syncing now, retry in ${config.checkForNewBlockInterval}")
-          none[Unit].pure[F]
-      }
-    } yield result
+    val f: F[Option[Unit]] = checkPeer.flatMap {
+      case Some(fullSyncing) =>
+        for {
+          _      <- syncStatus.set(fullSyncing)
+          result <- requestPeer(fullSyncing).map(_.some)
+        } yield result
 
-    Stream.eval {
-      F.delay(log.info(s"start full sync")) >> check
-    } ++ Stream.awakeEvery[F](config.checkForNewBlockInterval).evalMap(_ => check)
+      case None =>
+        for {
+          _ <- syncStatus.set(SyncStatus.SyncDone)
+          _ = log.info(s"no suitable peer for syncing now, retry in ${config.checkForNewBlockInterval}")
+          _ <- T.sleep(config.checkForNewBlockInterval)
+        } yield None
+    }
+
+    Stream.eval_(F.delay(log.info(s"start full sync"))) ++ Stream.repeatEval(f)
   }
 
-  private def requestPeer(peer: Peer[F], startNumber: BigInt): F[Unit] =
+  private def requestPeer(status: FullSyncing[F]): F[Unit] = {
+    val limit = config.maxBlockHeadersPerRequest min (status.target - status.start + 1).toInt
     for {
-      status <- peer.status.get
-      limit = config.maxBlockHeadersPerRequest min (status.bestNumber - startNumber + 1).toInt
-      _     = log.debug(s"request BlockHeader [${startNumber}, ${startNumber + limit})")
+      _     <- log.debug(s"request BlockHeader [${status.start}, ${status.start + limit})").pure[F]
       start <- T.clock.monotonic(MILLISECONDS)
-      _ <- peer.conn
-        .request(GetBlockHeaders(Left(startNumber), limit, 0, false))
+      _ <- status.peer.conn
+        .request(GetBlockHeaders(Left(status.start), limit, 0, false))
         .timeout(config.requestTimeout)
         .attempt
         .flatMap {
           case Right(BlockHeaders(headers, _)) =>
             if (headers.isEmpty) {
-              F.delay(log.debug(s"got empty headers from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
+              F.delay(
+                log.debug(s"got empty headers from ${status.peer.id}, retry in ${config.checkForNewBlockInterval}"))
             } else {
               T.clock.monotonic(MILLISECONDS).map { end =>
                 log.debug(s"received ${headers.length} BlockHeader(s) in ${end - start}ms")
-              } >> handleBlockHeaders(peer, startNumber, headers)
+              } >> handleBlockHeaders(status.peer, status.start, headers)
             }
           case _ =>
-            log.debug(s"got headers timeout from ${peer.id}, retry in ${config.checkForNewBlockInterval}")
+            log.debug(s"got headers timeout from ${status.peer.id}, retry in ${config.checkForNewBlockInterval}")
             F.unit
         }
     } yield ()
+  }
 
   private def handleBlockHeaders(peer: Peer[F], startNumber: BigInt, headers: List[BlockHeader]): F[Unit] =
     if (headers.headOption.map(_.number).contains(startNumber)) {

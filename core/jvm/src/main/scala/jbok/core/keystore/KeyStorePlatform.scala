@@ -30,7 +30,7 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
 
   override def readPassphrase(prompt: String): F[String] =
     for {
-      _          <- Terminal.putStr[F](prompt)
+      _          <- Terminal.putStrLn[F](prompt)
       passphrase <- Terminal.readPassword[F]("Passphrase:")
     } yield passphrase
 

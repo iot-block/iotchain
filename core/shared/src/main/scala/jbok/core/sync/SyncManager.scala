@@ -95,9 +95,10 @@ final case class SyncManager[F[_]] private (
 
   val messageService: PeerRoutes[F] = PeerRoutes.of[F] {
     case Request(peer, NewBlockHashes(hashes)) =>
-      hashes.traverse(hash => peer.markBlock(hash.hash)).as(Nil)
+      hashes.traverse(hash => peer.markBlock(hash.hash, hash.number)).as(Nil)
 
     case Request(peer, NewBlock(block)) =>
+      peer.markBlock(block.header.hash, block.header.number) >>
       syncStatus.get.flatMap {
         case SyncStatus.SyncDone =>
           executor

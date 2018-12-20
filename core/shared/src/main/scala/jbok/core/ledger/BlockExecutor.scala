@@ -40,8 +40,6 @@ case class BlockExecutor[F[_]](
 
   def handleReceivedBlock(received: ReceivedBlock[F]): F[List[Block]] =
     for {
-      _ <- received.peer.markBlock(received.block.header.hash)
-      _ = log.trace(s"handle receive block: ${received.block.tag}")
       result <- importBlock(received.block)
     } yield result
 

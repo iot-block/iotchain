@@ -28,8 +28,9 @@ case class Peer[F[_]](
   def hasTxs(stxs: SignedTransactions): F[Boolean] =
     knownTxs.get.map(_.contains(stxs))
 
-  def markBlock(blockHash: ByteVector): F[Unit] =
-    knownBlocks.update(s => s.take(MaxKnownBlocks - 1) + blockHash)
+  def markBlock(blockHash: ByteVector, number: BigInt): F[Unit] =
+    knownBlocks.update(s => s.take(MaxKnownBlocks - 1) + blockHash) >>
+      status.update(s => s.copy(bestNumber = s.bestNumber.max(number)))
 
   def markTxs(stxs: SignedTransactions): F[Unit] =
     knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs)

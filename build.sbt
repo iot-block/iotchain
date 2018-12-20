@@ -200,7 +200,7 @@ lazy val appJS = app.js
 lazy val appJVM = app.jvm.settings(
   scalaJSProjects := Seq(appJS),
   pipelineStages in Assets := Seq(scalaJSPipeline),
-  isDevMode in Assets := true
+  isDevMode in scalaJSPipeline := true
 )
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)
@@ -302,13 +302,14 @@ lazy val commonSettings = Seq(
   //  addCompilerPlugin("ch.epfl.scala"   %% "scalac-profiling"   % "1.0.0"),
   //  addCompilerPlugin(scalafixSemanticdb),
   connectInput in run := true,
-  fork in Test := false,
+  fork in Test := true,
   parallelExecution in test := false,
   scalacOpts
 )
 
 lazy val commonJsSettings = Seq(
   fork := false,
+  fork in Test := false,
   scalaJSUseMainModuleInitializer := true,
   scalaJSUseMainModuleInitializer in Test := false,
   webpackBundlingMode := BundlingMode.LibraryOnly(),

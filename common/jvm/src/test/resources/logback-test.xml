@@ -11,6 +11,8 @@
 
     <logger name="org.http4s" level="WARN" />
     <logger name="org.http4s.server" level="WARN" />
+    <logger name="org.http4s.blaze" level="OFF" />
+    <logger name="org.http4s.blazecore" level="OFF" />
     <logger name="com.offbynull.portmapper" level="INFO" />
     <logger name="scalacache" level="INFO" />
     <logger name="io.netty" level="WARN" />

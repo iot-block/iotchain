@@ -25,7 +25,7 @@ case class CliqueConsensus[F[_]](
 
   override def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader]): F[BlockHeader] =
     for {
-      parent <- parentOpt.fold(history.getBestBlock)(_.pure[F])
+      parent  <- parentOpt.fold(history.getBestBlock)(_.pure[F])
       blockNumber = parent.header.number + 1
       timestamp   = parent.header.unixTimestamp + clique.config.period.toMillis
       snap <- clique.applyHeaders(parent.header.number, parent.header.hash, Nil)
@@ -170,8 +170,6 @@ case class CliqueConsensus[F[_]](
         .map(_.number)
         .traverse(history.getBlockByNumber)
         .map { blocks =>
-          log.debug(s"local blocks: ${blocks.flatten.map(_.tag)}")
-
           val (a, newBranch) = blocks
             .zip(headers)
             .dropWhile {
