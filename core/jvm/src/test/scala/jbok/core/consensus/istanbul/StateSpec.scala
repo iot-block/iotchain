@@ -385,7 +385,7 @@ class StateSpec extends JbokSpec {
       )
     }
 
-    "receive 3 commit message" should {
+    "receive 3 commit messages" should {
       "block insertion success, Prepared -> Committed -> Final Committed -> NewRound" in {
         val consensus: IstanbulConsensus[IO] = fixture.consensus.unsafeRunSync().asInstanceOf[IstanbulConsensus[IO]]
         val block                            = random[List[Block]](genBlocks(1, 1)).head
@@ -463,11 +463,13 @@ class StateSpec extends JbokSpec {
       val fakeRound        = 2
       val fakeSubject      = subject.copy(view = subject.view.copy(round = fakeRound))
 
+      // receive 2 roundChange messages, still Preprepared
       fakeReceiveRoundChange(fakeSubject, "B", istanbul).unsafeRunSync()
       fakeReceiveRoundChange(fakeSubject, "C", istanbul).unsafeRunSync()
       istanbul.state.get.unsafeRunSync() shouldBe StatePreprepared
       istanbul.roundChanges.get.unsafeRunSync()(fakeRound).messages.size shouldBe 2
 
+      // receive 3 roundCHange messages, Preprepared -> Round Change -> New Round
       fakeReceiveRoundChange(fakeSubject, "D", istanbul).unsafeRunSync()
       istanbul.roundChanges.get.unsafeRunSync()(fakeRound).messages.size shouldBe 3
       check(

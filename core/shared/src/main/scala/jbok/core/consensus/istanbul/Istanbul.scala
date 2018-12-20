@@ -22,16 +22,16 @@ import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.concurrent.duration._
 
 case class Istanbul[F[_]](
-    val config: IstanbulConfig,
-    val history: History[F],
-    val keyPair: KeyPair,
-    val roundChangePromise: Ref[F, Deferred[F, BigInt]],
-    val state: Ref[F, State],
-    val backlogs: Ref[F, Map[Address, List[IstanbulMessage]]],
-    val current: Ref[F, RoundState],
-    val roundChanges: Ref[F, Map[BigInt, MessageSet]],
-    val validatorSet: Ref[F, ValidatorSet],
-    val candidates: Ref[F, Map[Address, Boolean]]
+    config: IstanbulConfig,
+    history: History[F],
+    keyPair: KeyPair,
+    roundChangePromise: Ref[F, Deferred[F, BigInt]],
+    state: Ref[F, State],
+    backlogs: Ref[F, Map[Address, List[IstanbulMessage]]],
+    current: Ref[F, RoundState],
+    roundChanges: Ref[F, Map[BigInt, MessageSet]],
+    validatorSet: Ref[F, ValidatorSet],
+    candidates: Ref[F, Map[Address, Boolean]]
 )(implicit F: Concurrent[F], C: Cache[Snapshot], timer: Timer[F], chainId: BigInt) {
 
   def signer: Address = Address(keyPair)
