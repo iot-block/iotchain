@@ -1,9 +1,9 @@
 package jbok.core.sync
 
+import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
-import fs2.concurrent.SignallingRef
 import jbok.core.config.Configs.SyncConfig
 import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.TypedBlock.ReceivedBlock
@@ -13,9 +13,10 @@ import jbok.core.peer.PeerSelectStrategy.PeerSelectStrategy
 import jbok.core.peer._
 import scodec.bits.ByteVector
 
-final case class SyncManager[F[_]](
+final case class SyncManager[F[_]] private (
     config: SyncConfig,
     executor: BlockExecutor[F],
+    syncStatus: Ref[F, SyncStatus],
     fullSync: FullSync[F],
     fastSync: FastSync[F]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
@@ -28,11 +29,10 @@ final case class SyncManager[F[_]](
       log.trace(s"received request ${req.message}")
       service.run(req).flatMap { response: List[(PeerSelectStrategy[F], Message)] =>
         response
-          .traverse[F, Unit] {
+          .traverse_[F, Unit] {
             case (strategy, message) =>
               peerManager.distribute(strategy, message)
           }
-          .void
       }
     }
 
@@ -95,12 +95,17 @@ final case class SyncManager[F[_]](
 
   val messageService: PeerRoutes[F] = PeerRoutes.of[F] {
     case Request(peer, NewBlockHashes(hashes)) =>
-      hashes.traverse(hash => peer.markBlock(hash.hash)) >> F.pure(Nil)
+      hashes.traverse(hash => peer.markBlock(hash.hash)).as(Nil)
 
     case Request(peer, NewBlock(block)) =>
-      executor
-        .handleReceivedBlock(ReceivedBlock(block, peer))
-        .map(blocks => blocks.flatMap(broadcastBlock))
+      syncStatus.get.flatMap {
+        case SyncStatus.SyncDone =>
+          executor
+            .handleReceivedBlock(ReceivedBlock(block, peer))
+            .map(blocks => blocks.flatMap(broadcastBlock))
+        case _ =>
+          F.delay(log.debug(s"still in syncing, ignore ${block.tag} atm")).as(Nil)
+      }
 
     case Request(peer, stxs: SignedTransactions) =>
       log.debug(s"received ${stxs.txs.length} stxs from ${peer.id}")
@@ -136,9 +141,11 @@ object SyncManager {
   def apply[F[_]](
       config: SyncConfig,
       executor: BlockExecutor[F],
+      status: SyncStatus = SyncStatus.Booting
   )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[SyncManager[F]] =
     for {
-      fastSync <- FastSync[F](config, executor.peerManager)
-      fullSync <- FullSync[F](config, executor)
-    } yield SyncManager[F](config, executor, fullSync, fastSync)
+      syncStatus <- Ref.of[F, SyncStatus](status)
+      fastSync   <- FastSync[F](config, executor.peerManager)
+      fullSync = FullSync[F](config, executor, syncStatus)
+    } yield SyncManager[F](config, executor, syncStatus, fullSync, fastSync)
 }

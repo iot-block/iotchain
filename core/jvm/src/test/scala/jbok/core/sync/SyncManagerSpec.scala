@@ -85,7 +85,7 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager Block Service" should {
     "broadcast NewBlockHashes to all peers and NewBlock to random part of the peers" in {
-      val sm                      = random[SyncManager[IO]]
+      val sm                      = random[SyncManager[IO]](genSyncManager(SyncStatus.SyncDone))
       val blocks                  = random[List[Block]](genBlocks(1, 1))
       val peer                    = random[Peer[IO]]
       val peers                   = random[List[Peer[IO]]](genPeers(1, 10))
@@ -97,7 +97,7 @@ class SyncManagerSpec extends JbokSpec {
     }
 
     "not send block when it is known by the peer" in {
-      val sm     = random[SyncManager[IO]]
+      val sm     = random[SyncManager[IO]](genSyncManager(SyncStatus.SyncDone))
       val blocks = random[List[Block]](genBlocks(1, 1))
       val peer   = random[Peer[IO]]
       val peers  = random[List[Peer[IO]]](genPeers(1, 10))
@@ -123,9 +123,9 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager FullSync" should {
     "sync to the highest state" in {
-      val sm1   = random[SyncManager[IO]](genSyncManager(config1))
-      val sm2   = random[SyncManager[IO]](genSyncManager(config2))
-      val sm3   = random[SyncManager[IO]](genSyncManager(config3))
+      val sm1   = random[SyncManager[IO]](genSyncManager()(config1))
+      val sm2   = random[SyncManager[IO]](genSyncManager()(config2))
+      val sm3   = random[SyncManager[IO]](genSyncManager()(config3))
       val miner = BlockMiner[IO](reference.mining, sm1).unsafeRunSync()
 
       // let miner mine 10 blocks first
@@ -161,9 +161,9 @@ class SyncManagerSpec extends JbokSpec {
     "fast sync to median state if best peer number - offset >= current best number" in {
       val List(config1, config2, config3) =
         FullNodeConfig.fill(config.withSync(_.copy(fastEnabled = true, fastSyncOffset = 0)), 3)
-      val sm1 = random[SyncManager[IO]](genSyncManager(config1))
-      val sm2 = random[SyncManager[IO]](genSyncManager(config2))
-      val sm3 = random[SyncManager[IO]](genSyncManager(config3))
+      val sm1 = random[SyncManager[IO]](genSyncManager()(config1))
+      val sm2 = random[SyncManager[IO]](genSyncManager()(config2))
+      val sm3 = random[SyncManager[IO]](genSyncManager()(config3))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))
@@ -189,9 +189,9 @@ class SyncManagerSpec extends JbokSpec {
     "skip fast sync if best peer number - offset < current best number" in {
       val List(config1, config2, config3) =
         FullNodeConfig.fill(config.withSync(_.copy(fastEnabled = true)), 3)
-      val sm1  = random[SyncManager[IO]](genSyncManager(config1))
-      val sm2  = random[SyncManager[IO]](genSyncManager(config2))
-      val sm3  = random[SyncManager[IO]](genSyncManager(config3))
+      val sm1  = random[SyncManager[IO]](genSyncManager()(config1))
+      val sm2  = random[SyncManager[IO]](genSyncManager()(config2))
+      val sm3  = random[SyncManager[IO]](genSyncManager()(config3))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))
@@ -223,9 +223,9 @@ class SyncManagerSpec extends JbokSpec {
         config.withSync(_.copy(fastEnabled = true, fastSyncOffset = 5)),
         3
       )
-      val sm1     = random[SyncManager[IO]](genSyncManager(config1))
-      val sm2     = random[SyncManager[IO]](genSyncManager(config2))
-      val sm3     = random[SyncManager[IO]](genSyncManager(config3))
+      val sm1     = random[SyncManager[IO]](genSyncManager()(config1))
+      val sm2     = random[SyncManager[IO]](genSyncManager()(config2))
+      val sm3     = random[SyncManager[IO]](genSyncManager()(config3))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))

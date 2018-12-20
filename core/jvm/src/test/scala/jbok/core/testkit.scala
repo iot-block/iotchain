@@ -1,6 +1,7 @@
 package jbok.core
 
 import cats.effect.IO
+import cats.effect.concurrent.Ref
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
@@ -295,17 +296,18 @@ object testkit {
   }
 
   def genFullSync(implicit config: FullNodeConfig): Gen[FullSync[IO]] = {
-    val executor = random[BlockExecutor[IO]]
-    FullSync[IO](config.sync, executor).unsafeRunSync()
+    val executor   = random[BlockExecutor[IO]]
+    val syncStatus = Ref.of[IO, SyncStatus](SyncStatus.Booting).unsafeRunSync()
+    FullSync[IO](config.sync, executor, syncStatus)
   }
 
-  def genSyncManager(implicit config: FullNodeConfig): Gen[SyncManager[IO]] = {
+  def genSyncManager(status: SyncStatus = SyncStatus.Booting)(implicit config: FullNodeConfig): Gen[SyncManager[IO]] = {
     val executor = random[BlockExecutor[IO]]
     SyncManager[IO](config.sync, executor).unsafeRunSync()
   }
 
   implicit def arbSyncManager(implicit config: FullNodeConfig): Arbitrary[SyncManager[IO]] = Arbitrary {
-    genSyncManager(config)
+    genSyncManager()(config)
   }
 
   def genDiscovery(implicit config: FullNodeConfig): Gen[Discovery[IO]] = {

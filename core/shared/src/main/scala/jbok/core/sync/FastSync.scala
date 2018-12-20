@@ -46,10 +46,13 @@ final class FastSync[F[_]](
   private[this] val history = peerManager.history
 
   val stream: Stream[F, Unit] = {
-    Stream.eval(initState).flatMap {
-      case Some(state) => startFastSync(state)
-      case None        => Stream.empty
-    }
+    Stream.eval(F.delay(log.info(s"start fast sync"))) ++ Stream
+      .eval(initState)
+      .flatMap {
+        case Some(state) => startFastSync(state)
+        case None        => Stream.empty
+      }
+      .onFinalize(F.delay(s"finish fast sync"))
   }
 
   private def initState: F[Option[FastSyncState[F]]] =
