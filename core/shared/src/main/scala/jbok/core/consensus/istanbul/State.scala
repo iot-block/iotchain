@@ -27,7 +27,7 @@ trait State {
           F.delay(RlpCodec.decode[Subject](message.msg.bits).require.value)
             .map(
               prepare =>
-                prepare.view.sequence == s.view.sequence
+                prepare.view.blockNumber == s.view.blockNumber
                   && prepare.view.round == s.view.round
                   && prepare.digest == s.digest)
         case None => F.pure(false)
@@ -190,7 +190,7 @@ case object StateNewRound extends State {
           view <- context.view
           _ = log.debug(s"handleProposer")
           isProposer <- context.validatorSet.get.map(_.isProposer(context.address))
-          _ <- if (block.header.number == view.sequence && isProposer) {
+          _ <- if (block.header.number == view.blockNumber && isProposer) {
             for {
               msg     <- F.pure(Preprepare(view, block))
               payload <- F.delay(RlpCodec.encode(msg).require.bytes)

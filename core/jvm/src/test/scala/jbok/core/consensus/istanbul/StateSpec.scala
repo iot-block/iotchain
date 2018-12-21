@@ -25,7 +25,7 @@ case class Expect(
     commits: List[Address],
     isLocked: Boolean,
     waitingForRoundChange: Boolean,
-    round: BigInt,
+    round: Int,
     sequence: BigInt,
     preprepare: Option[Preprepare]
 )
@@ -45,7 +45,7 @@ object Expect {
       isLocked = roundState.isLocked,
       waitingForRoundChange = roundState.waitingForRoundChange,
       round = roundState.round,
-      sequence = roundState.sequence,
+      sequence = roundState.blockNumber,
       preprepare = roundState.preprepare
     )
   }

@@ -66,8 +66,8 @@ case class StateContext[F[_]](
     validatorSet: Ref[F, ValidatorSet],
     current: Ref[F, RoundState],
     state: Ref[F, State],
-    roundChanges: Ref[F, Map[BigInt, MessageSet]],
-    roundChangePromise: Ref[F, Deferred[F, BigInt]],
+    roundChanges: Ref[F, Map[Int, MessageSet]],
+    roundChangePromise: Ref[F, Deferred[F, Int]],
     signFunc: ByteVector => F[CryptoSignature],
     eventHandler: IstanbulMessage => F[Unit]
 )(implicit F: Concurrent[F]) {
@@ -96,7 +96,7 @@ case class StateContext[F[_]](
       enough = rs.commits.messages.size > 2 * vs.f
     } yield enough
 
-  def view: F[View]               = current.get.map(s => View(s.round, s.sequence))
+  def view: F[View]               = current.get.map(s => View(s.round, s.blockNumber))
   def proposal: F[Option[Block]]  = current.get.map(_.preprepare.map(p => p.block))
   def setState(s: State): F[Unit] = state.set(s)
 
@@ -106,17 +106,13 @@ case class StateContext[F[_]](
   def addCommit(message: IstanbulMessage): F[Unit] =
     current.update(rs => rs.copy(commits = rs.commits.addMessage(message)))
 
-  def addRoundChange(round: BigInt, message: IstanbulMessage): F[Unit] =
+  def addRoundChange(round: Int, message: IstanbulMessage): F[Unit] =
     roundChanges.update(m => m + (round -> (m.getOrElse(round, MessageSet.empty).addMessage(message))))
-//    roundChanges.update(messages => {
-//      messages.getOrElseUpdate(round, MessageSet.empty).addMessage(message)
-//      messages
-//    })
 
   /**
     * delete the messages with smaller round
     */
-  private def clearRoundChange(round: BigInt): F[Unit] =
+  private def clearRoundChange(round: Int): F[Unit] =
     roundChanges.update(_.filter(_._1 >= round))
 
   /**
@@ -131,7 +127,7 @@ case class StateContext[F[_]](
     * and otherwise we clear preprepare when it's not locked since we fire a NEW ROUND when this
     * function is called
     */
-  def updateCurrentRound(round: BigInt): F[Unit] =
+  def updateCurrentRound(round: Int): F[Unit] =
     for {
       _ <- current.update(s => {
         if (s.isLocked)
@@ -149,21 +145,12 @@ case class StateContext[F[_]](
   def setPreprepare(preprepare: Preprepare): F[Unit] = current.update(_.copy(preprepare = Some(preprepare)))
 
   def currentSubject(): F[Option[Subject]] =
-    for {
-      c <- current.get
-      subject = c.preprepare match {
-        case Some(p) => {
-          val view = View(c.round, c.sequence)
-          Some(Subject(view, p.block.header.hash))
-        }
-        case None => None
-      }
-    } yield subject
+    current.get.map(rs => rs.preprepare.map(p => Subject(View(rs.round, rs.blockNumber), p.block.header.hash)))
 }
 
 case class View(
-    val round: BigInt,
-    val sequence: BigInt
+    val round: Int,
+    val blockNumber: BigInt
 )
 object View {
   def empty: View = View(0, 0)
@@ -172,7 +159,7 @@ object View {
 @JsonCodec
 case class ValidatorSet(
     proposer: Address,
-    validators: ArrayBuffer[Address]
+    validators: List[Address]
 ) {
 
   def isProposer(address: Address): Boolean = contains(address) && proposer == address
@@ -184,18 +171,14 @@ case class ValidatorSet(
 
   def contains(address: Address): Boolean = validators.contains(address)
 
-  def addValidator(address: Address): Unit = validators += address
-
-  def removeValidator(address: Address): Unit = validators -= address
-
-  def calculateProposer(lastProposer: Address, round: BigInt, policy: Int): Option[Address] =
+  def calculateProposer(lastProposer: Address, round: Int, policy: Int): Option[Address] =
     policy match {
       case IstanbulConfig.roundRobin => roundRobinProposer(lastProposer, round)
       case IstanbulConfig.sticky     => stickyProposer(lastProposer, round)
       case _                         => None
     }
 
-  private def roundRobinProposer(lastProposer: Address, round: BigInt): Option[Address] = {
+  private def roundRobinProposer(lastProposer: Address, round: Int): Option[Address] = {
     if (validators.isEmpty) return None
 
     val seed =
@@ -206,20 +189,20 @@ case class ValidatorSet(
     Option(validators(robin.intValue()))
   }
 
-  private def stickyProposer(lastProposer: Address, round: BigInt): Option[Address] = None
+  private def stickyProposer(lastProposer: Address, round: Int): Option[Address] = None
 
 }
 object ValidatorSet {
-  def empty: ValidatorSet = ValidatorSet(proposer = Address.empty, validators = ArrayBuffer.empty)
+  def empty: ValidatorSet = ValidatorSet(proposer = Address.empty, validators = List.empty)
 
   def apply(
       proposer: Address,
-      validators: ArrayBuffer[Address]
+      validators: List[Address]
   ): ValidatorSet = new ValidatorSet(proposer, validators)
 
   def apply(
       validators: Iterable[Address]
-  ): ValidatorSet = ValidatorSet(validators.head, ArrayBuffer.empty ++ validators)
+  ): ValidatorSet = ValidatorSet(validators.head, validators.toList)
 }
 
 case class MessageSet(
@@ -234,8 +217,8 @@ object MessageSet {
 }
 
 case class RoundState(
-    round: BigInt,
-    sequence: BigInt,
+    round: Int,
+    blockNumber: BigInt,
     preprepare: Option[Preprepare],
     prepares: MessageSet,
     commits: MessageSet,

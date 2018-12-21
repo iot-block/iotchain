@@ -47,7 +47,7 @@ object Proxy {
       _          <- sendRoundChange(roundState.round + 1, context)
     } yield ()
 
-  def sendRoundChange[F[_]](round: BigInt, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
+  def sendRoundChange[F[_]](round: Int, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     for {
       rs <- context.current.get
       // compare current round with new round, if current is larger, we will not send the ROUND CHANGE message
@@ -58,7 +58,7 @@ object Proxy {
         context.updateCurrentRound(round) >>
           // broadcast ROUND CHANGE message
           broadcast(IstanbulMessage.msgRoundChange,
-                    RlpCodec.encode(Subject(View(round, rs.sequence), ByteVector.empty)).require.bytes,
+                    RlpCodec.encode(Subject(View(round, rs.blockNumber), ByteVector.empty)).require.bytes,
                     context)
       }
     } yield ()

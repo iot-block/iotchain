@@ -25,11 +25,11 @@ case class Istanbul[F[_]](
     config: IstanbulConfig,
     history: History[F],
     keyPair: KeyPair,
-    roundChangePromise: Ref[F, Deferred[F, BigInt]],
+    roundChangePromise: Ref[F, Deferred[F, Int]],
     state: Ref[F, State],
     backlogs: Ref[F, Map[Address, List[IstanbulMessage]]],
     current: Ref[F, RoundState],
-    roundChanges: Ref[F, Map[BigInt, MessageSet]],
+    roundChanges: Ref[F, Map[Int, MessageSet]],
     validatorSet: Ref[F, ValidatorSet],
     candidates: Ref[F, Map[Address, Boolean]]
 )(implicit F: Concurrent[F], C: Cache[Snapshot], timer: Timer[F], chainId: BigInt) {
@@ -115,17 +115,17 @@ case class Istanbul[F[_]](
         F.pure(CheckResult.UnauthorizedAddress)
       } else if (message.msgCode == IstanbulMessage.msgRoundChange) {
 //        ROUND CHANGE message
-        if (view.sequence > currentState.sequence) {
+        if (view.blockNumber > currentState.blockNumber) {
 //          message's sequence bigger than current state
           F.pure(CheckResult.FutureMessage)
-        } else if (view.sequence < currentState.sequence || (view.sequence == currentState.sequence && view.round < currentState.round)) {
+        } else if (view.blockNumber < currentState.blockNumber || (view.blockNumber == currentState.blockNumber && view.round < currentState.round)) {
           F.pure(CheckResult.OldMessage)
         } else {
           F.pure(CheckResult.Success)
         }
-      } else if (view.sequence > currentState.sequence || (view.sequence == currentState.sequence && view.round > currentState.round)) {
+      } else if (view.blockNumber > currentState.blockNumber || (view.blockNumber == currentState.blockNumber && view.round > currentState.round)) {
         F.pure(CheckResult.FutureMessage)
-      } else if (view.sequence < currentState.sequence || (view.sequence == currentState.sequence && view.round < currentState.round)) {
+      } else if (view.blockNumber < currentState.blockNumber || (view.blockNumber == currentState.blockNumber && view.round < currentState.round)) {
         F.pure(CheckResult.OldMessage)
       } else if (currentState.waitingForRoundChange) {
         F.pure(CheckResult.FutureMessage)
@@ -231,11 +231,11 @@ case class Istanbul[F[_]](
     * return true means we are in old round, and we should work on current sequence
     * return false means the old round is passed, we should propose a new block and work on new sequence
     */
-  private def shouldChangeRound(lastProposal: Block, round: BigInt): F[Boolean] =
+  private def shouldChangeRound(lastProposal: Block, round: Int): F[Boolean] =
     for {
       rs <- this.current.get
-      roundChange <- if (lastProposal.header.number >= rs.sequence) F.pure(false)
-      else if (lastProposal.header.number == rs.sequence - 1) {
+      roundChange <- if (lastProposal.header.number >= rs.blockNumber) F.pure(false)
+      else if (lastProposal.header.number == rs.blockNumber - 1) {
         if (round < rs.round)
           F.raiseError(
             new Exception(s"New round should not be smaller than current round:new $round,current ${rs.round}"))
@@ -249,7 +249,7 @@ case class Istanbul[F[_]](
     * 1.we have received 2F+1 roundChange messages,start a new round to exits the round change loop,calculates the new proposer
     * 2.last proposal has succeeded, start a new round to generate a new block proposal
     */
-  def startNewRound(round: BigInt, preprepare: Option[Preprepare] = None, allowTimeout: Boolean = true): F[Unit] =
+  def startNewRound(round: Int, preprepare: Option[Preprepare] = None, allowTimeout: Boolean = true): F[Unit] =
     /**
       * select proposal
       * calculate new proposer
@@ -263,7 +263,7 @@ case class Istanbul[F[_]](
       roundChange  <- shouldChangeRound(lastProposal, round)
       currentState <- this.current.get
       view <- if (roundChange) {
-        F.pure(View(sequence = currentState.sequence, round = round))
+        F.pure(View(blockNumber = currentState.blockNumber, round = round))
       } else {
 
         /**
@@ -272,7 +272,7 @@ case class Istanbul[F[_]](
         for {
           newValidators <- getValidators(lastProposal.header.number, lastProposal.header.hash)
           _             <- validatorSet.set(newValidators)
-        } yield View(sequence = lastProposal.header.number + 1, round = 0)
+        } yield View(blockNumber = lastProposal.header.number + 1, round = 0)
       }
 
       _ <- roundChanges.set(Map.empty)
@@ -288,7 +288,7 @@ case class Istanbul[F[_]](
       } else {
         context.current.update(
           _.copy(round = view.round,
-                 sequence = view.sequence,
+                 blockNumber = view.blockNumber,
                  preprepare = preprepare,
                  lockedHash = ByteVector.empty,
                  prepares = MessageSet.empty,
@@ -315,7 +315,7 @@ case class Istanbul[F[_]](
 
   private def waitTimeout(): F[Unit] =
     for {
-      d      <- Deferred[F, BigInt]
+      d      <- Deferred[F, Int]
       _      <- roundChangePromise.set(d)
       result <- d.get.timeout(config.requestTimeout.millis).attempt
       _ = log.debug(s"timeout result:$result")
@@ -329,7 +329,7 @@ case class Istanbul[F[_]](
             lastProposal <- history.getBestBlock
             context  = currentContext
             _        = log.debug(s"timeout:$context")
-            maxRound = rcs.filter(_._2.messages.size > vs.f).toList.map(_._1).maximumOption.getOrElse(BigInt(0))
+            maxRound = rcs.filter(_._2.messages.size > vs.f).toList.map(_._1).maximumOption.getOrElse(0)
             _ <- if (!currentState.waitingForRoundChange && maxRound > currentState.round) {
 
               /**
@@ -339,7 +339,7 @@ case class Istanbul[F[_]](
                 */
               Proxy.sendRoundChange(maxRound, context)
             } else {
-              if (lastProposal.header.number >= currentState.sequence) {
+              if (lastProposal.header.number >= currentState.blockNumber) {
                 // this means timeout and we receives verified block(s) through peer synchronization,
                 // in this case we must start a new round
                 startNewRound(0)
@@ -356,14 +356,6 @@ case class Istanbul[F[_]](
   private[jbok] def extract(msg: ByteVector): F[IstanbulMessage] = F.delay {
     RlpCodec.decode[IstanbulMessage](msg.bits).require.value
   }
-//  val requestService: PeerRoutes[F] = PeerRoutes.of[F] {
-//    case Request(peer, IstanbulMessage(msgCode, msg, address, signature, committedSeal)) =>
-//      handleMessage(IstanbulMessage(msgCode, msg, address, signature, committedSeal)).as(Nil)
-//  }
-//  def stream: Stream[F, Unit] = peerManager.messageQueue.dequeue.evalMap { req =>
-//    log.trace(s"received request ${req.message}")
-//    requestService.orNil.run(req).void
-//  }
 }
 
 object Istanbul {
@@ -381,13 +373,13 @@ object Istanbul {
       timer: Timer[F],
       chainId: BigInt): F[Istanbul[F]] =
     for {
-      promise    <- Deferred[F, BigInt]
+      promise    <- Deferred[F, Int]
       refPromise <- Ref.of(promise)
       refState   <- Ref.of[F, State](state)
       backlogs   <- Ref.of[F, Map[Address, List[IstanbulMessage]]](Map.empty)
       rs = RoundState(0, 0, None, MessageSet.empty, MessageSet.empty, ByteVector.empty, false)
       current      <- Ref.of[F, RoundState](rs)
-      roundChanges <- Ref.of[F, Map[BigInt, MessageSet]](Map.empty)
+      roundChanges <- Ref.of[F, Map[Int, MessageSet]](Map.empty)
       validatorSet <- Ref.of[F, ValidatorSet](ValidatorSet.empty)
       candidates   <- Ref.of[F, Map[Address, Boolean]](Map.empty)
     } yield

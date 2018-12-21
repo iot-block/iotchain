@@ -121,7 +121,7 @@ object Snapshot {
   implicit private[jbok] val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
   def storeSnapshot[F[_]: Async](snapshot: Snapshot, db: KeyValueDB[F], checkpointInterval: Int)(
-    implicit C: Cache[Snapshot]): F[Unit] =
+      implicit C: Cache[Snapshot]): F[Unit] =
     if (snapshot.number % checkpointInterval == 0) {
       db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace) <* C.put[F](snapshot.hash)(snapshot)
     } else {
@@ -167,7 +167,7 @@ object Snapshot {
     }
 
   // create a new snapshot by applying a given header
-  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F]): F[Snapshot] = F.delay{
+  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F]): F[Snapshot] = F.delay {
     val number      = header.number
     val beneficiary = Address(header.beneficiary)
 
@@ -207,17 +207,17 @@ object Snapshot {
     }
 
     // If the vote passed, update the list of signers
-    val newVotes = snap.tally.get(beneficiary) match {
+    val (newVotes, newValidators) = snap.tally.get(beneficiary) match {
       case Some(t) if t.votes > snap.getValidators.size / 2 && t.authorize =>
-        snap.validatorSet.addValidator(beneficiary)
+        val finalValidators = snap.validatorSet.validators :+ beneficiary
 
         // Discard any previous votes around the just changed account
         val finalVotes = votes.filter(_.address != beneficiary)
         snap.tally -= beneficiary
-        finalVotes
+        (finalVotes, finalValidators)
 
       case Some(t) if t.votes > snap.getValidators.size / 2 =>
-        snap.validatorSet.removeValidator(beneficiary)
+        val finalValidators = snap.validatorSet.validators.filterNot(_ == beneficiary)
 
         // Discard any previous votes the deauthorized signer cast
         votes
@@ -228,16 +228,17 @@ object Snapshot {
         // Discard any previous votes around the just changed account
         val finalVotes = newVotes.filter(_.address != beneficiary)
         snap.tally -= beneficiary
-        finalVotes
+        (finalVotes, finalValidators)
 
       case _ =>
-        votes
+        (votes, snap.validatorSet.validators)
     }
 
     snap.copy(
       number = snap.number + 1,
       hash = header.hash,
-      votes = newVotes
+      votes = newVotes,
+      validatorSet = snap.validatorSet.copy(validators = newValidators)
     )
   }
 }
