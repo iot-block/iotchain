@@ -1,21 +1,20 @@
 package jbok.core.consensus.istanbul
 
-import cats.effect.{Concurrent, ConcurrentEffect, IO, Sync}
+import cats.effect.Concurrent
 import cats.effect.concurrent.{Deferred, Ref}
 import jbok.core.models.{Address, Block}
 import scodec.bits.ByteVector
 import cats.implicits._
 import io.circe.generic.JsonCodec
-import jbok.core.messages.{IstanbulMessage, Message}
+import jbok.core.messages.IstanbulMessage
 import jbok.crypto.signature.{CryptoSignature, KeyPair}
 
 import scala.collection.Iterable
-import scala.collection.mutable.ArrayBuffer
 
 case class IstanbulExtra(
     validators: List[Address],
-    seal: ByteVector,
-    committedSeals: List[ByteVector]
+    proposerSig: ByteVector,
+    committedSigs: List[CryptoSignature]
 )
 
 sealed trait CheckResult
@@ -34,22 +33,6 @@ object ProposalCheckResult {
   case object FutureBlock          extends ProposalCheckResult
   case object Success              extends ProposalCheckResult
 }
-
-//case class IstanbulMessage(
-//  msgCode: Int,
-//  msg: ByteVector = ByteVector.empty,
-//  address: Address = Address.empty,
-//  signature: ByteVector = ByteVector.empty,
-//  ommittedSeal: ByteVector = ByteVector.empty
-//) extends Message(0x5000)
-
-//object IstanbulMessage {
-//  val msgPreprepareCode = 0
-//  val msgPrepareCode    = 1
-//  val msgCommitCode     = 2
-//  val msgRoundChange    = 3
-//  val msgAll            = 4
-//}
 
 case class Preprepare(view: View, block: Block)
 
@@ -76,11 +59,11 @@ case class StateContext[F[_]](
   def lockHash(): F[Unit] =
     current.update(s => {
       s.preprepare match {
-        case Some(p) => s.copy(lockedHash = p.block.header.hash)
+        case Some(p) => s.copy(lockedHash = Some(p.block.header.hash))
         case None    => s
       }
     })
-  def unlockHash(): F[Unit] = current.update(_.copy(lockedHash = ByteVector.empty))
+  def unlockHash(): F[Unit] = current.update(_.copy(lockedHash = None))
 
   def prepareReady: F[Boolean] =
     for {
@@ -222,8 +205,8 @@ case class RoundState(
     preprepare: Option[Preprepare],
     prepares: MessageSet,
     commits: MessageSet,
-    lockedHash: ByteVector,
+    lockedHash: Option[ByteVector],
     waitingForRoundChange: Boolean = false
 ) {
-  def isLocked: Boolean = lockedHash != ByteVector.empty
+  def isLocked: Boolean = lockedHash.isDefined
 }

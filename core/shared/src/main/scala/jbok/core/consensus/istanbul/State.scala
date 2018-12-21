@@ -6,6 +6,7 @@ import jbok.codec.rlp.implicits._
 import cats.implicits._
 import jbok.core.messages.IstanbulMessage
 import jbok.core.models.{Address, Block}
+import jbok.crypto.signature.CryptoSignature
 import scodec.bits.ByteVector
 
 import scala.collection.mutable.{Map => MMap}
@@ -41,7 +42,7 @@ trait State {
     checkSubject(message, context)
 
 //  TODO: insert block
-  def insertBlock[F[_]](block: Block, committedSeals: List[ByteVector])(implicit F: Concurrent[F]): F[Boolean] =
+  def insertBlock[F[_]](block: Block, committedSeals: List[CryptoSignature])(implicit F: Concurrent[F]): F[Boolean] =
     F.pure(false)
 
   def acceptPrepare[F[_]](message: IstanbulMessage, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
@@ -280,10 +281,7 @@ case object StateCommitted extends State {
             case Some(block) =>
               for {
                 commits <- context.current.get.map(_.commits.messages.values.toList)
-                committedSeals = commits.map(msg => {
-                  if (msg.committedSeal.size >= Istanbul.extraSeal) msg.committedSeal.take(Istanbul.extraSeal)
-                  else msg.committedSeal ++ ByteVector.fill(Istanbul.extraSeal - msg.committedSeal.size)(0.toByte)
-                })
+                committedSeals = commits.map(msg => msg.committedSig.get)
                 result <- insertBlock(block, committedSeals)
                 _ <- if (!result) {
 

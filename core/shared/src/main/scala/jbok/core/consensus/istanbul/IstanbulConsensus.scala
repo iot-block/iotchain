@@ -73,10 +73,10 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
       _ <- if (header.number == 0) F.raiseError(BlockNumberInvalid) else F.unit
       proposalSeal = prepareCommittedSeal(header.hash)
       // recover the original address by seal and block hash
-      validSealAddrs <- extraData.committedSeals
+      validSealAddrs <- extraData.committedSigs
         .map(
           seal =>
-            F.fromOption(istanbul.ecrecover(proposalSeal,CryptoSignature(seal.toArray)),
+            F.fromOption(istanbul.ecrecover(proposalSeal,seal),
                          CommittedSealInvalid))
         .sequence
       validSeals = validSealAddrs.filter(pk => snapshot.validatorSet.contains(Address(pk.bytes.kec256))).distinct
@@ -152,8 +152,8 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
   private def prepareExtra(snapshot: Snapshot): ByteVector = {
     val extra = IstanbulExtra(
       validators = snapshot.getValidators,
-      seal = ByteVector.empty,
-      committedSeals = List.empty
+      proposerSig = ByteVector.empty,
+      committedSigs = List.empty
     )
     return ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes
   }

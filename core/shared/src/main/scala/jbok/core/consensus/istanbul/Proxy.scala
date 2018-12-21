@@ -19,9 +19,8 @@ object Proxy {
           for {
             seal <- F.pure(proposal.get.header.hash ++ ByteVector(IstanbulMessage.msgCommitCode))
             sig  <- context.signFunc(seal)
-            committedSeal = ByteVector(sig.bytes)
-          } yield IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, committedSeal)
-        case _ => F.pure(IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, ByteVector.empty))
+          } yield IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, Some(sig))
+        case _ => F.pure(IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, None))
       }
       rlp  <- F.delay(RlpCodec.encode(msgForSign).require.bytes)
       sign <- context.signFunc(rlp)

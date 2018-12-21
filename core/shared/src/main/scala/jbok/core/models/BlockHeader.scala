@@ -31,13 +31,8 @@ final case class BlockHeader(
 ) {
   lazy val hash: ByteVector =
     if (mixHash == Istanbul.mixDigest) {
-      val istanbulExtra    = Istanbul.extractIstanbulExtra(this)
-      val newHeaderPayload = RlpCodec.encode(istanbulExtra.copy(committedSeals = List.empty)).require.bytes
-      RlpCodec
-        .encode(this.copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ newHeaderPayload))
-        .require
-        .bytes
-        .kec256
+      val newHeader = Istanbul.filteredHeader(this, true)
+      RlpCodec.encode(newHeader).require.bytes.kec256
     } else {
       RlpCodec.encode(this).require.bytes.kec256
     }

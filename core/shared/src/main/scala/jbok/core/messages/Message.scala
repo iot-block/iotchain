@@ -9,6 +9,7 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{discriminated, uint16}
 import jbok.codec.rlp.implicits._
+import jbok.crypto.signature.CryptoSignature
 
 sealed abstract class Message(val code: Int, val id: String = UUID.randomUUID().toString)
 
@@ -57,10 +58,10 @@ case class AuthPacket(bytes: ByteVector) extends Message(0x2000)
 
 case class IstanbulMessage(
     msgCode: Int,
-    msg: ByteVector = ByteVector.empty,
-    address: Address = Address.empty,
-    signature: ByteVector = ByteVector.empty,
-    committedSeal: ByteVector = ByteVector.empty
+    msg: ByteVector,
+    address: Address,
+    signature: ByteVector,
+    committedSig: Option[CryptoSignature]
 ) extends Message(0x5000)
 
 object IstanbulMessage {

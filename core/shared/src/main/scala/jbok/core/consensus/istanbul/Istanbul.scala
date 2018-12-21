@@ -290,7 +290,7 @@ case class Istanbul[F[_]](
           _.copy(round = view.round,
                  blockNumber = view.blockNumber,
                  preprepare = preprepare,
-                 lockedHash = ByteVector.empty,
+                 lockedHash = None,
                  prepares = MessageSet.empty,
                  commits = MessageSet.empty))
       }
@@ -377,7 +377,7 @@ object Istanbul {
       refPromise <- Ref.of(promise)
       refState   <- Ref.of[F, State](state)
       backlogs   <- Ref.of[F, Map[Address, List[IstanbulMessage]]](Map.empty)
-      rs = RoundState(0, 0, None, MessageSet.empty, MessageSet.empty, ByteVector.empty, false)
+      rs = RoundState(0, 0, None, MessageSet.empty, MessageSet.empty, None, false)
       current      <- Ref.of[F, RoundState](rs)
       roundChanges <- Ref.of[F, Map[Int, MessageSet]](Map.empty)
       validatorSet <- Ref.of[F, ValidatorSet](ValidatorSet.empty)
@@ -404,9 +404,9 @@ object Istanbul {
   def filteredHeader(header: BlockHeader, keepSeal: Boolean): BlockHeader = {
     val extra = extractIstanbulExtra(header)
     val newExtra = if (!keepSeal) {
-      extra.copy(seal = ByteVector.empty, committedSeals = List.empty)
+      extra.copy(proposerSig = ByteVector.empty, committedSigs = List.empty)
     } else {
-      extra.copy(committedSeals = List.empty)
+      extra.copy(committedSigs = List.empty)
     }
     val payload   = RlpCodec.encode(newExtra).require.bytes
     val newHeader = header.copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ payload)
@@ -423,7 +423,7 @@ object Istanbul {
   }
   def ecrecover(header: BlockHeader): Address = {
     // Retrieve the signature from the header extra-data
-    val signature = extractIstanbulExtra(header).seal
+    val signature = extractIstanbulExtra(header).proposerSig
     val hash      = sigHash(header).kec256
     val sig       = CryptoSignature(signature.toArray)
     val chainId   = ECDSAChainIdConvert.getChainId(sig.v)
