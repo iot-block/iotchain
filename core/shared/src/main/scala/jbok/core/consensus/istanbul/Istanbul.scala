@@ -1,5 +1,6 @@
 package jbok.core.consensus.istanbul
 
+import _root_.io.circe.generic.JsonCodec
 import cats.data.OptionT
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect._
@@ -20,6 +21,7 @@ import fs2._
 
 import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.concurrent.duration._
+
 
 case class Istanbul[F[_]](
     config: IstanbulConfig,
@@ -110,13 +112,13 @@ case class Istanbul[F[_]](
     for {
       vs           <- validatorSet.get
       currentState <- current.get
-//      FIXME: this check is not so correct because the message may be a old or future message, current validatorSet may not contain the history validator
+      // FIXME: this check is not so correct because the message may be a old or future message, current validatorSet may not contain the history validator
       result <- if (!vs.contains(message.address)) {
         F.pure(CheckResult.UnauthorizedAddress)
       } else if (message.msgCode == IstanbulMessage.msgRoundChange) {
-//        ROUND CHANGE message
+        // ROUND CHANGE message
         if (view.blockNumber > currentState.blockNumber) {
-//          message's sequence bigger than current state
+          // message's sequence bigger than current state
           F.pure(CheckResult.FutureMessage)
         } else if (view.blockNumber < currentState.blockNumber || (view.blockNumber == currentState.blockNumber && view.round < currentState.round)) {
           F.pure(CheckResult.OldMessage)

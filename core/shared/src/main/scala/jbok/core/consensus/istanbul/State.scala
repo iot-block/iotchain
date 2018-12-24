@@ -128,8 +128,7 @@ case object StateNewRound extends State {
       preprepare  <- F.delay(RlpCodec.decode[Preprepare](message.msg.bits).require.value)
       checkResult <- checkProposal(message, context)
       _ <- checkResult match {
-        case ProposalCheckResult.Success => {
-
+        case ProposalCheckResult.Success =>
           /**
             * I think this IF situation will never happen, don't know why Ethereum do this check
             */
@@ -167,18 +166,14 @@ case object StateNewRound extends State {
               context.setState(StatePreprepared) >>
               Proxy.sendPrepare(context)
           }
-        }
-        case ProposalCheckResult.FutureBlock => {
+        case ProposalCheckResult.FutureBlock =>
           // it's a future block,
           F.raiseError(new Exception("future block"))
-        }
-        case ProposalCheckResult.UnauthorizedProposer => {
+        case ProposalCheckResult.UnauthorizedProposer =>
           F.raiseError(new Exception("unauthorized proposer"))
-        }
-        case ProposalCheckResult.InvalidProposal => {
+        case ProposalCheckResult.InvalidProposal =>
           // invalid proposal, broadcast ROUND CHANGE message along with the proposed round number
           Proxy.sendNextRound(context)
-        }
         case _ => F.raiseError(new Exception("check proposal exception"))
       }
     } yield ()

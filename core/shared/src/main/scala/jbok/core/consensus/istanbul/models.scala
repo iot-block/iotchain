@@ -38,8 +38,7 @@ case class Preprepare(view: View, block: Block)
 
 /**
   *
-  * @param view
-  * @param digest proposal hash
+  * @param digest proposal block hash
   */
 case class Subject(view: View, digest: ByteVector)
 
@@ -90,7 +89,7 @@ case class StateContext[F[_]](
     current.update(rs => rs.copy(commits = rs.commits.addMessage(message)))
 
   def addRoundChange(round: Int, message: IstanbulMessage): F[Unit] =
-    roundChanges.update(m => m + (round -> (m.getOrElse(round, MessageSet.empty).addMessage(message))))
+    roundChanges.update(m => m + (round -> m.getOrElse(round, MessageSet.empty).addMessage(message)))
 
   /**
     * delete the messages with smaller round
@@ -132,8 +131,8 @@ case class StateContext[F[_]](
 }
 
 case class View(
-    val round: Int,
-    val blockNumber: BigInt
+    round: Int,
+    blockNumber: BigInt
 )
 object View {
   def empty: View = View(0, 0)
@@ -150,7 +149,7 @@ case class ValidatorSet(
   /**
     * f represent the constant F in Istanbul BFT defined
     */
-  def f = Math.ceil(validators.size / 3.0).toInt - 1
+  def f:Int = Math.ceil(validators.size / 3.0).toInt - 1
 
   def contains(address: Address): Boolean = validators.contains(address)
 
@@ -166,7 +165,7 @@ case class ValidatorSet(
 
     val seed =
       if (proposer == Address.empty || !validators.contains(lastProposer)) round
-      else validators.toList.indexOf(lastProposer) + round
+      else validators.indexOf(lastProposer) + round
 
     val robin = seed % validators.size
     Option(validators(robin.intValue()))
@@ -206,7 +205,7 @@ case class RoundState(
     prepares: MessageSet,
     commits: MessageSet,
     lockedHash: Option[ByteVector],
-    waitingForRoundChange: Boolean = false
+    waitingForRoundChange: Boolean
 ) {
   def isLocked: Boolean = lockedHash.isDefined
 }

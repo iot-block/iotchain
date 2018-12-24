@@ -15,7 +15,6 @@ import jbok.core.ledger.TypedBlock.MinedBlock
 import jbok.core.messages.IstanbulMessage
 import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
 import jbok.crypto._
-import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 
 import scala.util.Random
 
@@ -60,9 +59,9 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
             case Some(n) => if (n >= 0) F.unit else F.raiseError(BlockNumberInvalid)
             case None    => F.raiseError(BlockNumberInvalid)
           }
-          snap      <- istanbul.applyHeaders(header.number - 1, parentHeader.hash, Nil, Nil)
-          _         <- validateSigner(header, snap)
-          extraData <- validateExtra(header, snap)
+          snap <- istanbul.applyHeaders(header.number - 1, parentHeader.hash, Nil, Nil)
+          _    <- validateSigner(header, snap)
+          _    <- validateExtra(header, snap)
         } yield ()
       }
 
@@ -74,10 +73,7 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
       proposalSeal = prepareCommittedSeal(header.hash)
       // recover the original address by seal and block hash
       validSealAddrs <- extraData.committedSigs
-        .map(
-          seal =>
-            F.fromOption(istanbul.ecrecover(proposalSeal,seal),
-                         CommittedSealInvalid))
+        .map(seal => F.fromOption(istanbul.ecrecover(proposalSeal, seal), CommittedSealInvalid))
         .sequence
       validSeals = validSealAddrs.filter(pk => snapshot.validatorSet.contains(Address(pk.bytes.kec256))).distinct
       _ <- if (validSeals.size <= 2 * snapshot.f) F.raiseError(CommittedSealInvalid) else F.unit
@@ -102,12 +98,6 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
   private def calcDifficulty(blockTime: Long, parentHeader: BlockHeader): F[BigInt] =
     F.pure(istanbul.config.defaultDifficulty)
 
-  private def calcBlockMinerReward(blockNumber: BigInt, ommersCount: Int): F[BigInt] = F.pure(BigInt(0))
-
-  private def calcOmmerMinerReward(blockNumber: BigInt, ommerNumber: BigInt): F[BigInt] = F.pure(BigInt(0))
-
-  private def getTimestamp: F[Long] = F.pure(System.currentTimeMillis())
-
   def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader] = Nil): F[BlockHeader] =
     for {
       parent <- parentOpt.fold(history.getBestBlock)(_.pure[F])
@@ -123,12 +113,8 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
         parentHash = parent.header.hash,
         ommersHash = ByteVector.empty,
         beneficiary = candicate match {
-          case Some((address, auth)) => address.bytes
-          case None                  => ByteVector.empty
-        },
-        nonce = candicate match {
-          case Some((address, auth)) => if (auth) Istanbul.nonceAuthVote else Istanbul.nonceDropVote
-          case None                  => ByteVector.empty
+          case Some((address, _)) => address.bytes
+          case None               => ByteVector.empty
         },
         stateRoot = ByteVector.empty,
         transactionsRoot = ByteVector.empty,
@@ -140,7 +126,11 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
         gasUsed = 0,
         unixTimestamp = timestamp,
         extraData = extraData,
-        mixHash = Istanbul.mixDigest
+        mixHash = Istanbul.mixDigest,
+        nonce = candicate match {
+          case Some((_, auth)) => if (auth) Istanbul.nonceAuthVote else Istanbul.nonceDropVote
+          case None            => ByteVector.empty
+        }
       )
 
   private def calcGasLimit(parentGas: BigInt): BigInt = {
@@ -155,7 +145,7 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
       proposerSig = ByteVector.empty,
       committedSigs = List.empty
     )
-    return ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes
+    ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes
   }
 
   override def postProcess(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.ExecutedBlock[F]] = F.pure(executed)
