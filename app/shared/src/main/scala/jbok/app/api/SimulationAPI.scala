@@ -1,4 +1,4 @@
-package jbok.app.simulations
+package jbok.app.api
 
 import _root_.io.circe.generic.JsonCodec
 import cats.effect.IO

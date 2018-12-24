@@ -5,9 +5,10 @@ import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.{AppState, ContractAddress}
-import jbok.app.api.{BlockParam, CallTx, TransactionRequest}
+import jbok.sdk.api.{BlockParam, CallTx}
 import jbok.core.models.{Account, Address}
-import org.scalajs.dom.raw.{HTMLInputElement}
+import jbok.sdk.api.{BlockParam, CallTx, TransactionRequest}
+import org.scalajs.dom.raw.HTMLInputElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
 
@@ -62,9 +63,9 @@ case class DeployContractView(state: AppState) {
         account  <- client.get.public.getAccount(fromSubmit, BlockParam.Latest)
         gasPrice <- client.get.public.getGasPrice
         hash <- client.get.personal.sendTransaction(txRequest.copy(nonce = Some(account.nonce),
-                                                                gasPrice = Some(gasPrice.max(1)),
-                                                                gasLimit = Some(defaultGasLimit)),
-                                                 password)
+                                                                   gasPrice = Some(gasPrice.max(1)),
+                                                                   gasLimit = Some(defaultGasLimit)),
+                                                    password)
         stx <- client.get.public.getTransactionByHash(hash)
         _       = stx.map(state.stxs.value(currentId.get).value += _)
         _       = state.receipts.value(currentId.get).value += (hash -> Var(None))

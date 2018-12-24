@@ -1,14 +1,13 @@
-package jbok.app.api
+package jbok.sdk.api
 
 import io.circe.generic.JsonCodec
-import jbok.codec.json.implicits._
 import jbok.core.models.{Address, Transaction}
-import jbok.core.peer.PeerNode
 import jbok.crypto.signature._
 import scodec.bits.ByteVector
+import jbok.codec.json.implicits._
 
 import scala.concurrent.duration.Duration
-import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
+import scala.scalajs.js.annotation.JSExportTopLevel
 
 @JSExportTopLevel("TransactionRequest")
 @JsonCodec

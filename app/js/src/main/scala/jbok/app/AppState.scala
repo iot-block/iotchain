@@ -6,15 +6,17 @@ import cats.effect.IO
 import cats.implicits._
 import com.thoughtworks.binding.Binding.{Var, Vars}
 import fs2.Stream
-import jbok.app.api.BlockParam
-import jbok.app.client.JbokClient
-import jbok.app.simulations.NodeInfo
+import jbok.app.api.NodeInfo
+import jbok.sdk.api.BlockParam
+import jbok.sdk.client.JbokClient
 import jbok.core.models._
 import jbok.evm.abi.Description
 import scodec.bits.ByteVector
 import org.scalajs.dom.Event
+
 import scala.concurrent.duration._
 import jbok.common.execution._
+import jbok.sdk.api.BlockParam
 
 case class ClientStatus(number: Var[BigInt] = Var(0),
                         gasPrice: Var[BigInt] = Var(0),

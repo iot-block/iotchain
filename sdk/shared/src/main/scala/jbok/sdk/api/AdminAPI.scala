@@ -1,4 +1,4 @@
-package jbok.app.api
+package jbok.sdk.api
 
 trait AdminAPI[F[_]] {
   def stop: F[Unit]

@@ -3,7 +3,7 @@ package jbok.app
 import java.net.URI
 
 import cats.effect.IO
-import jbok.app.simulations.SimulationAPI
+import jbok.app.api.SimulationAPI
 import jbok.network.client.WsClient
 import jbok.network.rpc.RpcClient
 import jbok.common.execution._

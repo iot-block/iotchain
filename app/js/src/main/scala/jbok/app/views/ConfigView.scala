@@ -6,10 +6,10 @@ import cats.effect.IO
 import com.thoughtworks.binding
 import com.thoughtworks.binding.{Binding, FutureBinding}
 import com.thoughtworks.binding.Binding.{Constant, Var, Vars}
+import jbok.app.api.NodeInfo
 import jbok.app.{AppState, BlockHistory, ClientStatus, SimuClient}
-import jbok.app.client.JbokClient
+import jbok.sdk.client.JbokClient
 import jbok.app.components.Spinner
-import jbok.app.simulations.NodeInfo
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw._
 import jbok.common.execution._

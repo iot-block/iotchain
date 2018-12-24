@@ -43,6 +43,8 @@ lazy val jbok = project
     network.jvm,
     core.js,
     core.jvm,
+    sdk.js,
+    sdk.jvm,
     app.jvm // app.jvm is depends on app.js
   )
   .settings(noPublishSettings)
@@ -153,7 +155,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
   .settings(
     name := "jbok-app",
-    packageName in Docker := "jbok",
+    packageName in Docker := "jbok-app",
     dockerBaseImage := "openjdk:8-jre-alpine"
   )
   .jsSettings(
@@ -193,7 +195,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
     webpackBundlingMode := BundlingMode.LibraryAndApplication()
   )
-  .dependsOn(core % CompileAndTest, common % CompileAndTest)
+  .dependsOn(core % CompileAndTest, common % CompileAndTest, sdk % CompileAndTest)
 
 // for integrating with sbt-web
 lazy val appJS = app.js
@@ -201,6 +203,64 @@ lazy val appJVM = app.jvm.settings(
   scalaJSProjects := Seq(appJS),
   pipelineStages in Assets := Seq(scalaJSPipeline),
   isDevMode in scalaJSPipeline := true
+)
+
+lazy val sdk = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin, WebScalaJSBundlerPlugin))
+  .jsSettings(commonJsSettings)
+  .jsSettings(scalaJSUseMainModuleInitializer := false)
+  .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
+  .settings(
+    name := "jbok-sdk",
+    packageName in Docker := "jbok-sdk",
+    dockerBaseImage := "openjdk:8-jre-alpine"
+  )
+  .jsSettings(
+    useYarn := true,
+    additionalNpmConfig in Compile := Map(
+      "license"     -> JSON.str("MIT"),
+      "name"        -> JSON.str("JBOK-SDK"),
+      "description" -> JSON.str("JBOK-SDK"),
+      "version"     -> JSON.str("0.0.1"),
+      "author"      -> JSON.str("JBOK authors"),
+      "repository" -> JSON.obj(
+        "type" -> JSON.str("git"),
+        "url"  -> JSON.str("https://github.com/c-block/jbok.git")
+      ),
+      "build" -> JSON.obj(
+        "appId" -> JSON.str("org.jbok.sdk")
+      ),
+      "scripts" -> JSON.obj(
+        "pack" -> JSON.str("electron-builder --dir"),
+        "dist" -> JSON.str("electron-builder")
+      )
+    ),
+    npmDevDependencies in Compile ++= Seq(
+      "file-loader"         -> "1.1.11",
+      "style-loader"        -> "0.20.3",
+      "css-loader"          -> "0.28.11",
+      "html-webpack-plugin" -> "3.2.0",
+      "copy-webpack-plugin" -> "4.5.1",
+      "webpack-merge"       -> "4.1.2",
+      "electron-builder"    -> "20.28.4"
+    ),
+    npmDependencies in Compile ++= Seq(
+      "jsdom" -> "13.0.0"
+    ),
+    version in webpack := "4.8.1",
+    version in startWebpackDevServer := "3.1.4",
+    webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
+    webpackBundlingMode := BundlingMode.LibraryAndApplication()
+  )
+  .dependsOn(core % CompileAndTest, common % CompileAndTest)
+
+lazy val sdkJS = sdk.js
+lazy val sdkJVM = sdk.jvm.settings(
+  scalaJSProjects := Seq(sdkJS),
+  pipelineStages in Assets := Seq(scalaJSPipeline),
+  isDevMode in Assets := true
 )
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)
@@ -215,6 +275,13 @@ lazy val macros = crossProject(JVMPlatform, JSPlatform)
 lazy val network = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
+  .jsSettings(
+    npmDependencies in Compile ++= Seq(
+      "ws"  -> "6.1.2"
+    ),
+    // https://github.com/indutny/elliptic/issues/149
+    jsEnv in Test := new org.scalajs.jsenv.nodejs.NodeJSEnv()
+  )
   .settings(
     name := "jbok-network",
     libraryDependencies ++= http4s ++ Seq(
@@ -315,7 +382,6 @@ lazy val commonJsSettings = Seq(
   webpackBundlingMode := BundlingMode.LibraryOnly(),
   scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
   jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv(),
-  jsDependencies += RuntimeDOM,
   libraryDependencies ++= Seq(
     "org.scala-js"             %%% "scalajs-dom"   % "0.9.6",
     "com.thoughtworks.binding" %%% "dom"           % "11.0.1",

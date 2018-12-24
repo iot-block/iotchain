@@ -1,17 +1,16 @@
-package jbok.app.api.impl
+package jbok.sdk.api.impl
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
-import jbok.app.api.{PersonalAPI, TransactionRequest}
 import jbok.core.config.Configs.HistoryConfig
 import jbok.core.keystore.{KeyStorePlatform, Wallet}
 import jbok.core.ledger.History
 import jbok.core.models.Address
-import jbok.core.peer.{PeerManager, PeerNode}
 import jbok.core.pool.TxPool
 import jbok.crypto._
 import jbok.crypto.signature._
 import jbok.network.json.JsonRpcErrors
+import jbok.sdk.api.{PersonalAPI, TransactionRequest}
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.Duration

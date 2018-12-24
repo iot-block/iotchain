@@ -1,21 +1,24 @@
-package jbok.app.client
+package jbok.sdk.client
 
 import java.net.URI
 
 import cats.effect.IO
-import jbok.app.api.{AdminAPI, PersonalAPI, PublicAPI}
 import jbok.common.execution._
+import jbok.core.models.Block
 import jbok.network.client.{Client, WsClient}
 import jbok.network.rpc.RpcClient
+import jbok.sdk.api.{AdminAPI, PersonalAPI, PublicAPI}
 
-import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
+import scala.annotation.meta.field
+import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("JbokClientClass")
-case class JbokClient(uri: URI,
-                      client: Client[IO, String],
-                      public: PublicAPI[IO],
-                      personal: PersonalAPI[IO],
-                      admin: AdminAPI[IO]) {
+case class JbokClient(@(JSExport @field) uri: URI,
+                      @(JSExport @field) client: Client[IO, String],
+                      @(JSExport @field) public: PublicAPI[IO],
+                      @(JSExport @field) personal: PersonalAPI[IO],
+                      @(JSExport @field) admin: AdminAPI[IO]) {
+  @JSExport
   def status: IO[Boolean] = client.haltWhenTrue.get.map(!_)
 }
 
@@ -37,4 +40,11 @@ object JbokClient {
     val uri = new URI(url)
     apply(uri)
   }
+
+  @JSExport
+  def getBlockNumber2(url: String): IO[Option[Block]] =
+    for {
+      jbc   <- webSocket(url)
+      block <- jbc.public.getBlockByNumber(2)
+    } yield block
 }
