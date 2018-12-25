@@ -14,7 +14,6 @@ import jbok.core.store.namespaces
 import jbok.core.sync.SyncManager
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.persistent.KeyValueDB
-import scodec.Codec
 import scodec.bits.ByteVector
 
 /**
@@ -118,7 +117,7 @@ case class BlockMiner[F[_]](
     F.pure(transactionsForBlock)
   }
 
-  private[jbok] def calcMerkleRoot[V: Codec](entities: List[V]): F[ByteVector] =
+  private[jbok] def calcMerkleRoot[V: RlpCodec](entities: List[V]): F[ByteVector] =
     for {
       db   <- KeyValueDB.inmem[F]
       mpt  <- MerklePatriciaTrie[F](namespaces.empty, db)

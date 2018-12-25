@@ -2,8 +2,10 @@ package jbok.core.peer
 import java.net._
 
 import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
+import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
 
@@ -16,7 +18,7 @@ object PeerType {
   case object Trusted    extends PeerType(3)
 
   implicit val codec: RlpCodec[PeerType] =
-    RlpCodec.item(mappedEnum(uint8, Discovered -> 1, Static -> 2, Trusted -> 3))
+    rlp(mappedEnum(uint8, Discovered -> 1, Static -> 2, Trusted -> 3))
 }
 
 final case class PeerNode(

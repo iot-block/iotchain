@@ -93,44 +93,44 @@ object MptNode {
       }
     )
 
-  implicit lazy val nodeCodec: RlpCodec[MptNode] = RlpCodec.pure(
-    rbyteslist.codec
-      .narrow[MptNode](
-        list =>
-          list.size match {
-            case 2 =>
-              HexPrefix.decode(list.head) map {
-                case (true, k)  => LeafNode(k, list(1))
-                case (false, k) => ExtensionNode(k, entryCodec.decode(list(1).bits).require.value)
-              }
+  implicit lazy val nodeCodec: RlpCodec[MptNode] = nop {
+    RlpCodec[List[ByteVector]].narrow[MptNode](
+      list =>
+        list.size match {
+          case 2 =>
+            HexPrefix.decode(list.head) map {
+              case (true, k)  => LeafNode(k, list(1))
+              case (false, k) => ExtensionNode(k, entryCodec.decode(list(1).bits).require.value)
+            }
 
-            case 17 =>
-              list.splitAt(16) match {
-                case (branches, value) =>
-                  branches
-                    .foldLeft(Attempt.successful(List[Option[NodeEntry]]())) {
-                      case (attempt, branch) =>
-                        attempt.flatMap(entries => entryOptCodec.decode(branch.bits).map(r => entries :+ r.value))
-                    }
-                    .flatMap { nodes =>
-                      bytes
-                        .decode(value.head.bits)
-                        .map(r =>
-                          r.value match {
-                            case ByteVector.empty => BranchNode(nodes, None)
-                            case v                => BranchNode(nodes, Some(v))
-                        })
-                    }
-              }
+          case 17 =>
+            list.splitAt(16) match {
+              case (branches, value) =>
+                branches
+                  .foldLeft(Attempt.successful(List[Option[NodeEntry]]())) {
+                    case (attempt, branch) =>
+                      attempt.flatMap(entries => entryOptCodec.decode(branch.bits).map(r => entries :+ r.value))
+                  }
+                  .flatMap { nodes =>
+                    bytes
+                      .decode(value.head.bits)
+                      .map(r =>
+                        r.value match {
+                          case ByteVector.empty => BranchNode(nodes, None)
+                          case v                => BranchNode(nodes, Some(v))
+                      })
+                  }
+            }
 
-            case size => Failure(Err(s"invalid node list size $size"))
-        }, {
-          case LeafNode(k, v) =>
-            List(HexPrefix.encode(k, isLeaf = true), v)
-          case ExtensionNode(k, v) =>
-            List(HexPrefix.encode(k, isLeaf = false), entryCodec.encode(v).require.bytes)
-          case BranchNode(branches, v) =>
-            branches.map(b => entryOptCodec.encode(b).require.bytes) ++ List(v.getOrElse(ByteVector.empty))
-        }
-      ))
+          case size => Failure(Err(s"invalid node list size $size"))
+      }, {
+        case LeafNode(k, v) =>
+          List(HexPrefix.encode(k, isLeaf = true), v)
+        case ExtensionNode(k, v) =>
+          List(HexPrefix.encode(k, isLeaf = false), entryCodec.encode(v).require.bytes)
+        case BranchNode(branches, v) =>
+          branches.map(b => entryOptCodec.encode(b).require.bytes) ++ List(v.getOrElse(ByteVector.empty))
+      }
+    )
+  }
 }

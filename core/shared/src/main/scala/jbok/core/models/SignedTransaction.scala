@@ -1,16 +1,15 @@
 package jbok.core.models
 
 import cats.effect.Sync
+import cats.implicits._
 import io.circe.{Decoder, Encoder}
-import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
 import jbok.codec.json.implicits._
+import jbok.codec.rlp.implicits._
+import jbok.core.validators.TxInvalid.TxSignatureInvalid
 import jbok.crypto._
 import jbok.crypto.signature._
 import scodec.bits.ByteVector
-import shapeless._
-import cats.implicits._
-import jbok.core.validators.TxInvalid.TxSignatureInvalid
+
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("SignedTransaction")
@@ -26,8 +25,7 @@ case class SignedTransaction(
     r: BigInt,
     s: BigInt
 ) {
-  lazy val hash: ByteVector =
-    RlpCodec.encode(this).require.bytes.kec256
+  lazy val hash: ByteVector = this.asBytes.kec256
 
   lazy val chainIdOpt: Option[BigInt] = ECDSAChainIdConvert.getChainId(v)
 
@@ -87,11 +85,8 @@ object SignedTransaction {
     Signature[ECDSA].sign[F](bytes.toArray, keyPair, chainId).map(sig => stx.copy(v = sig.v, r = sig.r, s = sig.s))
   }
 
-  private def bytesToSign(stx: SignedTransaction, chainId: BigInt): ByteVector = {
-    val hlist = stx.nonce :: stx.gasPrice :: stx.gasLimit :: stx.receivingAddress :: stx.value :: stx.payload :: chainId :: BigInt(
-      0) :: BigInt(0) :: HNil
-    RlpCodec.encode(hlist).require.bytes.kec256
-  }
+  private def bytesToSign(stx: SignedTransaction, chainId: BigInt): ByteVector =
+    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId, BigInt(0), BigInt(0)).asBytes.kec256
 
   private def recoverPublicKey(stx: SignedTransaction, chainId: BigInt): Option[KeyPair.Public] = {
     val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)

@@ -2,14 +2,17 @@ package jbok.core.consensus.poa.clique
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.codec.rlp.implicits._
 import jbok.common.execution._
+import jbok.common.testkit._
+import jbok.core.consensus.poa.clique.Clique.CliqueExtra
 import jbok.core.ledger.History
 import jbok.core.models.{Address, BlockHeader}
-import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
+import jbok.core.testkit._
+import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import jbok.common.testkit._
-import jbok.core.testkit._
+
 import scala.collection.mutable
 
 case class TestVote(
@@ -44,9 +47,12 @@ trait SnapshotFixture {
     if (!accounts.contains(signer)) {
       accounts += (signer -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
     }
-    val sig       = Signature[ECDSA].sign[IO](Clique.sigHash(header).toArray, accounts(signer), chainId).unsafeRunSync()
-    val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
-    val recovered = Clique.ecrecover(signed).get
+    val sig       = Signature[ECDSA].sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(signer), chainId).unsafeRunSync()
+    val extra = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value.copy(signature = sig)
+    val extraBytes = extra.asBytes
+//    val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
+    val signed    = header.copy(extra = extraBytes)
+    val recovered = Clique.ecrecover[IO](signed).unsafeRunSync().get
     require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")
     signed
   }
@@ -69,14 +75,18 @@ class SnapshotSpec extends JbokSpec {
         val number   = BigInt(i) + 1
         val time     = i * miningConfig.period.toSeconds
         val coinbase = address(v.voted)
-        val extra    = ByteVector.fill(Clique.extraVanity + Clique.extraSeal)(0)
+        val extra = CliqueExtra(
+          Nil,
+          CryptoSignature(ByteVector.fill(65)(0).toArray),
+          v.auth
+        )
+        val extraBytes    = extra.asBytes
         val header = random[BlockHeader]
           .copy(
             number = number,
             unixTimestamp = time,
             beneficiary = coinbase.bytes,
-            extraData = extra,
-            nonce = if (v.auth) Clique.nonceAuthVote else Clique.nonceDropVote
+            extra = extraBytes,
           )
         sign(header, v.signer) // signer vote to authorize/deauthorize the beneficiary
     }
@@ -97,14 +107,18 @@ class SnapshotSpec extends JbokSpec {
     "sigHash and ecrecover" in new SnapshotFixture {
       val signer   = address("A")
       val coinbase = address("B")
-      val extra    = ByteVector.fill(Clique.extraVanity + Clique.extraSeal)(0.toByte)
+      val extra = CliqueExtra(
+        Nil,
+        CryptoSignature(ByteVector.fill(65)(0).toArray)
+      )
+      val extraBytes    = extra.asBytes
       val header = random[BlockHeader]
         .copy(
           beneficiary = coinbase.bytes,
-          extraData = extra
+          extra = extraBytes
         )
       val signed = sign(header, "A")
-      Clique.ecrecover(signed).get shouldBe signer
+      Clique.ecrecover[IO](signed).unsafeRunSync().get shouldBe signer
     }
 
     "single signer, no votes cast" in {

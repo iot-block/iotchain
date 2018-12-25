@@ -21,7 +21,7 @@ object testkit {
 
   def intGen(min: Int, max: Int): Gen[Int] = Gen.choose(min, max)
 
-  implicit val arbInt: Arbitrary[Int] = Arbitrary { intGen(Int.MinValue, Int.MaxValue) }
+  implicit val arbInt: Arbitrary[Int] = Arbitrary { Gen.posNum[Int] }
 
   implicit val arbByteVector = Arbitrary(arbString.arbitrary.map(x => ByteVector(x.getBytes)))
 

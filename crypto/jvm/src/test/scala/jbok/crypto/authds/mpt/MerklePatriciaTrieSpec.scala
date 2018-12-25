@@ -2,13 +2,13 @@ package jbok.crypto.authds.mpt
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
 import jbok.common.testkit._
+import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
 import jbok.crypto.testkit._
 import jbok.persistent.KeyValueDB
 import org.scalacheck.Gen
-import scodec.Codec
 import scodec.bits._
 
 import scala.util.Random
@@ -22,16 +22,16 @@ class MerklePatriciaTrieSpec extends JbokSpec {
 
   "codec round trip" in {
     val leafNode = LeafNode("dead", hex"beef")
-    Codec.decode[MptNode](leafNode.bytes.bits).require.value shouldBe leafNode
+    RlpCodec.decode[MptNode](leafNode.bytes.bits).require.value shouldBe leafNode
     leafNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + 2)
 
     val extNode = ExtensionNode("babe", leafNode.entry)
-    Codec.decode[MptNode](extNode.bytes.bits).require.value shouldBe extNode
-    Codec.decode[MptNode](extNode.bytes.bits).require.value.asInstanceOf[ExtensionNode].child shouldBe Right(leafNode)
+    RlpCodec.decode[MptNode](extNode.bytes.bits).require.value shouldBe extNode
+    RlpCodec.decode[MptNode](extNode.bytes.bits).require.value.asInstanceOf[ExtensionNode].child shouldBe Right(leafNode)
     extNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + leafNode.bytes.length)
 
     val branchNode = BranchNode.withSingleBranch('a', extNode.entry, Some(hex"c0de"))
-    val bn         = Codec.decode[MptNode](branchNode.bytes.bits).require.value.asInstanceOf[BranchNode]
+    val bn         = RlpCodec.decode[MptNode](branchNode.bytes.bits).require.value.asInstanceOf[BranchNode]
     bn shouldBe branchNode
     bn.branchAt('a') shouldBe Some(extNode.entry)
     bn.bytes.length shouldBe 1 + (15 * 1) + (1 + extNode.bytes.length) + (1 + 2)

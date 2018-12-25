@@ -8,7 +8,6 @@ import jbok.app.simulations.SimulationImpl
 import jbok.common.execution._
 import jbok.common.metrics.Metrics
 import jbok.network.rpc.RpcServer
-import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 
 import scala.concurrent.duration._

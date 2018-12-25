@@ -12,7 +12,7 @@ import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.GenesisConfig
 import jbok.core.config.defaults.testReference
-import jbok.core.consensus.poa.clique
+import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models.{Account, Address}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.sdk.client.{JbokClient => sdkClient}
@@ -50,7 +50,7 @@ class SimulationImpl(
       .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
       .unsafeRunSync()
     val (configs, minersKP) = selectMiner(n, m, fullNodeConfigs, signers)
-    val genesisConfig       = clique.generateGenesisConfig(genesisConfigWithAlloc, minersKP.map(Address(_)))
+    val genesisConfig       = Clique.generateGenesisConfig(genesisConfigWithAlloc, minersKP.map(Address(_)))
 
     log.info(s"create $n node(s)")
 
@@ -99,7 +99,7 @@ class SimulationImpl(
       nodeId = Random.shuffle(nodeIdList).take(1).head
       jbokClientOpt <- id2NodeNetwrok.get.map(_.get(nodeId).map(_.jbokClient))
       _ <- jbokClientOpt.traverse[IO, ByteVector](jbokClient =>
-        jbokClient.public.sendRawTransaction(RlpCodec.encode(txGraphGen.getCoin(address, value)).require.bytes))
+        jbokClient.public.sendRawTransaction(txGraphGen.getCoin(address, value).asBytes))
     } yield ()
 
   override def addNode(interface: String, port: Int): IO[Option[String]] =
@@ -137,9 +137,7 @@ class SimulationImpl(
         case _             => txGraphGen.nextValidTxs(nStx)
       }
       _ <- jbokClientOpt
-        .map(jbokClient =>
-          stxs.traverse[IO, ByteVector](stx =>
-            jbokClient.public.sendRawTransaction(RlpCodec.encode(stx).require.bytes)))
+        .map(jbokClient => stxs.traverse[IO, ByteVector](stx => jbokClient.public.sendRawTransaction(stx.asBytes)))
         .getOrElse(IO.unit)
     } yield ()
 

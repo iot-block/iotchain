@@ -5,12 +5,12 @@ import java.io.File
 import cats.effect._
 import cats.implicits._
 import fs2._
+import jbok.codec.rlp.RlpCodec
 import jbok.common.metrics.Metrics
 import jbok.persistent.KeyValueDB
 import org.fusesource.leveldbjni.JniDBFactory.{factory => JNIFactory}
 import org.iq80.leveldb._
 import org.iq80.leveldb.impl.Iq80DBFactory.factory
-import scodec.Codec
 import scodec.bits.ByteVector
 
 final class LevelDB[F[_]](
@@ -49,14 +49,14 @@ final class LevelDB[F[_]](
   override protected[jbok] def toMapRaw: F[Map[ByteVector, ByteVector]] =
     stream(None).compile.toList.map(_.toMap)
 
-  override def keys[Key: Codec](namespace: ByteVector): F[List[Key]] =
+  override def keys[Key: RlpCodec](namespace: ByteVector): F[List[Key]] =
     stream(Some(namespace.toArray))
       .map(_._1)
       .compile
       .toList
       .flatMap(_.traverse(k => decode[Key](k, namespace)))
 
-  override def toMap[Key: Codec, Val: Codec](namespace: ByteVector): F[Map[Key, Val]] =
+  override def toMap[Key: RlpCodec, Val: RlpCodec](namespace: ByteVector): F[Map[Key, Val]] =
     for {
       mapRaw <- stream(Some(namespace.toArray)).compile.toList.map(_.toMap)
       xs     <- mapRaw.toList.traverse { case (k, v) => (decode[Key](k, namespace), decode[Val](v)).tupled }

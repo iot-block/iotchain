@@ -3,10 +3,10 @@ package jbok.persistent
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
-import scodec.Codec
+import jbok.codec.rlp.RlpCodec
 import scodec.bits.ByteVector
 
-case class StageKeyValueDB[F[_]: Sync, K: Codec, V: Codec](
+case class StageKeyValueDB[F[_]: Sync, K: RlpCodec, V: RlpCodec](
     namespace: ByteVector,
     inner: KeyValueDB[F],
     stage: Map[K, Option[V]]
@@ -38,6 +38,6 @@ case class StageKeyValueDB[F[_]: Sync, K: Codec, V: Codec](
 }
 
 object StageKeyValueDB {
-  def apply[F[_]: Sync, K: Codec, V: Codec](namespace: ByteVector, inner: KeyValueDB[F]): StageKeyValueDB[F, K, V] =
+  def apply[F[_]: Sync, K: RlpCodec, V: RlpCodec](namespace: ByteVector, inner: KeyValueDB[F]): StageKeyValueDB[F, K, V] =
     new StageKeyValueDB[F, K, V](namespace, inner, Map.empty)
 }

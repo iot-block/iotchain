@@ -9,6 +9,7 @@ import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
 import jbok.app.api.impl.{AdminApiImpl, PersonalApiImpl, PublicApiImpl}
+import jbok.codec.rlp.implicits._
 import jbok.common.FileLock
 import jbok.common.execution._
 import jbok.common.metrics.Metrics
@@ -21,7 +22,6 @@ import jbok.core.peer.PeerManagerPlatform
 import jbok.core.pool.{BlockPool, BlockPoolConfig}
 import jbok.core.sync.SyncManager
 import jbok.network.rpc.RpcServer
-import jbok.network.rpc.RpcServer._
 import jbok.network.server.Server
 
 case class FullNode[F[_]](

@@ -1,7 +1,5 @@
 package jbok.codec.json
 
-import java.nio.file.Paths
-
 import io.circe._
 import io.circe.derivation.DerivationMacros
 import io.circe.syntax._

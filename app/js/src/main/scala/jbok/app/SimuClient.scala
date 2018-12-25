@@ -7,6 +7,7 @@ import jbok.app.api.SimulationAPI
 import jbok.network.client.WsClient
 import jbok.network.rpc.RpcClient
 import jbok.common.execution._
+import jbok.codec.rlp.implicits._
 
 case class SimuClient(uri: URI, simulation: SimulationAPI)
 

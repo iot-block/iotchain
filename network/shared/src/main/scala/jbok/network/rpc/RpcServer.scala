@@ -9,7 +9,6 @@ import fs2.concurrent.Queue
 import jbok.network.common.{RequestId, RequestMethod}
 import jbok.network.json._
 import jbok.network.rpc.RpcServer._
-import scodec.Codec
 
 import scala.language.experimental.macros
 
@@ -68,8 +67,6 @@ object RpcServer {
     override def method(a: String): Option[String] =
       parse(a).flatMap(_.hcursor.downField("method").as[String]).toOption
   }
-
-  implicit val codec: Codec[String] = jbok.codec.rlp.implicits.rstring.codec
 
   def apply(
       handlers: Map[String, String => IO[String]] = Map.empty

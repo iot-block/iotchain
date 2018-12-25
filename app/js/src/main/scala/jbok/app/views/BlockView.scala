@@ -58,13 +58,13 @@ case class BlockView(state: AppState) {
                   <th>Gas Limit:</th>
                   <td>{header.gasLimit.toString}</td>
                 </tr>
-                <tr>
-                  <th>Nonce:</th>
-                  <td>{header.nonce.toHex}</td>
-                </tr>
+//                <tr>
+//                  <th>Nonce:</th>
+//                  <td>{header.nonce.toHex}</td>
+//                </tr>
                 <tr>
                   <th>Extra Data:</th>
-                  <td>{header.extraData.toHex}</td>
+                  <td>{header.extra.toHex}</td>
                 </tr>
               }
             </table>

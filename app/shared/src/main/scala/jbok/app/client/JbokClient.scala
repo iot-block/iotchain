@@ -5,6 +5,9 @@ import java.net.URI
 import cats.effect.IO
 import jbok.network.client.{Client, WsClient}
 import jbok.network.rpc.RpcClient
+import jbok.codec.rlp.implicits._
+
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import jbok.sdk.api.{AdminAPI, PersonalAPI, PublicAPI}
 import jbok.sdk.client.{JbokClient => sdkClient}
 import jbok.common.execution._

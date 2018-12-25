@@ -6,7 +6,6 @@ import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import fs2.concurrent.InspectableQueue
-import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.common._
 import jbok.core.config.Configs.SyncConfig
@@ -16,6 +15,7 @@ import jbok.core.peer.{Peer, PeerManager}
 import jbok.core.sync.NodeHash.{EvmCodeHash, StateMptNodeHash, StorageMptNodeHash}
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MptNode
+import scodec.Codec
 import scodec.bits.ByteVector
 
 import scala.util.Random
@@ -40,7 +40,6 @@ final class FastSync[F[_]](
   private[this] val log = jbok.common.log.getLogger("FastSync")
 
   import FastSync._
-
   import config._
 
   private[this] val history = peerManager.history

@@ -2,14 +2,11 @@ package jbok.core.messages
 
 import java.util.UUID
 
+import jbok.codec.rlp.implicits._
 import jbok.core.models._
 import jbok.core.sync.NodeHash
 import jbok.network.common.{RequestId, RequestMethod}
-import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{discriminated, uint16}
-import jbok.codec.rlp.implicits._
-import jbok.crypto.signature.CryptoSignature
 
 sealed abstract class Message(val code: Int, val id: String = UUID.randomUUID().toString)
 
@@ -73,70 +70,7 @@ object IstanbulMessage {
 }
 
 object Message {
-  implicit val codec: Codec[Message] = {
-    discriminated[Message]
-      .by(uint16)
-      .subcaseO(0x0000) {
-        case x: Handshake => Some(x)
-        case _            => None
-      }(Codec[Handshake])
-      .subcaseO(0x1000) {
-        case x: Status => Some(x)
-        case _         => None
-      }(Codec[Status])
-      .subcaseO(0x1001) {
-        case x: NewBlockHashes => Some(x)
-        case _                 => None
-      }(Codec[NewBlockHashes])
-      .subcaseO(0x1002) {
-        case x: SignedTransactions => Some(x)
-        case _                     => None
-      }(Codec[SignedTransactions])
-      .subcaseO(0x1003) {
-        case x: GetBlockHeaders => Some(x)
-        case _                  => None
-      }(Codec[GetBlockHeaders])
-      .subcaseO(0x1004) {
-        case x: BlockHeaders => Some(x)
-        case _               => None
-      }(Codec[BlockHeaders])
-      .subcaseO(0x1005) {
-        case x: GetBlockBodies => Some(x)
-        case _                 => None
-      }(Codec[GetBlockBodies])
-      .subcaseO(0x1006) {
-        case x: BlockBodies => Some(x)
-        case _              => None
-      }(Codec[BlockBodies])
-      .subcaseO(0x1007) {
-        case x: NewBlock => Some(x)
-        case _           => None
-      }(Codec[NewBlock])
-      .subcaseO(0x100d) {
-        case x: GetNodeData => Some(x)
-        case _              => None
-      }(Codec[GetNodeData])
-      .subcaseO(0x100e) {
-        case x: NodeData => Some(x)
-        case _           => None
-      }(Codec[NodeData])
-      .subcaseO(0x100f) {
-        case x: GetReceipts => Some(x)
-        case _              => None
-      }(Codec[GetReceipts])
-      .subcaseO(0x1010) {
-        case x: Receipts => Some(x)
-        case _           => None
-      }(Codec[Receipts])
-      .subcaseO(0x2000) {
-        case x: AuthPacket => Some(x)
-        case _             => None
-      }(Codec[AuthPacket])
-      .subcaseO(0x5000) {
-        case x: IstanbulMessage => Some(x)
-        case _                  => None
-      }(Codec[IstanbulMessage])
-  }
+  implicit val codec = RlpCodec[Message]
 
   implicit val I: RequestId[Message] = new RequestId[Message] {
     override def id(a: Message): String = a.id

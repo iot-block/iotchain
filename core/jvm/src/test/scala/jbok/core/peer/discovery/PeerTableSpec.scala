@@ -51,7 +51,6 @@ class PeerTableSpec extends JbokSpec {
       val targetHash = target.bytes.kec256
 
       val result = table.closest(targetHash, 1).unsafeRunSync()
-      println(result)
     }
   }
 }

@@ -19,7 +19,6 @@ class BlockMinerSpec extends JbokSpec {
     "mine block with transactions" in {
       val miner = random[BlockMiner[IO]]
       val txs   = random[List[SignedTransaction]](genTxs(1, 1024))
-      println(txs.length)
       val parent = miner.history.getBestBlock.unsafeRunSync()
       miner.mine1(parent.some, txs.some).unsafeRunSync()
     }

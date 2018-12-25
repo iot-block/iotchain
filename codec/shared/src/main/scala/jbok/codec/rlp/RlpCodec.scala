@@ -1,131 +1,81 @@
 package jbok.codec.rlp
 
+import magnolia._
 import scodec.Attempt.{Failure, Successful}
 import scodec._
-import scodec.bits._
-import scodec.codecs._
-import shapeless._
+import scodec.bits.{BitVector, ByteVector}
 
 import scala.annotation.tailrec
+import scala.language.experimental.macros
 
-sealed trait CodecType
-case object PureCodec  extends CodecType
-case object ItemCodec  extends CodecType
-case object HListCodec extends CodecType
-
-final case class RlpCodec[A](codecType: CodecType, valueCodec: Codec[A]) {
-  import RlpCodec.listLengthCodec
-
-  val codec: Codec[A] = codecType match {
-    case PureCodec  => valueCodec
-    case ItemCodec  => RlpCodec.rlpitem(valueCodec)
-    case HListCodec => variableSizeBytes(listLengthCodec.xmap[Int](_.toInt, _.toLong), valueCodec)
-  }
-
-  def xmap[B](f: A => B, g: B => A): RlpCodec[B] = RlpCodec(codecType, valueCodec.xmap(f, g))
-
-  def encode(a: A): Attempt[BitVector] = codec.encode(a)
-
-  def decode(bits: BitVector): Attempt[DecodeResult[A]] = codec.decode(bits)
+sealed trait PrefixType
+object PrefixType {
+  case object NoPrefix      extends PrefixType
+  case object ItemLenPrefix extends PrefixType
+  case object ListLenPrefix extends PrefixType
 }
 
-object RlpCodec {
-  def apply[A](implicit codec: Lazy[RlpCodec[A]]): RlpCodec[A] = codec.value
+final case class RlpCodec[A](prefixType: PrefixType, valueCodec: Codec[A]) extends Codec[A] {
+  import RlpCodec._
 
-  def encode[A](a: A)(implicit codec: RlpCodec[A]) =
-    codec.encode(a)
-
-  def decode[A](bits: BitVector)(implicit codec: RlpCodec[A]) =
-    codec.decode(bits)
-
-  def pure[A](codec: Codec[A]): RlpCodec[A] = RlpCodec(PureCodec, codec)
-
-  def apply[A](encode: A => Attempt[BitVector], decode: BitVector => Attempt[DecodeResult[A]]): RlpCodec[A] =
-    pure(Codec(encode, decode))
-
-  def item[A](codec: Codec[A]): RlpCodec[A] =
-    RlpCodec(ItemCodec, codec)
-
-  //////////////////////////
-  //////////////////////////
-
-  private[jbok] val itemOffset = 0x80
-
-  private[jbok] val itemLengthCodec: Codec[Either[Int, Long]] = lengthCodec(itemOffset)
-
-  private[jbok] val listOffset = 0xc0
-
-  private[jbok] val listLengthCodec: Codec[Long] = lengthCodec(listOffset).narrow[Long]({
-    case Left(l)  => Failure(Err(s"invalid rlp list length $l"))
-    case Right(l) => Successful(l)
-  }, Right.apply)
-
-  /**
-    * A string(i.e. ByteVector) is an item
-    * For a **single** byte whose value is in the [0x00, 0x7f] range, that byte is its own RLP encoding.
-    */
-  private[jbok] val rlpitem: Codec[ByteVector] = itemLengthCodec.consume[ByteVector] {
-    case Left(v)  => provide(ByteVector(v)) // provide literal
-    case Right(l) => bytes(l.toInt) // read next l bytes
-  } { b =>
-    if (b.length == 1 && b(0) >= 0x00 && b(0) <= 0x7f) Left(b(0).toInt) // [0x00, 0x7f]
-    else Right(b.length) // how many bytes to read
-  }
-
-  private[jbok] def rlplist[A](codec: RlpCodec[A]): RlpCodec[List[A]] =
-    pure(variableSizeBytes(listLengthCodec.xmap[Int](_.toInt, _.toLong), list(codec.codec)))
-
-  private[jbok] def rlpset[A](codec: RlpCodec[A]): RlpCodec[Set[A]] =
-    pure(
-      variableSizeBytes(listLengthCodec.xmap[Int](_.toInt, _.toLong), list(codec.codec).xmap[Set[A]](_.toSet, _.toList))
-    )
-
-//  private[jbok] def rlpIsoList[A](codec: Codec[A]): Codec[List[A]] =
-//    variableSizeBytes(listLengthCodec.xmap[Int](_.toInt, _.toLong), list(rlpitem(codec)))
-
-//  private[jbok] def rlpHeteroList[A <: HList](codec: Codec[A]): Codec[A] =
-//    variableSizeBytes(listLengthCodec.xmap[Int](_.toInt, _.toLong), codec)
-
-  /**
-    * lift a normal codec to rlp codec
-    * @param codec to encode/decode A
-    * @tparam A type
-    * @return RlpCodec[A]
-    */
-  private[jbok] def rlpitem[A](codec: Codec[A]): Codec[A] =
-    Codec(
+  def prefix(lengthCodec: Codec[ByteVector], codec: Codec[A]): Codec[A] =
+    Codec[A](
       { a: A =>
-        codec
-          .encode(a)
-          .flatMap(bits => rlpitem.encode(bits.bytes))
-      }, { bits =>
         for {
-          result1 <- rlpitem.decode(bits)
-          result2 <- codec.decode(result1.value.bits)
-        } yield result2.mapRemainder(_ => result1.remainder)
+          bits           <- valueCodec.encode(a)
+          lengthPrefixed <- lengthCodec.encode(bits.bytes)
+        } yield lengthPrefixed
+      }, { bits: BitVector =>
+        for {
+          result <- lengthCodec.decode(bits)
+          a      <- valueCodec.decode(result.value.bits)
+        } yield a.mapRemainder(_ => result.remainder)
       }
     )
 
-  /**
-    * @param offset item offset 0x80 or list offset 0xc0
-    * @return Left(value) if this is a single byte in [0x00, 0x7f], otherwise Right(length)
-    */
-  private[jbok] def lengthCodec(offset: Int): Codec[Either[Int, Long]] =
-    uint8.consume[Either[Int, Long]] { h =>
-      if (h < offset) provide(Left(h))
-      else if ((h - offset) <= 55) provide(Right((h - offset).toLong))
-      else ulong((h - offset - 55) * 8).xmap(Right.apply, _.right.get)
+  val codec: Codec[A] = prefixType match {
+    case PrefixType.NoPrefix      => valueCodec
+    case PrefixType.ItemLenPrefix => prefix(itemLength, valueCodec)
+    case PrefixType.ListLenPrefix => prefix(listLengthCodec, valueCodec)
+  }
+
+  override def sizeBound: SizeBound = codec.sizeBound
+
+  override def encode(a: A): Attempt[BitVector] =
+    codec.encode(a)
+
+  override def decode(buffer: BitVector): Attempt[DecodeResult[A]] =
+    codec.decode(buffer)
+
+  override def toString: String = prefixType match {
+    case PrefixType.NoPrefix      => s"Codec(${valueCodec})"
+    case PrefixType.ItemLenPrefix => s"RlpCodec(${valueCodec})"
+    case PrefixType.ListLenPrefix => s"RlpListCodec(${valueCodec})"
+  }
+}
+
+object RlpCodec {
+  val itemOffset = 0x80
+
+  val listOffset = 0xc0
+
+  def lengthCodec(offset: Int): Codec[Either[Int, Long]] = new Codec[Either[Int, Long]] {
+    val codec = codecs.uint8.consume[Either[Int, Long]] { h =>
+      if (h < offset) codecs.provide(Left(h))
+      else if ((h - offset) <= 55) codecs.provide(Right((h - offset).toLong))
+      else codecs.ulong((h - offset - 55) * 8).xmap(Right.apply, _.right.get)
     } {
       case Left(l)             => l
       case Right(l) if l <= 55 => l.toInt + offset
       case Right(l)            => binaryLength(l) + offset + 55
     }
 
-  /**
-    * @param value length
-    * @return how many bytes to represent the length
-    */
-  private[jbok] def binaryLength(value: Long): Int = {
+    override def encode(value: Either[Int, Long]): Attempt[BitVector]              = codec.encode(value)
+    override def decode(bits: BitVector): Attempt[DecodeResult[Either[Int, Long]]] = codec.decode(bits)
+    override def sizeBound: SizeBound                                              = SizeBound.atLeast(1L)
+  }
+
+  private def binaryLength(value: Long): Int = {
     @tailrec
     def bl0(value: Long, len: Int): Int =
       if (len >= 8 || value < (1L << (len * 8)))
@@ -135,4 +85,86 @@ object RlpCodec {
 
     bl0(value, 1)
   }
+
+  val itemLength: Codec[ByteVector] = lengthCodec(itemOffset).consume[ByteVector] {
+    case Left(v)  => codecs.provide(ByteVector(v)) // provide literal
+    case Right(l) => codecs.bytes(l.toInt) // read next l bytes
+  } { b =>
+    if (b.length == 1 && b(0) >= 0x00 && b(0) <= 0x7f) Left(b(0).toInt) // [0x00, 0x7f]
+    else Right(b.length) // how many bytes to read
+  }
+
+  val listLength: Codec[Long] = lengthCodec(listOffset)
+    .narrow[Long]({
+      case Left(l)  => Failure(Err(s"invalid rlp list length $l"))
+      case Right(l) => Successful(l)
+    }, Right.apply)
+
+  val listLengthCodec: Codec[ByteVector] =
+    listLength.consume[ByteVector](size => codecs.bytes(size.toInt))(_.length)
+
+  def apply[A](implicit codec: RlpCodec[A]): RlpCodec[A] = codec
+
+  def encode[A](a: A)(implicit c: RlpCodec[A]): Attempt[BitVector] = c.encode(a)
+
+  def decode[A](bits: BitVector)(implicit c: RlpCodec[A]): Attempt[DecodeResult[A]] = c.decode(bits)
+
+  type Typeclass[A] = RlpCodec[A]
+
+  def combine[A](ctx: CaseClass[RlpCodec, A]): RlpCodec[A] = {
+    val codec = new Codec[A] {
+      override def encode(value: A): Attempt[BitVector] =
+        Attempt.successful {
+          ctx.parameters.foldLeft(BitVector.empty)((acc, cur) =>
+            acc ++ cur.typeclass.encode(cur.dereference(value)).require)
+        }
+
+      override def decode(bits: BitVector): Attempt[DecodeResult[A]] = {
+        val (fields, remainder) = ctx.parameters.foldLeft((List.empty[Any], bits)) {
+          case ((acc, bits), cur) =>
+            val v = cur.typeclass.decode(bits).require
+            (v.value :: acc, v.remainder)
+        }
+        Attempt.successful(DecodeResult(ctx.rawConstruct(fields.reverse), remainder))
+      }
+
+      override def sizeBound: SizeBound =
+        ctx.parameters.foldLeft(ctx.parameters.head.typeclass.sizeBound)((acc, cur) => acc + cur.typeclass.sizeBound)
+
+      override def toString: String =
+        s"${ctx.typeName.short}(${ctx.parameters.map(p => s"${p.label}").mkString(",")})"
+    }
+
+    if (ctx.isValueClass) {
+      RlpCodec(PrefixType.NoPrefix, codec)
+    } else {
+      RlpCodec(PrefixType.ListLenPrefix, codec)
+    }
+  }
+
+  def dispatch[A](ctx: SealedTrait[RlpCodec, A]): RlpCodec[A] = {
+    val m1 = ctx.subtypes.zipWithIndex.map(_.swap).toMap
+    val m2 = ctx.subtypes.zipWithIndex.toMap
+    val codec = new Codec[A] {
+      override def encode(value: A): Attempt[BitVector] =
+        ctx.dispatch(value)(sub => {
+          val bits = codecs.uint8.encode(m2(sub)).require
+          sub.typeclass.encode(sub.cast(value)).map(v => bits ++ v)
+        })
+
+      override def decode(bits: BitVector): Attempt[DecodeResult[A]] =
+        codecs.uint8.decode(bits).flatMap { result =>
+          m1.get(result.value) match {
+            case Some(sub) => sub.typeclass.decode(result.remainder)
+            case None      => ???
+          }
+        }
+
+      override def sizeBound: SizeBound = ???
+    }
+
+    RlpCodec(PrefixType.ItemLenPrefix, codec)
+  }
+
+  implicit def gen[A]: RlpCodec[A] = macro Magnolia.gen[A]
 }

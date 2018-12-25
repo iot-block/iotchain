@@ -67,7 +67,7 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "io.circe" %%% "circe-parser"     % V.circe,
       "io.circe" %%% "circe-derivation" % "0.9.0-M5",
       // binary
-      "org.scodec" %%% "scodec-bits"  % "1.1.5",
+      "org.scodec" %%% "scodec-bits"  % "1.1.6",
       "org.scodec" %%% "scodec-core"  % "1.10.3",
       "org.scodec" %% "scodec-stream" % "1.2.0",
       // graph
@@ -87,6 +87,8 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       // test
       "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
       "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test,
+      // macro
+      "com.propensive" %%% "magnolia" % "0.10.0",
       // scalajs-stubs
       "org.scala-js" %% "scalajs-stubs" % "0.6.26"
     ) ++ dropwizard ++ prometheus
@@ -99,11 +101,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-core"
   )
-  .dependsOn(common % CompileAndTest,
-             codec,
-             crypto     % CompileAndTest,
-             network    % CompileAndTest,
-             persistent % CompileAndTest)
+  .dependsOn(Seq(common, codec, crypto, network, persistent).map(_ % CompileAndTest): _*)
 
 lazy val pow = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -159,7 +157,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
   .settings(
     name := "jbok-app",
-    packageName in Docker := "jbok-app",
+    packageName in Docker := "jbok",
     dockerBaseImage := "openjdk:8-jre-alpine"
   )
   .jsSettings(

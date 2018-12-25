@@ -9,6 +9,7 @@ import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.network.client.WsClient
 import jbok.network.server.Server
+import jbok.codec.rlp.implicits._
 
 import scala.concurrent.duration._
 

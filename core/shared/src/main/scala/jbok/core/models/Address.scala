@@ -6,7 +6,9 @@ import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
+import scodec.codecs
 import scodec.bits.ByteVector
+
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 
 final class Address private (val bytes: ByteVector) extends AnyVal {
@@ -23,7 +25,7 @@ object Address {
 
   val empty: Address = Address(ByteVector.empty)
 
-  implicit val codec: RlpCodec[Address] = rbytes.xmap[Address](Address.apply, _.bytes)
+  implicit val codec: RlpCodec[Address] = rlp(codecs.bytes.xmap[Address](Address.apply, _.bytes))
 
   implicit val addressJsonEncoder: Encoder[Address] = bytesEncoder.contramap[Address](_.bytes)
 

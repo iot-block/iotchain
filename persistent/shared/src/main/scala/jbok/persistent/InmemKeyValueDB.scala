@@ -2,9 +2,9 @@ package jbok.persistent
 
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import scodec.Codec
-import scodec.bits.ByteVector
 import cats.implicits._
+import jbok.codec.rlp.RlpCodec
+import scodec.bits.ByteVector
 
 final class InmemKeyValueDB[F[_]: Sync](ref: Ref[F, Map[ByteVector, ByteVector]]) extends KeyValueDB[F] {
   override def getRaw(key: ByteVector): F[Option[ByteVector]] =
@@ -31,10 +31,10 @@ final class InmemKeyValueDB[F[_]: Sync](ref: Ref[F, Map[ByteVector, ByteVector]]
   override def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit] =
     ref.update(xs => xs -- del ++ put)
 
-  override def keys[Key: Codec](namespace: ByteVector): F[List[Key]] =
+  override def keys[Key: RlpCodec](namespace: ByteVector): F[List[Key]] =
     keysRaw.map(_.filter(_.startsWith(namespace))).flatMap(_.traverse(k => decode[Key](k, namespace)))
 
-  override def toMap[Key: Codec, Val: Codec](namespace: ByteVector): F[Map[Key, Val]] =
+  override def toMap[Key: RlpCodec, Val: RlpCodec](namespace: ByteVector): F[Map[Key, Val]] =
     for {
       mapRaw <- toMapRaw.map(_.filterKeys(_.startsWith(namespace)))
       xs     <- mapRaw.toList.traverse { case (k, v) => (decode[Key](k, namespace), decode[Val](v)).tupled }

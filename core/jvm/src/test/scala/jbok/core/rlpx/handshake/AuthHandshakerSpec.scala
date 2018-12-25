@@ -7,11 +7,9 @@ import fs2._
 import jbok.JbokSpec
 import jbok.codec.rlp.implicits._
 import jbok.common.execution._
-import jbok.common.testkit._
 import jbok.core.messages.Message
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.network.common.{RequestId, TcpUtil}
-import scodec.Codec
 import scodec.bits._
 
 import scala.concurrent.duration._
@@ -22,7 +20,6 @@ class AuthHandshakerSpec extends JbokSpec {
   val addr      = new InetSocketAddress("localhost", 9003)
 
   implicit val I: RequestId[ByteVector] = RequestId.empty
-  implicit val C: Codec[ByteVector]     = rbytes.codec
 
   "AuthHandshakerSpec" should {
     "build auth connection" in {
@@ -53,8 +50,6 @@ class AuthHandshakerSpec extends JbokSpec {
           .compile
           .toList
           .unsafeRunSync()
-
-      println(result)
     }
 
     "fail if wrong remotePk" in {
@@ -66,7 +61,6 @@ class AuthHandshakerSpec extends JbokSpec {
             fiber      <- conn.start
             handshaker <- AuthHandshaker[IO](serverKey)
             result     <- handshaker.accept(conn)
-            _ = println(result)
             _ <- fiber.cancel
           } yield ()
         }
@@ -77,7 +71,6 @@ class AuthHandshakerSpec extends JbokSpec {
           _          <- conn.start
           handshaker <- AuthHandshaker[IO](clientKey)
           result     <- handshaker.connect(conn, clientKey.public)
-          _ = println(result)
         } yield ()
 
       server

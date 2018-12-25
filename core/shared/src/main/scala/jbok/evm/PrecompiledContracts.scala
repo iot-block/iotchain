@@ -215,7 +215,6 @@ object PrecompiledContracts {
   object BN256Pairing extends PrecompiledContract {
     def exec(inputData: ByteVector): ByteVector = {
       if (inputData.length % 192 != 0) {
-        println("not % 192 == 0")
         return ByteVector.empty.padTo(32)
       }
 

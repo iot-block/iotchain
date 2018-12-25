@@ -6,7 +6,7 @@ import java.security.SecureRandom
 
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
-import jbok.codec.rlp.RlpCodec
+
 import jbok.codec.rlp.implicits._
 import jbok.core.messages.{AuthPacket, Message}
 import jbok.crypto.signature._
@@ -43,12 +43,12 @@ case class AuthHandshaker[F[_]](
 
   private[this] val log = jbok.common.log.getLogger(s"AuthHandshaker")
 
-  implicit val codec: Codec[ByteVector] = pure.codec
+//  implicit val codec: Codec[ByteVector] = pure.codec
 
   def initiate(remotePk: KeyPair.Public): F[(ByteVector, AuthHandshaker[F])] =
     for {
       message <- createAuthInitiateMessageV4(remotePk)
-      encoded       = RlpCodec.encode(message).require.bytes.toArray
+      encoded       = Codec.encode(message).require.bytes.toArray
       padded        = encoded ++ randomBytes(Random.nextInt(MaxPadding - MinPadding) + MinPadding)
       encryptedSize = padded.length + ECIES.OverheadSize
       sizePrefix    = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array
@@ -108,7 +108,7 @@ case class AuthHandshaker[F[_]](
         ciphertext = encryptedPayload.toArray,
         macData = Some(sizeBytes.toArray)
       )
-      message = RlpCodec.decode[AuthResponseMessageV4](BitVector(plaintext)).require.value
+      message = Codec.decode[AuthResponseMessageV4](BitVector(plaintext)).require.value
       result <- copy(responsePacketOpt = Some(initData)).finalizeHandshake(message.ephemeralPublicKey, message.nonce)
     } yield result
   }
@@ -166,13 +166,13 @@ case class AuthHandshaker[F[_]](
         ciphertext = encryptedPayload.toArray,
         macData = Some(sizeBytes.toArray)
       )
-      message = RlpCodec.decode[AuthInitiateMessageV4](BitVector(plaintext)).require.value
+      message = Codec.decode[AuthInitiateMessageV4](BitVector(plaintext)).require.value
       response = AuthResponseMessageV4(
         ephemeralPublicKey = ephemeralKey.public,
         nonce = nonce,
         version = ProtocolVersion
       )
-      encodedResponse = RlpCodec.encode(response).require.toByteArray
+      encodedResponse = Codec.encode(response).require.toByteArray
 
       encryptedSize = encodedResponse.length + ECIES.OverheadSize
       sizePrefix    = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array

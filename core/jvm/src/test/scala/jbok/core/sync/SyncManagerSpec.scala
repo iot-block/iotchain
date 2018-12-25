@@ -130,7 +130,6 @@ class SyncManagerSpec extends JbokSpec {
 
       // let miner mine 10 blocks first
       val blocks = miner.stream.take(10).compile.toList.unsafeRunSync()
-      println(sm1.history.getBestBlockNumber.unsafeRunSync())
 
       val p = for {
         fiber <- Stream(sm1, sm2, sm3).map(_.peerManager.stream).parJoinUnbounded.compile.drain.start

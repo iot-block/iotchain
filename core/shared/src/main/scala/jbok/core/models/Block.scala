@@ -1,6 +1,7 @@
 package jbok.core.models
 
 import jbok.codec.json.implicits._
+
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("Block")

@@ -4,7 +4,6 @@ import cats.Foldable
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
-import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.common._
 import jbok.core.ledger.History
@@ -13,6 +12,7 @@ import jbok.core.store.namespaces
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.persistent.StageKeyValueDB
+import scodec.Codec
 import scodec.bits.ByteVector
 import shapeless._
 
@@ -135,7 +135,7 @@ final case class WorldState[F[_]](
     for {
       creatorAccount <- getAccount(creatorAddr)
     } yield {
-      val hash = RlpCodec.encode(creatorAddr :: (creatorAccount.nonce - 1) :: HNil).require.bytes.kec256
+      val hash = (creatorAddr, creatorAccount.nonce - 1).asBytes.kec256
       Address.apply(hash)
     }
 

@@ -10,20 +10,24 @@ import org.scalacheck.Gen
 class CodecBenchmark extends JbokBenchmark {
   val size = 10000
 
-  val blockHeaders = Gen.listOfN(size, arbBlockHeader.arbitrary).sample.get.toArray
+  val xs = Gen.listOfN(size, arbBlockHeader.arbitrary).sample.get.toArray
 
   var i = 0
 
   @Benchmark
-  def codecHeader() = {
-    RlpCodec.encode(blockHeaders(i))
-    i = (i + 1) % size
-  }
+  @OperationsPerInvocation(1000)
+  def derive_1k() =
+    (0 until 1000).foreach { _ =>
+      xs(i).asBytes
+      i = (i + 1) % size
+    }
 
-  val codec = implicitly[RlpCodec[BlockHeader]]
+  val codec = RlpCodec[BlockHeader]
   @Benchmark
-  def codecHeader2() = {
-    codec.encode(blockHeaders(i))
-    i = (i + 1) % size
-  }
+  @OperationsPerInvocation(1000)
+  def derive_cached_1k() =
+    (0 until 1000).foreach { _ =>
+      xs(i).asBytes(codec)
+      i = (i + 1) % size
+    }
 }

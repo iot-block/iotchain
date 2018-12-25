@@ -3,7 +3,6 @@ package jbok.core.ledger
 import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
-import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.models._
 import jbok.common.testkit._
@@ -11,6 +10,8 @@ import jbok.core.testkit._
 import jbok.crypto._
 import scodec.bits.ByteVector
 import jbok.core.config.defaults.reference
+
+import scala.io.Codec
 
 class HistorySpec extends JbokSpec {
   "History" should {
@@ -20,7 +21,7 @@ class HistorySpec extends JbokSpec {
     "put and get account node" in {
       val history = random[History[IO]]
       forAll { (addr: Address, acc: Account) =>
-        val bytes = RlpCodec.encode(acc).require.bytes
+        val bytes = acc.asBytes
         history.putMptNode(bytes.kec256, bytes).unsafeRunSync()
         history.getMptNode(bytes.kec256).unsafeRunSync() shouldBe bytes.some
       }
@@ -29,7 +30,7 @@ class HistorySpec extends JbokSpec {
     "put and get storage node" in {
       val history = random[History[IO]]
       forAll { (k: UInt256, v: UInt256) =>
-        val bytes = RlpCodec.encode(v).require.bytes
+        val bytes = v.asBytes
         history.putMptNode(bytes.kec256, bytes).unsafeRunSync()
         history.getMptNode(bytes.kec256).unsafeRunSync() shouldBe bytes.some
       }

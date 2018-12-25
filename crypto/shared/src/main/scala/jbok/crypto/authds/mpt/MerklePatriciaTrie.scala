@@ -6,11 +6,11 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.codec.HexPrefix
 import jbok.codec.HexPrefix.Nibbles
+import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MptNode._
 import jbok.persistent.KeyValueDB
-import scodec.Codec
 import scodec.bits.ByteVector
 
 final class MerklePatriciaTrie[F[_]](
@@ -110,10 +110,10 @@ final class MerklePatriciaTrie[F[_]](
     } yield m.map { case (k, v) => ByteVector.fromValidHex(k) -> v }
   }
 
-  override def keys[Key: Codec](namespace: ByteVector): F[List[Key]] =
+  override def keys[Key: RlpCodec](namespace: ByteVector): F[List[Key]] =
     keysRaw.flatMap(_.traverse(k => decode[Key](k, namespace)))
 
-  override def toMap[Key: Codec, Val: Codec](namespace: ByteVector): F[Map[Key, Val]] =
+  override def toMap[Key: RlpCodec, Val: RlpCodec](namespace: ByteVector): F[Map[Key, Val]] =
     for {
       mapRaw <- toMapRaw
       xs     <- mapRaw.toList.traverse { case (k, v) => (decode[Key](k, namespace), decode[Val](v)).tupled }
@@ -125,11 +125,11 @@ final class MerklePatriciaTrie[F[_]](
   // note: since merkle trie only use key as tree path, we do not need
   // prefix key by namespace. we only need prefix node bytes hash when
   // we read or write the underlying db
-  override def encode[A: Codec](a: A, prefix: ByteVector): F[ByteVector] =
-    F.delay(Codec[A].encode(a).require.bytes)
+  override def encode[A: RlpCodec](a: A, prefix: ByteVector): F[ByteVector] =
+    F.delay(RlpCodec[A].encode(a).require.bytes)
 
-  override def decode[A: Codec](bytes: ByteVector, prefix: ByteVector): F[A] =
-    F.delay(Codec[A].decode(bytes.bits).require.value)
+  override def decode[A: RlpCodec](bytes: ByteVector, prefix: ByteVector): F[A] =
+    F.delay(RlpCodec[A].decode(bytes.bits).require.value)
 
   ////////////////////////
   ////////////////////////
@@ -564,7 +564,7 @@ object MerklePatriciaTrie {
       rootHash <- Ref.of[F, Option[ByteVector]](root)
     } yield new MerklePatriciaTrie[F](namespace, db, rootHash)
 
-  def calcMerkleRoot[F[_]: Sync, V: Codec](entities: List[V]): F[ByteVector] =
+  def calcMerkleRoot[F[_]: Sync, V: RlpCodec](entities: List[V]): F[ByteVector] =
     for {
       db   <- KeyValueDB.inmem[F]
       mpt  <- MerklePatriciaTrie[F](ByteVector.empty, db)
@@ -572,7 +572,7 @@ object MerklePatriciaTrie {
       root <- mpt.getRootHash
     } yield root
 
-  val emptyRootHash: ByteVector = rempty.encode(()).require.bytes.kec256
+  val emptyRootHash: ByteVector = ().asBytes.kec256
 
   val alphabet: Vector[String] = "0123456789abcdef".map(_.toString).toVector
 

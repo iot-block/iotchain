@@ -3,20 +3,20 @@ package jbok.network.discovery
 import java.util.UUID
 
 import cats.effect.IO
+import cats.implicits._
 import fs2._
 import jbok.JbokSpec
+import jbok.codec.rlp.RlpCodec
 import jbok.common.execution._
 import jbok.common.testkit._
+import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.peer.PeerNode
+import jbok.core.peer.discovery.KadPacket._
 import jbok.core.peer.discovery._
 import jbok.core.testkit._
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.testkit._
 import org.scalacheck.Gen
-import scodec.Codec
-import cats.implicits._
-import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.peer.discovery.KadPacket._
 
 import scala.concurrent.duration._
 
@@ -26,8 +26,8 @@ class DiscoverySpec extends JbokSpec {
 
     "roundtrip kad packets" in {
       def roundtrip[A <: KadPacket](a: A) = {
-        val bits = Codec.encode[KadPacket](a).require
-        Codec.decode[KadPacket](bits).require.value shouldBe a
+        val bits = RlpCodec[KadPacket].encode(a).require
+        RlpCodec.decode[KadPacket](bits).require.value shouldBe a
       }
 
       val ping      = Ping(random[PeerNode], Long.MaxValue, UUID.randomUUID())

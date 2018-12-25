@@ -1,6 +1,6 @@
 package jbok.examples.hg
 
-import jbok.codec.rlp.RlpCodec
+
 import jbok.crypto._
 import scalax.collection.Graph
 import scalax.collection.GraphEdge.DiEdge
@@ -15,7 +15,7 @@ trait Generator {
   def emptyEvent(sp: Event, op: Event, creator: ByteVector, timestamp: Long): Event = {
     val ts = math.max(sp.body.timestamp, op.body.timestamp) + 1L
     val body = EventBody(sp.hash, op.hash, creator, timestamp, sp.body.index + 1, Nil)
-    val hash = RlpCodec.encode(body).require.bytes.kec256
+    val hash = body.asBytes
     Event(body, hash)
   }
 
