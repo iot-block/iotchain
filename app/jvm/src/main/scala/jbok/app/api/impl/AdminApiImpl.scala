@@ -1,8 +1,8 @@
 package jbok.app.api.impl
 
 import cats.effect.IO
-import jbok.app.api.AdminAPI
 import jbok.core.peer.{PeerManager, PeerNode}
+import jbok.sdk.api.AdminAPI
 
 final class AdminApiImpl(
     peerManager: PeerManager[IO]

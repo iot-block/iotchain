@@ -6,10 +6,10 @@ import cats.effect.IO
 import com.thoughtworks.binding
 import com.thoughtworks.binding.{Binding, FutureBinding}
 import com.thoughtworks.binding.Binding.{Constant, Var, Vars}
+import jbok.app.api.NodeInfo
 import jbok.app.{AppState, BlockHistory, ClientStatus, SimuClient}
-import jbok.app.client.JbokClient
+import jbok.sdk.client.JbokClient
 import jbok.app.components.Spinner
-import jbok.app.simulations.NodeInfo
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw._
 import jbok.common.execution._
@@ -216,7 +216,7 @@ case class ConfigView(state: AppState) {
               val nodeInfo = NodeInfo(peerNodeUriOpt.get, addHost.value, addPort.value.toInt)
               state.addNodeInfo(nodeInfo)
               for {
-                jbokClient <- JbokClient(new URI(nodeInfo.rpcAddr))
+                jbokClient <- jbok.app.client.JbokClient(new URI(nodeInfo.rpcAddr))
                 _ = state.clients.value += (peerNodeUriOpt.get -> jbokClient)
               } yield "connected."
             }

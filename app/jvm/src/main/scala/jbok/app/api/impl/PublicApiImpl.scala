@@ -3,12 +3,12 @@ package jbok.app.api.impl
 import cats.data.OptionT
 import cats.effect.IO
 import cats.implicits._
-import jbok.app.api._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.HistoryConfig
 import jbok.core.mining.BlockMiner
 import jbok.core.models._
+import jbok.sdk.api.{BlockParam, CallTx, PublicAPI}
 import scodec.bits.ByteVector
 
 final class PublicApiImpl(

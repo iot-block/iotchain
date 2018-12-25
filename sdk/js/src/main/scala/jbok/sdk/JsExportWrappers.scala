@@ -1,4 +1,4 @@
-package jbok.app
+package jbok.sdk
 
 import cats.effect.IO
 import jbok.common.execution._
@@ -9,7 +9,7 @@ import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.Promise
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
-import scala.scalajs.js.typedarray.{byteArray2Int8Array, Int8Array}
+import scala.scalajs.js.typedarray.{Int8Array, byteArray2Int8Array}
 
 @JSExportTopLevel("Option")
 @JSExportAll

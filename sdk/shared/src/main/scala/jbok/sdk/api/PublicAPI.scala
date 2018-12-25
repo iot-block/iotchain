@@ -1,4 +1,4 @@
-package jbok.app.api
+package jbok.sdk.api
 
 import io.circe.generic.JsonCodec
 import jbok.core.models._

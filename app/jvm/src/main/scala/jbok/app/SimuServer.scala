@@ -3,7 +3,8 @@ package jbok.app
 import java.net.InetSocketAddress
 
 import cats.effect.IO
-import jbok.app.simulations.{SimulationAPI, SimulationImpl}
+import jbok.app.api.SimulationAPI
+import jbok.app.simulations.SimulationImpl
 import jbok.common.execution._
 import jbok.common.metrics.Metrics
 import jbok.network.rpc.RpcServer

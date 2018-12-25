@@ -16,21 +16,34 @@ import jbok.common.execution._
 
 class JsClientSpec extends JbokAsyncSpec {
 
-  override implicit def executionContext: ExecutionContext = EC
+  implicit override def executionContext: ExecutionContext = EC
 
-  override def timeLimit: Span = 60.seconds
+  override def timeLimit: Span            = 60.seconds
   implicit val codecString: Codec[String] = variableSizeBytes(uint16, string(StandardCharsets.US_ASCII))
-  implicit val requestId = RequestId.empty[String]
-  implicit val requestMethod = RequestMethod.none[String]
+  implicit val requestId                  = RequestId.empty[String]
+  implicit val requestMethod              = RequestMethod.none[String]
 
   "JsClient" should {
     "echo" ignore {
       val uri = new URI("ws://echo.websocket.org:80")
       for {
         client <- WsClient[IO, String](uri)
-        _ <- client.start
-        _ <- client.write("ohoho")
-        resp <- client.read
+        _      <- client.start
+        _      <- client.write("ohoho")
+        resp   <- client.read
+        _ = println(resp)
+      } yield ()
+    }
+  }
+
+  "JsClientNodejs" should {
+    "echo" ignore {
+      val uri = new URI("ws://echo.websocket.org:80")
+      for {
+        client <- WsClientNode[IO, String](uri)
+        _      <- client.start
+        _      <- client.write("ohoho")
+        resp   <- client.read
         _ = println(resp)
       } yield ()
     }

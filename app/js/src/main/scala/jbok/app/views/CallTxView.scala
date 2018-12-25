@@ -5,7 +5,7 @@ import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
 import jbok.app.AppState
-import jbok.app.api.{BlockParam, CallTx, TransactionRequest}
+import jbok.sdk.api.{BlockParam, CallTx}
 import jbok.core.models.{Account, Address}
 import jbok.evm.abi.Description
 import org.scalajs.dom.raw._
@@ -14,6 +14,7 @@ import org.scalajs.dom
 import scodec.bits.ByteVector
 import io.circe.parser._
 import jbok.evm.abi
+import jbok.sdk.api.{BlockParam, CallTx, TransactionRequest}
 
 case class CallTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]

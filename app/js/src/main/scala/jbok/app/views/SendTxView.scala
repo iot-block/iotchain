@@ -4,9 +4,10 @@ import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
-import jbok.app.api.{BlockParam, TransactionRequest}
+import jbok.sdk.api.BlockParam
 import jbok.app.AppState
 import jbok.core.models.{Account, Address, UInt256}
+import jbok.sdk.api.{BlockParam, TransactionRequest}
 import org.scalajs.dom.raw.HTMLButtonElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector

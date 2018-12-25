@@ -7,6 +7,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2.concurrent.Topic
 import jbok.app.FullNode
+import jbok.app.api.{NodeInfo, SimulationAPI, SimulationEvent}
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.GenesisConfig
@@ -14,12 +15,12 @@ import jbok.core.config.defaults.testReference
 import jbok.core.consensus.poa.clique
 import jbok.core.models.{Account, Address}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
-import jbok.app.client.JbokClient
+import jbok.sdk.client.{JbokClient => sdkClient}
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import scodec.bits.ByteVector
-import scala.concurrent.duration._
 
+import scala.concurrent.duration._
 import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.util.Random
@@ -27,7 +28,7 @@ import scala.util.Random
 case class Node(
     nodeInfo: NodeInfo,
     peerNodeUri: String,
-    jbokClient: JbokClient
+    jbokClient: sdkClient
 )
 
 class SimulationImpl(
@@ -44,7 +45,7 @@ class SimulationImpl(
   val genesisConfigWithAlloc: GenesisConfig = txGraphGen.genesisConfig
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val fullNodeConfigs = FullNodeConfig.fill(testReference.withMining(_.copy(period = 5.seconds)), n)
+    val fullNodeConfigs = FullNodeConfig.fill(testReference.withMining(_.copy(period = 10.seconds)), n)
     val signers = (1 to n).toList
       .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
       .unsafeRunSync()
@@ -65,7 +66,7 @@ class SimulationImpl(
       _ <- newNodes.traverse(_.start)
       _ = T.sleep(5.seconds)
       _ = log.info("node start, then client to connect")
-      jbokClients <- newNodes.traverse[IO, JbokClient](x => JbokClient(new URI(infoFromNode(x).rpcAddr)))
+      jbokClients <- newNodes.traverse[IO, sdkClient](x => jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
       _ <- id2NodeNetwrok.update(
         _ ++ newNodes
           .zip(jbokClients)
@@ -103,7 +104,7 @@ class SimulationImpl(
 
   override def addNode(interface: String, port: Int): IO[Option[String]] =
     for {
-      jbokClient <- JbokClient(new URI(s"ws://$interface:$port"))
+      jbokClient <- jbok.app.client.JbokClient(new URI(s"ws://$interface:$port"))
       peerNodeUriOpt <- jbokClient.admin.peerNodeUri.timeout(requestTimeout).attempt.map {
         case Left(_)            => None
         case Right(peerNodeUri) => peerNodeUri.some
