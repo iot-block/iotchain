@@ -1,13 +1,18 @@
 package jbok.core
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Deferred, Ref}
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.implicits._
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
 import jbok.core.config.GenesisConfig
 import jbok.core.config.defaults.testReference
 import jbok.core.consensus.Consensus
+import jbok.core.consensus.istanbul._
+import jbok.core.consensus.istanbul.Istanbul
+import jbok.core.consensus.istanbul.Snapshot
 import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus, _}
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.messages._
@@ -17,12 +22,14 @@ import jbok.core.peer.discovery.{Discovery, PeerTable}
 import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerNode, PeerStorePlatform, PeerType}
 import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
 import jbok.core.sync._
-import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
+import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import jbok.crypto.testkit._
 import jbok.network.transport.UdpTransport
-import jbok.persistent.KeyValueDB
+import jbok.persistent.{CacheBuilder, KeyValueDB}
 import jbok.persistent.testkit._
 import org.scalacheck._
+import scodec.bits.ByteVector
+import jbok.crypto._
 import scala.concurrent.duration._
 
 object testkit {
@@ -41,15 +48,95 @@ object testkit {
       peer = testReference.peer.copy(nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()))
     )
 
+  def istanbulTestConfig(keypairs: List[KeyPair]): FullNodeConfig = {
+    val genesisConfig = prepareIstanbulConfig(keypairs, testMiner)
+    testReference.copy(
+      consensusAlgo = "istanbul",
+      genesisOrPath = Left(genesisConfig),
+      mining = testReference.mining.copy(minerAddressOrKey = Right(testMiner.keyPair), period = 500.millis),
+      peer = testReference.peer.copy(nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()))
+    )
+  }
+
   def genConsensus(implicit config: FullNodeConfig): Gen[Consensus[IO]] = {
     implicit val chainId = config.genesis.chainId
-    val p = for {
-      history   <- History.forPath[IO](config.history.chainDataDir)
-      blockPool <- BlockPool(history, BlockPoolConfig())
-      clique    <- Clique(config.mining, config.genesis, history, Some(testMiner.keyPair))
-      consensus = new CliqueConsensus[IO](clique, blockPool)
-    } yield consensus
+    val p = config.consensusAlgo match {
+      case "clique" =>
+        for {
+          history   <- History.forPath[IO](config.history.chainDataDir)
+          blockPool <- BlockPool(history, BlockPoolConfig())
+          clique    <- Clique(config.mining, config.genesis, history, Some(testMiner.keyPair))
+          consensus = new CliqueConsensus[IO](clique, blockPool)
+        } yield consensus
+      case "istanbul" =>
+        genIstanbulConsensus(testMiner.keyPair)
+    }
     p.unsafeRunSync()
+  }
+
+  def genIstanbulConsensus(selfPk: KeyPair)(implicit config: FullNodeConfig): IO[Consensus[IO]] = {
+    implicit val cache = CacheBuilder.build[IO, Snapshot](128).unsafeRunSync()
+    for {
+      history   <- History.forPath[IO](config.history.chainDataDir)
+      blockPool <- BlockPool[IO](history, BlockPoolConfig())
+      promise   <- Deferred[IO, Int]
+      istanbul  <- Istanbul[IO](IstanbulConfig(), history, config.genesis, selfPk, StateNewRound)
+      consensus = new IstanbulConsensus[IO](blockPool, istanbul)
+    } yield consensus
+  }
+
+  def sign(sigHash: ByteVector, pk: KeyPair)(implicit chainId: BigInt): CryptoSignature =
+    Signature[ECDSA].sign[IO](sigHash.kec256.toArray, pk, chainId).unsafeRunSync()
+
+  private def prepareIstanbulConfig(keypairs: List[KeyPair], miner: SimAccount): GenesisConfig = {
+    implicit val byteArrayOrd: Ordering[Array[Byte]] = new Ordering[Array[Byte]] {
+      def compare(a: Array[Byte], b: Array[Byte]): Int =
+        if (a eq null) {
+          if (b eq null) 0
+          else -1
+        } else if (b eq null) 1
+        else {
+          val L = math.min(a.length, b.length)
+          var i = 0
+          while (i < L) {
+            if (a(i) < b(i)) return -1
+            else if (b(i) < a(i)) return 1
+            i += 1
+          }
+          if (L < b.length) -1
+          else if (L < a.length) 1
+          else 0
+        }
+    }
+
+    implicit val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
+
+    val signers    = keypairs
+    val validators = signers.map(Address(_))
+
+    val alloc = Map(miner.address -> miner.balance)
+    val extra = IstanbulExtra(validators, ByteVector.empty, List.empty)
+    val genesisConfig = GenesisConfig
+      .generate(chainId, alloc)
+      .copy(difficulty = BigInt(1),
+            extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes)
+//    val genesisConfig =
+//      testReference.genesis.copy(
+//        alloc = alloc,
+//        extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes)
+
+    val sigHash = Istanbul.sigHash(genesisConfig.header)
+    val seal    = sign(sigHash, miner.keyPair)
+
+    val commitSeals = signers.map(pk => {
+      sign(genesisConfig.header.hash ++ ByteVector(IstanbulMessage.msgCommitCode), pk)
+    })
+    val newExtra = IstanbulExtra(validators, ByteVector(seal.bytes), commitSeals)
+
+    val sealConfig = genesisConfig.copy(
+      extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(newExtra).require.bytes)
+
+    sealConfig
   }
 
   implicit def arbConsensus(implicit config: FullNodeConfig): Arbitrary[Consensus[IO]] = Arbitrary {

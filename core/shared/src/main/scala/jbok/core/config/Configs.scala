@@ -24,7 +24,8 @@ object Configs {
       sync: SyncConfig,
       txPool: TxPoolConfig,
       mining: MiningConfig,
-      rpc: RpcConfig
+      rpc: RpcConfig,
+      consensusAlgo:String = "clique"
   ) {
     def genesis = genesisOrPath match {
       case Left(g)     => g

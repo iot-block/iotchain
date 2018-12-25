@@ -4,6 +4,7 @@ import io.circe._
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
+import jbok.core.consensus.istanbul.Istanbul
 import jbok.crypto._
 import scodec.bits._
 import shapeless._
@@ -28,7 +29,13 @@ final case class BlockHeader(
     mixHash: ByteVector, // B32 consensus field
     nonce: ByteVector // B8 consensus field
 ) {
-  lazy val hash: ByteVector = RlpCodec.encode(this).require.bytes.kec256
+  lazy val hash: ByteVector =
+    if (mixHash == Istanbul.mixDigest) {
+      val newHeader = Istanbul.filteredHeader(this, true)
+      RlpCodec.encode(newHeader).require.bytes.kec256
+    } else {
+      RlpCodec.encode(this).require.bytes.kec256
+    }
 
   lazy val hashWithoutNonce: ByteVector = BlockHeader.encodeWithoutNonce(this).kec256
 

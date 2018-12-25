@@ -9,6 +9,7 @@ import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{discriminated, uint16}
 import jbok.codec.rlp.implicits._
+import jbok.crypto.signature.CryptoSignature
 
 sealed abstract class Message(val code: Int, val id: String = UUID.randomUUID().toString)
 
@@ -54,6 +55,22 @@ case class GetReceipts(blockHashes: List[ByteVector], override val id: String = 
 case class Receipts(receiptsForBlocks: List[List[Receipt]], override val id: String) extends Message(0x1010)
 
 case class AuthPacket(bytes: ByteVector) extends Message(0x2000)
+
+case class IstanbulMessage(
+    msgCode: Int,
+    msg: ByteVector,
+    address: Address,
+    signature: ByteVector,
+    committedSig: Option[CryptoSignature]
+) extends Message(0x5000)
+
+object IstanbulMessage {
+  val msgPreprepareCode = 0
+  val msgPrepareCode    = 1
+  val msgCommitCode     = 2
+  val msgRoundChange    = 3
+  val msgAll            = 4
+}
 
 object Message {
   implicit val codec: Codec[Message] = {
@@ -115,6 +132,10 @@ object Message {
         case x: AuthPacket => Some(x)
         case _             => None
       }(Codec[AuthPacket])
+      .subcaseO(0x5000) {
+        case x: IstanbulMessage => Some(x)
+        case _                  => None
+      }(Codec[IstanbulMessage])
   }
 
   implicit val I: RequestId[Message] = new RequestId[Message] {
