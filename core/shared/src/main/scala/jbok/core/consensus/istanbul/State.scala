@@ -43,7 +43,7 @@ trait State {
 
 //  TODO: insert block
   def insertBlock[F[_]](block: Block, committedSeals: List[CryptoSignature])(implicit F: Concurrent[F]): F[Boolean] =
-    F.pure(false)
+    F.pure(true)
 
   def acceptPrepare[F[_]](message: IstanbulMessage, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit] =
     for {

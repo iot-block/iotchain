@@ -18,10 +18,10 @@ import jbok.core.messages.IstanbulMessage
 import jbok.core.peer.{PeerManager, PeerRoutes, PeerService, Request}
 import scalacache.Cache
 import fs2._
+import jbok.core.config.GenesisConfig
 
 import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.concurrent.duration._
-
 
 case class Istanbul[F[_]](
     config: IstanbulConfig,
@@ -369,11 +369,12 @@ object Istanbul {
   val nonceDropVote: ByteVector = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
   val mixDigest: ByteVector     = hex"0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365"
 
-  def apply[F[_]](config: IstanbulConfig, history: History[F], keyPair: KeyPair, state: State)(
-      implicit F: Concurrent[F],
-      C: Cache[Snapshot],
-      timer: Timer[F],
-      chainId: BigInt): F[Istanbul[F]] =
+  def apply[F[_]](
+      config: IstanbulConfig,
+      history: History[F],
+      genesisConfig: GenesisConfig,
+      keyPair: KeyPair,
+      state: State)(implicit F: Concurrent[F], C: Cache[Snapshot], timer: Timer[F], chainId: BigInt): F[Istanbul[F]] =
     for {
       promise    <- Deferred[F, Int]
       refPromise <- Ref.of(promise)
@@ -384,6 +385,12 @@ object Istanbul {
       roundChanges <- Ref.of[F, Map[Int, MessageSet]](Map.empty)
       validatorSet <- Ref.of[F, ValidatorSet](ValidatorSet.empty)
       candidates   <- Ref.of[F, Map[Address, Boolean]](Map.empty)
+      genesisBlock <- history.getBlockByNumber(0)
+      _ <- if (genesisBlock.isEmpty) {
+        history.initGenesis(genesisConfig)
+      } else {
+        F.unit
+      }
     } yield
       new Istanbul[F](config,
                       history,
