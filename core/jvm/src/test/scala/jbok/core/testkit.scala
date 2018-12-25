@@ -29,6 +29,8 @@ import jbok.persistent.{CacheBuilder, KeyValueDB}
 import jbok.persistent.testkit._
 import org.scalacheck._
 import scodec.bits.ByteVector
+
+import scodec.bits.ByteVector
 import jbok.crypto._
 import scala.concurrent.duration._
 
@@ -43,8 +45,8 @@ object testkit {
 
   val testConfig =
     testReference.copy(
-      genesisOrPath = Left(generateGenesisConfig(testGenesis, List(testMiner.address))),
-      mining = testReference.mining.copy(minerAddressOrKey = Right(testMiner.keyPair), period = 500.millis),
+      genesisOrPath = Left(Clique.generateGenesisConfig(testGenesis, List(testMiner.address))),
+      mining = testReference.mining.copy(minerAddressOrKey = Right(testMiner.keyPair), period = 100.millis),
       peer = testReference.peer.copy(nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()))
     )
 
@@ -206,9 +208,9 @@ object testkit {
       gasLimit         <- bigIntGen
       gasUsed          <- bigIntGen
       unixTimestamp    <- Gen.chooseNum(0L, Long.MaxValue)
-      extraData        <- arbByteVector.arbitrary
-      mixHash          <- genBoundedByteVector(32, 32)
-      nonce            <- genBoundedByteVector(8, 8)
+//      extraData        <- arbByteVector.arbitrary
+//      mixHash          <- genBoundedByteVector(32, 32)
+//      nonce            <- genBoundedByteVector(8, 8)
     } yield
       BlockHeader(
         parentHash = parentHash,
@@ -223,9 +225,10 @@ object testkit {
         gasLimit = gasLimit,
         gasUsed = gasUsed,
         unixTimestamp = unixTimestamp,
-        extraData = extraData,
-        mixHash = mixHash,
-        nonce = nonce
+        extra = ByteVector.empty
+//        extraData = extraData,
+//        mixHash = mixHash,
+//        nonce = nonce
       )
   }
 

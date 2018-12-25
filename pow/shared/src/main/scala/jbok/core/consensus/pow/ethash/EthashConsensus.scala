@@ -3,17 +3,17 @@ package jbok.core.consensus.pow.ethash
 import cats.data.{NonEmptyList, OptionT}
 import cats.effect.Sync
 import cats.implicits._
-import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
+import jbok.common._
 import jbok.core.config.Configs.{HistoryConfig, MiningConfig, MonetaryPolicyConfig}
 import jbok.core.consensus.Consensus
+import jbok.core.consensus.pow.ethash.Ethash.{EthashAlgo, EthashExtra}
 import jbok.core.ledger.TypedBlock.MinedBlock
 import jbok.core.ledger.{History, TypedBlock}
 import jbok.core.models.{Block, BlockHeader}
 import jbok.core.pool.BlockPool
 import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
 import jbok.crypto._
-import jbok.common._
 import scodec.bits.ByteVector
 
 class EthashConsensus[F[_]](
@@ -27,6 +27,12 @@ class EthashConsensus[F[_]](
 )(implicit F: Sync[F])
     extends Consensus[F](history, blockPool) {
 
+  override type Protocol = EthashAlgo
+
+  override val protocol: Protocol = EthashAlgo
+
+  override type E = EthashExtra
+
   override def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader]): F[BlockHeader] =
     for {
       parent <- parentOpt.fold(history.getBestBlock)(F.pure)
@@ -36,7 +42,7 @@ class EthashConsensus[F[_]](
     } yield
       BlockHeader(
         parentHash = parent.header.hash,
-        ommersHash = RlpCodec.encode(ommers).require.bytes.kec256,
+        ommersHash = ommers.asBytes.kec256,
         beneficiary = miningConfig.coinbase.bytes,
         stateRoot = ByteVector.empty,
         //we are not able to calculate transactionsRoot here because we do not know if they will fail
@@ -48,9 +54,10 @@ class EthashConsensus[F[_]](
         gasLimit = calcGasLimit(parent.header.gasLimit),
         gasUsed = 0,
         unixTimestamp = timestamp,
-        extraData = miningConfig.extraData,
-        mixHash = ByteVector.empty,
-        nonce = ByteVector.empty
+        extra = ByteVector.empty
+//        extraData = miningConfig.extraData,
+//        mixHash = ByteVector.empty,
+//        nonce = ByteVector.empty
       )
 
   override def postProcess(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.ExecutedBlock[F]] = ???

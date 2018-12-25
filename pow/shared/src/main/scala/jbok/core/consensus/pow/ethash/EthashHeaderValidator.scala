@@ -2,9 +2,13 @@ package jbok.core.consensus.pow.ethash
 
 import cats.effect.Effect
 import cats.implicits._
-import jbok.core.config.Configs.{HistoryConfig}
-import jbok.core.models.BlockHeader
+import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.implicits._
+import jbok.core.config.Configs.HistoryConfig
+import jbok.core.consensus.pow.ethash.Ethash.EthashExtra
 import jbok.core.consensus.pow.ethash.EthashHeaderInvalid._
+import jbok.core.models.BlockHeader
+import jbok.crypto._
 import scodec.bits.ByteVector
 
 object EthashHeaderInvalid {
@@ -15,7 +19,6 @@ object EthashHeaderInvalid {
 }
 
 class EthashHeaderValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Effect[F]) {
-  private val MaxExtraDataSize: Int = 32
   private val MaxPowCaches: Int     = 2
 
   // for validate pow
@@ -23,21 +26,16 @@ class EthashHeaderValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: E
   lazy val epoch0PowCache                          = new PowCacheData(cache = Ethash.makeCache(0), dagSize = Ethash.dagSize(0))
   val powCaches: java.util.Map[Long, PowCacheData] = new java.util.concurrent.ConcurrentHashMap[Long, PowCacheData]()
 
-  private def validateDifficulty(difficulty: BigInt,
-                                 timestamp: Long,
-                                 number: BigInt,
-                                 parentHeader: BlockHeader): F[BigInt] = {
+  private def validateDifficulty(
+      difficulty: BigInt,
+      timestamp: Long,
+      number: BigInt,
+      parentHeader: BlockHeader
+  ): F[BigInt] = {
     val diffCal = new EthDifficultyCalculator(blockChainConfig)
     if (difficulty == diffCal.calculateDifficulty(timestamp, parentHeader)) F.pure(difficulty)
     else F.raiseError(HeaderDifficultyInvalid)
   }
-
-  private def validateExtraData(extraData: ByteVector, number: BigInt): F[ByteVector] =
-    if (extraData.length <= MaxExtraDataSize) {
-      F.pure(extraData)
-    } else {
-      F.raiseError(HeaderExtraDataInvalid)
-    }
 
   private def validatePow(header: BlockHeader): F[BlockHeader] = {
     import scala.collection.JavaConverters._
@@ -58,21 +56,28 @@ class EthashHeaderValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: E
 
     val powCacheData = getPowCacheData(Ethash.epoch(header.number.toLong))
 
-    val proofOfWork =
-      Ethash.hashimotoLight(header.hashWithoutNonce.toArray,
-                            header.nonce.toArray,
-                            powCacheData.dagSize,
-                            powCacheData.cache)
+    val extra            = RlpCodec.decode[EthashExtra](header.extra.bits).require.value
+    val hashWithoutNonce = header.copy(extra = ByteVector.empty).asBytes.kec256
 
-    if (proofOfWork.mixHash == header.mixHash && Ethash.checkDifficulty(header.difficulty.toLong, proofOfWork))
+    val proofOfWork = {
+      Ethash.hashimotoLight(
+        hashWithoutNonce.toArray,
+        extra.nonce.toArray,
+        powCacheData.dagSize,
+        powCacheData.cache
+      )
+    }
+
+    if (proofOfWork.mixHash == extra.mixHash && Ethash.checkDifficulty(header.difficulty.toLong, proofOfWork)) {
       F.pure(header)
-    else F.raiseError(HeaderPoWInvalid)
+    } else {
+      F.raiseError(HeaderPoWInvalid)
+    }
   }
 
   def validate(parentHeader: BlockHeader, header: BlockHeader): F[Unit] =
     for {
       _ <- validateDifficulty(header.difficulty, header.unixTimestamp, header.number, parentHeader)
-      _ <- validateExtraData(header.extraData, header.number)
       _ <- validatePow(header)
     } yield ()
 }

@@ -1,6 +1,6 @@
 package jbok.core.consensus.poa.clique
 
-import cats.effect.{Async, Sync}
+import cats.effect.{Async, IO, Sync}
 import _root_.io.circe._
 import _root_.io.circe.generic.JsonCodec
 import _root_.io.circe.parser._
@@ -17,6 +17,7 @@ import cats.implicits._
 import jbok.core.config.Configs.MiningConfig
 import jbok.crypto.signature.KeyPair
 import scalacache.CatsEffect.modes._
+import scodec.Codec
 
 @JsonCodec
 case class Vote(
@@ -238,10 +239,11 @@ object Snapshot {
   /** create a new snapshot by applying a given header */
   private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F]): F[Snapshot] = F.delay {
     val number      = header.number
+    val extra = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value
     val beneficiary = Address(header.beneficiary)
 
     // Resolve the authorization key and check against signers
-    val signerOpt = Clique.ecrecover(header)
+    val signerOpt = Clique.ecrecover[IO](header).unsafeRunSync()
     if (signerOpt.isEmpty || !snap.signers.contains(signerOpt.get)) {
       throw new Exception("unauthorized signer")
     }
@@ -253,13 +255,7 @@ object Snapshot {
     }
 
     // Tally up the new vote from the signer
-    val authorize = if (header.nonce == nonceAuthVote) {
-      true
-    } else if (header.nonce == nonceDropVote) {
-      false
-    } else {
-      throw new Exception("invalid vote")
-    }
+    val authorize = extra.auth
 
     val casted = snap.cast(signer, beneficiary, authorize)
 

@@ -1,7 +1,5 @@
 package jbok.core.config
 
-import java.nio.file.Path
-
 import better.files.File
 import cats.effect.IO
 import io.circe.Json
@@ -42,9 +40,7 @@ case class GenesisConfig(
     gasLimit = gasLimit,
     gasUsed = 0,
     unixTimestamp = timestamp,
-    extraData = extraData,
-    mixHash = ByteVector.empty,
-    nonce = nonce
+    extra = extraData
   )
 
   lazy val body = BlockBody(Nil, Nil)

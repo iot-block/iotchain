@@ -1,24 +1,24 @@
 package jbok.core.consensus.poa.clique
 
 import cats.data.OptionT
-import cats.effect.ConcurrentEffect
+import cats.effect.{ConcurrentEffect, Sync}
 import cats.implicits._
-import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
+import jbok.core.config.Configs.MiningConfig
+import jbok.core.config.GenesisConfig
+import jbok.core.consensus.Extra
 import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
 import jbok.crypto.signature._
+import jbok.persistent.CacheBuilder
 import scalacache._
 import scodec.bits._
-import jbok.core.config.Configs.MiningConfig
-import jbok.core.config.GenesisConfig
-import jbok.persistent.CacheBuilder
 
 import scala.concurrent.duration._
 
-class Clique[F[_]](
+final class Clique[F[_]](
     val config: MiningConfig,
     val history: History[F],
     val proposals: Map[Address, Boolean], // Current list of proposals we are pushing
@@ -71,27 +71,25 @@ class Clique[F[_]](
     log.trace(s"making a genesis snapshot")
     for {
       genesis <- history.genesisHeader
-      n = (genesis.extraData.length - extraVanity - extraSeal).toInt / 20
-      signers: Set[Address] = (0 until n)
-        .map(i => Address(genesis.extraData.slice(i * 20 + extraVanity, i * 20 + extraVanity + 20)))
-        .toSet
-      snap = Snapshot(config, 0, genesis.hash, signers)
+      extra = RlpCodec.decode[CliqueExtra](genesis.extra.bits).require.value
+      snap  = Snapshot(config, 0, genesis.hash, extra.signer.toSet)
       _ <- Snapshot.storeSnapshot[F](snap, history.db, checkpointInterval)
-      _ = log.trace(s"stored genesis with ${signers.size} signers")
+      _ = log.trace(s"stored genesis with ${extra.signer.size} signers")
     } yield snap
   }
 }
 
 object Clique {
-  val extraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
-  val extraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
-  val ommersHash = RlpCodec
-    .encode(List.empty[BlockHeader])
-    .require
-    .bytes
-    .kec256 // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
-  val diffInTurn    = BigInt(11)              // Block difficulty for in-turn signatures
-  val diffNoTurn    = BigInt(10)              // Block difficulty for out-of-turn signatures
+  sealed trait CliqueAlgo
+  object CliqueAlgo extends CliqueAlgo
+  case class CliqueExtra(signer: List[Address], signature: CryptoSignature, auth: Boolean = false)
+      extends Extra[CliqueAlgo]
+
+  val extraVanity   = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
+  val extraSeal     = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
+  val ommersHash    = List.empty[BlockHeader].asBytes.kec256 // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
+  val diffInTurn    = BigInt(11) // Block difficulty for in-turn signatures
+  val diffNoTurn    = BigInt(10) // Block difficulty for out-of-turn signatures
   val nonceAuthVote = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
   val nonceDropVote = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
 
@@ -116,23 +114,33 @@ object Clique {
     } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache)
 
   private[clique] def fillExtraData(signers: List[Address]): ByteVector =
-    ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
-      extraSeal)(0.toByte)
+    RlpCodec.encode(CliqueExtra(signers, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray))).require.bytes
+//    ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
+//      extraSeal)(0.toByte)
 
-  def sigHash(header: BlockHeader): ByteVector = {
-    val bytes = RlpCodec.encode(header.copy(extraData = header.extraData.dropRight(extraSeal))).require.bytes
+  def sigHash[F[_]](header: BlockHeader)(implicit F: Sync[F]): F[ByteVector] = F.delay {
+    val bytes = header.copy(extra = ByteVector.empty).asBytes
+//    val bytes = RlpCodec.encode(header.copy(extraData = header.extraData.dropRight(extraSeal))).require.bytes
     bytes.kec256
   }
 
   /** Retrieve the signature from the header extra-data */
-  def ecrecover(header: BlockHeader): Option[Address] = {
-    val signature               = header.extraData.takeRight(extraSeal)
-    val hash                    = sigHash(header)
-    val sig                     = CryptoSignature(signature.toArray)
-    val chainId: Option[BigInt] = ECDSAChainIdConvert.getChainId(sig.v)
-    chainId.flatMap(
-      Signature[ECDSA]
-        .recoverPublic(hash.toArray, sig, _)
-        .map(pub => Address(pub.bytes.kec256)))
-  }
+  def ecrecover[F[_]](header: BlockHeader)(implicit F: Sync[F]): F[Option[Address]] =
+    for {
+      extra <- F.delay(RlpCodec.decode[CliqueExtra](header.extra.bits).require.value)
+      sig = extra.signature
+      hash <- sigHash[F](header)
+      chainId = ECDSAChainIdConvert.getChainId(sig.v)
+    } yield {
+      chainId.flatMap(
+        Signature[ECDSA]
+          .recoverPublic(hash.toArray, sig, _)
+          .map(pub => Address(pub.bytes.kec256)))
+    }
+
+  def generateGenesisConfig(template: GenesisConfig, signers: List[Address]): GenesisConfig =
+    template.copy(
+      extraData = Clique.fillExtraData(signers),
+      timestamp = System.currentTimeMillis()
+    )
 }

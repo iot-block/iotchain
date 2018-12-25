@@ -7,7 +7,6 @@ import io.circe.generic.auto._
 import io.circe.parser._
 import jbok.JbokSpec
 import jbok.codec.json.implicits._
-import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
@@ -144,9 +143,9 @@ class VMTest extends JbokSpec {
         vmJson.env.currentGasLimit,
         BigInt(0),
         vmJson.env.currentTimestamp.toLong,
-        ByteVector.empty,
-        ByteVector.empty,
         ByteVector.empty
+//        ByteVector.empty,
+//        ByteVector.empty
       )
       val env = ExecEnv(
         vmJson.exec.address,
@@ -186,7 +185,7 @@ class VMTest extends JbokSpec {
       }
 
       result.returnData shouldEqual vmJson.out
-      RlpCodec.encode(result.logs).require.bytes.kec256 shouldEqual vmJson.logs
+      result.logs.asBytes.kec256 shouldBe vmJson.logs
     }
 
   "load and run official json test files" should {

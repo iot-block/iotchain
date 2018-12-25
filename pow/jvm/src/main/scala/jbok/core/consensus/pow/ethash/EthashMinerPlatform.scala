@@ -1,13 +1,16 @@
 package jbok.core.consensus.pow.ethash
 
 import better.files.File
-import cats.effect.{Effect, Resource}
 import cats.effect.concurrent.Ref
+import cats.effect.{Effect, Resource}
 import cats.implicits._
+import jbok.codec.rlp.implicits._
+import jbok.common.ByteUtils
 import jbok.core.config.Configs.MiningConfig
 import jbok.core.consensus.pow.ProofOfWork
+import jbok.core.consensus.pow.ethash.Ethash.EthashExtra
 import jbok.core.models.Block
-import jbok.common.ByteUtils
+import jbok.crypto._
 import scodec.bits.ByteVector
 
 import scala.util.Random
@@ -56,14 +59,15 @@ class EthashMinerPlatform[F[_]](
           } yield (dag, dagSize)
       }
     } yield {
-      val headerHash = block.header.hashWithoutNonce
+      val headerHash = block.header.copy(extra = ByteVector.empty).asBytes.kec256
       val startTime  = System.currentTimeMillis()
       val mineResult = mine(headerHash, block.header.difficulty.toLong, dagSize, dag, miningConfig.mineRounds)
       val time       = System.currentTimeMillis() - startTime
       val hashRate   = (mineResult.triedHashes * 1000) / time
       mineResult match {
         case MiningSuccessful(_, pow, nonce) =>
-          block.copy(header = block.header.copy(nonce = nonce, mixHash = pow.mixHash))
+          val extraBytes = EthashExtra(pow.mixHash, nonce).asBytes
+          block.copy(header = block.header.copy(extra = extraBytes))
         case MiningUnsuccessful(tried) =>
           throw new Exception(s"mining unsuccessful, tried ${tried}")
       }

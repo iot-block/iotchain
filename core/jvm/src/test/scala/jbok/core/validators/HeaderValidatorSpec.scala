@@ -27,9 +27,10 @@ class HeaderValidatorSpec extends JbokSpec {
     gasLimit = 131620495,
     gasUsed = 0,
     unixTimestamp = 1486752441,
-    extraData = hex"d783010507846765746887676f312e372e33856c696e7578",
-    mixHash = hex"6bc729364c9b682cfa923ba9480367ebdfa2a9bca2a652fe975e8d5958f696dd",
-    nonce = hex"797a8f3a494f937b"
+    extra = ByteVector.empty
+//    extraData = hex"d783010507846765746887676f312e372e33856c696e7578",
+//    mixHash = hex"6bc729364c9b682cfa923ba9480367ebdfa2a9bca2a652fe975e8d5958f696dd",
+//    nonce = hex"797a8f3a494f937b"
   )
 
   val validParent = BlockHeader(
@@ -45,9 +46,10 @@ class HeaderValidatorSpec extends JbokSpec {
     gasLimit = 131749155,
     gasUsed = 0,
     unixTimestamp = 1486752440,
-    extraData = hex"d783010507846765746887676f312e372e33856c696e7578",
-    mixHash = hex"7f9ac1ddeafff0f926ed9887b8cf7d50c3f919d902e618b957022c46c8b404a6",
-    nonce = hex"3fc7bc671f7cee70"
+    extra = ByteVector.empty,
+//    extraData = hex"d783010507846765746887676f312e372e33856c696e7578",
+//    mixHash = hex"7f9ac1ddeafff0f926ed9887b8cf7d50c3f919d902e618b957022c46c8b404a6",
+//    nonce = hex"3fc7bc671f7cee70"
   )
 
   history.putBlockHeader(validParent).unsafeRunSync()
