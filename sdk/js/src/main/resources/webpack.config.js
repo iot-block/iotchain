@@ -7,18 +7,7 @@ const merge = require('webpack-merge');
 
 module.exports = merge(config, {
   resolve: {
-    alias: {
-      "css": path.resolve(__dirname, "../../../../src/main/resources/css"),
-    },
     modules: [ path.resolve(__dirname, 'node_modules') ]
-  },
-  module: {
-    rules: [
-      {
-        test: /\.css$/,
-        use: [ 'style-loader', 'css-loader' ]
-      }
-    ]
   },
   plugins: [
     new HtmlWebpackPlugin({
@@ -26,8 +15,4 @@ module.exports = merge(config, {
       template: path.resolve(__dirname, "../../../../src/main/resources/template.html")
     })
   ],
-  devServer: {
-      disableHostCheck: true,
-  }
-  // target: "electron-main" // https://github.com/scalacenter/scalajs-bundler/issues/252
 });

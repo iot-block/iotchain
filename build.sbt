@@ -99,7 +99,11 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(
     name := "jbok-core"
   )
-  .dependsOn(common % CompileAndTest, codec, crypto % CompileAndTest, network, persistent % CompileAndTest)
+  .dependsOn(common % CompileAndTest,
+             codec,
+             crypto     % CompileAndTest,
+             network    % CompileAndTest,
+             persistent % CompileAndTest)
 
 lazy val pow = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -187,9 +191,6 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
       "webpack-merge"       -> "4.1.2",
       "electron-builder"    -> "20.28.4"
     ),
-    npmDependencies in Compile ++= Seq(
-      "jsdom" -> "13.0.0"
-    ),
     version in webpack := "4.8.1",
     version in startWebpackDevServer := "3.1.4",
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
@@ -231,24 +232,18 @@ lazy val sdk = crossProject(JSPlatform, JVMPlatform)
       ),
       "build" -> JSON.obj(
         "appId" -> JSON.str("org.jbok.sdk")
-      ),
-      "scripts" -> JSON.obj(
-        "pack" -> JSON.str("electron-builder --dir"),
-        "dist" -> JSON.str("electron-builder")
       )
     ),
     npmDevDependencies in Compile ++= Seq(
       "file-loader"         -> "1.1.11",
-      "style-loader"        -> "0.20.3",
-      "css-loader"          -> "0.28.11",
       "html-webpack-plugin" -> "3.2.0",
       "copy-webpack-plugin" -> "4.5.1",
-      "webpack-merge"       -> "4.1.2",
-      "electron-builder"    -> "20.28.4"
+      "webpack-merge"       -> "4.1.2"
     ),
     npmDependencies in Compile ++= Seq(
       "jsdom" -> "13.0.0"
     ),
+    jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv(),
     version in webpack := "4.8.1",
     version in startWebpackDevServer := "3.1.4",
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
@@ -275,11 +270,11 @@ lazy val macros = crossProject(JVMPlatform, JSPlatform)
 lazy val network = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
+  .jsSettings(commonJsSettings)
   .jsSettings(
     npmDependencies in Compile ++= Seq(
-      "ws"  -> "6.1.2"
+      "ws" -> "6.1.2"
     ),
-    // https://github.com/indutny/elliptic/issues/149
     jsEnv in Test := new org.scalajs.jsenv.nodejs.NodeJSEnv()
   )
   .settings(
@@ -290,7 +285,6 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
       "org.bitlet"               % "weupnp"     % "0.1.4",
     )
   )
-  .jsSettings(commonJsSettings)
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
   .dependsOn(common % CompileAndTest, macros, crypto)
 
@@ -381,7 +375,6 @@ lazy val commonJsSettings = Seq(
   scalaJSUseMainModuleInitializer in Test := false,
   webpackBundlingMode := BundlingMode.LibraryOnly(),
   scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
-  jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv(),
   libraryDependencies ++= Seq(
     "org.scala-js"             %%% "scalajs-dom"   % "0.9.6",
     "com.thoughtworks.binding" %%% "dom"           % "11.0.1",

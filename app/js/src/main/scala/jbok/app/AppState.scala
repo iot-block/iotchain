@@ -8,7 +8,7 @@ import com.thoughtworks.binding.Binding.{Var, Vars}
 import fs2.Stream
 import jbok.app.api.NodeInfo
 import jbok.sdk.api.BlockParam
-import jbok.sdk.client.JbokClient
+import jbok.sdk.client.{JbokClient => sdkClient}
 import jbok.core.models._
 import jbok.evm.abi.Description
 import scodec.bits.ByteVector
@@ -31,7 +31,7 @@ case class AppState(
     config: Var[AppConfig],
     hrefHandler: Event => Unit,
     currentId: Var[Option[String]] = Var(None),
-    clients: Var[Map[String, JbokClient]] = Var(Map.empty),
+    clients: Var[Map[String, sdkClient]] = Var(Map.empty),
     status: Var[Map[String, ClientStatus]] = Var(Map.empty),
     nodeInfos: Var[Map[String, NodeInfo]] = Var(Map.empty),
     blocks: Var[Map[String, BlockHistory]] = Var(Map.empty),
@@ -53,7 +53,7 @@ case class AppState(
       simuAccounts <- sc.simulation.getAccounts
       _ = simuAddress.value ++= simuAccounts.map(_._1)
       _ = nodes.foreach(addNodeInfo)
-      jbokClients <- nodes.traverse[IO, JbokClient](node => JbokClient(new URI(node.rpcAddr.toString)))
+      jbokClients <- nodes.traverse[IO, sdkClient](node => jbok.app.client.JbokClient(new URI(node.rpcAddr.toString)))
       _ = clients.value = nodes.map(_.id).zip(jbokClients).toMap
     } yield ()
 
@@ -95,7 +95,7 @@ case class AppState(
 //    }
 //  }
 
-  def updateStatus(id: String, client: JbokClient): IO[Unit] =
+  def updateStatus(id: String, client: sdkClient): IO[Unit] =
     for {
       bestBlockNumber <- client.public.bestBlockNumber
       block           <- client.public.getBlockByNumber(bestBlockNumber)
@@ -120,7 +120,7 @@ case class AppState(
       }
     } yield ()
 
-  def updateBlocks(id: String, client: JbokClient): IO[Unit] =
+  def updateBlocks(id: String, client: sdkClient): IO[Unit] =
     for {
       bestBlockNumber <- client.public.bestBlockNumber
       localBestBlockNumber = blocks.value.find(p => p._1 == id).map(_._2.bestBlockNumber.value.toInt).getOrElse(-1)
@@ -141,7 +141,7 @@ case class AppState(
       }
     } yield ()
 
-  def updateAddresses(id: String, client: JbokClient): IO[Unit] =
+  def updateAddresses(id: String, client: sdkClient): IO[Unit] =
     for {
       addresses <- client.personal.listAccounts
       _ = if (addressInNode.value.contains(id)) {
@@ -152,7 +152,7 @@ case class AppState(
       }
     } yield ()
 
-  def updateAccounts(id: String, client: JbokClient): IO[Unit] = {
+  def updateAccounts(id: String, client: sdkClient): IO[Unit] = {
     val addresses = simuAddress.value.toList ++ addressInNode.value
       .get(id)
       .map(_.value.toList)
@@ -182,7 +182,7 @@ case class AppState(
     } yield ()
   }
 
-  def updateReceipts(id: String, client: JbokClient): IO[Unit] = {
+  def updateReceipts(id: String, client: sdkClient): IO[Unit] = {
     val txHashes = stxs.value.get(id).map(_.value.toList.map(_.hash)).getOrElse(List.empty[ByteVector])
     for {
       txReceipts <- txHashes.traverse[IO, Option[Receipt]](hash => client.public.getTransactionReceipt(hash))
@@ -209,7 +209,7 @@ case class AppState(
     } yield ()
   }
 
-  def updateContracts(id: String, client: JbokClient): IO[Unit] = {
+  def updateContracts(id: String, client: sdkClient): IO[Unit] = {
     val addresses = contractInfo.value.toList.map(_.address)
     for {
       simuAccounts <- addresses.traverse[IO, Account](addr => client.public.getAccount(addr, BlockParam.Latest))

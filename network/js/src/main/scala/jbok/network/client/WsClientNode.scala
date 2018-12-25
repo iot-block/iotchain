@@ -7,13 +7,13 @@ import cats.implicits._
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
 import jbok.network.common.RequestId
-import jbok.network.facade.{Event, MessageEvent, WebSocket}
+import jbok.network.facade.{ErrorEvent, Event, MessageEvent, WebSocket}
 import scodec.Codec
 import scodec.bits.BitVector
 
 import scala.scalajs.js.typedarray.{ArrayBuffer, TypedArrayBuffer}
 
-object WsClient2 {
+object WsClientNode {
   def apply[F[_], A: Codec: RequestId](
       uri: URI,
       maxQueued: Int = 64,
@@ -54,7 +54,7 @@ object WsClient2 {
               cb(Right(ws))
             }
 
-            ws.onerror = { event: Event =>
+            ws.onerror = { event: ErrorEvent =>
               println(s"onerror: ${scala.scalajs.js.JSON.stringify(event)}")
               cb(Left(new Exception(event.toString)))
             }
@@ -62,13 +62,14 @@ object WsClient2 {
           _ = println("connection established")
         } yield opened
       } { socket =>
-        F.delay(socket.close(0, ""))
+        F.delay(socket.close())
       }
 
       val stream = Stream.resource(resource).flatMap { ws =>
         for {
           queue <- Stream.eval(Queue.unbounded[F, A])
           _ = ws.onmessage = { event: MessageEvent =>
+            println(s"onmessage: ${scala.scalajs.js.JSON.stringify(event.data)}")
             val arr  = event.data.asInstanceOf[ArrayBuffer]
             val bits = BitVector(TypedArrayBuffer.wrap(arr))
             val a    = Codec[A].decode(bits).require.value

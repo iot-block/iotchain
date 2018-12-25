@@ -1,36 +1,40 @@
 package jbok.network.facade
 
-import scala.scalajs.js.annotation.JSImport
+import scala.scalajs.js.annotation.{JSImport, ScalaJSDefined}
 import scala.scalajs.js
 
 @js.native
 @JSImport("ws", JSImport.Default)
-class WebSocket(var url: String = js.native, var protocol: String = js.native) {
+class WebSocket(url: String) extends js.Object {
+  def on(str: String, fun: js.Function1[js.Object, _]): Unit = js.native
+
   var onopen: js.Function1[Event, _] = js.native
 
-  def extensions: String = js.native
+  var onerror: js.Function1[ErrorEvent, _] = js.native
+
+  var onclose: js.Function1[CloseEvent, _] = js.native
 
   var onmessage: js.Function1[MessageEvent, _] = js.native
 
-  var onclose: js.Function1[Event, _] = js.native
-
-  var onerror: js.Function1[Event, _] = js.native
-
-  var binaryType: String = js.native
-
-  def close(code: Int = js.native, reason: String = js.native): Unit = js.native
+  var binaryType: js.Any = js.native
 
   def send(data: String): Unit = js.native
+
+  def close(): Unit = js.native
 }
 
-@js.native
-@JSImport("ws/lib/event-target.js", JSImport.Default)
+object WebSocket {
+  def apply(url: String): WebSocket = new WebSocket(url)
+}
+
+@ScalaJSDefined
 class Event(var target: js.Any, var `type`: js.Any) extends js.Object
 
-@js.native
-@JSImport("ws/lib/event-target.js", JSImport.Default)
-class MessageEvent(var data: js.Any, `type`: js.Any) extends Event("message", `type`)
+@ScalaJSDefined
+class MessageEvent(var data: js.Any, var target: js.Any, var `type`: js.Any) extends js.Object
 
-//@js.native
-//@JSImport
-//class CloseEvent()
+@ScalaJSDefined
+class CloseEvent(var code: Int, var reason: String, var target: js.Any) extends js.Object
+
+@ScalaJSDefined
+class ErrorEvent(var error: js.Any, var message: js.Any) extends js.Object

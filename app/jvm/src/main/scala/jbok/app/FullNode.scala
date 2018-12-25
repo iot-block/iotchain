@@ -8,7 +8,7 @@ import cats.effect.implicits._
 import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
-import jbok.sdk.api.impl.{AdminApiImpl, PersonalApiImpl, PublicApiImpl}
+import jbok.app.api.impl.{AdminApiImpl, PersonalApiImpl, PublicApiImpl}
 import jbok.common.FileLock
 import jbok.common.execution._
 import jbok.common.metrics.Metrics

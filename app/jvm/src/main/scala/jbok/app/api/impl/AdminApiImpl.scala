@@ -1,4 +1,4 @@
-package jbok.sdk.api.impl
+package jbok.app.api.impl
 
 import cats.effect.IO
 import jbok.core.peer.{PeerManager, PeerNode}

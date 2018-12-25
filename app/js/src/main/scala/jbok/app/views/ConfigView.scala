@@ -216,7 +216,7 @@ case class ConfigView(state: AppState) {
               val nodeInfo = NodeInfo(peerNodeUriOpt.get, addHost.value, addPort.value.toInt)
               state.addNodeInfo(nodeInfo)
               for {
-                jbokClient <- JbokClient(new URI(nodeInfo.rpcAddr))
+                jbokClient <- jbok.app.client.JbokClient(new URI(nodeInfo.rpcAddr))
                 _ = state.clients.value += (peerNodeUriOpt.get -> jbokClient)
               } yield "connected."
             }

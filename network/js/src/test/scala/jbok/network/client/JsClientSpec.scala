@@ -40,7 +40,7 @@ class JsClientSpec extends JbokAsyncSpec {
     "echo" ignore {
       val uri = new URI("ws://echo.websocket.org:80")
       for {
-        client <- WsClient2[IO, String](uri)
+        client <- WsClientNode[IO, String](uri)
         _      <- client.start
         _      <- client.write("ohoho")
         resp   <- client.read
