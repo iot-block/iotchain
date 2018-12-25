@@ -8,6 +8,7 @@ import jbok.network.rpc.RpcClient
 import jbok.sdk.api.{AdminAPI, PersonalAPI, PublicAPI}
 import jbok.network.client.WsClientNode
 import jbok.common.execution._
+import jbok.codec.rlp.implicits._
 
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 

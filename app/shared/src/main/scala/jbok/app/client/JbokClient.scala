@@ -3,14 +3,12 @@ package jbok.app.client
 import java.net.URI
 
 import cats.effect.IO
+import jbok.codec.rlp.implicits._
+import jbok.common.execution._
 import jbok.network.client.{Client, WsClient}
 import jbok.network.rpc.RpcClient
-import jbok.codec.rlp.implicits._
-
-import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import jbok.sdk.api.{AdminAPI, PersonalAPI, PublicAPI}
 import jbok.sdk.client.{JbokClient => sdkClient}
-import jbok.common.execution._
 
 object JbokClient {
   import jbok.network.rpc.RpcServer._

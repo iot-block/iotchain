@@ -9,6 +9,7 @@ import jbok.common.execution._
 import jbok.common.metrics.Metrics
 import jbok.network.rpc.RpcServer
 import jbok.network.server.Server
+import jbok.codec.rlp.implicits._
 
 import scala.concurrent.duration._
 import scala.io.StdIn
