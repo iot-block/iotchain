@@ -140,15 +140,6 @@ lazy val codec = crossProject(JSPlatform, JVMPlatform)
   )
   .dependsOn(common % CompileAndTest)
 
-lazy val examples = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Full)
-  .settings(commonSettings)
-  .jsSettings(commonJsSettings)
-  .settings(
-    name := "jbok-examples"
-  )
-  .dependsOn(core % CompileAndTest)
-
 lazy val app = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
