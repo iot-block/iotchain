@@ -1,17 +1,15 @@
 package jbok.core.consensus.istanbul
 
-import cats.effect.{Concurrent, ConcurrentEffect, Sync}
+import cats.effect.Concurrent
+import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import cats.implicits._
 import jbok.core.messages.IstanbulMessage
-import jbok.core.models.{Address, Block}
+import jbok.core.models.Block
 import jbok.crypto.signature.CryptoSignature
-import scodec.bits.ByteVector
 
-import scala.collection.mutable.{Map => MMap}
-
-trait State {
+sealed trait State {
   val log = org.log4s.getLogger("State")
 
   def handle[F[_]](action: Action, context: StateContext[F])(implicit F: Concurrent[F]): F[Unit]

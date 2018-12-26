@@ -3,17 +3,15 @@ package jbok.core
 import cats.effect.IO
 import cats.effect.concurrent.{Deferred, Ref}
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
 import jbok.core.config.GenesisConfig
 import jbok.core.config.defaults.testReference
 import jbok.core.consensus.Consensus
-import jbok.core.consensus.istanbul._
-import jbok.core.consensus.istanbul.Istanbul
-import jbok.core.consensus.istanbul.Snapshot
-import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus, _}
+import jbok.core.consensus.istanbul.Istanbul.IstanbulExtra
+import jbok.core.consensus.istanbul.{Istanbul, Snapshot, _}
+import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus}
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.messages._
 import jbok.core.mining.{BlockMiner, SimAccount, TxGenerator}
@@ -22,16 +20,15 @@ import jbok.core.peer.discovery.{Discovery, PeerTable}
 import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerNode, PeerStorePlatform, PeerType}
 import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
 import jbok.core.sync._
+import jbok.crypto._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import jbok.crypto.testkit._
 import jbok.network.transport.UdpTransport
-import jbok.persistent.{CacheBuilder, KeyValueDB}
 import jbok.persistent.testkit._
+import jbok.persistent.{CacheBuilder, KeyValueDB}
 import org.scalacheck._
 import scodec.bits.ByteVector
 
-import scodec.bits.ByteVector
-import jbok.crypto._
 import scala.concurrent.duration._
 
 object testkit {
@@ -120,8 +117,8 @@ object testkit {
     val extra = IstanbulExtra(validators, ByteVector.empty, List.empty)
     val genesisConfig = GenesisConfig
       .generate(chainId, alloc)
-      .copy(difficulty = BigInt(1),
-            extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes)
+//      .copy(difficulty = BigInt(1),
+//            extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes)
 //    val genesisConfig =
 //      testReference.genesis.copy(
 //        alloc = alloc,
@@ -135,8 +132,8 @@ object testkit {
     })
     val newExtra = IstanbulExtra(validators, ByteVector(seal.bytes), commitSeals)
 
-    val sealConfig = genesisConfig.copy(
-      extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(newExtra).require.bytes)
+    val sealConfig = genesisConfig
+//      .copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(newExtra).require.bytes)
 
     sealConfig
   }

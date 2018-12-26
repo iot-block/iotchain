@@ -25,7 +25,7 @@ object Configs {
       txPool: TxPoolConfig,
       mining: MiningConfig,
       rpc: RpcConfig,
-      consensusAlgo:String = "clique"
+      consensusAlgo: String = "clique"
   ) {
     def genesis = genesisOrPath match {
       case Left(g)     => g

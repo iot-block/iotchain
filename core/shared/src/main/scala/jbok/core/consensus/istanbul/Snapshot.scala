@@ -184,13 +184,14 @@ object Snapshot {
     }
 
     // Tally up the new vote from the signer
-    val authorize = if (header.nonce == Istanbul.nonceAuthVote) {
-      true
-    } else if (header.nonce == Istanbul.nonceDropVote) {
-      false
-    } else {
-      throw new Exception("invalid vote")
-    }
+    val authorize = ???
+//      if (header.nonce == Istanbul.nonceAuthVote) {
+//      true
+//    } else if (header.nonce == Istanbul.nonceDropVote) {
+//      false
+//    } else {
+//      throw new Exception("invalid vote")
+//    }
 
     // Header authorized, discard any previous votes from the signer to prevent duplicated votes
     // Uncast the vote from the cached tally

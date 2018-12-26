@@ -1,26 +1,22 @@
 package jbok.core.consensus.istanbul
 
-import _root_.io.circe.generic.JsonCodec
 import cats.data.OptionT
-import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect._
+import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.implicits._
+import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.core.models.{Address, Block, BlockHeader}
-import scodec.bits.ByteVector
-import cats.implicits._
-import cats.effect.implicits._
-import jbok.crypto._
-import scodec.bits._
-import jbok.crypto.signature._
+import jbok.core.config.GenesisConfig
+import jbok.core.consensus.Extra
 import jbok.core.ledger.History
 import jbok.core.messages.IstanbulMessage
-import jbok.core.peer.{PeerManager, PeerRoutes, PeerService, Request}
+import jbok.core.models.{Address, Block, BlockHeader}
+import jbok.crypto._
+import jbok.crypto.signature._
 import scalacache.Cache
-import fs2._
-import jbok.core.config.GenesisConfig
+import scodec.bits.{ByteVector, _}
 
-import scala.collection.mutable.{ArrayBuffer, Map => MMap}
 import scala.concurrent.duration._
 
 case class Istanbul[F[_]](
@@ -46,16 +42,16 @@ case class Istanbul[F[_]](
   def ecrecover(hash: ByteVector, sig: CryptoSignature): Option[KeyPair.Public] =
     Signature[ECDSA].recoverPublic(hash.kec256.toArray, sig, chainId)
 
-  def genesisSnapshot: F[Snapshot] = {
-    log.trace(s"making a genesis snapshot")
-    for {
-      genesis <- history.genesisHeader
-      extra = Istanbul.extractIstanbulExtra(genesis)
-      snap  = Snapshot(config, 0, genesis.hash, ValidatorSet(extra.validators))
-      _ <- Snapshot.storeSnapshot[F](snap, history.db, config.epoch)
-      _ = log.trace(s"stored genesis with ${extra.validators.size} validators")
-    } yield snap
-  }
+  def genesisSnapshot: F[Snapshot] =
+    ???
+//    log.trace(s"making a genesis snapshot")
+//    for {
+//      genesis <- history.genesisHeader
+//      extra = Istanbul.extractIstanbulExtra(genesis)
+//      snap  = Snapshot(config, 0, genesis.hash, ValidatorSet(extra.validators))
+//      _ <- Snapshot.storeSnapshot[F](snap, history.db, config.epoch)
+//      _ = log.trace(s"stored genesis with ${extra.validators.size} validators")
+//    } yield snap
 
   def applyHeaders(
       number: BigInt,
@@ -361,6 +357,13 @@ case class Istanbul[F[_]](
 }
 
 object Istanbul {
+  sealed trait IstanbulAlgo
+  object IstanbulAlgo extends IstanbulAlgo
+  case class IstanbulExtra(
+      validators: List[Address],
+      proposerSig: ByteVector,
+      committedSigs: List[CryptoSignature]
+  ) extends Extra[IstanbulAlgo]
 
   val extraVanity: Int          = 32 // Fixed number of extra-data bytes reserved for validator vanity
   val extraSeal: Int            = 65 // Fixed number of extra-data bytes reserved for validator seal
@@ -404,23 +407,24 @@ object Istanbul {
                       candidates)
 
   def extractIstanbulExtra(header: BlockHeader): IstanbulExtra =
-    RlpCodec.decode[IstanbulExtra](header.extraData.drop(Istanbul.extraVanity).bits).require.value
+    ???
+//    RlpCodec.decode[IstanbulExtra](header.extraData.drop(Istanbul.extraVanity).bits).require.value
 
   /**
     * set committedSeals and seal to empty
     * return new header
     */
-  def filteredHeader(header: BlockHeader, keepSeal: Boolean): BlockHeader = {
-    val extra = extractIstanbulExtra(header)
-    val newExtra = if (!keepSeal) {
-      extra.copy(proposerSig = ByteVector.empty, committedSigs = List.empty)
-    } else {
-      extra.copy(committedSigs = List.empty)
-    }
-    val payload   = RlpCodec.encode(newExtra).require.bytes
-    val newHeader = header.copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ payload)
-    newHeader
-  }
+  def filteredHeader(header: BlockHeader, keepSeal: Boolean): BlockHeader =
+    ???
+//    val extra = extractIstanbulExtra(header)
+//    val newExtra = if (!keepSeal) {
+//      extra.copy(proposerSig = ByteVector.empty, committedSigs = List.empty)
+//    } else {
+//      extra.copy(committedSigs = List.empty)
+//    }
+//    val payload   = RlpCodec.encode(newExtra).require.bytes
+//    val newHeader = header.copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ payload)
+//    newHeader
 
   /**
     * set committedSeals and seal to empty
@@ -430,13 +434,13 @@ object Istanbul {
     val newHeader = filteredHeader(header, false)
     RlpCodec.encode(newHeader).require.bytes
   }
-  def ecrecover(header: BlockHeader): Address = {
+  def ecrecover(header: BlockHeader): Address =
     // Retrieve the signature from the header extra-data
-    val signature = extractIstanbulExtra(header).proposerSig
-    val hash      = sigHash(header).kec256
-    val sig       = CryptoSignature(signature.toArray)
-    val chainId   = ECDSAChainIdConvert.getChainId(sig.v)
-    val public    = Signature[ECDSA].recoverPublic(hash.toArray, sig, chainId.get).get
-    Address(public.bytes.kec256)
-  }
+    ???
+//    val signature = extractIstanbulExtra(header).proposerSig
+//    val hash      = sigHash(header).kec256
+//    val sig       = CryptoSignature(signature.toArray)
+//    val chainId   = ECDSAChainIdConvert.getChainId(sig.v)
+//    val public    = Signature[ECDSA].recoverPublic(hash.toArray, sig, chainId.get).get
+//    Address(public.bytes.kec256)
 }

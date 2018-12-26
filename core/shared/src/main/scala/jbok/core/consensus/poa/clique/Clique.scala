@@ -71,6 +71,7 @@ final class Clique[F[_]](
     log.trace(s"making a genesis snapshot")
     for {
       genesis <- history.genesisHeader
+      _     = log.debug(s"decode genesis extra ${genesis.extra}")
       extra = RlpCodec.decode[CliqueExtra](genesis.extra.bits).require.value
       snap  = Snapshot(config, 0, genesis.hash, extra.signer.toSet)
       _ <- Snapshot.storeSnapshot[F](snap, history.db, checkpointInterval)
@@ -114,7 +115,7 @@ object Clique {
     } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache)
 
   private[clique] def fillExtraData(signers: List[Address]): ByteVector =
-    RlpCodec.encode(CliqueExtra(signers, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray))).require.bytes
+    CliqueExtra(signers, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asBytes
 //    ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
 //      extraSeal)(0.toByte)
 

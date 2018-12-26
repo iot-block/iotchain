@@ -11,12 +11,6 @@ import jbok.crypto.signature.{CryptoSignature, KeyPair}
 
 import scala.collection.Iterable
 
-case class IstanbulExtra(
-    validators: List[Address],
-    proposerSig: ByteVector,
-    committedSigs: List[CryptoSignature]
-)
-
 sealed trait CheckResult
 object CheckResult {
   case object UnauthorizedAddress extends CheckResult
@@ -37,7 +31,6 @@ object ProposalCheckResult {
 case class Preprepare(view: View, block: Block)
 
 /**
-  *
   * @param digest proposal block hash
   */
 case class Subject(view: View, digest: ByteVector)
@@ -174,6 +167,7 @@ case class ValidatorSet(
   private def stickyProposer(lastProposer: Address, round: Int): Option[Address] = None
 
 }
+
 object ValidatorSet {
   def empty: ValidatorSet = ValidatorSet(proposer = Address.empty, validators = List.empty)
 

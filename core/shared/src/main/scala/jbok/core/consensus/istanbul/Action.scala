@@ -3,12 +3,12 @@ package jbok.core.consensus.istanbul
 import jbok.core.messages.IstanbulMessage
 import jbok.core.models.Block
 
-trait Action
+sealed trait Action
 
 /**
   * ProposeAction represent a action proposed by proposer，
   * this action will trigger the proposer broadcast a PRE-PREPARE message to validators
-  * and entr PRE-PREPARED state
+  * and enter PRE-PREPARED state
   */
 case class ProposeAction(block: Block) extends Action
 
@@ -29,7 +29,7 @@ case class RoundChangeAction(message: IstanbulMessage) extends Action
   * when a block insertion succeed, or receive 2F+1 ROUND CHANGE message, we will trigger a NewRoundAction
   * and then enter StateNewRound
   */
-case class NewRoundAction(round:Int) extends Action
+case class NewRoundAction(round: Int) extends Action
 
 case object InsertBlockAction extends Action
 
