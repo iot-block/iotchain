@@ -1,7 +1,7 @@
 package jbok.network.facade
 
-import scala.scalajs.js.annotation.{JSImport, ScalaJSDefined}
 import scala.scalajs.js
+import scala.scalajs.js.annotation.JSImport
 
 @js.native
 @JSImport("ws", JSImport.Default)
@@ -27,14 +27,10 @@ object WebSocket {
   def apply(url: String): WebSocket = new WebSocket(url)
 }
 
-@ScalaJSDefined
 class Event(var target: js.Any, var `type`: js.Any) extends js.Object
 
-@ScalaJSDefined
 class MessageEvent(var data: js.Any, var target: js.Any, var `type`: js.Any) extends js.Object
 
-@ScalaJSDefined
 class CloseEvent(var code: Int, var reason: String, var target: js.Any) extends js.Object
 
-@ScalaJSDefined
 class ErrorEvent(var error: js.Any, var message: js.Any) extends js.Object

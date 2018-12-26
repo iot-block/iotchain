@@ -4,18 +4,14 @@ import java.net._
 
 import cats.effect.IO
 import com.thoughtworks.binding
+import com.thoughtworks.binding.Binding.{Var, Vars}
 import com.thoughtworks.binding.{Binding, FutureBinding}
-import com.thoughtworks.binding.Binding.{Constant, Var, Vars}
 import jbok.app.api.NodeInfo
-import jbok.app.{AppState, BlockHistory, ClientStatus, SimuClient}
-import jbok.sdk.client.JbokClient
 import jbok.app.components.Spinner
+import jbok.app.{AppState, SimuClient}
+import jbok.common.execution._
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw._
-import jbok.common.execution._
-
-import scala.concurrent.duration._
-import scala.util.Try
 
 case class ConfigView(state: AppState) {
   val interfaces: Vars[String]       = Vars.empty[String]

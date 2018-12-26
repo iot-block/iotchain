@@ -8,11 +8,5 @@ const merge = require('webpack-merge');
 module.exports = merge(config, {
   resolve: {
     modules: [ path.resolve(__dirname, 'node_modules') ]
-  },
-  plugins: [
-    new HtmlWebpackPlugin({
-      inject: false,
-      template: path.resolve(__dirname, "../../../../src/main/resources/template.html")
-    })
-  ],
+  }
 });

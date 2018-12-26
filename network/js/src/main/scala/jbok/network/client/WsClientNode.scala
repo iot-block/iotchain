@@ -69,7 +69,6 @@ object WsClientNode {
         for {
           queue <- Stream.eval(Queue.unbounded[F, A])
           _ = ws.onmessage = { event: MessageEvent =>
-            println(s"onmessage: ${scala.scalajs.js.JSON.stringify(event.data)}")
             val arr  = event.data.asInstanceOf[ArrayBuffer]
             val bits = BitVector(TypedArrayBuffer.wrap(arr))
             val a    = Codec[A].decode(bits).require.value

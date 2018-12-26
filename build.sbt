@@ -45,6 +45,7 @@ lazy val jbok = project
     core.jvm,
     sdk.js,
     sdk.jvm,
+    app.js,
     app.jvm // app.jvm is depends on app.js
   )
   .settings(noPublishSettings)
@@ -190,7 +191,7 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
 // for integrating with sbt-web
 lazy val appJS = app.js
 lazy val appJVM = app.jvm.settings(
-  scalaJSProjects := Seq(appJS),
+  scalaJSProjects := Seq(appJS, sdk.js),
   pipelineStages in Assets := Seq(scalaJSPipeline),
   isDevMode in scalaJSPipeline := true
 )
@@ -198,20 +199,17 @@ lazy val appJVM = app.jvm.settings(
 lazy val sdk = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .settings(commonSettings)
-  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin, WebScalaJSBundlerPlugin))
   .jsSettings(commonJsSettings)
   .jsSettings(scalaJSUseMainModuleInitializer := false)
-  .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
+  .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
   .settings(
-    name := "jbok-sdk",
-    packageName in Docker := "jbok-sdk",
-    dockerBaseImage := "openjdk:8-jre-alpine"
+    name := "jbok-sdk"
   )
   .jsSettings(
     useYarn := true,
     additionalNpmConfig in Compile := Map(
       "license"     -> JSON.str("MIT"),
-      "name"        -> JSON.str("JBOK-SDK"),
+      "name"        -> JSON.str("jbok-sdk"),
       "description" -> JSON.str("JBOK-SDK"),
       "version"     -> JSON.str("0.0.1"),
       "author"      -> JSON.str("JBOK authors"),
@@ -229,23 +227,15 @@ lazy val sdk = crossProject(JSPlatform, JVMPlatform)
       "copy-webpack-plugin" -> "4.5.1",
       "webpack-merge"       -> "4.1.2"
     ),
-    npmDependencies in Compile ++= Seq(
-      "jsdom" -> "13.0.0"
-    ),
-    jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv(),
+//    npmDependencies in Compile ++= Seq(
+//      "jsdom" -> "13.0.0"
+//    ),
     version in webpack := "4.8.1",
     version in startWebpackDevServer := "3.1.4",
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
     webpackBundlingMode := BundlingMode.LibraryAndApplication()
   )
   .dependsOn(core % CompileAndTest, common % CompileAndTest)
-
-lazy val sdkJS = sdk.js
-lazy val sdkJVM = sdk.jvm.settings(
-  scalaJSProjects := Seq(sdkJS),
-  pipelineStages in Assets := Seq(scalaJSPipeline),
-  isDevMode in Assets := true
-)
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
@@ -369,7 +359,8 @@ lazy val commonJsSettings = Seq(
     "com.thoughtworks.binding" %%% "dom"           % "11.0.1",
     "com.thoughtworks.binding" %%% "futurebinding" % "11.0.1"
   ),
-  coverageEnabled := false // workaround
+  coverageEnabled := false, // workaround
+  scalacOptions += "-P:scalajs:sjsDefinedByDefault"
 )
 
 lazy val CompileAndTest = "compile->compile;test->test"
@@ -385,7 +376,7 @@ lazy val scalacOpts = scalacOptions := Seq(
   "-Ypartial-unification",
   "-language:higherKinds",
   "-language:implicitConversions",
-  "-language:postfixOps",
+  "-language:postfixOps"
   //  "-P:scalac-profiling:generate-macro-flamegraph",
   //  "-P:scalac-profiling:no-profiledb"
   //  "-Yrangepos", // required by SemanticDB compiler plugin

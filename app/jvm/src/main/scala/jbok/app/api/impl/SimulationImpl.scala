@@ -1,6 +1,6 @@
 package jbok.app.simulations
-import java.util.concurrent.Executors
 import java.net.URI
+import java.util.concurrent.Executors
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
@@ -8,6 +8,8 @@ import cats.implicits._
 import fs2.concurrent.Topic
 import jbok.app.FullNode
 import jbok.app.api.{NodeInfo, SimulationAPI, SimulationEvent}
+import jbok.app.client.JbokClient
+import jbok.codec.rlp.implicits._
 import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.GenesisConfig
@@ -15,25 +17,22 @@ import jbok.core.config.defaults.testReference
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models.{Account, Address}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
-import jbok.sdk.client.{JbokClient => sdkClient}
-import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
 import scodec.bits.ByteVector
 
-import scala.concurrent.duration._
 import scala.collection.mutable.{ListBuffer => MList}
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.util.Random
 
 case class Node(
     nodeInfo: NodeInfo,
     peerNodeUri: String,
-    jbokClient: sdkClient
+    jbokClient: JbokClient
 )
 
 class SimulationImpl(
     topic: Topic[IO, Option[SimulationEvent]],
-    id2NodeNetwrok: Ref[IO, Map[String, Node]],
+    id2NodeNetwork: Ref[IO, Map[String, Node]],
     id2Node: Ref[IO, Map[String, Node]]
 ) extends SimulationAPI {
   import SimulationImpl._
@@ -66,8 +65,8 @@ class SimulationImpl(
       _ <- newNodes.traverse(_.start)
       _ = T.sleep(5.seconds)
       _ = log.info("node start, then client to connect")
-      jbokClients <- newNodes.traverse[IO, sdkClient](x => jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
-      _ <- id2NodeNetwrok.update(
+      jbokClients <- newNodes.traverse[IO, JbokClient](x => jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
+      _ <- id2NodeNetwork.update(
         _ ++ newNodes
           .zip(jbokClients)
           .map {
@@ -80,14 +79,14 @@ class SimulationImpl(
     } yield newNodes.map(x => infoFromNode(x))
   }
 
-  override def getNodes: IO[List[NodeInfo]] = id2NodeNetwrok.get.map(_.values.toList.map(_.nodeInfo))
+  override def getNodes: IO[List[NodeInfo]] = id2NodeNetwork.get.map(_.values.toList.map(_.nodeInfo))
 
   override def getNodeInfo(id: String): IO[Option[NodeInfo]] =
-    id2NodeNetwrok.get.map(_.get(id).map(_.nodeInfo))
+    id2NodeNetwork.get.map(_.get(id).map(_.nodeInfo))
 
   override def stopNode(id: String): IO[Unit] =
     for {
-      nodes <- id2NodeNetwrok.get
+      nodes <- id2NodeNetwork.get
       _     <- nodes.get(id).traverse(_.jbokClient.admin.stop)
     } yield ()
 
@@ -95,9 +94,9 @@ class SimulationImpl(
 
   override def getCoin(address: Address, value: BigInt): IO[Unit] =
     for {
-      nodeIdList <- id2NodeNetwrok.get.map(_.keys.toList)
+      nodeIdList <- id2NodeNetwork.get.map(_.keys.toList)
       nodeId = Random.shuffle(nodeIdList).take(1).head
-      jbokClientOpt <- id2NodeNetwrok.get.map(_.get(nodeId).map(_.jbokClient))
+      jbokClientOpt <- id2NodeNetwork.get.map(_.get(nodeId).map(_.jbokClient))
       _ <- jbokClientOpt.traverse[IO, ByteVector](jbokClient =>
         jbokClient.public.sendRawTransaction(txGraphGen.getCoin(address, value).asBytes))
     } yield ()
@@ -123,7 +122,7 @@ class SimulationImpl(
 
   override def submitStxsToNetwork(nStx: Int, t: String): IO[Unit] =
     for {
-      nodeIdList <- id2NodeNetwrok.get.map(_.keys.toList)
+      nodeIdList <- id2NodeNetwork.get.map(_.keys.toList)
       _      = log.info("in submitstx")
       nodeId = Random.shuffle(nodeIdList).take(1).head
       _ <- submitStxsToNode(nStx, t, nodeId)
@@ -131,7 +130,7 @@ class SimulationImpl(
 
   override def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit] =
     for {
-      jbokClientOpt <- id2NodeNetwrok.get.map(_.get(id).map(_.jbokClient))
+      jbokClientOpt <- id2NodeNetwork.get.map(_.get(id).map(_.jbokClient))
       stxs = t match {
         case "DoubleSpend" => txGraphGen.nextDoubleSpendTxs2(nStx)
         case _             => txGraphGen.nextValidTxs(nStx)
