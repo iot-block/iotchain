@@ -46,6 +46,7 @@ case class FullSync[F[_]](
         for {
           _      <- syncStatus.set(fullSyncing)
           result <- requestPeer(fullSyncing).map(_.some)
+          _      <- T.sleep(config.checkForNewBlockInterval)
         } yield result
 
       case None =>

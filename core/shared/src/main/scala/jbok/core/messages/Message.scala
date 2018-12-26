@@ -5,6 +5,7 @@ import java.util.UUID
 import jbok.codec.rlp.implicits._
 import jbok.core.models._
 import jbok.core.sync.NodeHash
+import jbok.crypto.signature.CryptoSignature
 import jbok.network.common.{RequestId, RequestMethod}
 import scodec.bits.ByteVector
 

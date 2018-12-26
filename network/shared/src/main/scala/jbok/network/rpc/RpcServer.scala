@@ -35,7 +35,7 @@ class RpcServer(
                 JsonRpcErrors.internalError.asJson.noSpaces
 
               case Right(resp) =>
-                log.debug(s"response: ${resp}")
+                log.debug(s"response: ${resp}, ${f(req).unsafeRunSync()}")
                 resp
             }
           case None =>
