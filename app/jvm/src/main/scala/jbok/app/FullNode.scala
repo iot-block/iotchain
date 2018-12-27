@@ -96,7 +96,7 @@ object FullNode {
       consensus = new CliqueConsensus[IO](clique, blockPool)
       peerManager <- PeerManagerPlatform[IO](config.peer, history)
       executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
-      syncManager <- SyncManager(config.sync, executor)
+      syncManager <- SyncManager(config.sync, executor)(F, T, metrics)
       miner       <- BlockMiner[IO](config.mining, syncManager)
 
       // mount rpc
