@@ -9,15 +9,18 @@ import jbok.app.FullNode
 import jbok.app.api.{NodeInfo, SimulationAPI, SimulationEvent}
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.implicits._
+import jbok.common.execution._
+import jbok.common.log.{Level, ScribeLog, ScribeLogPlatform}
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.GenesisConfig
-import jbok.core.config.defaults.testReference
+import jbok.core.config.{ConfigHelper, GenesisConfig}
+import jbok.core.config.defaults.genTestReference
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models.{Account, Address}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable.{ListBuffer => MList}
+import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -42,7 +45,34 @@ class SimulationImpl(
   val genesisConfigWithAlloc: GenesisConfig = txGraphGen.genesisConfig
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val fullNodeConfigs = FullNodeConfig.fill(testReference.withMining(_.copy(period = 10.seconds)), n)
+    val fullNodeConfigs = (0 until n).toList.map(i => {
+      val port = 20000 + 3 * i
+      val debugConfig = ConfigHelper
+        .parseConfig(
+          List(
+            "-history.chainDataDir",
+            "inmem",
+            "-peer.peerDataDir",
+            "inmem",
+            "-logLevel",
+            "DEBUG",
+            "-mining.period",
+            "5.seconds",
+            "-identity",
+            s"test-node-${i}",
+            "-peer.port",
+            s"${port}",
+            "-peer.discoveryPort",
+            s"${port + 1}",
+            "-rpc.enabled",
+            "true",
+            "-rpc.port",
+            s"${port + 2}",
+          ))
+        .right
+        .get
+      genTestReference(debugConfig)
+    })
     val signers = (1 to n).toList
       .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
       .unsafeRunSync()
@@ -54,9 +84,7 @@ class SimulationImpl(
     for {
       newNodes <- configs.zipWithIndex.traverse[IO, FullNode[IO]] {
         case (config, idx) =>
-          val fullNodeConfig = config.copy(
-            genesisOrPath = Left(genesisConfig)
-          )
+          val fullNodeConfig = config.copy(genesisOrPath = Left(genesisConfig))
           FullNode.forConfig(fullNodeConfig)
       }
       _ <- newNodes.tail.traverse[IO, Unit](_.peerManager.addPeerNode(newNodes.head.peerManager.peerNode))
