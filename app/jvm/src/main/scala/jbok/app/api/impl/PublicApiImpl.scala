@@ -77,7 +77,7 @@ final class PublicApiImpl(
   override def getOmmerByBlockNumberAndIndex(blockParam: BlockParam, uncleIndex: Int): IO[Option[BlockHeader]] = {
     val x = for {
       block <- OptionT.liftF(resolveBlock(blockParam))
-      uncle <- OptionT.fromOption[IO](block.body.ommerList.lift(uncleIndex))
+      uncle <- OptionT.fromOption[IO](block.flatMap(_.body.ommerList.lift(uncleIndex)))
     } yield uncle
 
     x.value
@@ -87,7 +87,9 @@ final class PublicApiImpl(
     val blockDifference = BigInt(30)
     for {
       bestBlock <- history.getBestBlockNumber
-      gasPrices <- ((bestBlock - blockDifference) to bestBlock).toList
+      gasPrices <- ((bestBlock - blockDifference) to bestBlock)
+        .filter(_ >= BigInt(0))
+        .toList
         .traverse(history.getBlockByNumber)
         .map(_.flatten.flatMap(_.body.transactionList).map(_.gasPrice))
       gasPrice = if (gasPrices.nonEmpty) {
@@ -121,14 +123,14 @@ final class PublicApiImpl(
   override def getCode(address: Address, blockParam: BlockParam): IO[ByteVector] =
     for {
       block <- resolveBlock(blockParam)
-      world <- history.getWorldState(historyConfig.accountStartNonce, Some(block.header.stateRoot))
+      world <- history.getWorldState(historyConfig.accountStartNonce, block.map(_.header.stateRoot))
       code  <- world.getCode(address)
     } yield code
 
   override def getOmmerCountByBlockNumber(blockParam: BlockParam): IO[Int] =
     for {
       block <- resolveBlock(blockParam)
-    } yield block.body.ommerList.length
+    } yield block.map(_.body.ommerList.length).getOrElse(0)
 
   override def getOmmerCountByBlockHash(blockHash: ByteVector): IO[Int] =
     for {
@@ -136,7 +138,7 @@ final class PublicApiImpl(
     } yield body.map(_.ommerList.length).getOrElse(-1)
 
   override def getBlockTransactionCountByNumber(blockParam: BlockParam): IO[Int] =
-    resolveBlock(blockParam).map(_.body.transactionList.length)
+    resolveBlock(blockParam).map(_.map(_.body.transactionList.length).getOrElse(0))
 
   override def getTransactionByBlockNumberAndIndexRequest(
       blockParam: BlockParam,
@@ -144,7 +146,7 @@ final class PublicApiImpl(
   ): IO[Option[SignedTransaction]] =
     for {
       block <- resolveBlock(blockParam)
-      tx = block.body.transactionList.lift(txIndex)
+      tx = block.flatMap(_.body.transactionList.lift(txIndex))
     } yield tx
 
   override def getAccount(address: Address, blockParam: BlockParam): IO[Account] =
@@ -176,7 +178,7 @@ final class PublicApiImpl(
       case stx if stx.receivingAddress == address                                => stx
     }
     for {
-      blocks <- (fromBlock to toBlock).toList.traverse(history.getBlockByNumber)
+      blocks <- (fromBlock to toBlock).toList.filter(_ >= BigInt(0)).traverse(history.getBlockByNumber)
       stxsFromBlock = blocks.collect {
         case Some(block) => block.body.transactionList.collect(collectTxs)
       }.flatten
@@ -192,7 +194,7 @@ final class PublicApiImpl(
     for {
       stx   <- prepareTransaction(callTx, blockParam)
       block <- resolveBlock(blockParam)
-    } yield (stx, block)
+    } yield (stx, block.get)
 
   private[jbok] def prepareTransaction(callTx: CallTx, blockParam: BlockParam): IO[SignedTransaction] =
     for {
@@ -204,19 +206,24 @@ final class PublicApiImpl(
     if (callTx.gas.isDefined) {
       callTx.gas.get.pure[IO]
     } else {
-      resolveBlock(BlockParam.Latest).map(_.header.gasLimit)
+      resolveBlock(BlockParam.Latest).map(_.map(_.header.gasLimit).getOrElse(BigInt(0)))
     }
 
   private[jbok] def resolveAccount(address: Address, blockParam: BlockParam): IO[Account] =
     for {
-      block <- resolveBlock(blockParam)
-      account <- history
-        .getAccount(address, block.header.number)
-        .map(_.getOrElse(Account.empty(historyConfig.accountStartNonce)))
+      blockOpt <- resolveBlock(blockParam)
+      account <- if (blockOpt.isEmpty) {
+        IO.pure(Account.empty(historyConfig.accountStartNonce))
+      } else {
+        history
+          .getAccount(address, blockOpt.get.header.number)
+          .map(_.getOrElse(Account.empty(historyConfig.accountStartNonce)))
+      }
     } yield account
 
-  private[jbok] def resolveBlock(blockParam: BlockParam): IO[Block] = {
-    def getBlock(number: BigInt): IO[Block] = history.getBlockByNumber(number).map(_.get)
+  private[jbok] def resolveBlock(blockParam: BlockParam): IO[Option[Block]] = {
+    def getBlock(number: BigInt): IO[Option[Block]] =
+      number.some.filter(_ >= BigInt(0)).traverse[IO, Block](n => history.getBlockByNumber(n).map(_.get))
 
     blockParam match {
       case BlockParam.WithNumber(blockNumber) => getBlock(blockNumber)
