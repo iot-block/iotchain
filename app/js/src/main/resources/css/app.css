@@ -127,7 +127,8 @@ th {
 }
 
 td {
-    font-size: 0.85em;
+    font-size: 1.20em;
+    font-family: monospace;
 }
 
 thead tr:nth-child(1) th {
@@ -147,6 +148,7 @@ a:hover {
 .status-item {
     border-right: 1px solid darkgrey;
     padding: 20px;
+    height: 90px;
 }
 
 .status {
