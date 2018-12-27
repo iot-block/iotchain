@@ -1,5 +1,7 @@
 package jbok.app
 
+import java.net.InetSocketAddress
+
 import _root_.io.circe.generic.auto._
 import _root_.io.circe.syntax._
 import better.files.File
@@ -7,11 +9,18 @@ import cats.effect.{ExitCode, IO}
 import cats.implicits._
 import com.typesafe.config.Config
 import fs2._
-import jbok.common.log.{Level, ScribeLog, ScribeLogPlatform}
+import jbok.app.api.SimulationAPI
+import jbok.app.simulations.SimulationImpl
+import jbok.codec.rlp.implicits._
+import jbok.common.metrics.Metrics
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.{ConfigHelper, ConfigLoader, GenesisConfig}
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.keystore.KeyStorePlatform
+import jbok.network.rpc.RpcServer
+import jbok.network.server.Server
+
+import scala.concurrent.duration._
 
 object MainApp extends StreamApp {
   val buildVersion = getClass.getPackage.getImplementationVersion
@@ -34,10 +43,6 @@ object MainApp extends StreamApp {
   def loadConfig(config: Config): IO[FullNodeConfig] =
     for {
       fullNodeConfig <- ConfigLoader.loadFullNodeConfig[IO](config)
-      _ <- ScribeLog.setHandlers[IO](
-        ScribeLog.consoleHandler(Some(Level.fromName(fullNodeConfig.logLevel))),
-        ScribeLogPlatform.fileHandler(fullNodeConfig.logsDir, Some(Level.fromName(fullNodeConfig.logLevel)))
-      )
       _ <- IO(println(version))
       _ <- IO(println(banner))
       _ <- IO(println(ConfigHelper.printConfig(config).render))
@@ -88,6 +93,23 @@ object MainApp extends StreamApp {
           genesis = Clique.generateGenesisConfig(GenesisConfig.generate(0, Map.empty), signers)
           _ <- IO(File(fullNodeConfig.genesisPath).createIfNotExists().overwrite(genesis.asJson.spaces2))
         } yield ExitCode.Success
+
+      case "simulation" :: tail =>
+        val bind       = new InetSocketAddress("localhost", 8888)
+        val peerCount  = 4
+        val minerCount = 1
+        for {
+          config    <- parseConfig(tail)
+          _         <- loadConfig(config)
+          impl      <- SimulationImpl()
+          rpcServer <- RpcServer().map(_.mountAPI[SimulationAPI](impl))
+          metrics   <- Metrics.default[IO]
+          server = Server.websocket(bind, rpcServer.pipe, metrics)
+          _ <- impl.createNodesWithMiner(peerCount, minerCount)
+          _ = timer.sleep(5000.millis)
+          _  <- impl.submitStxsToNetwork(10, "valid")
+          ec <- runStream(server.stream)
+        } yield ec
 
       case _ =>
         for {

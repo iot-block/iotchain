@@ -1,16 +1,14 @@
 package jbok.app.simulations
 import java.net.URI
-import java.util.concurrent.Executors
 
-import cats.effect.IO
 import cats.effect.concurrent.Ref
+import cats.effect.{ConcurrentEffect, ContextShift, IO, Timer}
 import cats.implicits._
 import fs2.concurrent.Topic
 import jbok.app.FullNode
 import jbok.app.api.{NodeInfo, SimulationAPI, SimulationEvent}
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.implicits._
-import jbok.common.execution._
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.GenesisConfig
 import jbok.core.config.defaults.testReference
@@ -21,7 +19,6 @@ import scodec.bits.ByteVector
 
 import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.util.Random
 
 case class Node(
@@ -34,7 +31,8 @@ class SimulationImpl(
     topic: Topic[IO, Option[SimulationEvent]],
     id2NodeNetwork: Ref[IO, Map[String, Node]],
     id2Node: Ref[IO, Map[String, Node]]
-) extends SimulationAPI {
+)(implicit F: ConcurrentEffect[IO], T: Timer[IO], CS: ContextShift[IO])
+    extends SimulationAPI {
   import SimulationImpl._
   private[this] val log = jbok.common.log.getLogger("SimulationImpl")
 
@@ -56,16 +54,17 @@ class SimulationImpl(
     for {
       newNodes <- configs.zipWithIndex.traverse[IO, FullNode[IO]] {
         case (config, idx) =>
-          implicit val ec: ExecutionContextExecutor =
-            ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2, namedThreadFactory(s"EC$idx", daemon = true)))
-          val fullNodeConfig = config.copy(genesisOrPath = Left(genesisConfig))
+          val fullNodeConfig = config.copy(
+            genesisOrPath = Left(genesisConfig)
+          )
           FullNode.forConfig(fullNodeConfig)
       }
       _ <- newNodes.tail.traverse[IO, Unit](_.peerManager.addPeerNode(newNodes.head.peerManager.peerNode))
       _ <- newNodes.traverse(_.start)
       _ = T.sleep(5.seconds)
       _ = log.info("node start, then client to connect")
-      jbokClients <- newNodes.traverse[IO, JbokClient](x => jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
+      jbokClients <- newNodes.traverse[IO, JbokClient](x =>
+        jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
       _ <- id2NodeNetwork.update(
         _ ++ newNodes
           .zip(jbokClients)
@@ -169,7 +168,7 @@ class SimulationImpl(
 object SimulationImpl {
   val requestTimeout: FiniteDuration = 5.seconds
 
-  def apply()(implicit ec: ExecutionContext): IO[SimulationImpl] =
+  def apply()(implicit F: ConcurrentEffect[IO], T: Timer[IO], CS: ContextShift[IO]): IO[SimulationImpl] =
     for {
       topic          <- Topic[IO, Option[SimulationEvent]](None)
       id2NodeNetwork <- Ref.of[IO, Map[String, Node]](Map.empty)

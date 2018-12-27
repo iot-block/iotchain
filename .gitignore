@@ -30,3 +30,4 @@ project/plugins/project/
 # project specific
 node_modules
 package-lock.json
+sdk/**/*.js

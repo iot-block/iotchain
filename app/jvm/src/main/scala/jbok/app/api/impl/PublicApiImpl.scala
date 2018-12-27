@@ -3,7 +3,6 @@ package jbok.app.api.impl
 import cats.data.OptionT
 import cats.effect.IO
 import cats.implicits._
-import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.HistoryConfig
 import jbok.core.mining.BlockMiner
@@ -101,13 +100,11 @@ final class PublicApiImpl(
 
   override def isMining: IO[Boolean] = miner.haltWhenTrue.get.map(!_)
 
-  override def sendRawTransaction(data: ByteVector): IO[ByteVector] = {
-    val stx = RlpCodec.decode[SignedTransaction](data.bits).require.value
-    val txHash = for {
-      _ <- txPool.addOrUpdateTransaction(stx)
+  override def sendRawTransaction(data: ByteVector): IO[ByteVector] =
+    for {
+      stx <- IO(data.asOpt[SignedTransaction].get)
+      _   <- txPool.addOrUpdateTransaction(stx)
     } yield stx.hash
-    txHash
-  }
 
   override def call(callTx: CallTx, blockParam: BlockParam): IO[ByteVector] =
     for {

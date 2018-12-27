@@ -12,6 +12,7 @@ import jbok.app.api.impl.{AdminApiImpl, PersonalApiImpl, PublicApiImpl}
 import jbok.codec.rlp.implicits._
 import jbok.common.FileLock
 import jbok.common.execution._
+import jbok.common.log.{Level, ScribeLog, ScribeLogPlatform}
 import jbok.common.metrics.Metrics
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus}
@@ -74,6 +75,10 @@ object FullNode {
   ): IO[FullNode[IO]] = {
     implicit val chainId = config.genesis.chainId
     for {
+      _ <- ScribeLog.setHandlers[IO](
+        ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel))),
+        ScribeLogPlatform.fileHandler(config.logsDir, Some(Level.fromName(config.logLevel)))
+      )
       metrics  <- Metrics.default[IO]
       keystore <- KeyStorePlatform[IO](config.keystore.keystoreDir)
       minerKey <- config.mining.minerAddressOrKey match {

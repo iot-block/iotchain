@@ -66,7 +66,9 @@ package object rlp {
   }
 
   trait CodecSyntax {
-    implicit def implicitCodecOps[A: RlpCodec](a: A): CodecOps[A] = new CodecOps[A](a)
+    implicit def implicitCodecOps[A: RlpCodec](a: A): CodecOps[A]          = new CodecOps[A](a)
+    implicit def implicitBitsDecodeOps(bits: BitVector): BitsDecodeOps     = new BitsDecodeOps(bits)
+    implicit def implicitBytesDecodeOps(bytes: ByteVector): BytesDecodeOps = new BytesDecodeOps(bytes)
   }
 
   final class CodecOps[A](val a: A) extends AnyVal {
@@ -74,6 +76,14 @@ package object rlp {
     def asBytes(implicit codec: RlpCodec[A]): ByteVector                 = asBits.bytes
     def asBitsF[F[_]: Sync](implicit codec: RlpCodec[A]): F[BitVector]   = Sync[F].delay(asBits)
     def asBytesF[F[_]: Sync](implicit codec: RlpCodec[A]): F[ByteVector] = Sync[F].delay(asBytes)
+  }
+
+  final class BitsDecodeOps(val bits: BitVector) extends AnyVal {
+    def asOpt[A](implicit codec: RlpCodec[A]): Option[A] = codec.decode(bits).map(_.value).toOption
+  }
+
+  final class BytesDecodeOps(val bytes: ByteVector) extends AnyVal {
+    def asOpt[A](implicit codec: RlpCodec[A]): Option[A] = codec.decode(bytes.bits).map(_.value).toOption
   }
 
   object implicits extends codecs with CodecSyntax {
