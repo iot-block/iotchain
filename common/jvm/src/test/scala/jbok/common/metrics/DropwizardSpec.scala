@@ -33,7 +33,7 @@ class DropwizardSpec extends JbokSpec {
       valuesOf(registry, Timer("ioa")).isDefined shouldBe true
     }
 
-    "console reporter" in {
+    "console reporter" ignore {
       val stream =
         Stream
           .range[IO](0, 20)

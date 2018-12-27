@@ -71,4 +71,22 @@ trait Metrics[F[_]] extends EffectMetrics[F] with StreamMetrics[F] {
 
 object Metrics extends MetricsPlatform {
   def default[F[_]: Sync]: F[Metrics[F]] = _default
+
+  sealed trait NoopRegistry
+
+  object NoopRegistry extends NoopRegistry
+
+  def nop[F[_]: Sync]: F[Metrics[F]] = Sync[F].pure {
+    new Metrics[F] {
+      override type Registry = NoopRegistry
+
+      override def registry: Registry = NoopRegistry
+
+      override def time(name: String, labels: List[String])(elapsed: Long): F[Unit] = Sync[F].unit
+
+      override def gauge(name: String, labels: List[String])(delta: Double): F[Unit] = Sync[F].unit
+
+      override def current(name: String, labels: String*)(current: Double): F[Unit] = Sync[F].unit
+    }
+  }
 }

@@ -55,11 +55,17 @@ object Server {
   ): Server[F] = {
     val log = jbok.common.log.getLogger("WebSocket")
 
-    val registry = metrics.registry.asInstanceOf[CollectorRegistry]
+    val registry: Option[CollectorRegistry] = metrics.registry match {
+      case x: CollectorRegistry => Some(x)
+      case _                    => None
+    }
 
-    val stream: Stream[F, Unit] = Stream.eval(
-      PrometheusExportService.addDefaults[F](registry) >> F.delay(log.info(s"successfully bound to ${bind}"))
-    ) ++ {
+    val registerDefaults =
+      registry.fold(Stream.empty.covaryAll[F, Unit])(r =>
+        Stream.eval[F, Unit](PrometheusExportService.addDefaults[F](r)))
+
+    val stream
+      : Stream[F, Unit] = registerDefaults ++ Stream.eval_(F.delay(log.info(s"successfully bound to ${bind}"))) ++ {
       val dsl = Http4sDsl[F]
       import dsl._
       val service = HttpRoutes.of[F] {
@@ -86,9 +92,10 @@ object Server {
           }
       }
 
-      val metricsService = PrometheusExportService(registry).routes
-
-      val httpApp = Router("/" -> service, "/" -> metricsService).orNotFound
+      val httpApp = registry match {
+        case Some(r) => Router("/" -> service, "/" -> PrometheusExportService(r).routes).orNotFound
+        case None    => Router("/" -> service).orNotFound
+      }
 
       val builder = BlazeServerBuilder[F]
         .bindSocketAddress(bind)

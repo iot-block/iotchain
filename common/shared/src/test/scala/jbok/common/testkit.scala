@@ -11,7 +11,7 @@ import scodec.bits.ByteVector
 object testkit {
   implicit val chainId: BigInt = 1
 
-  implicit val metrics: Metrics[IO] = Metrics.default[IO].unsafeRunSync()
+  implicit val metrics: Metrics[IO] = Metrics.nop[IO].unsafeRunSync()
 
   def random[A](implicit arbA: Arbitrary[A]): A =
     arbA.arbitrary.sample.get
