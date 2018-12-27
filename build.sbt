@@ -227,9 +227,6 @@ lazy val sdk = crossProject(JSPlatform, JVMPlatform)
       "copy-webpack-plugin" -> "4.5.1",
       "webpack-merge"       -> "4.1.2"
     ),
-//    npmDependencies in Compile ++= Seq(
-//      "jsdom" -> "13.0.0"
-//    ),
     version in webpack := "4.8.1",
     version in startWebpackDevServer := "3.1.4",
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),

@@ -25,7 +25,9 @@ final case class BlockHeader(
     unixTimestamp: Long, // pre
     extra: ByteVector
 ) {
-  lazy val hash: ByteVector = this.asBytes.kec256
+  lazy val bytes: ByteVector = this.asBytes
+
+  lazy val hash: ByteVector = bytes.kec256
 
   lazy val tag: String = s"BlockHeader(${number})#${hash.toHex.take(7)}"
 }

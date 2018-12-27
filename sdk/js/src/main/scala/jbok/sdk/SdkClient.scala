@@ -1,4 +1,4 @@
-package jbok.sdk.client
+package jbok.sdk
 
 import java.net.URI
 import java.util.UUID

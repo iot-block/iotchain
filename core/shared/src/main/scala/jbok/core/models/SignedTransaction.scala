@@ -25,7 +25,9 @@ case class SignedTransaction(
     r: BigInt,
     s: BigInt
 ) {
-  lazy val hash: ByteVector = this.asBytes.kec256
+  lazy val bytes: ByteVector = this.asBytes
+
+  lazy val hash: ByteVector = bytes.kec256
 
   lazy val chainIdOpt: Option[BigInt] = ECDSAChainIdConvert.getChainId(v)
 
