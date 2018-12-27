@@ -1,29 +1,23 @@
 package jbok.network.client
 
 import java.net.URI
-import java.nio.charset.StandardCharsets
 
 import cats.effect.IO
 import jbok.JbokAsyncSpec
+import jbok.codec.rlp.implicits._
+import jbok.common.execution._
 import jbok.network.common.{RequestId, RequestMethod}
-import org.scalatest.time.Span
-import scodec.Codec
-import scodec.codecs._
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-import jbok.common.execution._
 
-class JsClientSpec extends JbokAsyncSpec {
+class WsClientSpec extends JbokAsyncSpec {
 
   implicit override def executionContext: ExecutionContext = EC
 
-  override def timeLimit: Span            = 60.seconds
-  implicit val codecString: Codec[String] = variableSizeBytes(uint16, string(StandardCharsets.US_ASCII))
-  implicit val requestId                  = RequestId.empty[String]
-  implicit val requestMethod              = RequestMethod.none[String]
+  implicit val requestId     = RequestId.empty[String]
+  implicit val requestMethod = RequestMethod.none[String]
 
-  "JsClient" should {
+  "WsClient" should {
     "echo" ignore {
       val uri = new URI("ws://echo.websocket.org:80")
       for {
@@ -36,7 +30,7 @@ class JsClientSpec extends JbokAsyncSpec {
     }
   }
 
-  "JsClientNodejs" should {
+  "WsClientNode" should {
     "echo" ignore {
       val uri = new URI("ws://echo.websocket.org:80")
       for {
