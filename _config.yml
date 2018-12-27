@@ -1,0 +1,11 @@
+name: jbok
+baseurl: /jbok
+description: Just a Bunch Of Keys
+highlighter: rouge
+docs: true
+collections:
+  tut:
+    output: true
+version: 0.0.1-SNAPSHOT
+org: org.jbok
+markdown: kramdown
