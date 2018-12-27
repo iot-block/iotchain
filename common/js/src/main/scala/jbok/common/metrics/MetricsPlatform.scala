@@ -16,6 +16,8 @@ trait MetricsPlatform {
       override def time(name: String, labels: List[String])(elapsed: Long): F[Unit] = Sync[F].unit
 
       override def gauge(name: String, labels: List[String])(delta: Double): F[Unit] = Sync[F].unit
+
+      override def current(name: String, labels: String*)(current: Double): F[Unit] = Sync[F].unit
     }
   }
 }

@@ -30,6 +30,16 @@ object Dropwizard {
         counter.dec(-delta.toLong)
       }
     }
+
+    override def current(name: String, labels: String*)(current: Double): F[Unit] = F.delay {
+      val counter = registry.counter(name)
+      val count= counter.getCount
+      if (current > count) {
+        counter.inc(current.toLong - count)
+      } else {
+        counter.dec(count - current.toLong)
+      }
+    }
   }
 
   def consoleReporter[F[_]](registry: MetricRegistry, interval: FiniteDuration)(

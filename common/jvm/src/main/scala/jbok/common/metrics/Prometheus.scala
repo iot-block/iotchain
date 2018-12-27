@@ -37,6 +37,12 @@ object Prometheus {
             _ = gauge.inc(delta)
           } yield ()
 
+        override def current(name: String, labels: String*)(current: Double): F[Unit] =
+          for {
+            gauge <- getOrCreateGauge(name, labels.toSet)
+            _ = gauge.set(current)
+          } yield ()
+
         def histName(name: String): MetricName =
           MetricName(s"${METRIC_PREFIX}_${name}_${TIMER_SUFFIX}")
 

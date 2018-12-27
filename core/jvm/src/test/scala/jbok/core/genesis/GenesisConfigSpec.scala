@@ -8,12 +8,12 @@ import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.core.testkit.testGenesis
 import jbok.common.testkit._
+import jbok.common.execution._
 
 class GenesisConfigSpec extends JbokSpec {
   "GenesisConfig" should {
     "load config alloc" in {
-      val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-      val history = History[IO](db).unsafeRunSync()
+      val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
       history.initGenesis(testGenesis).unsafeRunSync()
       val addresses = testGenesis.alloc.keysIterator.toList
       val accounts =

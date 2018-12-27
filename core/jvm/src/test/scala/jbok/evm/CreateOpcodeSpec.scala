@@ -2,97 +2,98 @@ package jbok.evm
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.common.execution._
+import jbok.common.testkit._
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
-object CreateOpFixture {
-  val config = EvmConfig.SpuriousDragonConfigBuilder(None)
-  import config.feeSchedule._
-
-  val creatorAddr              = Address(0xcafe)
-  val endowment: UInt256       = 123
-  implicit val chainId: BigInt = 61
-  val db                       = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history                  = History[IO](db).unsafeRunSync()
-  val initWorld =
-    history
-      .getWorldState()
-      .unsafeRunSync()
-      .putAccount(creatorAddr, Account.empty().increaseBalance(endowment))
-  val newAddr = initWorld.createAddressWithOpCode(creatorAddr).unsafeRunSync()._1
-
-  // doubles the value passed in the input data
-  val contractCode = Assembly(
-    PUSH1,
-    0,
-    CALLDATALOAD,
-    DUP1,
-    ADD,
-    PUSH1,
-    0,
-    MSTORE,
-    PUSH1,
-    32,
-    PUSH1,
-    0,
-    RETURN
-  )
-
-  def initPart(contractCodeSize: Int): Assembly = Assembly(
-    PUSH1,
-    42,
-    PUSH1,
-    0,
-    SSTORE, //store an arbitrary value
-    PUSH1,
-    contractCodeSize,
-    DUP1,
-    PUSH1,
-    16,
-    PUSH1,
-    0,
-    CODECOPY,
-    PUSH1,
-    0,
-    RETURN
-  )
-
-  val initWithSelfDestruct = Assembly(
-    PUSH1,
-    creatorAddr.toUInt256.toInt,
-    SELFDESTRUCT
-  )
-
-  val initWithSstoreWithClear = Assembly(
-    //Save a value to the storage
-    PUSH1,
-    10,
-    PUSH1,
-    0,
-    SSTORE,
-    //Clear the store
-    PUSH1,
-    0,
-    PUSH1,
-    0,
-    SSTORE
-  )
-
-  val createCode             = Assembly(initPart(contractCode.code.size.toInt).byteCode ++ contractCode.byteCode: _*)
-  val copyCodeGas            = G_copy * wordsForBytes(contractCode.code.size) + config.calcMemCost(0, 0, contractCode.code.size)
-  val storeGas               = G_sset
-  val gasRequiredForInit     = initPart(contractCode.code.size.toInt).linearConstGas(config) + copyCodeGas + storeGas
-  val depositGas             = config.calcCodeDepositCost(contractCode.code)
-  val gasRequiredForCreation = gasRequiredForInit + depositGas + G_create
-  val env                    = ExecEnv(creatorAddr, Address(0), Address(0), 1, ByteVector.empty, 0, Program(ByteVector.empty), null, 0)
-  val context                = ProgramContext(env, Address(0), 2 * gasRequiredForCreation, initWorld, config)
-}
-
 class CreateOpcodeSpec extends JbokSpec {
   val config = EvmConfig.SpuriousDragonConfigBuilder(None)
   import config.feeSchedule._
+
+  object CreateOpFixture {
+    val config = EvmConfig.SpuriousDragonConfigBuilder(None)
+    import config.feeSchedule._
+
+    val creatorAddr              = Address(0xcafe)
+    val endowment: UInt256       = 123
+    implicit val chainId: BigInt = 61
+    val history                  = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+    val initWorld =
+      history
+        .getWorldState()
+        .unsafeRunSync()
+        .putAccount(creatorAddr, Account.empty().increaseBalance(endowment))
+    val newAddr = initWorld.createAddressWithOpCode(creatorAddr).unsafeRunSync()._1
+
+    // doubles the value passed in the input data
+    val contractCode = Assembly(
+      PUSH1,
+      0,
+      CALLDATALOAD,
+      DUP1,
+      ADD,
+      PUSH1,
+      0,
+      MSTORE,
+      PUSH1,
+      32,
+      PUSH1,
+      0,
+      RETURN
+    )
+
+    def initPart(contractCodeSize: Int): Assembly = Assembly(
+      PUSH1,
+      42,
+      PUSH1,
+      0,
+      SSTORE, //store an arbitrary value
+      PUSH1,
+      contractCodeSize,
+      DUP1,
+      PUSH1,
+      16,
+      PUSH1,
+      0,
+      CODECOPY,
+      PUSH1,
+      0,
+      RETURN
+    )
+
+    val initWithSelfDestruct = Assembly(
+      PUSH1,
+      creatorAddr.toUInt256.toInt,
+      SELFDESTRUCT
+    )
+
+    val initWithSstoreWithClear = Assembly(
+      //Save a value to the storage
+      PUSH1,
+      10,
+      PUSH1,
+      0,
+      SSTORE,
+      //Clear the store
+      PUSH1,
+      0,
+      PUSH1,
+      0,
+      SSTORE
+    )
+
+    val createCode             = Assembly(initPart(contractCode.code.size.toInt).byteCode ++ contractCode.byteCode: _*)
+    val copyCodeGas            = G_copy * wordsForBytes(contractCode.code.size) + config.calcMemCost(0, 0, contractCode.code.size)
+    val storeGas               = G_sset
+    val gasRequiredForInit     = initPart(contractCode.code.size.toInt).linearConstGas(config) + copyCodeGas + storeGas
+    val depositGas             = config.calcCodeDepositCost(contractCode.code)
+    val gasRequiredForCreation = gasRequiredForInit + depositGas + G_create
+    val env                    = ExecEnv(creatorAddr, Address(0), Address(0), 1, ByteVector.empty, 0, Program(ByteVector.empty), null, 0)
+    val context                = ProgramContext(env, Address(0), 2 * gasRequiredForCreation, initWorld, config)
+  }
 
   case class CreateResult(
       context: ProgramContext[IO] = CreateOpFixture.context,

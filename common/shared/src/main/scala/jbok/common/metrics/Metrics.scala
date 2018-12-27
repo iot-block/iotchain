@@ -65,6 +65,8 @@ trait Metrics[F[_]] extends EffectMetrics[F] with StreamMetrics[F] {
   def time(name: String, labels: List[String])(elapsed: Long): F[Unit]
 
   def gauge(name: String, labels: List[String])(delta: Double): F[Unit]
+
+  def current(name: String, labels: String*)(current: Double): F[Unit]
 }
 
 object Metrics extends MetricsPlatform {

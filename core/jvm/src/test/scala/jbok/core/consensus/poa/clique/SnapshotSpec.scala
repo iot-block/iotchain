@@ -28,8 +28,7 @@ trait SnapshotFixture {
     val extra            = Clique.fillExtraData(signers)
     val config           = testGenesis.copy(extraData = extra)
     implicit val chainId = config.chainId
-    val db               = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history          = History[IO](db).unsafeRunSync()
+    val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
     history.initGenesis(config).unsafeRunSync()
     history
   }
@@ -65,8 +64,8 @@ class SnapshotSpec extends JbokSpec {
     val extra            = Clique.fillExtraData(signers)
     val genesisConfig    = testGenesis.copy(extraData = extra)
     implicit val chainId = genesisConfig.chainId
-    val db               = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history          = History[IO](db).unsafeRunSync()
+    val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+
     history.initGenesis(genesisConfig).unsafeRunSync()
 
     // Assemble a chain of headers from the cast votes

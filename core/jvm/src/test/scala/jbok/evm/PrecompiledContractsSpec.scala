@@ -2,21 +2,26 @@ package jbok.evm
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.common.execution._
+import jbok.common.testkit._
 import jbok.core.ledger.History
 import jbok.core.models.{Address, UInt256}
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, Signature}
+import jbok.evm.testkit._
+import jbok.core.testkit._
 import jbok.persistent.KeyValueDB
 import scodec.bits._
-import jbok.evm.testkit._
 
 class PrecompiledContractsSpec extends JbokSpec {
 
   def buildContext(recipient: Address, inputData: ByteVector, gas: UInt256 = 1000000): ProgramContext[IO] = {
-    val origin  = Address(0xcafebabe)
-    val env     = ExecEnv(recipient, origin, origin, 1000, inputData, 0, Program(ByteVector.empty), null, 0)
-    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history = History[IO](db).unsafeRunSync()
+    val origin = Address(0xcafebabe)
+    val env    = ExecEnv(recipient, origin, origin, 1000, inputData, 0, Program(ByteVector.empty), null, 0)
+
+    implicit val bigInt: BigInt = BigInt(0)
+
+    val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
     val world = history
       .getWorldState()
       .unsafeRunSync()

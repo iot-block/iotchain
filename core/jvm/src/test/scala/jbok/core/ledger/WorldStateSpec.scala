@@ -13,8 +13,7 @@ import scodec.bits._
 class WorldStateSpec extends JbokSpec {
   trait Fixture {
     import jbok.common.testkit._
-    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history = History[IO](db).unsafeRunSync()
+    val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
 
     val world = history
       .getWorldState(noEmptyAccounts = false)

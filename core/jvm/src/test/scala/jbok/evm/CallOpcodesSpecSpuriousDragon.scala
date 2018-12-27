@@ -6,12 +6,12 @@ import jbok.core.ledger.History
 import jbok.core.models.UInt256
 import jbok.persistent.KeyValueDB
 import jbok.common.testkit._
+import jbok.common.execution._
 
 class CallOpcodesSpecSpuriousDragon extends JbokSpec {
 
   val config     = EvmConfig.SpuriousDragonConfigBuilder(None)
-  val db         = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history    = History[IO](db).unsafeRunSync()
+  val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
   import config.feeSchedule._
 

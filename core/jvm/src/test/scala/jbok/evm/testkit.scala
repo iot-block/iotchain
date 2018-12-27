@@ -1,6 +1,8 @@
 package jbok.evm
+
 import cats.effect.IO
 import jbok.common.testkit._
+import jbok.common.execution._
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
 import jbok.persistent.KeyValueDB
@@ -103,13 +105,9 @@ object testkit {
       returnData     <- returnDataGen
       blockNumber    <- blockNumberGen
       blockPlacement <- getUInt256Gen(0, blockNumber)
-
       blockHeader = exampleBlockHeader.copy(number = blockNumber - blockPlacement)
-
       env = ExecEnv(ownerAddr, callerAddr, callerAddr, 0, inputData, value, program, blockHeader, 0)
-
-      db      = KeyValueDB.inmem[IO].unsafeRunSync()
-      history = History[IO](db).unsafeRunSync()
+      history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
       world = history
         .getWorldState()
         .unsafeRunSync()

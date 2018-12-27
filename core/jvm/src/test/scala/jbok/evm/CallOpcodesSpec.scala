@@ -8,12 +8,12 @@ import jbok.crypto._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.common.testkit._
+import jbok.common.execution._
 
 class CallOpcodesSpec extends JbokSpec {
 
   val config     = EvmConfig.FrontierConfigBuilder(None)
-  val db         = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history    = History[IO](db).unsafeRunSync()
+  val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
   import config.feeSchedule._
 

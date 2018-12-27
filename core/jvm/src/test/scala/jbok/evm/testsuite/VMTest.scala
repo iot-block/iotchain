@@ -17,6 +17,7 @@ import jbok.evm._
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits.ByteVector
 import jbok.common.testkit._
+import jbok.common.execution._
 
 import scala.collection.JavaConverters._
 
@@ -102,15 +103,14 @@ class VMTest extends JbokSpec {
       case (addr, account) => (addr, account.code)
     }
 
-    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history = History[IO](db).unsafeRunSync()
+    val history                  = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
 
     val storages = json.map {
       case (addr, account) =>
         (addr, Storage.fromMap[IO](account.storage.map(s => (UInt256(s._1), UInt256(s._2)))).unsafeRunSync())
     }
 
-    val mpt          = MerklePatriciaTrie[IO](namespaces.Node, db).unsafeRunSync()
+    val mpt          = MerklePatriciaTrie[IO](namespaces.Node, history.db).unsafeRunSync()
     val accountProxy = StageKeyValueDB[IO, Address, Account](namespaces.empty, mpt) ++ accounts
 
     WorldState[IO](
