@@ -43,10 +43,9 @@ lazy val jbok = project
     network.jvm,
     core.js,
     core.jvm,
-    sdk.js,
     sdk.jvm,
     app.js,
-    app.jvm // app.jvm is depends on app.js
+    app.jvm
   )
   .settings(noPublishSettings)
 
