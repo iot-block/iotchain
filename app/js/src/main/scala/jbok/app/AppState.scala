@@ -264,5 +264,8 @@ case class AppState(
     Stream
       .awakeEvery[IO](5.seconds)
       .evalMap(_ => updateTask())
+      .handleErrorWith { err =>
+        Stream.eval(IO.delay(println(err)))
+      }
 
 }
