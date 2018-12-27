@@ -47,7 +47,7 @@ case class AppState(
 ) {
   def init() = {
     val p = for {
-      sc           <- SimuClient(config.value.uri)
+      sc           <- SimuClient(config.value.uri.toString)
       nodes        <- sc.simulation.getNodes
       simuAccounts <- sc.simulation.getAccounts
       _ = simuAddress.value ++= simuAccounts.map(_._1)
