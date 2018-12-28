@@ -44,7 +44,7 @@ object SignedTransaction {
   implicit val txJsonEncoder: Encoder[SignedTransaction] =
     deriveEncoder[SignedTransaction]
 
-  implicit def txJsonDecoder: Decoder[SignedTransaction] =
+  implicit val txJsonDecoder: Decoder[SignedTransaction] =
     deriveDecoder[SignedTransaction]
 
   def apply(
