@@ -4,14 +4,15 @@ import java.net.URI
 import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, ContextShift, IO, Timer}
 import cats.implicits._
+import fs2.Stream
 import fs2.concurrent.Topic
 import jbok.app.FullNode
 import jbok.app.api.{NodeInfo, SimulationAPI, SimulationEvent}
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.GenesisConfig
-import jbok.core.config.defaults.testReference
+import jbok.core.config.defaults.genTestReference
+import jbok.core.config.{ConfigHelper, GenesisConfig}
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models.{Account, Address}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
@@ -40,12 +41,40 @@ class SimulationImpl(
   val genesisConfigChainId: GenesisConfig   = GenesisConfig.generate(chainId, Map.empty)
   val txGraphGen: TxGraphGen                = new TxGraphGen(genesisConfigChainId, nAddr = 10)
   val genesisConfigWithAlloc: GenesisConfig = txGraphGen.genesisConfig
+  val blockTime: Int                        = 5
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val fullNodeConfigs = FullNodeConfig.fill(testReference.withMining(_.copy(period = 10.seconds)), n)
-    val signers = (1 to n).toList
-      .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
-      .unsafeRunSync()
+    val fullNodeConfigs = (0 until n).toList.map(i => {
+      val port = 20000 + 3 * i
+      val debugConfig = ConfigHelper
+        .parseConfig(
+          List(
+            "-history.chainDataDir",
+            "inmem",
+            "-peer.peerDataDir",
+            "inmem",
+            "-logLevel",
+            "DEBUG",
+            "-mining.period",
+            s"${blockTime}.seconds",
+            "-identity",
+            s"test-node-${i}",
+            "-peer.port",
+            s"${port}",
+            "-peer.discoveryPort",
+            s"${port + 1}",
+            "-rpc.enabled",
+            "true",
+            "-rpc.port",
+            s"${port + 2}",
+            "-rpc.host",
+            "0.0.0.0",
+          ))
+        .right
+        .get
+      genTestReference(debugConfig)
+    })
+    val signers             = (1 to n).toList.traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]()).unsafeRunSync()
     val (configs, minersKP) = selectMiner(n, m, fullNodeConfigs, signers)
     val genesisConfig       = Clique.generateGenesisConfig(genesisConfigWithAlloc, minersKP.map(Address(_)))
 
@@ -54,15 +83,14 @@ class SimulationImpl(
     for {
       newNodes <- configs.zipWithIndex.traverse[IO, FullNode[IO]] {
         case (config, idx) =>
-          val fullNodeConfig = config.copy(
-            genesisOrPath = Left(genesisConfig)
-          )
+          val fullNodeConfig = config.copy(genesisOrPath = Left(genesisConfig))
           FullNode.forConfig(fullNodeConfig)
       }
       _ <- newNodes.tail.traverse[IO, Unit](_.peerManager.addPeerNode(newNodes.head.peerManager.peerNode))
       _ <- newNodes.traverse(_.start)
       _ = T.sleep(5.seconds)
       _ = log.info("node start, then client to connect")
+      _ <- stxStream(10).compile.drain.start
       jbokClients <- newNodes.traverse[IO, JbokClient](x =>
         jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
       _ <- id2NodeNetwork.update(
@@ -138,6 +166,14 @@ class SimulationImpl(
         .map(jbokClient => stxs.traverse[IO, ByteVector](stx => jbokClient.public.sendRawTransaction(stx.asBytes)))
         .getOrElse(IO.unit)
     } yield ()
+
+  private def stxStream(nStx: Int): Stream[IO, Unit] =
+    Stream
+      .awakeEvery[IO](5.seconds)
+      .evalMap[IO, Unit](_ => submitStxsToNetwork(nStx, "valid"))
+      .handleErrorWith[IO, Unit] { err =>
+        Stream.eval(IO.delay(log.error(err)))
+      }
 
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
     NodeInfo(fullNode.peerManager.peerNode.uri.toString, fullNode.config.peer.host, fullNode.config.rpc.port)

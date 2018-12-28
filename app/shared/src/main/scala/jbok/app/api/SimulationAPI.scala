@@ -2,6 +2,7 @@ package jbok.app.api
 
 import _root_.io.circe.generic.JsonCodec
 import cats.effect.IO
+import fs2.Stream
 import jbok.core.models.{Account, Address}
 
 @JsonCodec
@@ -40,4 +41,9 @@ trait SimulationAPI {
   def submitStxsToNetwork(nStx: Int, t: String): IO[Unit]
 
   def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit]
+
+//  def openRandomStx: IO[Unit]
+//
+//  def closeRandomStx: IO[Unit]
+//  def stxStream(nStx: Int): Stream[IO, Unit]
 }
