@@ -61,6 +61,7 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "org.typelevel" %% "cats-collections-core" % V.catsCollections,
       "co.fs2"        %%% "fs2-core"             % V.fs2,
       "co.fs2"        %% "fs2-io"                % V.fs2,
+      "org.typelevel" %%% "spire"                % "0.16.0",
       // json
       "io.circe" %%% "circe-core"       % V.circe,
       "io.circe" %%% "circe-generic"    % V.circe,
@@ -340,6 +341,7 @@ lazy val commonSettings = Seq(
   //  addCompilerPlugin(scalafixSemanticdb),
   connectInput in run := true,
   fork in Test := true,
+  fork in run := true,
   parallelExecution in test := false,
   scalacOpts
 )

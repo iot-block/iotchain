@@ -2,7 +2,6 @@ package jbok.core
 
 import cats.effect.IO
 import cats.effect.concurrent.{Deferred, Ref}
-import jbok.codec.rlp.RlpCodec
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._

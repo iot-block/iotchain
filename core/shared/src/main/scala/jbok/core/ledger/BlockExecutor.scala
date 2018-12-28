@@ -43,8 +43,8 @@ case class BlockExecutor[F[_]](
       result <- importBlock(received.block)
     } yield result
 
-  def handleSyncBlocks(requested: SyncBlocks[F]): F[Unit] =
-    requested.blocks.traverse(importBlock).void
+  def handleSyncBlocks(requested: SyncBlocks[F]): F[List[Block]] =
+    requested.blocks.flatTraverse(importBlock)
 
   def handleMinedBlock(mined: MinedBlock): F[List[Block]] =
     importBlock(mined.block)
@@ -239,7 +239,6 @@ case class BlockExecutor[F[_]](
       checkpointWorldState <- updateSenderAccountBeforeExecution(senderAddress, stx, worldForTx)
       context              <- prepareProgramContext(stx, senderAddress, header, checkpointWorldState, vmConfig)
       result               <- runVM(stx, context, vmConfig)
-      _ = log.debug(s"result.error.isDefined: ${result.error.isDefined}, result.isRevert: ${result.isRevert}")
       resultWithErrorHandling = if (result.error.isDefined || result.isRevert) {
         //Rollback to the world before transfer was done if an error happened
         result.copy(world = checkpointWorldState, addressesToDelete = Set.empty, logs = Nil)

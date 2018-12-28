@@ -39,7 +39,7 @@ final case class SyncManager[F[_]] private (
       }
     }
 
-  def sync: Stream[F, Option[Unit]] =
+  def sync: Stream[F, Block] =
     if (!config.fastEnabled) {
       fullSync.stream
     } else {

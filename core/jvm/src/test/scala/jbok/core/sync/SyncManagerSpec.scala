@@ -128,8 +128,8 @@ class SyncManagerSpec extends JbokSpec {
       val sm3   = random[SyncManager[IO]](genSyncManager()(config3))
       val miner = BlockMiner[IO](reference.mining, sm1).unsafeRunSync()
 
-      // let miner mine 10 blocks first
-      val blocks = miner.stream.take(10).compile.toList.unsafeRunSync()
+      val N = 10
+      val blocks = miner.stream.take(N).compile.toList.unsafeRunSync()
 
       val p = for {
         fiber <- Stream(sm1, sm2, sm3).map(_.peerManager.stream).parJoinUnbounded.compile.drain.start
@@ -140,8 +140,8 @@ class SyncManagerSpec extends JbokSpec {
         _     <- sm3.peerManager.addPeerNode(sm1.peerManager.peerNode)
         _     <- T.sleep(1.second)
 
-        _     <- sm2.fullSync.stream.unNone.take(1).compile.drain
-        _     <- sm3.fullSync.stream.unNone.take(1).compile.drain
+        _     <- sm2.fullSync.stream.take(N).compile.drain
+        _     <- sm3.fullSync.stream.take(N).compile.drain
         best1 <- sm1.history.getBestBlock
         best2 <- sm2.history.getBestBlock
         best3 <- sm3.history.getBestBlock
@@ -218,7 +218,7 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager" should {
     "start with FastSync then switch to FullSync" in {
-      val List(config1, config2, confgi3) = FullNodeConfig.fill(
+      val List(config1, config2, configs) = FullNodeConfig.fill(
         config.withSync(_.copy(fastEnabled = true, fastSyncOffset = 5)),
         3
       )
@@ -240,7 +240,7 @@ class SyncManagerSpec extends JbokSpec {
         _     <- sm3.peerManager.addPeerNode(sm2.peerManager.peerNode)
         _     <- T.sleep(1.second)
 
-        _     <- sm3.sync.unNone.take(1).compile.drain
+        _     <- sm3.sync.take(5).compile.drain
         best1 <- sm1.history.getBestBlock
         best3 <- sm3.history.getBestBlock
         _ = best3 shouldBe best1
