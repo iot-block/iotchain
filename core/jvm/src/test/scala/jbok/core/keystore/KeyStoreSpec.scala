@@ -96,6 +96,11 @@ class KeyStoreSpec extends JbokSpec {
       keyStore.importPrivateKey(key1, "oldpass").unsafeRunSync()
       keyStore.changePassphrase(addr1, "wrongpass", "newpass").attempt.unsafeRunSync() shouldBe Left(DecryptionFailed)
     }
+
+    "import private key with empty passphrase and unlock account" in {
+      keyStore.importPrivateKey(key1, "").unsafeRunSync()
+      keyStore.unlockAccount(addr1, "").attempt.unsafeRunSync().isRight shouldBe true
+    }
   }
 
   override protected def afterEach(): Unit =

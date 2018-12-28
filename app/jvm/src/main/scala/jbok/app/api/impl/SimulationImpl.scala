@@ -41,10 +41,10 @@ class SimulationImpl(
   val genesisConfigChainId: GenesisConfig   = GenesisConfig.generate(chainId, Map.empty)
   val txGraphGen: TxGraphGen                = new TxGraphGen(genesisConfigChainId, nAddr = 10)
   val genesisConfigWithAlloc: GenesisConfig = txGraphGen.genesisConfig
-  val blockTime: Int                        = 5
+  val blockTime: FiniteDuration             = 5.seconds
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val tconfig         = testReference.copy(logsdir = ".")
+    val tconfig         = testReference.copy(logsdir = ".").withMining(_.copy(period = blockTime))
     val fullNodeConfigs = FullNodeConfig.fill(tconfig, n)
     println(s"configs: ${fullNodeConfigs.head}")
 
@@ -140,7 +140,7 @@ class SimulationImpl(
 
   private def stxStream(nStx: Int): Stream[IO, Unit] =
     Stream
-      .awakeEvery[IO](5.seconds)
+      .awakeEvery[IO](blockTime)
       .evalMap[IO, Unit] { _ =>
         submitStxsToNetwork(nStx)
       }
