@@ -12,12 +12,13 @@ import jbok.network.rpc.RpcClient
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
+import scala.concurrent.duration._
 
 @JSExportTopLevel("SdkClient")
 @JSExportAll
 class SdkClient(client: RpcClient[IO]) {
   def jsonrpc(json: String, id: String = UUID.randomUUID().toString): js.Promise[String] =
-    client.jsonrpc(json, id).unsafeToFuture().toJSPromise
+    client.jsonrpc(json, id).timeout(10.seconds).unsafeToFuture().toJSPromise
 }
 
 @JSExportTopLevel("Client")
