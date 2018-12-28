@@ -33,7 +33,7 @@ case class AccountsView(state: AppState) {
     Constants(CustomInput("Address", "address", None, (addr: String) => InputValidator.isValidAddress(addr))), { data =>
       if (data.values.forall(_.isValid)) {
         val p = for {
-          sc <- SimuClient(state.config.value.uri.toString)
+          sc <- SimuClient(state.config.value.uri)
           address = Address(ByteVector.fromValidHex(data("Address").value))
           _ <- sc.simulation.getCoin(address, BigInt("100000000"))
         } yield ()

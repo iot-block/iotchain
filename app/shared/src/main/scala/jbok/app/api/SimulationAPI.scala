@@ -41,9 +41,4 @@ trait SimulationAPI {
   def submitStxsToNetwork(nStx: Int, t: String): IO[Unit]
 
   def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit]
-
-//  def openRandomStx: IO[Unit]
-//
-//  def closeRandomStx: IO[Unit]
-//  def stxStream(nStx: Int): Stream[IO, Unit]
 }
