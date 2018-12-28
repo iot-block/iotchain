@@ -13,12 +13,10 @@ case class SimuClient(uri: URI, simulation: SimulationAPI)
 
 object SimuClient {
   import jbok.network.rpc.RpcServer._
-  def apply(url: String): IO[SimuClient] = {
-    val uri: URI = new URI(url)
+  def apply(uri: URI): IO[SimuClient] =
     for {
       client <- WsClient[IO, String](uri)
       simulation = RpcClient(client).useAPI[SimulationAPI]
       _ <- client.start
     } yield SimuClient(uri, simulation)
-  }
 }

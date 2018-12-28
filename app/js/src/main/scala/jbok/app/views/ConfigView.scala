@@ -204,7 +204,7 @@ case class ConfigView(state: AppState) {
         if (addHostIsValid.value && addPortIsValid.value) {
           val rpcAddr = s"${addHost.value}:${addPort.value}"
           val p = for {
-            sc             <- SimuClient(state.config.value.uri.toString)
+            sc             <- SimuClient(state.config.value.uri)
             peerNodeUriOpt <- sc.simulation.addNode(addHost.value, addPort.value.toInt)
             tip <- if (peerNodeUriOpt.isEmpty) {
               IO.pure("connect failed.")

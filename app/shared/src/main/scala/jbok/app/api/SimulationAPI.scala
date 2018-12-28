@@ -38,12 +38,7 @@ trait SimulationAPI {
   def deleteNode(id: String): IO[Unit]
 
   // simulation txs
-  def submitStxsToNetwork(nStx: Int, t: String): IO[Unit]
+  def submitStxsToNetwork(nStx: Int): IO[Unit]
 
-  def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit]
-
-//  def openRandomStx: IO[Unit]
-//
-//  def closeRandomStx: IO[Unit]
-//  def stxStream(nStx: Int): Stream[IO, Unit]
+  def submitStxsToNode(nStx: Int, id: String): IO[Unit]
 }
