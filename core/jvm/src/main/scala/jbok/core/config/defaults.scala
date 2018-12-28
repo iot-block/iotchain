@@ -16,6 +16,8 @@ object defaults {
         "inmem",
         "-logLevel",
         "DEBUG",
+        "-rpc.host",
+        "0.0.0.0",
       ))
     .right
     .get
