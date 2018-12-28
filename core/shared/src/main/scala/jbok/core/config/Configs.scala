@@ -18,6 +18,7 @@ object Configs {
       datadir: String,
       identity: String,
       logLevel: String,
+      logsdir: String,
       genesisOrPath: Either[GenesisConfig, String],
       history: HistoryConfig,
       keystore: KeyStoreConfig,
@@ -32,8 +33,6 @@ object Configs {
       case Left(g)     => g
       case Right(path) => GenesisConfig.fromFile(path).unsafeRunSync()
     }
-
-    def logsDir: String = s"${datadir}/logs"
 
     def lockPath: String = s"${datadir}/LOCK"
 
@@ -72,13 +71,11 @@ object Configs {
         case Left(e)     => Left(e)
         case Right(path) => Right(s"${datadir}/genesis.conf")
       }).withKeyStore(_.copy(keystoreDir = s"${datadir}/keystore"))
-        .withHistory(_.copy(chainDataDir = s"${datadir}/chainData"))
         .withPeer(
           _.copy(
             port = port,
             nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()),
-            discoveryPort = port + 1,
-            peerDataDir = s"${datadir}/peerData"
+            discoveryPort = port + 1
           )
         )
         .withRpc(

@@ -19,6 +19,7 @@ object ConfigLoader {
       datadir       <- F.delay(config.getString("datadir"))
       identity      <- F.delay(config.getString("identity"))
       logLevel      <- F.delay(config.getString("logLevel"))
+      logsdir       <- F.delay(config.getString("logsdir"))
       genesisOrPath <- F.delay(ConfigLoader.loadOrThrow[Either[GenesisConfig, String]](config, "genesisOrPath"))
       history       <- F.delay(ConfigLoader.loadOrThrow[HistoryConfig](config, "history"))
       keystore      <- F.delay(ConfigLoader.loadOrThrow[KeyStoreConfig](config, "keystore"))
@@ -33,6 +34,7 @@ object ConfigLoader {
         datadir,
         identity,
         logLevel,
+        logsdir,
         genesisOrPath,
         history,
         keystore,
