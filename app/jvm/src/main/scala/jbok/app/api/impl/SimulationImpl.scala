@@ -11,11 +11,10 @@ import jbok.app.api.{NodeInfo, SimulationAPI, SimulationEvent}
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.defaults.genTestReference
-import jbok.core.config.{ConfigHelper, GenesisConfig}
+import jbok.core.config.defaults.testReference
+import jbok.core.config.GenesisConfig
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models.{Account, Address}
-import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable.{ListBuffer => MList}
@@ -44,51 +43,20 @@ class SimulationImpl(
   val blockTime: Int                        = 5
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val fullNodeConfigs = (0 until n).toList.map(i => {
-      val port = 20000 + 3 * i
-      val debugConfig = ConfigHelper
-        .parseConfig(
-          List(
-            "-history.chainDataDir",
-            "inmem",
-            "-peer.peerDataDir",
-            "inmem",
-            "-logLevel",
-            "DEBUG",
-            "-mining.period",
-            s"${blockTime}.seconds",
-            "-identity",
-            s"test-node-${i}",
-            "-peer.port",
-            s"${port}",
-            "-peer.discoveryPort",
-            s"${port + 1}",
-            "-rpc.enabled",
-            "true",
-            "-rpc.port",
-            s"${port + 2}",
-            "-rpc.host",
-            "0.0.0.0",
-          ))
-        .right
-        .get
-      genTestReference(debugConfig)
-    })
-    val signers             = (1 to n).toList.traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]()).unsafeRunSync()
-    val (configs, minersKP) = selectMiner(n, m, fullNodeConfigs, signers)
-    val genesisConfig       = Clique.generateGenesisConfig(genesisConfigWithAlloc, minersKP.map(Address(_)))
+    val fullNodeConfigs = FullNodeConfig.fill(testReference, n)
+    val miner           = fullNodeConfigs.head.withMining(_.copy(enabled = true))
+    val minerKP         = miner.mining.minerAddressOrKey.right.get
+    val genesisConfig   = Clique.generateGenesisConfig(genesisConfigWithAlloc, List(minerKP).map(Address(_)))
+    val configs         = miner :: fullNodeConfigs.tail
+    val finalConfigs    = configs.map(_.copy(genesisOrPath = Left(genesisConfig)))
 
     log.info(s"create $n node(s)")
 
     for {
-      newNodes <- configs.zipWithIndex.traverse[IO, FullNode[IO]] {
-        case (config, idx) =>
-          val fullNodeConfig = config.copy(genesisOrPath = Left(genesisConfig))
-          FullNode.forConfig(fullNodeConfig)
-      }
-      _ <- newNodes.tail.traverse[IO, Unit](_.peerManager.addPeerNode(newNodes.head.peerManager.peerNode))
-      _ <- newNodes.traverse(_.start)
-      _ = T.sleep(5.seconds)
+      newNodes <- finalConfigs.traverse[IO, FullNode[IO]](FullNode.forConfig)
+      _        <- newNodes.tail.traverse[IO, Unit](_.peerManager.addPeerNode(newNodes.head.peerManager.peerNode))
+      _        <- newNodes.traverse(_.start)
+      _        <- T.sleep(5.seconds)
       _ = log.info("node start, then client to connect")
       _ <- stxStream(10).compile.drain.start
       jbokClients <- newNodes.traverse[IO, JbokClient](x =>
@@ -147,21 +115,18 @@ class SimulationImpl(
       _ <- id2Node.update(_ - peerNodeUri)
     } yield ()
 
-  override def submitStxsToNetwork(nStx: Int, t: String): IO[Unit] =
+  override def submitStxsToNetwork(nStx: Int): IO[Unit] =
     for {
       nodeIdList <- id2NodeNetwork.get.map(_.keys.toList)
-      _      = log.info("in submitstx")
       nodeId = Random.shuffle(nodeIdList).take(1).head
-      _ <- submitStxsToNode(nStx, t, nodeId)
+      _ <- submitStxsToNode(nStx, nodeId)
     } yield ()
 
-  override def submitStxsToNode(nStx: Int, t: String, id: String): IO[Unit] =
+  override def submitStxsToNode(nStx: Int, id: String): IO[Unit] =
     for {
       jbokClientOpt <- id2NodeNetwork.get.map(_.get(id).map(_.jbokClient))
-      stxs = t match {
-        case "DoubleSpend" => txGraphGen.nextDoubleSpendTxs2(nStx)
-        case _             => txGraphGen.nextValidTxs(nStx)
-      }
+      _    = log.trace(s"submit ${10} txs in network")
+      stxs = txGraphGen.nextValidTxs(nStx)
       _ <- jbokClientOpt
         .map(jbokClient => stxs.traverse[IO, ByteVector](stx => jbokClient.public.sendRawTransaction(stx.asBytes)))
         .getOrElse(IO.unit)
@@ -170,35 +135,16 @@ class SimulationImpl(
   private def stxStream(nStx: Int): Stream[IO, Unit] =
     Stream
       .awakeEvery[IO](5.seconds)
-      .evalMap[IO, Unit](_ => submitStxsToNetwork(nStx, "valid"))
+      .evalMap[IO, Unit] { _ =>
+        submitStxsToNetwork(nStx)
+      }
       .handleErrorWith[IO, Unit] { err =>
         Stream.eval(IO.delay(log.error(err)))
       }
+      .onFinalize[IO](IO.delay(log.info("stx stream stop.")))
 
   private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
     NodeInfo(fullNode.peerManager.peerNode.uri.toString, fullNode.config.peer.host, fullNode.config.rpc.port)
-
-  private def selectMiner(
-      n: Int,
-      m: Int,
-      fullNodeConfigs: List[FullNodeConfig],
-      signers: List[KeyPair]
-  ): (List[FullNodeConfig], List[KeyPair]) =
-    if (m == 0) (fullNodeConfigs, List.empty)
-    else {
-      val gap                    = (n + m - 1) / m
-      val miners: MList[KeyPair] = MList.empty
-      val configs = fullNodeConfigs.zip(signers).zipWithIndex.map {
-        case ((config, signer), index) =>
-          if (index % gap == 0) {
-            miners += signer
-            config.withMining(_.copy(enabled = true, minerAddressOrKey = Right(signer)))
-          } else {
-            config.withMining(_.copy(enabled = false, minerAddressOrKey = Right(signer)))
-          }
-      }
-      (configs, miners.toList)
-    }
 }
 
 object SimulationImpl {

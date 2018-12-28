@@ -14,6 +14,7 @@ import scala.concurrent.duration._
 
 object Configs {
   case class FullNodeConfig(
+      rootdir: String,
       datadir: String,
       identity: String,
       logLevel: String,
@@ -44,11 +45,17 @@ object Configs {
     def withGenesisPath(path: String): FullNodeConfig =
       copy(genesisOrPath = Right(path))
 
+    def withHistory(f: HistoryConfig => HistoryConfig): FullNodeConfig =
+      copy(history = f(history))
+
     def withPeer(f: PeerConfig => PeerConfig): FullNodeConfig =
       copy(peer = f(peer))
 
     def withSync(f: SyncConfig => SyncConfig): FullNodeConfig =
       copy(sync = f(sync))
+
+    def withKeyStore(f: KeyStoreConfig => KeyStoreConfig): FullNodeConfig =
+      copy(keystore = f(keystore))
 
     def withTxPool(f: TxPoolConfig => TxPoolConfig): FullNodeConfig =
       copy(txPool = f(txPool))
@@ -59,18 +66,26 @@ object Configs {
     def withMining(f: MiningConfig => MiningConfig): FullNodeConfig =
       copy(mining = f(mining))
 
-    def withIdentityAndPort(identity: String, port: Int): FullNodeConfig =
-      copy(identity = identity)
+    def withIdentityAndPort(identity: String, port: Int): FullNodeConfig = {
+      val datadir = s"${rootdir}/${identity}"
+      copy(identity = identity, datadir = datadir, genesisOrPath = genesisOrPath match {
+        case Left(e) => Left(e)
+        case Right(path) => Right(s"${datadir}/genesis.conf")
+      })
+        .withKeyStore(_.copy(keystoreDir = s"${datadir}/keystore"))
+        .withHistory(_.copy(chainDataDir = s"${datadir}/chainData"))
         .withPeer(
           _.copy(
             port = port,
             nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()),
-            discoveryPort = port + 1
+            discoveryPort = port + 1,
+            peerDataDir = s"${datadir}/peerData"
           )
         )
         .withRpc(
           _.copy(enabled = true, port = port + 2)
         )
+    }
   }
 
   object FullNodeConfig {
