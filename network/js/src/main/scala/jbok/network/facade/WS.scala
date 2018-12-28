@@ -4,7 +4,7 @@ import scala.scalajs.js
 import scala.scalajs.js.annotation.JSImport
 
 @js.native
-@JSImport("ws", JSImport.Default)
+@JSImport("isomorphic-ws", JSImport.Default)
 class WebSocket(url: String) extends js.Object {
   def on(str: String, fun: js.Function1[js.Object, _]): Unit = js.native
 

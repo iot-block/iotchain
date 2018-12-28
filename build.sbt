@@ -249,8 +249,9 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
   .jsSettings(commonJsSettings)
   .jsSettings(
     npmDependencies in Compile ++= Seq(
-      "ws"    -> "6.1.2",
-      "axios" -> "0.18.0"
+      "ws"            -> "6.1.2",
+      "isomorphic-ws" -> "4.0.1",
+      "axios"         -> "0.18.0"
     ),
     jsEnv in Test := new org.scalajs.jsenv.nodejs.NodeJSEnv()
   )
