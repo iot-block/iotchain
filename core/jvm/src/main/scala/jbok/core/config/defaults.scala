@@ -21,7 +21,4 @@ object defaults {
     .get
 
   val testReference = ConfigLoader.loadFullNodeConfig[IO](ConfigHelper.overrideWith(testOverrides)).unsafeRunSync()
-
-  def genTestReference(config: Config): FullNodeConfig =
-    ConfigLoader.loadFullNodeConfig[IO](ConfigHelper.overrideWith(config)).unsafeRunSync()
 }

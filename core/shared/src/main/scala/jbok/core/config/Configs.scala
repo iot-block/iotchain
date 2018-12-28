@@ -69,10 +69,9 @@ object Configs {
     def withIdentityAndPort(identity: String, port: Int): FullNodeConfig = {
       val datadir = s"${rootdir}/${identity}"
       copy(identity = identity, datadir = datadir, genesisOrPath = genesisOrPath match {
-        case Left(e) => Left(e)
+        case Left(e)     => Left(e)
         case Right(path) => Right(s"${datadir}/genesis.conf")
-      })
-        .withKeyStore(_.copy(keystoreDir = s"${datadir}/keystore"))
+      }).withKeyStore(_.copy(keystoreDir = s"${datadir}/keystore"))
         .withHistory(_.copy(chainDataDir = s"${datadir}/chainData"))
         .withPeer(
           _.copy(
