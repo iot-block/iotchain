@@ -43,9 +43,9 @@ object MainApp extends StreamApp {
   def loadConfig(config: Config): IO[FullNodeConfig] =
     for {
       fullNodeConfig <- ConfigLoader.loadFullNodeConfig[IO](config)
-      _ <- IO(println(version))
-      _ <- IO(println(banner))
-      _ <- IO(println(ConfigHelper.printConfig(config).render))
+      _              <- IO(println(version))
+      _              <- IO(println(banner))
+      _              <- IO(println(ConfigHelper.printConfig(config).render))
     } yield fullNodeConfig
 
   override def run(args: List[String]): IO[ExitCode] =
@@ -99,15 +99,12 @@ object MainApp extends StreamApp {
         val peerCount  = 4
         val minerCount = 1
         for {
-          config    <- parseConfig(tail)
-          _         <- loadConfig(config)
           impl      <- SimulationImpl()
           rpcServer <- RpcServer().map(_.mountAPI[SimulationAPI](impl))
           metrics   <- Metrics.default[IO]
           server = Server.websocket(bind, rpcServer.pipe, metrics)
           _ <- impl.createNodesWithMiner(peerCount, minerCount)
           _ = timer.sleep(5000.millis)
-          _  <- impl.submitStxsToNetwork(10, "valid")
           ec <- runStream(server.stream)
         } yield ec
 

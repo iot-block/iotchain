@@ -10,8 +10,6 @@ import jbok.app.FullNode
 import jbok.app.api.{NodeInfo, SimulationAPI, SimulationEvent}
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.implicits._
-import jbok.common.execution._
-import jbok.common.log.{Level, ScribeLog, ScribeLogPlatform}
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.defaults.genTestReference
 import jbok.core.config.{ConfigHelper, GenesisConfig}
@@ -21,7 +19,6 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable.{ListBuffer => MList}
-import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -70,14 +67,14 @@ class SimulationImpl(
             "true",
             "-rpc.port",
             s"${port + 2}",
+            "-rpc.host",
+            "0.0.0.0",
           ))
         .right
         .get
       genTestReference(debugConfig)
     })
-    val signers = (1 to n).toList
-      .traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]())
-      .unsafeRunSync()
+    val signers             = (1 to n).toList.traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]()).unsafeRunSync()
     val (configs, minersKP) = selectMiner(n, m, fullNodeConfigs, signers)
     val genesisConfig       = Clique.generateGenesisConfig(genesisConfigWithAlloc, minersKP.map(Address(_)))
 
