@@ -9,6 +9,6 @@ trait MetricsPlatform {
   def _default[F[_]: Sync]: F[Metrics[F]] =
     for {
       registry <- new CollectorRegistry().pure[F]
-      metrics  <- Prometheus(registry)
+      metrics  = Prometheus(registry)
     } yield metrics
 }

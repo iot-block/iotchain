@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 class PrometheusSpec extends JbokSpec {
   val registry: CollectorRegistry = new CollectorRegistry()
 
-  implicit val metrics: Metrics[IO]   = Prometheus[IO](registry).unsafeRunSync()
+  implicit val metrics: Metrics[IO]   = Prometheus[IO](registry)
 
   "Prometheus" should {
     "time" in {
