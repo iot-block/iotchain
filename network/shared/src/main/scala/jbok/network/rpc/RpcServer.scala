@@ -32,7 +32,8 @@ class RpcServer(
             f(req).attempt.map {
               case Left(e) =>
                 log.debug(s"internal error: ${e.toString}")
-                JsonRpcErrors.internalError.asJson.noSpaces
+                val id = RequestId[String].id(req)
+                JsonRpcErrorResponse(id, JsonRpcErrors.internalError).asJson.noSpaces
 
               case Right(resp) =>
                 log.debug(s"response: ${resp}")

@@ -21,7 +21,7 @@ import scodec.Codec
 import scodec.bits.BitVector
 import _root_.io.prometheus.client.CollectorRegistry
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 
 final case class Server[F[_]](bind: InetSocketAddress, stream: Stream[F, Unit])
 
@@ -102,7 +102,7 @@ object Server {
         .withHttpApp(httpApp)
         .withWebSockets(true)
         .withoutBanner
-        .withIdleTimeout(Duration.Inf)
+        .withIdleTimeout(60.seconds)
 
       builder.serve.drain
         .onFinalize(F.delay(log.info(s"stop listening to ${bind}")))

@@ -43,7 +43,8 @@ object RpcServerMacro {
             (json: String) => {
               decode[JsonRpcRequest[$parameterType]](json) match {
                 case Left(e) =>
-                  IO.pure(JsonRpcErrors.invalidRequest.asJson.noSpaces)
+                  val id = parse(json).flatMap(_.hcursor.downField("id").as[String]).toOption.getOrElse("")
+                  IO.pure(JsonRpcErrorResponse(id, JsonRpcErrors.invalidRequest).asJson.noSpaces)
                 case Right(req) =>
                   $run.attempt.map {
                     case Left(e) => JsonRpcErrorResponse(req.id, JsonRpcErrors.internalError).asJson.noSpaces
