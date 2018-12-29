@@ -193,7 +193,11 @@ lazy val appJS = app.js
 lazy val appJVM = app.jvm.settings(
   scalaJSProjects := Seq(appJS, sdk.js),
   pipelineStages in Assets := Seq(scalaJSPipeline),
-  isDevMode in scalaJSPipeline := true
+  isDevMode in scalaJSPipeline := true,
+  javaOptions in Universal ++= Seq(
+    "-J-Xms2g",
+    "-J-Xmx4g"
+  )
 )
 
 lazy val sdk = crossProject(JSPlatform, JVMPlatform)
