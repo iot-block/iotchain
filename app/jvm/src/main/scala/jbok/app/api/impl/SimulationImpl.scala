@@ -44,8 +44,13 @@ class SimulationImpl(
   val blockTime: FiniteDuration             = 5.seconds
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val tconfig         = testReference.copy(logsdir = ".").withMining(_.copy(period = blockTime))
-    val fullNodeConfigs = FullNodeConfig.fill(tconfig, n)
+    val tconfig = testReference.copy(logsdir = ".").withMining(_.copy(period = blockTime))
+    val fullNodeConfigs = FullNodeConfig
+      .fill(tconfig, n)
+      .map(
+        x =>
+          x.withHistory(_.copy(chainDataDir = s"${x.datadir}/chainData"))
+            .withPeer(_.copy(peerDataDir = s"${x.datadir}/peerData")))
     println(s"configs: ${fullNodeConfigs.head}")
 
     val signers             = (1 to n).toList.traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]()).unsafeRunSync()
@@ -64,7 +69,6 @@ class SimulationImpl(
       _ <- newNodes.traverse(_.start)
       _ <- T.sleep(5.seconds)
       _ = log.info("node start, then client to connect")
-      _ <- stxStream(10).compile.drain.start
       jbokClients <- newNodes.traverse[IO, JbokClient](x =>
         jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
       _ <- id2NodeNetwork.update(
@@ -77,6 +81,7 @@ class SimulationImpl(
                                                                  jbokClient)
           }
           .toMap)
+      _ <- stxStream(10).compile.drain.start
     } yield newNodes.map(x => infoFromNode(x))
   }
 
