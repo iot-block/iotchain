@@ -44,8 +44,13 @@ class SimulationImpl(
   val blockTime: FiniteDuration             = 5.seconds
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val tconfig         = testReference.copy(logsdir = ".").withMining(_.copy(period = blockTime))
-    val fullNodeConfigs = FullNodeConfig.fill(tconfig, n)
+    val tconfig = testReference.copy(logsdir = ".").withMining(_.copy(period = blockTime))
+    val fullNodeConfigs = FullNodeConfig
+      .fill(tconfig, n)
+      .map(
+        x =>
+          x.withHistory(_.copy(chainDataDir = s"${x.datadir}/chainData"))
+            .withPeer(_.copy(peerDataDir = s"${x.datadir}/peerData")))
     println(s"configs: ${fullNodeConfigs.head}")
 
     val signers             = (1 to n).toList.traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]()).unsafeRunSync()
@@ -64,9 +69,11 @@ class SimulationImpl(
       _ <- newNodes.traverse(_.start)
       _ <- T.sleep(5.seconds)
       _ = log.info("node start, then client to connect")
-      _ <- stxStream(10).compile.drain.start
       jbokClients <- newNodes.traverse[IO, JbokClient](x =>
         jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
+      miner = jbokClients.head
+      _ <- txGraphGen.keyPairs.toList.traverse[IO, Address](kp =>
+        miner.personal.importRawKey(kp.keyPair.secret.bytes, ""))
       _ <- id2NodeNetwork.update(
         _ ++ newNodes
           .zip(jbokClients)
@@ -77,6 +84,7 @@ class SimulationImpl(
                                                                  jbokClient)
           }
           .toMap)
+      _ <- stxStream(2).compile.drain.start
     } yield newNodes.map(x => infoFromNode(x))
   }
 
@@ -131,7 +139,7 @@ class SimulationImpl(
   override def submitStxsToNode(nStx: Int, id: String): IO[Unit] =
     for {
       jbokClientOpt <- id2NodeNetwork.get.map(_.get(id).map(_.jbokClient))
-      _    = log.trace(s"submit ${10} txs in network")
+      _    = log.trace(s"submit ${nStx} txs in network")
       stxs = txGraphGen.nextValidTxs(nStx)
       _ <- jbokClientOpt
         .map(jbokClient => stxs.traverse[IO, ByteVector](stx => jbokClient.public.sendRawTransaction(stx.asBytes)))
