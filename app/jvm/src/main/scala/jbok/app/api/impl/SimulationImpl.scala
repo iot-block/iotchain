@@ -71,6 +71,9 @@ class SimulationImpl(
       _ = log.info("node start, then client to connect")
       jbokClients <- newNodes.traverse[IO, JbokClient](x =>
         jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
+      miner = jbokClients.head
+      _ <- txGraphGen.keyPairs.toList.traverse[IO, Address](kp =>
+        miner.personal.importRawKey(kp.keyPair.secret.bytes, ""))
       _ <- id2NodeNetwork.update(
         _ ++ newNodes
           .zip(jbokClients)
@@ -81,7 +84,7 @@ class SimulationImpl(
                                                                  jbokClient)
           }
           .toMap)
-      _ <- stxStream(10).compile.drain.start
+      _ <- stxStream(2).compile.drain.start
     } yield newNodes.map(x => infoFromNode(x))
   }
 
@@ -136,7 +139,7 @@ class SimulationImpl(
   override def submitStxsToNode(nStx: Int, id: String): IO[Unit] =
     for {
       jbokClientOpt <- id2NodeNetwork.get.map(_.get(id).map(_.jbokClient))
-      _    = log.trace(s"submit ${10} txs in network")
+      _    = log.trace(s"submit ${nStx} txs in network")
       stxs = txGraphGen.nextValidTxs(nStx)
       _ <- jbokClientOpt
         .map(jbokClient => stxs.traverse[IO, ByteVector](stx => jbokClient.public.sendRawTransaction(stx.asBytes)))
