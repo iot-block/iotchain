@@ -34,25 +34,42 @@ case class CallTx(
 trait PublicAPI[F[_]] {
   def bestBlockNumber: F[BigInt]
 
+  //tx count
+  def getTransactionCount(address: Address, blockParam: BlockParam): F[BigInt]
+
   def getBlockTransactionCountByHash(blockHash: ByteVector): F[Option[Int]]
 
+  def getBlockTransactionCountByNumber(blockParam: BlockParam): F[Int]
+
+  //block
   def getBlockByHash(blockHash: ByteVector): F[Option[Block]]
 
   def getBlockByNumber(blockNumber: BigInt): F[Option[Block]]
 
+  //tx
   def getTransactionByHash(txHash: ByteVector): F[Option[SignedTransaction]]
 
   def getTransactionReceipt(txHash: ByteVector): F[Option[Receipt]]
 
   def getTransactionByBlockHashAndIndexRequest(blockHash: ByteVector, txIndex: Int): F[Option[SignedTransaction]]
 
+  def getTransactionByBlockNumberAndIndexRequest(blockParam: BlockParam, txIndex: Int): F[Option[SignedTransaction]]
+
+  //ommer
   def getOmmerByBlockHashAndIndex(blockHash: ByteVector, ommerIndex: Int): F[Option[BlockHeader]]
 
   def getOmmerByBlockNumberAndIndex(blockParam: BlockParam, ommerIndex: Int): F[Option[BlockHeader]]
 
+  def getOmmerCountByBlockNumber(blockParam: BlockParam): F[Int]
+
+  def getOmmerCountByBlockHash(blockHash: ByteVector): F[Int]
+
   def getGasPrice: F[BigInt]
 
   def isMining: F[Boolean]
+
+  //send
+  def sendSignedTransaction(stx: SignedTransaction): F[ByteVector]
 
   def sendRawTransaction(data: ByteVector): F[ByteVector]
 
@@ -60,15 +77,8 @@ trait PublicAPI[F[_]] {
 
   def estimateGas(callTx: CallTx, blockParam: BlockParam): F[BigInt]
 
+  // acount
   def getCode(address: Address, blockParam: BlockParam): F[ByteVector]
-
-  def getOmmerCountByBlockNumber(blockParam: BlockParam): F[Int]
-
-  def getOmmerCountByBlockHash(blockHash: ByteVector): F[Int]
-
-  def getBlockTransactionCountByNumber(blockParam: BlockParam): F[Int]
-
-  def getTransactionByBlockNumberAndIndexRequest(blockParam: BlockParam, txIndex: Int): F[Option[SignedTransaction]]
 
   def getAccount(address: Address, blockParam: BlockParam): F[Account]
 
@@ -76,7 +86,5 @@ trait PublicAPI[F[_]] {
 
   def getStorageAt(address: Address, position: BigInt, blockParam: BlockParam): F[ByteVector]
 
-  def getTransactionCount(address: Address, blockParam: BlockParam): F[BigInt]
-
-  def getAccountTransactions(address: Address, fromBlock: BigInt, toBlock: BigInt): F[List[SignedTransaction]]
+  def getAccountTransactions(address: Address, fromBlock: BlockParam, toBlock: BlockParam): F[List[SignedTransaction]]
 }

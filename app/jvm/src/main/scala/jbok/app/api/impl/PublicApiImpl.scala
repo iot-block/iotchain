@@ -102,6 +102,9 @@ final class PublicApiImpl(
 
   override def isMining: IO[Boolean] = miner.haltWhenTrue.get.map(!_)
 
+  override def sendSignedTransaction(stx: SignedTransaction): IO[ByteVector] =
+    txPool.addOrUpdateTransaction(stx) *> IO.pure(stx.hash)
+
   override def sendRawTransaction(data: ByteVector): IO[ByteVector] =
     for {
       stx <- IO(data.asOpt[SignedTransaction].get)
@@ -171,14 +174,26 @@ final class PublicApiImpl(
     } yield account.nonce.toBigInt
 
   override def getAccountTransactions(address: Address,
-                                      fromBlock: BigInt,
-                                      toBlock: BigInt): IO[List[SignedTransaction]] = {
+                                      fromBlock: BlockParam,
+                                      toBlock: BlockParam): IO[List[SignedTransaction]] = {
     def collectTxs: PartialFunction[SignedTransaction, SignedTransaction] = {
       case stx if stx.senderAddress.nonEmpty && stx.senderAddress.get == address => stx
       case stx if stx.receivingAddress == address                                => stx
     }
+
+    val bestNumber = history.getBestBlockNumber.unsafeRunSync()
+
+    def resolveNumber(param: BlockParam): BigInt = param match {
+      case BlockParam.Earliest      => 0
+      case BlockParam.Latest        => bestNumber
+      case BlockParam.WithNumber(n) => n
+    }
+
+    val sn = resolveNumber(fromBlock)
+    val en = resolveNumber(toBlock)
+
     for {
-      blocks <- (fromBlock to toBlock).toList.filter(_ >= BigInt(0)).traverse(history.getBlockByNumber)
+      blocks <- (sn to en).toList.filter(_ >= BigInt(0)).traverse(history.getBlockByNumber)
       stxsFromBlock = blocks.collect {
         case Some(block) => block.body.transactionList.collect(collectTxs)
       }.flatten
@@ -194,6 +209,7 @@ final class PublicApiImpl(
     for {
       stx   <- prepareTransaction(callTx, blockParam)
       block <- resolveBlock(blockParam)
+      _ = println(block)
     } yield (stx, block.get)
 
   private[jbok] def prepareTransaction(callTx: CallTx, blockParam: BlockParam): IO[SignedTransaction] =
@@ -206,7 +222,7 @@ final class PublicApiImpl(
     if (callTx.gas.isDefined) {
       callTx.gas.get.pure[IO]
     } else {
-      resolveBlock(BlockParam.Latest).map(_.map(_.header.gasLimit).getOrElse(BigInt(0)))
+      resolveBlock(blockParam).map(_.map(_.header.gasLimit).getOrElse(BigInt(0)))
     }
 
   private[jbok] def resolveAccount(address: Address, blockParam: BlockParam): IO[Account] =
@@ -223,7 +239,8 @@ final class PublicApiImpl(
 
   private[jbok] def resolveBlock(blockParam: BlockParam): IO[Option[Block]] = {
     def getBlock(number: BigInt): IO[Option[Block]] =
-      number.some.filter(_ >= BigInt(0)).traverse[IO, Block](n => history.getBlockByNumber(n).map(_.get))
+      if (number < 0) IO.pure(None)
+      else history.getBlockByNumber(number)
 
     blockParam match {
       case BlockParam.WithNumber(blockNumber) => getBlock(blockNumber)

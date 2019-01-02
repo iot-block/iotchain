@@ -10,7 +10,10 @@ final case class Receipt(
     postTransactionStateHash: ByteVector,
     cumulativeGasUsed: BigInt,
     logsBloomFilter: ByteVector,
-    logs: List[TxLogEntry]
+    logs: List[TxLogEntry],
+    txHash: ByteVector,
+    contractAddress: Option[Address],
+    gasUsed: BigInt
 )
 
 object Receipt {
