@@ -9,7 +9,7 @@ import jbok.network.rpc.RpcClient
 import jbok.common.execution._
 import jbok.codec.rlp.implicits._
 
-case class SimuClient(uri: URI, simulation: SimulationAPI)
+final case class SimuClient(uri: URI, simulation: SimulationAPI)
 
 object SimuClient {
   import jbok.network.rpc.RpcServer._

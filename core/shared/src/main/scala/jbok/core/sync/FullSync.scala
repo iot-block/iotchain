@@ -21,7 +21,7 @@ import scala.concurrent.duration._
   * [[FullSync]] should download the block headers, the block bodies
   * then import them into the local chain (validate and execute)
   */
-case class FullSync[F[_]](
+final case class FullSync[F[_]](
     config: SyncConfig,
     executor: BlockExecutor[F],
     syncStatus: Ref[F, SyncStatus]
@@ -107,7 +107,11 @@ case class FullSync[F[_]](
 
   private def handleBetterBranch(peer: Peer[F], betterBranch: List[BlockHeader]): F[List[Block]] = {
     val hashes = betterBranch.take(config.maxBlockBodiesPerRequest).map(_.hash)
-    log.debug(s"request BlockBody [${betterBranch.head.number}, ${betterBranch.head.number + hashes.length})")
+    betterBranch match {
+      case head :: tail =>
+        log.debug(s"request BlockBody [${head.number}, ${head.number + hashes.length})")
+      case Nil => ()
+    }
     for {
       start <- T.clock.monotonic(MILLISECONDS)
       imported <- peer.conn.request(GetBlockBodies(hashes)).timeout(config.requestTimeout).attempt.flatMap {

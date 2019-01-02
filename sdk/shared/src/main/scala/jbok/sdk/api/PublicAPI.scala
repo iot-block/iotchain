@@ -13,16 +13,16 @@ sealed trait BlockParam
 object BlockParam {
   @JSExportTopLevel("BlockParam.WithNumber")
   @JSExportAll
-  case class WithNumber(n: BigInt) extends BlockParam
+  final case class WithNumber(n: BigInt) extends BlockParam
   @JSExportTopLevel("BlockParam.Latest")
-  case object Latest extends BlockParam
+  final case object Latest extends BlockParam
   @JSExportTopLevel("BlockParam.Earliest")
-  case object Earliest extends BlockParam
+  final case object Earliest extends BlockParam
 }
 
 @JSExportAll
 @JsonCodec
-case class CallTx(
+final case class CallTx(
     from: Option[Address],
     to: Option[Address],
     gas: Option[BigInt],

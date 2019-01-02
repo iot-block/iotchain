@@ -12,7 +12,7 @@ import jbok.common.execution._
 class CallOpcodesSpecByzantium extends JbokSpec {
 
   val config     = EvmConfig.ByzantiumConfigBuilder(None)
-  val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+  val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
 
   val fxt = new CallOpFixture(config, startState)

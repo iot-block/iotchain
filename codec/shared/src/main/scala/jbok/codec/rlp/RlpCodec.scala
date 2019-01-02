@@ -54,6 +54,7 @@ final case class RlpCodec[A](prefixType: PrefixType, valueCodec: Codec[A]) exten
   }
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
 object RlpCodec {
   val itemOffset = 0x80
 
@@ -128,8 +129,14 @@ object RlpCodec {
         Attempt.successful(DecodeResult(ctx.rawConstruct(fields.reverse), remainder))
       }
 
-      override def sizeBound: SizeBound =
-        ctx.parameters.foldLeft(ctx.parameters.head.typeclass.sizeBound)((acc, cur) => acc + cur.typeclass.sizeBound)
+      override def sizeBound: SizeBound = {
+        ctx.parameters match {
+          case head :: tail =>
+            ctx.parameters.foldLeft(head.typeclass.sizeBound)((acc, cur) => acc + cur.typeclass.sizeBound)
+          case Nil =>
+              SizeBound.unknown
+        }
+      }
 
       override def toString: String =
         s"${ctx.typeName.short}(${ctx.parameters.map(p => s"${p.label}").mkString(",")})"

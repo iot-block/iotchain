@@ -8,7 +8,7 @@ import jbok.app.views.Nav.Tab
 import jbok.core.models.{Account, Address, SignedTransaction}
 import org.scalajs.dom._
 
-case class AccountView(state: AppState) {
+final case class AccountView(state: AppState) {
   val address: Var[Address] = Var(Address(0))
   val account: Var[Account] = Var(Account())
 

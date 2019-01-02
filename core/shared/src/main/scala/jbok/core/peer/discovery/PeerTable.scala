@@ -11,7 +11,7 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration._
 import scala.util.Random
 
-case class PeerTable[F[_]](
+final case class PeerTable[F[_]](
     selfNode: PeerNode,
     store: PeerStore[F],
     bootstrapNodes: Vector[PeerNode],
@@ -122,7 +122,7 @@ object PeerTable {
   val revalidateInterval  = 10.seconds
 
   /** a [[Bucket]] is just a list of [[PeerNode]]s and a list of backup [[PeerNode]]s */
-  case class Bucket(entries: Vector[PeerNode], replacements: Vector[PeerNode]) {
+  final case class Bucket(entries: Vector[PeerNode], replacements: Vector[PeerNode]) {
     def bump(n: PeerNode): Bucket =
       if (entries.contains(n)) {
         this.copy(entries = Vector(n) ++ entries.filterNot(_.id == n.id))
@@ -157,15 +157,16 @@ object PeerTable {
       * with someone else or became active.
       */
     def replace(last: PeerNode): Bucket =
-      if (entries.isEmpty || entries.last.id != last.id) {
-        this
-      } else {
-        if (replacements.isEmpty) {
-          deleteEntry(last)
-        } else {
-          val r = Random.shuffle(replacements).head
-          delReplacement(r).copy(entries = entries.updated(entries.length - 1, r))
-        }
+      entries.lastOption match {
+        case None                       => this
+        case Some(l) if l.id != last.id => this
+        case _ =>
+          replacements match {
+            case head +: tail =>
+              val Vector(r) = Random.shuffle(replacements)
+              delReplacement(r).copy(entries = entries.updated(entries.length - 1, r))
+            case _ => deleteEntry(last)
+          }
       }
 
     override def toString: String =
@@ -185,7 +186,7 @@ object PeerTable {
   def ordByTargetDist(target: ByteVector): Ordering[ByteVector] =
     Ordering.by((v: ByteVector) => v.xor(target).toIterable)
 
-  case class NodesByDistance(entries: Vector[PeerNode], target: ByteVector) {
+  final case class NodesByDistance(entries: Vector[PeerNode], target: ByteVector) {
     val ord = ordByTargetDist(target)
     def pushed(node: PeerNode, maxSize: Int = bucketSize): NodesByDistance = {
       val updated = entries.indexWhere(x => ord.compare(node.id, x.id) <= 0) match {
@@ -203,6 +204,6 @@ object PeerTable {
       bootstrapNodes: Vector[PeerNode]
   )(implicit T: Timer[F]): F[PeerTable[F]] =
     for {
-      buckets  <- Ref.of[F, Vector[Bucket]](Vector.fill(nBuckets)(Bucket.empty))
+      buckets <- Ref.of[F, Vector[Bucket]](Vector.fill(nBuckets)(Bucket.empty))
     } yield PeerTable[F](selfNode, store, bootstrapNodes, buckets)
 }

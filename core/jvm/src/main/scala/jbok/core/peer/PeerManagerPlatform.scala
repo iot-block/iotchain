@@ -20,7 +20,7 @@ object PeerManagerPlatform {
 
   def loadNodeKey[F[_]: Sync](path: String): F[KeyPair] =
     for {
-      secret <- Sync[F].delay(File(path).lines(DefaultCharset).head).map(str => KeyPair.Secret(str))
+      secret <- Sync[F].delay(File(path).lines(DefaultCharset).headOption.getOrElse("")).map(str => KeyPair.Secret(str))
       pubkey <- Signature[ECDSA].generatePublicKey[F](secret)
     } yield KeyPair(pubkey, secret)
 

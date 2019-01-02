@@ -9,18 +9,13 @@ import shapeless._
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.language.experimental.macros
 
+@SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
 object implicits {
   final def deriveDecoder[A]: Decoder[A] =
     macro DerivationMacros.materializeDecoder[A]
 
   final def deriveEncoder[A]: ObjectEncoder[A] =
     macro DerivationMacros.materializeEncoder[A]
-
-  final def deriveDecoder[A](nameTransformation: String => String): Decoder[A] =
-    macro DerivationMacros.materializeDecoderWithNameTransformation[A]
-
-  final def deriveEncoder[A](nameTransformation: String => String): ObjectEncoder[A] =
-    macro DerivationMacros.materializeEncoderWithNameTransformation[A]
 
   implicit val bytesDecoder: Decoder[ByteVector] = Decoder[String].emap(ByteVector.fromHexDescriptive(_))
 

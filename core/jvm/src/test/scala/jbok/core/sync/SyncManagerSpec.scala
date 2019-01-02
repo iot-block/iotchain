@@ -6,8 +6,6 @@ import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.common.testkit._
-import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.defaults.reference
 import jbok.core.ledger.TypedBlock.SyncBlocks
 import jbok.core.messages._
 import jbok.core.mining.BlockMiner
@@ -23,7 +21,7 @@ import scala.concurrent.duration._
 class SyncManagerSpec extends JbokSpec {
   implicit val config = testConfig
 
-  val List(config1, config2, config3) = FullNodeConfig.fill(config, 3)
+  val List(config1, config2, config3) = fillFullNodeConfigs(3)
 
   "SyncManager Request Service" should {
     "return receipts by block hashes" in {
@@ -126,9 +124,9 @@ class SyncManagerSpec extends JbokSpec {
       val sm1   = random[SyncManager[IO]](genSyncManager()(config1))
       val sm2   = random[SyncManager[IO]](genSyncManager()(config2))
       val sm3   = random[SyncManager[IO]](genSyncManager()(config3))
-      val miner = BlockMiner[IO](reference.mining, sm1).unsafeRunSync()
+      val miner = BlockMiner[IO](testConfig.mining, sm1).unsafeRunSync()
 
-      val N = 10
+      val N      = 10
       val blocks = miner.stream.take(N).compile.toList.unsafeRunSync()
 
       val p = for {
@@ -158,8 +156,8 @@ class SyncManagerSpec extends JbokSpec {
   "SyncManager FastSync" should {
 
     "fast sync to median state if best peer number - offset >= current best number" in {
-      val List(config1, config2, config3) =
-        FullNodeConfig.fill(config.withSync(_.copy(fastEnabled = true, fastSyncOffset = 0)), 3)
+      val List(config1, config2, config3) = fillFullNodeConfigs(3)
+        .map(_.withSync(_.copy(fastEnabled = true, fastSyncOffset = 0)))
       val sm1 = random[SyncManager[IO]](genSyncManager()(config1))
       val sm2 = random[SyncManager[IO]](genSyncManager()(config2))
       val sm3 = random[SyncManager[IO]](genSyncManager()(config3))
@@ -187,10 +185,10 @@ class SyncManagerSpec extends JbokSpec {
 
     "skip fast sync if best peer number - offset < current best number" in {
       val List(config1, config2, config3) =
-        FullNodeConfig.fill(config.withSync(_.copy(fastEnabled = true)), 3)
-      val sm1  = random[SyncManager[IO]](genSyncManager()(config1))
-      val sm2  = random[SyncManager[IO]](genSyncManager()(config2))
-      val sm3  = random[SyncManager[IO]](genSyncManager()(config3))
+        fillFullNodeConfigs(3).map(_.withSync(_.copy(fastEnabled = true)))
+      val sm1 = random[SyncManager[IO]](genSyncManager()(config1))
+      val sm2 = random[SyncManager[IO]](genSyncManager()(config2))
+      val sm3 = random[SyncManager[IO]](genSyncManager()(config3))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))
@@ -218,13 +216,11 @@ class SyncManagerSpec extends JbokSpec {
 
   "SyncManager" should {
     "start with FastSync then switch to FullSync" in {
-      val List(config1, config2, configs) = FullNodeConfig.fill(
-        config.withSync(_.copy(fastEnabled = true, fastSyncOffset = 5)),
-        3
-      )
-      val sm1     = random[SyncManager[IO]](genSyncManager()(config1))
-      val sm2     = random[SyncManager[IO]](genSyncManager()(config2))
-      val sm3     = random[SyncManager[IO]](genSyncManager()(config3))
+      val List(config1, config2, config3) =
+        fillFullNodeConfigs(3).map(_.withSync(_.copy(fastEnabled = true, fastSyncOffset = 5)))
+      val sm1 = random[SyncManager[IO]](genSyncManager()(config1))
+      val sm2 = random[SyncManager[IO]](genSyncManager()(config2))
+      val sm3 = random[SyncManager[IO]](genSyncManager()(config3))
 
       val N      = 10
       val blocks = random[List[Block]](genBlocks(N, N))

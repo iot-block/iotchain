@@ -25,15 +25,15 @@ final class LevelDB[F[_]](
   def close: F[Unit] =
     F.delay(db.close())
 
-  override protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]] = M.time("leveldb_get") {
+  override protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]] = M.timeF("leveldb_get") {
     F.delay(db.get(key.toArray, readOptions)).map(ByteVector.apply).attemptT.toOption.value
   }
 
-  override protected[jbok] def putRaw(key: ByteVector, newVal: ByteVector): F[Unit] = M.time("leveldb_put") {
+  override protected[jbok] def putRaw(key: ByteVector, newVal: ByteVector): F[Unit] = M.timeF("leveldb_put") {
     F.delay(db.put(key.toArray, newVal.toArray, writeOptions))
   }
 
-  override protected[jbok] def delRaw(key: ByteVector): F[Unit] = M.time("leveldb_del") {
+  override protected[jbok] def delRaw(key: ByteVector): F[Unit] = M.timeF("leveldb_del") {
     F.delay(db.delete(key.toArray))
   }
 
@@ -63,7 +63,7 @@ final class LevelDB[F[_]](
     } yield xs.toMap
 
   override protected[jbok] def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit] =
-    M.time("leveldb_batch") {
+    M.timeF("leveldb_batch") {
       for {
         batch <- createWriteBatch
         _     <- F.delay(put.map { case (k, v) => batch.put(k.toArray, v.toArray) })

@@ -4,6 +4,7 @@ import cats.effect.IO
 import jbok.core.peer.{PeerManager, PeerNode}
 import jbok.sdk.api.AdminAPI
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final class AdminApiImpl(
     peerManager: PeerManager[IO]
 ) extends AdminAPI[IO] {

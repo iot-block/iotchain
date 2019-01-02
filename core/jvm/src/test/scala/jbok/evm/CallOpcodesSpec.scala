@@ -13,7 +13,7 @@ import jbok.common.execution._
 class CallOpcodesSpec extends JbokSpec {
 
   val config     = EvmConfig.FrontierConfigBuilder(None)
-  val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+  val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
   import config.feeSchedule._
 

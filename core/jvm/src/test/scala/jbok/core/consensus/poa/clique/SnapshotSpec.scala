@@ -15,20 +15,20 @@ import scodec.bits.ByteVector
 
 import scala.collection.mutable
 
-case class TestVote(
+final case class TestVote(
     signer: String,
     voted: String = "",
     auth: Boolean = false
 )
 
-case class Test(signers: List[String], votes: List[TestVote], results: List[String], epoch: BigInt = 30000)
+final case class Test(signers: List[String], votes: List[TestVote], results: List[String], epoch: BigInt = 30000)
 
 trait SnapshotFixture {
   def mkHistory(signers: List[Address]) = {
     val extra            = Clique.fillExtraData(signers)
     val config           = testGenesis.copy(extraData = extra)
     implicit val chainId = config.chainId
-    val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
     history.initGenesis(config).unsafeRunSync()
     history
   }
@@ -64,7 +64,7 @@ class SnapshotSpec extends JbokSpec {
     val extra            = Clique.fillExtraData(signers)
     val genesisConfig    = testGenesis.copy(extraData = extra)
     implicit val chainId = genesisConfig.chainId
-    val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
 
     history.initGenesis(genesisConfig).unsafeRunSync()
 

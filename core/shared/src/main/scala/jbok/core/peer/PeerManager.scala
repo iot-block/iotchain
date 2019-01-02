@@ -22,8 +22,8 @@ import scala.concurrent.duration._
 
 sealed abstract class PeerErr(message: String) extends Exception(message)
 object PeerErr {
-  case object HandshakeTimeout                         extends PeerErr("handshake timeout")
-  case class Incompatible(self: Status, other: Status) extends PeerErr(s"incompatible peer ${self} ${other}")
+  final case object HandshakeTimeout                         extends PeerErr("handshake timeout")
+  final case class Incompatible(self: Status, other: Status) extends PeerErr(s"incompatible peer ${self} ${other}")
 }
 
 abstract class PeerManager[F[_]](

@@ -10,7 +10,7 @@ import jbok.core.models.Block
 import jbok.core.pool.BlockPool._
 import scodec.bits.ByteVector
 
-case class BlockPoolConfig(
+final case class BlockPoolConfig(
     maxBlockAhead: Int = 10,
     maxBlockBehind: Int = 10
 )
@@ -209,8 +209,8 @@ final class BlockPool[F[_]](
 }
 
 object BlockPool {
-  case class PooledBlock(block: Block, totalDifficulty: Option[BigInt])
-  case class Leaf(hash: ByteVector, totalDifficulty: BigInt)
+  final case class PooledBlock(block: Block, totalDifficulty: Option[BigInt])
+  final case class Leaf(hash: ByteVector, totalDifficulty: BigInt)
 
   def apply[F[_]: ConcurrentEffect](history: History[F],
                                     blockPoolConfig: BlockPoolConfig = BlockPoolConfig()): F[BlockPool[F]] =

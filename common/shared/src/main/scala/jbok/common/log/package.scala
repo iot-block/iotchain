@@ -7,7 +7,4 @@ package object log {
 
   def setRootLevel[F[_]: Sync](level: Level): F[Unit] =
     ScribeLog.setLevel[F](level)
-
-  def setRootLevel[F[_]: Sync](levelName: String): F[Unit] =
-    ScribeLog.setLevel[F](Level.fromName(levelName))
 }

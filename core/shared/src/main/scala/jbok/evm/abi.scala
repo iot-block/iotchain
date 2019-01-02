@@ -11,21 +11,25 @@ import jbok.core.models.{Address, UInt256}
 import scodec.bits.ByteVector
 import jbok.crypto._
 
+@SuppressWarnings(
+  Array("org.wartremover.warts.EitherProjectionPartial",
+        "org.wartremover.warts.OptionPartial",
+        "org.wartremover.warts.TraversableOps"))
 object abi {
   sealed trait AbiError
-  case class InvalidType(reason: String)  extends AbiError
-  case class InvalidParam(reason: String) extends AbiError
-  case class InvalidValue(reason: String) extends AbiError
+  final case class InvalidType(reason: String)  extends AbiError
+  final case class InvalidParam(reason: String) extends AbiError
+  final case class InvalidValue(reason: String) extends AbiError
 
-  case class Param(
+  final case class Param(
       name: String, // the name of the parameter
       `type`: String, // the canonical type of the parameter (more below).
       components: Option[List[Param]],
   )
 
-  case class ParamAttribute(isDynamic: Boolean, size: Option[Int])
+  final case class ParamAttribute(isDynamic: Boolean, size: Option[Int])
 
-  case class ParamWithAttr(
+  final case class ParamWithAttr(
       name: String, // the name of the parameter
       `type`: String, // the canonical type of the parameter (more below).
       components: Option[List[ParamWithAttr]],
@@ -36,7 +40,7 @@ object abi {
 
   object Description {
 
-    case class Function(
+    final case class Function(
         name: Option[String], // the name of the function
         inputs: List[Param],
         outputs: Option[List[Param]],
@@ -71,7 +75,7 @@ object abi {
         outputs.map(decodeOutputs(_, result)).getOrElse(InvalidType("no outputs format.").asLeft)
     }
 
-    case class Event(
+    final case class Event(
         `type`: String,
         name: String, // the name of the event
         inputs: List[Param],
@@ -299,9 +303,6 @@ object abi {
           val b = if (bit.isEmpty) 256 else bit.toInt
           if (value.length == 32) {
             if (value.take(32 - b / 8).toArray.forall(_ == 0.toByte)) {
-//              if (output.name.nonEmpty)
-//                JsonObject((output.name, Json.fromBigInt(UInt256(value).toBigInt))).asJson.asRight
-//              else
               Json.fromBigInt(UInt256(value).toBigInt).asRight
             } else {
               InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
@@ -316,7 +317,6 @@ object abi {
         } else {
           if (value.length == 32) {
             if (value.take(32 - bit.toInt / 8).toArray.forall(b => b == 0.toByte || b == 255.toByte)) {
-//              JsonObject((output.name, Json.fromBigInt(UInt256(value).toBigInt))).asJson.asRight
               Json.fromBigInt(UInt256(value).toBigInt).asRight
             } else {
               InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
@@ -334,7 +334,6 @@ object abi {
         if (value.length == 32) {
           if (value.take(31).toArray.forall(_ == 0.toByte) && (value.last == 0.toByte || value.last == 1.toByte)) {
             val bool = if (value.last == 1.toByte) Json.True else Json.False
-//            JsonObject((output.name, bool)).asJson.asRight
             bool.asRight
           } else {
             InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
@@ -345,7 +344,6 @@ object abi {
       case "address" =>
         if (value.length == 32) {
           if (value.take(12).toArray.forall(b => b == 0.toByte)) {
-//            JsonObject((output.name, Json.fromString(Address(value).toString))).asJson.asRight
             Json.fromString(Address(value).toString).asRight
           } else {
             InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
@@ -356,7 +354,6 @@ object abi {
       case bytes(size) if size.toInt > 0 && size.toInt <= 32 =>
         if (value.length == 32) {
           if (value.takeRight(32 - size.toInt).toArray.forall(b => b == 0.toByte)) {
-//            JsonObject((output.name, Json.fromString(s"0x${value.take(size.toInt).toHex}"))).asJson.asRight
             Json.fromString(s"0x${value.take(size.toInt).toHex}").asRight
           } else {
             InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft
@@ -375,7 +372,6 @@ object abi {
               val codec = scodec.codecs.string(StandardCharsets.UTF_8)
               codec.decode(r.take(size).bits).require.value
             }
-//            JsonObject((output.name, Json.fromString(data))).asJson.asRight
             Json.fromString(data).asRight
           } else {
             InvalidValue(s"type: ${output.`type`}, value: ${value}").asLeft

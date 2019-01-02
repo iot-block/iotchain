@@ -8,7 +8,7 @@ import jbok.app.{AppState, BlockHistory}
 import jbok.app.components.Modal
 import org.scalajs.dom._
 
-case class BlocksView(state: AppState) {
+final case class BlocksView(state: AppState) {
   @binding.dom
   def render: Binding[Element] =
     <div>

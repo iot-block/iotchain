@@ -50,7 +50,7 @@ object ProgramContext {
   * @param config                   evm config
   * @param initialAddressesToDelete contains initial set of addresses to delete (from lower depth calls)
   */
-case class ProgramContext[F[_]: Sync](
+final case class ProgramContext[F[_]: Sync](
     env: ExecEnv,
     receivingAddr: Address,
     startGas: BigInt,

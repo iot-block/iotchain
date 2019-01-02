@@ -8,6 +8,7 @@ import jbok.app.ContractAddress
 import org.scalajs.dom.Element
 import org.scalajs.dom.Event
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 object StxsView {
   @binding.dom
   def render(stxs: List[SignedTransaction], hrefHandler: Event => Unit): Binding[Element] =

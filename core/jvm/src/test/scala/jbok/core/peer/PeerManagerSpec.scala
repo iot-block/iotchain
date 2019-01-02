@@ -21,12 +21,11 @@ class PeerManagerSpec extends JbokSpec {
     } yield fiber
 
   "PeerManager" should {
-    implicit val config                 = testConfig
-    val List(config1, config2, config3) = FullNodeConfig.fill(config, 3)
+    val List(config1, config2, config3) = fillFullNodeConfigs(3)
 
     "keep incoming connections <= maxOpen" in {
       val pm1 =
-        random[PeerManager[IO]](genPeerManager(config1.withPeer(_.copy(port = 10001, maxIncomingPeers = 1))))
+        random[PeerManager[IO]](genPeerManager(config1.withPeer(_.copy(maxIncomingPeers = 1))))
       val pm2 = random[PeerManager[IO]](genPeerManager(config2))
       val pm3 = random[PeerManager[IO]](genPeerManager(config3))
 
@@ -60,7 +59,7 @@ class PeerManagerSpec extends JbokSpec {
     }
 
     "get local status" in {
-      val pm     = random[PeerManager[IO]]
+      val pm     = random[PeerManager[IO]](genPeerManager(config1))
       val status = pm.localStatus.unsafeRunSync()
       status.genesisHash shouldBe pm.history.getBestBlock.unsafeRunSync().header.hash
     }

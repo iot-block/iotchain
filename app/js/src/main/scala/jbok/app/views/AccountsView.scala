@@ -9,7 +9,7 @@ import jbok.core.models.{Account, Address}
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
 
-case class AccountsView(state: AppState) {
+final case class AccountsView(state: AppState) {
   val newAccountForm = Form2(
     Constants(CustomInput("Password", "password", None, (addr: String) => true, "password")), { data =>
       if (data.values.forall(_.isValid))

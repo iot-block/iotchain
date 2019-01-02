@@ -5,7 +5,7 @@ import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
 import org.scalajs.dom._
 
-case class SelectItem(name: String, value: String)
+final case class SelectItem(name: String, value: String)
 
 class SelectMenu(title: String) {
   val selected = Var[SelectItem](SelectItem(title, ""))

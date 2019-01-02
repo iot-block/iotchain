@@ -6,7 +6,7 @@ import jbok.core.models.UInt256
 import jbok.core.store.namespaces
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 
-case class Storage[F[_]: Sync](db: StageKeyValueDB[F, UInt256, UInt256]) {
+final case class Storage[F[_]: Sync](db: StageKeyValueDB[F, UInt256, UInt256]) {
   def store(offset: UInt256, value: UInt256): Storage[F] =
     if (value == UInt256.Zero) {
       this.copy(db = db.del(offset))

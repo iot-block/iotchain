@@ -6,10 +6,10 @@ import fs2.Stream
 import jbok.core.models.{Account, Address}
 
 @JsonCodec
-case class SimulationEvent(source: String, target: String, message: String, time: Long = System.currentTimeMillis())
+final case class SimulationEvent(source: String, target: String, message: String, time: Long = System.currentTimeMillis())
 
 @JsonCodec
-case class NodeInfo(
+final case class NodeInfo(
     id: String,
     interface: String,
     rpcPort: Int

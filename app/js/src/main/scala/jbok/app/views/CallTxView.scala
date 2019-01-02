@@ -16,7 +16,8 @@ import io.circe.parser._
 import jbok.evm.abi
 import jbok.sdk.api.{BlockParam, CallTx, TransactionRequest}
 
-case class CallTxView(state: AppState) {
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
+final case class CallTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]
   val contracts    = Vars.empty[Address]
 
@@ -52,8 +53,10 @@ case class CallTxView(state: AppState) {
     txStatus.value = ""
 
     val element = dom.document.getElementById("decodeSelect")
-    if (element.isInstanceOf[HTMLSelectElement]) {
-      element.asInstanceOf[HTMLSelectElement].value = "default"
+    element match {
+      case x: HTMLSelectElement =>
+        x.value = "default"
+      case _ => ()
     }
   }
 

@@ -13,15 +13,15 @@ import scodec.bits.ByteVector
 import scala.math.BigDecimal.RoundingMode
 
 object HeaderInvalid {
-  case object HeaderParentNotFoundInvalid extends Exception("HeaderParentNotFoundInvalid")
-  case object HeaderBeneficiaryInvalid    extends Exception("HeaderBeneficiaryInvalid")
-  case object HeaderReceiptsHashInvalid   extends Exception("HeaderReceiptsHashInvalid")
-  case object HeaderLogBloomInvalid       extends Exception("HeaderLogBloomInvalid")
-  case object HeaderNumberInvalid         extends Exception("HeaderNumberInvalid")
-  case class HeaderGasLimitInvalid(min: BigInt, max: BigInt, parent: BigInt, delta: BigInt, cur: BigInt)
+  final case object HeaderParentNotFoundInvalid extends Exception("HeaderParentNotFoundInvalid")
+  final case object HeaderBeneficiaryInvalid    extends Exception("HeaderBeneficiaryInvalid")
+  final case object HeaderReceiptsHashInvalid   extends Exception("HeaderReceiptsHashInvalid")
+  final case object HeaderLogBloomInvalid       extends Exception("HeaderLogBloomInvalid")
+  final case object HeaderNumberInvalid         extends Exception("HeaderNumberInvalid")
+  final case class HeaderGasLimitInvalid(min: BigInt, max: BigInt, parent: BigInt, delta: BigInt, cur: BigInt)
       extends Exception(s"HeaderGasLimitInvalid: min=${min}, max=${max}, parent=${parent}, delta=${delta}, cur=${cur}")
-  case object HeaderGasUsedInvalid   extends Exception("HeaderGasUsedInvalid")
-  case object HeaderTimestampInvalid extends Exception("HeaderTimestampInvalid")
+  final case object HeaderGasUsedInvalid   extends Exception("HeaderGasUsedInvalid")
+  final case object HeaderTimestampInvalid extends Exception("HeaderTimestampInvalid")
 }
 
 object HeaderValidator {

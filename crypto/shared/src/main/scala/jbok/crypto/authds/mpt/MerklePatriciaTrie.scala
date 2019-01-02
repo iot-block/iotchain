@@ -10,7 +10,7 @@ import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MptNode._
-import jbok.persistent.KeyValueDB
+import jbok.persistent.{DBErr, KeyValueDB}
 import scodec.bits.ByteVector
 
 final class MerklePatriciaTrie[F[_]](
@@ -37,8 +37,8 @@ final class MerklePatriciaTrie[F[_]](
       _ <- hashOpt match {
         case Some(hash) if hash != MerklePatriciaTrie.emptyRootHash =>
           for {
-            root        <- getRootOpt
-            newRootHash <- putNode(root.get, nibbles, newVal) >>= commitPut
+            root        <- getRootOpt.flatMap(opt => F.fromOption(opt, DBErr.NotFound))
+            newRootHash <- putNode(root, nibbles, newVal) >>= commitPut
             _           <- rootHash.set(Some(newRootHash))
           } yield ()
 
@@ -55,8 +55,8 @@ final class MerklePatriciaTrie[F[_]](
         case Some(hash) if hash != MerklePatriciaTrie.emptyRootHash =>
           val nibbles = HexPrefix.bytesToNibbles(key)
           for {
-            root        <- getRootOpt
-            newRootHash <- delNode(root.get, nibbles) >>= commitDel
+            root        <- getRootOpt.flatMap(opt => F.fromOption(opt, DBErr.NotFound))
+            newRootHash <- delNode(root, nibbles) >>= commitDel
             _           <- rootHash.set(Some(newRootHash))
           } yield ()
 
@@ -101,7 +101,7 @@ final class MerklePatriciaTrie[F[_]](
           m = xs.foldLeft(Map.empty[String, ByteVector]) {
             case (acc, (cur, i)) => acc ++ cur.map { case (k, v) => MerklePatriciaTrie.alphabet(i) ++ k -> v }
           }
-        } yield if (value.isDefined) m + ("" -> value.get) else m
+        } yield value.fold(m)(v => m + ("" -> v))
     }
 
     for {
@@ -359,8 +359,8 @@ final class MerklePatriciaTrie[F[_]](
         // recursively insert on the child
 
         for {
-          child <- getNodeByEntry(extNode.child)
-          r     <- putNode(child.get, key.drop(l), value)
+          child <- getNodeByEntry(extNode.child).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
+          r     <- putNode(child, key.drop(l), value)
         } yield {
           val newExtNode = ExtensionNode(extNode.key, r.newNode.entry)
           NodeInsertResult(
@@ -396,8 +396,8 @@ final class MerklePatriciaTrie[F[_]](
       if (branchNode.branchAt(key.head).isDefined) {
         // The associated branch is not empty, we recursively insert in that child
         for {
-          branch <- getNodeByBranch(branchNode.branchAt(key.head))
-          r      <- putNode(branch.get, key.tail, value)
+          branch <- getNodeByBranch(branchNode.branchAt(key.head)).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
+          r      <- putNode(branch, key.tail, value)
         } yield {
           val newBranchNode = branchNode.updateBranch(key.head, Some(r.newNode.entry))
           NodeInsertResult(
@@ -439,9 +439,8 @@ final class MerklePatriciaTrie[F[_]](
       case l if l == node.key.length =>
         // recursively delete the child
         for {
-          next <- getNodeByEntry(node.child)
-          _ = log.trace(s"del next: ${next.get}")
-          r <- delNode(next.get, key.drop(l))
+          next <- getNodeByEntry(node.child).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
+          r    <- delNode(next, key.drop(l))
           result <- r match {
             case NodeRemoveResult(true, newNodeOpt, toDel, toPut) =>
               // If we changed the child, we need to fix this extension node
@@ -524,8 +523,13 @@ final class MerklePatriciaTrie[F[_]](
       (activeIndexes, value) match {
         case (Nil, None) => F.raiseError(new Exception("EmptyBranch"))
         case (index :: Nil, None) =>
-          val temporalExtNode = ExtensionNode(MerklePatriciaTrie.alphabet(index), branches(index).get)
-          fix(temporalExtNode, notStoredYet)
+          branches(index) match {
+            case Some(entry) =>
+              val temporalExtNode = ExtensionNode(MerklePatriciaTrie.alphabet(index), entry)
+              fix(temporalExtNode, notStoredYet)
+            case None =>
+              F.raiseError(new Exception(s"unexpected empty branches at ${index}"))
+          }
         case (Nil, Some(v)) => F.pure(LeafNode("", v))
         case _              => node.pure[F]
       }
@@ -537,7 +541,9 @@ final class MerklePatriciaTrie[F[_]](
           // so we search in this list too
           notStoredYet.find(n => n.hash == nextHash) match {
             case Some(n) => F.pure(n)
-            case None    => getNodeByEntry(extensionNode.child).map(_.get) // We search for the node in the db
+            case None =>
+              getNodeByEntry(extensionNode.child)
+                .flatMap(opt => F.fromOption(opt, DBErr.NotFound)) // We search for the node in the db
           }
 
         case Right(nextNodeOnExt) => F.pure(nextNodeOnExt)

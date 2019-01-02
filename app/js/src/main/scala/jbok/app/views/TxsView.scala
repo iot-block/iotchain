@@ -9,7 +9,8 @@ import jbok.core.models._
 import org.scalajs.dom._
 import scodec.bits.ByteVector
 
-case class TxsView(state: AppState) {
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
+final case class TxsView(state: AppState) {
   val transactions = Vars[SignedTransaction]()
 
   @binding.dom

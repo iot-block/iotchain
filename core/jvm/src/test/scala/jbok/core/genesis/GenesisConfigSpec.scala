@@ -13,7 +13,7 @@ import jbok.common.execution._
 class GenesisConfigSpec extends JbokSpec {
   "GenesisConfig" should {
     "load config alloc" in {
-      val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+      val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
       history.initGenesis(testGenesis).unsafeRunSync()
       val addresses = testGenesis.alloc.keysIterator.toList
       val accounts =

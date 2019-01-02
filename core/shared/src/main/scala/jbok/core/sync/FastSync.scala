@@ -58,7 +58,7 @@ final class FastSync[F[_]](
     for {
       peersStatus <- getPeersStatus
       bestNumber  <- history.getBestBlockNumber
-      bestPeerNumber = peersStatus.map(_._2.bestNumber).max
+      bestPeerNumber = peersStatus.map(_._2.bestNumber).foldLeft(BigInt(0))(_ max _)
       stateOpt <- if (bestPeerNumber <= bestNumber + config.fastSyncOffset) {
         log.debug(s"skip because best peer number ${bestPeerNumber} - ${config.fastSyncOffset} <= ${bestNumber}")
         None.pure[F]
@@ -159,9 +159,12 @@ final class FastSync[F[_]](
   }
 
   private def randomPeer(peers: List[Peer[F]]): F[Peer[F]] =
-    peerManager.connected.map { connected =>
+    peerManager.connected.flatMap { connected =>
       val available = connected.filter(p => peers.contains(p))
-      Random.shuffle(available).head
+      Random.shuffle(available) match {
+        case head :: _ => F.pure(head)
+        case Nil       => F.raiseError(new Exception(s"no available peers"))
+      }
     }
 
   /**
@@ -472,7 +475,7 @@ final class FastSync[F[_]](
 }
 
 object FastSync {
-  case class FastSyncState[F[_]](target: BlockHeader, goodPeers: List[Peer[F]])
+  final case class FastSyncState[F[_]](target: BlockHeader, goodPeers: List[Peer[F]])
 
   def apply[F[_]](config: SyncConfig, pm: PeerManager[F], maxQueueSize: Int = 1024)(implicit F: ConcurrentEffect[F],
                                                                                     T: Timer[F]): F[FastSync[F]] =

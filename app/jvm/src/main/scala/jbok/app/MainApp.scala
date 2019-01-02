@@ -14,7 +14,7 @@ import jbok.app.simulations.SimulationImpl
 import jbok.codec.rlp.implicits._
 import jbok.common.metrics.Metrics
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.{ConfigHelper, ConfigLoader, GenesisConfig}
+import jbok.core.config.{TypeSafeConfigHelper, ConfigLoader, GenesisConfig}
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.keystore.KeyStorePlatform
 import jbok.network.rpc.RpcServer
@@ -22,6 +22,7 @@ import jbok.network.server.Server
 
 import scala.concurrent.duration._
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 object MainApp extends StreamApp {
   val buildVersion = getClass.getPackage.getImplementationVersion
 
@@ -36,8 +37,8 @@ object MainApp extends StreamApp {
 
   def parseConfig(args: List[String]): IO[Config] =
     for {
-      cmdConfig <- IO(ConfigHelper.parseConfig(args).right.get)
-      config = ConfigHelper.overrideWith(cmdConfig)
+      cmdConfig <- IO(TypeSafeConfigHelper.parseCmdArgs(args).right.get)
+      config = TypeSafeConfigHelper.overrideBy(cmdConfig)
     } yield config
 
   def loadConfig(config: Config): IO[FullNodeConfig] =
@@ -45,7 +46,7 @@ object MainApp extends StreamApp {
       fullNodeConfig <- ConfigLoader.loadFullNodeConfig[IO](config)
       _              <- IO(println(version))
       _              <- IO(println(banner))
-      _              <- IO(println(ConfigHelper.printConfig(config).render))
+      _              <- IO(println(TypeSafeConfigHelper.printConfig(config).render))
     } yield fullNodeConfig
 
   override def run(args: List[String]): IO[ExitCode] =
@@ -112,7 +113,7 @@ object MainApp extends StreamApp {
         for {
           _ <- IO(println(version))
           _ <- IO(println(banner))
-          _ <- IO(println(ConfigHelper.printConfig(ConfigHelper.reference).render))
+          _ <- IO(println(TypeSafeConfigHelper.printConfig(TypeSafeConfigHelper.reference).render))
         } yield ExitCode.Error
     }
 }

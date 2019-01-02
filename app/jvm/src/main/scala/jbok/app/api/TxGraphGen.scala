@@ -3,7 +3,6 @@ package jbok.app.simulations
 import cats.effect.IO
 import jbok.common.GraphUtil
 import jbok.core.config.GenesisConfig
-import jbok.core.config.defaults.reference
 import jbok.core.models._
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scalax.collection.GraphEdge.DiEdge

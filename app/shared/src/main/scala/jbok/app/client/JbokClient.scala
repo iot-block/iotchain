@@ -10,7 +10,7 @@ import jbok.network.client.{Client, WsClient}
 import jbok.network.rpc.RpcClient
 import jbok.sdk.api.{AdminAPI, PersonalAPI, PublicAPI}
 
-case class JbokClient(
+final case class JbokClient(
     uri: URI,
     client: Client[IO, String],
     public: PublicAPI[IO],

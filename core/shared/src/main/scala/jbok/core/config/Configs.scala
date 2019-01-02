@@ -2,23 +2,20 @@ package jbok.core.config
 
 import java.net.InetSocketAddress
 
-import cats.effect.IO
-import io.circe.generic.JsonCodec
 import jbok.core.models.{Address, UInt256}
 import jbok.core.peer.PeerNode
-import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
+import jbok.crypto.signature.KeyPair
 import scodec.bits._
-import jbok.codec.json.implicits._
 
 import scala.concurrent.duration._
 
 object Configs {
-  case class FullNodeConfig(
-      rootdir: String,
-      datadir: String,
+  final case class FullNodeConfig(
+      rootDir: String,
       identity: String,
+      dataDir: String,
       logLevel: String,
-      logsdir: String,
+      logDir: String,
       genesisOrPath: Either[GenesisConfig, String],
       history: HistoryConfig,
       keystore: KeyStoreConfig,
@@ -29,23 +26,23 @@ object Configs {
       rpc: RpcConfig,
       consensusAlgo: String = "clique"
   ) {
-    def genesis = genesisOrPath match {
+    lazy val genesis: GenesisConfig = genesisOrPath match {
       case Left(g)     => g
       case Right(path) => GenesisConfig.fromFile(path).unsafeRunSync()
     }
 
-    def lockPath: String = s"${datadir}/LOCK"
+    lazy val lockPath: String = s"${dataDir}/LOCK"
 
-    def genesisPath: String = s"${datadir}/genesis.conf"
+    lazy val genesisPath: String = s"${dataDir}/genesis.conf"
 
     def withGenesis(f: GenesisConfig => GenesisConfig): FullNodeConfig =
       copy(genesisOrPath = Left(f(genesis)))
 
-    def withGenesisPath(path: String): FullNodeConfig =
-      copy(genesisOrPath = Right(path))
-
     def withHistory(f: HistoryConfig => HistoryConfig): FullNodeConfig =
       copy(history = f(history))
+
+    def withKeyStore(f: KeyStoreConfig => KeyStoreConfig): FullNodeConfig =
+      copy(keystore = f(keystore))
 
     def withPeer(f: PeerConfig => PeerConfig): FullNodeConfig =
       copy(peer = f(peer))
@@ -53,49 +50,23 @@ object Configs {
     def withSync(f: SyncConfig => SyncConfig): FullNodeConfig =
       copy(sync = f(sync))
 
-    def withKeyStore(f: KeyStoreConfig => KeyStoreConfig): FullNodeConfig =
-      copy(keystore = f(keystore))
-
     def withTxPool(f: TxPoolConfig => TxPoolConfig): FullNodeConfig =
       copy(txPool = f(txPool))
-
-    def withRpc(f: RpcConfig => RpcConfig): FullNodeConfig =
-      copy(rpc = f(rpc))
 
     def withMining(f: MiningConfig => MiningConfig): FullNodeConfig =
       copy(mining = f(mining))
 
-    def withIdentityAndPort(identity: String, port: Int): FullNodeConfig = {
-      val datadir = s"${rootdir}/${identity}"
-      copy(identity = identity, datadir = datadir, genesisOrPath = genesisOrPath match {
-        case Left(e)     => Left(e)
-        case Right(path) => Right(s"${datadir}/genesis.conf")
-      }).withKeyStore(_.copy(keystoreDir = s"${datadir}/keystore"))
-        .withPeer(
-          _.copy(
-            port = port,
-            nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()),
-            discoveryPort = port + 1
-          )
-        )
-        .withRpc(
-          _.copy(enabled = true, port = port + 2)
-        )
-    }
+    def withRpc(f: RpcConfig => RpcConfig): FullNodeConfig =
+      copy(rpc = f(rpc))
   }
 
-  object FullNodeConfig {
-    def fill(template: FullNodeConfig, size: Int): List[FullNodeConfig] =
-      (0 until size).toList.map(i => {
-        template.withIdentityAndPort(s"test-node-${i}", 20000 + { i * 3 })
-      })
-  }
-
-  case class KeyStoreConfig(
+  final case class KeyStoreConfig(
+      dbBackend: String,
       keystoreDir: String
   )
 
-  case class HistoryConfig(
+  final case class HistoryConfig(
+      dbBackend: String,
       chainDataDir: String,
       frontierBlockNumber: BigInt = 0,
       homesteadBlockNumber: BigInt = 1150000,
@@ -111,12 +82,13 @@ object Configs {
     val monetaryPolicyConfig: MonetaryPolicyConfig = MonetaryPolicyConfig()
   }
 
-  case class PeerConfig(
+  final case class PeerConfig(
       port: Int,
       host: String,
       nodekeyOrPath: Either[KeyPair, String],
       enableDiscovery: Boolean,
       discoveryPort: Int,
+      dbBackend: String,
       peerDataDir: String,
       bootUris: List[String],
       updatePeersInterval: FiniteDuration,
@@ -128,10 +100,10 @@ object Configs {
   ) {
     val bindAddr: InetSocketAddress      = new InetSocketAddress(host, port)
     val discoveryAddr: InetSocketAddress = new InetSocketAddress(host, discoveryPort)
-    val bootNodes: List[PeerNode]        = bootUris.flatMap(s => PeerNode.fromStr(s).toOption)
+    val bootNodes: List[PeerNode]        = bootUris.flatMap(s => PeerNode.fromStr(s).toOption.toList)
   }
 
-  case class RpcConfig(
+  final case class RpcConfig(
       enabled: Boolean,
       host: String,
       port: Int,
@@ -140,20 +112,19 @@ object Configs {
     val addr = new InetSocketAddress(host, port)
   }
 
-  case class MonetaryPolicyConfig(
+  final case class MonetaryPolicyConfig(
       eraDuration: Int = 5000000,
       rewardReductionRate: Double = 0.2,
       firstEraBlockReward: BigInt = BigInt("5000000000000000000")
   )
 
-  case class MiningConfig(
+  final case class MiningConfig(
       enabled: Boolean,
       ommersPoolSize: Int,
       blockCacheSize: Int,
       minerAddressOrKey: Either[Address, KeyPair],
       coinbase: Address,
       extraData: ByteVector,
-      ethashDir: String,
       mineRounds: Int,
       period: FiniteDuration = 15.seconds,
       epoch: BigInt = BigInt("30000"),
@@ -165,7 +136,7 @@ object Configs {
       transactionTimeout: FiniteDuration = 10.minutes
   )
 
-  case class SyncConfig(
+  final case class SyncConfig(
       maxConcurrentRequests: Int,
       maxBlockHeadersPerRequest: Int,
       maxBlockBodiesPerRequest: Int,

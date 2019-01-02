@@ -17,16 +17,16 @@ import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
 
-case class ClientStatus(number: Var[BigInt] = Var(0),
+final case class ClientStatus(number: Var[BigInt] = Var(0),
                         gasPrice: Var[BigInt] = Var(0),
                         gasLimit: Var[BigInt] = Var(0),
                         miningStatus: Var[String] = Var("idle"))
 
-case class BlockHistory(bestBlockNumber: Var[BigInt] = Var(-1), history: Vars[Block] = Vars.empty)
+final case class BlockHistory(bestBlockNumber: Var[BigInt] = Var(-1), history: Vars[Block] = Vars.empty)
 
-case class Contract(address: Address, abi: List[Description])
+final case class Contract(address: Address, abi: List[Description])
 
-case class AppState(
+final case class AppState(
     config: Var[AppConfig],
     hrefHandler: Event => Unit,
     currentId: Var[Option[String]] = Var(None),

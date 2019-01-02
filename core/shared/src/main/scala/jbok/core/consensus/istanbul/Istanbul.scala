@@ -19,7 +19,7 @@ import scodec.bits.{ByteVector, _}
 
 import scala.concurrent.duration._
 
-case class Istanbul[F[_]](
+final case class Istanbul[F[_]](
     config: IstanbulConfig,
     history: History[F],
     keyPair: KeyPair,
@@ -75,12 +75,16 @@ case class Istanbul[F[_]](
       case None =>
         // No snapshot for this header, gather the header and move backward(recur)
         for {
-          (h, p) <- if (parents.nonEmpty) {
-            // If we have explicit parents, pick from there (enforced)
-            F.pure((parents.last, parents.slice(0, parents.length - 1)))
-          } else {
-            // No explicit parents (or no more left), reach out to the database
-            history.getBlockHeaderByHash(hash).map(header => header.get -> parents)
+          (h, p) <- parents.lastOption match {
+            case Some(last) =>
+              // If we have explicit parents, pick from there (enforced)
+              F.pure((last, parents.slice(0, parents.length - 1)))
+            case None =>
+              // No explicit parents (or no more left), reach out to the database
+              history.getBlockHeaderByHash(hash).flatMap {
+                case Some(header) => F.pure(header -> parents)
+                case None => ???
+              }
           }
           snap <- applyHeaders(number - 1, h.parentHash, p, h :: headers)
         } yield snap
@@ -359,7 +363,7 @@ case class Istanbul[F[_]](
 object Istanbul {
   sealed trait IstanbulAlgo
   object IstanbulAlgo extends IstanbulAlgo
-  case class IstanbulExtra(
+  final case class IstanbulExtra(
       validators: List[Address],
       proposerSig: ByteVector,
       committedSigs: List[CryptoSignature]

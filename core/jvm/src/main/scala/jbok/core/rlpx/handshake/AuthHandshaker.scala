@@ -19,7 +19,7 @@ import scodec.bits.{BitVector, ByteVector}
 
 import scala.util.Random
 
-case class Secrets(
+final case class Secrets(
     aes: Array[Byte],
     mac: Array[Byte],
     token: Array[Byte],
@@ -27,9 +27,9 @@ case class Secrets(
     ingressMac: KeccakDigest
 )
 
-case class AuthHandshakeResult(secrets: Secrets, remotePubKey: ByteVector)
+final case class AuthHandshakeResult(secrets: Secrets, remotePubKey: ByteVector)
 
-case class AuthHandshaker[F[_]](
+final case class AuthHandshaker[F[_]](
     nodeKey: KeyPair,
     nonce: ByteVector,
     ephemeralKey: KeyPair,
@@ -147,7 +147,7 @@ case class AuthHandshaker[F[_]](
         response.encoded.toArray,
         None
       )
-      remoteEphemeralKey = extractEphemeralKey(message.signature, message.nonce, message.publicKey)
+      remoteEphemeralKey <- extractEphemeralKey(message.signature, message.nonce, message.publicKey)
       handshakeResult <- copy(
         initiatePacketOpt = Some(initData),
         responsePacketOpt = Some(encryptedPacket),
@@ -183,7 +183,7 @@ case class AuthHandshaker[F[_]](
         Some(sizePrefix)
       )
       packet             = ByteVector(sizePrefix) ++ encryptedResponsePayload
-      remoteEphemeralKey = extractEphemeralKey(message.signature, message.nonce, message.publicKey)
+      remoteEphemeralKey <- extractEphemeralKey(message.signature, message.nonce, message.publicKey)
       responseHandshaker = copy(initiatePacketOpt = Some(initData),
                                 responsePacketOpt = Some(packet),
                                 remotePubKeyOpt = Some(message.publicKey))
@@ -196,7 +196,7 @@ case class AuthHandshaker[F[_]](
 
   private def extractEphemeralKey(signature: CryptoSignature,
                                   nonce: ByteVector,
-                                  publicKey: ByteVector): KeyPair.Public = {
+                                  publicKey: ByteVector): F[KeyPair.Public] = {
     val agreement = new ECDHBasicAgreement
     agreement.init(ECDSAPlatform.toECPrivateKeyParameters(nodeKey.secret))
     val sharedSecret = agreement.calculateAgreement(ECDSAPlatform.toECPublicKeyParameters(KeyPair.Public(publicKey)))
@@ -204,7 +204,7 @@ case class AuthHandshaker[F[_]](
     val token  = bigIntegerToBytes(sharedSecret, NonceSize)
     val signed = xor(token, nonce.toArray)
 
-    ECDSAPlatform.recoverPublic(signed, signature, 0).get
+    F.fromOption(ECDSAPlatform.recoverPublic(signed, signature, 0), new Exception("public key recovery failed"))
   }
 
   private def xor(a: Array[Byte], b: Array[Byte]): Array[Byte] =

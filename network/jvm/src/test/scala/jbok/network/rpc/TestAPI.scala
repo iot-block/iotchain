@@ -5,7 +5,7 @@ import io.circe.generic.JsonCodec
 import jbok.network.json.JsonRpcErrors
 
 @JsonCodec
-case class Person(name: String, age: Int)
+final case class Person(name: String, age: Int)
 
 trait TestAPI[F[_]] {
   def foo: F[Int]

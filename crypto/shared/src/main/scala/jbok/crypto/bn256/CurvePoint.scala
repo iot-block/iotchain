@@ -20,7 +20,7 @@ object CurvePoint {
   }
 }
 
-case class CurvePoint(x: BigInt, y: BigInt, z: BigInt, t: BigInt) {
+final case class CurvePoint(x: BigInt, y: BigInt, z: BigInt, t: BigInt) {
   def isOnCurve: Boolean =
     (y * y - x.pow(3)).mod(p) == CurvePoint.curveB
 

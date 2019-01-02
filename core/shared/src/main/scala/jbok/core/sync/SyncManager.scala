@@ -28,7 +28,7 @@ final case class SyncManager[F[_]] private (
   def serve: Stream[F, Unit] =
     peerManager.messageQueue.dequeue.evalMap { req =>
       log.trace(s"received request ${req.message}")
-      M.time("peer_message") {
+      M.timeF("peer_message") {
         service.run(req).flatMap { response: List[(PeerSelectStrategy[F], Message)] =>
           response
             .traverse_[F, Unit] {

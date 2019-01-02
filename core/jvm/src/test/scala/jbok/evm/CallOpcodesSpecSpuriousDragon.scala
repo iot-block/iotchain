@@ -11,7 +11,7 @@ import jbok.common.execution._
 class CallOpcodesSpecSpuriousDragon extends JbokSpec {
 
   val config     = EvmConfig.SpuriousDragonConfigBuilder(None)
-  val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+  val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
   import config.feeSchedule._
 

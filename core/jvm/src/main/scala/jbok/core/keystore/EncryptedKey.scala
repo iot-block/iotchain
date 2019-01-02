@@ -16,13 +16,13 @@ import tsec.cipher.symmetric.jca._
 import jbok.codec.json.implicits._
 
 @JsonCodec
-case class KdfParams(salt: ByteVector, n: Int, r: Int, p: Int, dklen: Int)
+final case class KdfParams(salt: ByteVector, n: Int, r: Int, p: Int, dklen: Int)
 
 @JsonCodec
-case class CipherParams(iv: ByteVector)
+final case class CipherParams(iv: ByteVector)
 
 @JsonCodec
-case class CryptoSpec(
+final case class CryptoSpec(
     cipher: String,
     ciphertext: ByteVector,
     cipherparams: CipherParams,
@@ -34,7 +34,7 @@ case class CryptoSpec(
 import jbok.core.keystore.EncryptedKey._
 
 @JsonCodec
-case class EncryptedKey(
+final case class EncryptedKey(
     id: UUID,
     address: Address,
     crypto: CryptoSpec,
@@ -96,10 +96,6 @@ object EncryptedKey {
     kdfParams match {
       case KdfParams(salt, n, r, p, dkLen) =>
         SCrypt.derive(passphrase, salt, n, r, p, dkLen)
-
-//      case Pbkdf2Params(salt, prf, c, dklen) =>
-//        // prf is currently ignored, only hmac sha256 is used
-//        crypto.pbkdf2HMacSha256(passphrase, salt, c, dklen)
     }
 
   private def createMac(dk: ByteVector, ciphertext: ByteVector): ByteVector =

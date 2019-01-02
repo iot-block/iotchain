@@ -6,11 +6,11 @@ import io.circe.Decoder.decodeOption
 import io.circe.Encoder.encodeOption
 
 package object json {
-  case class JsonRpcRequest[A](id: String, method: String, params: A)
-  case class JsonRpcNotification[A](method: String, params: A)
-  case class JsonRpcResultResponse[A](id: String, result: A)
-  case class JsonRpcErrorResponse[+A](id: String, error: JsonRpcError[A])
-  case class JsonRpcError[+A](code: Int, message: String, data: Option[A]) extends Exception(message)
+  final case class JsonRpcRequest[A](id: String, method: String, params: A)
+  final case class JsonRpcNotification[A](method: String, params: A)
+  final case class JsonRpcResultResponse[A](id: String, result: A)
+  final case class JsonRpcErrorResponse[+A](id: String, error: JsonRpcError[A])
+  final case class JsonRpcError[+A](code: Int, message: String, data: Option[A]) extends Exception(message)
 
   object JsonRpcErrors {
     val parseError =

@@ -46,7 +46,7 @@ final class UdpTransport[F[_]](socket: Socket[F])(implicit F: ConcurrentEffect[F
 object UdpTransport {
   def apply[F[_]](bind: InetSocketAddress)(implicit F: ConcurrentEffect[F],
                                            CS: ContextShift[F]): Resource[F, UdpTransport[F]] = {
-    implicit val AG = AsynchronousSocketGroup()
+    implicit val AG: AsynchronousSocketGroup = AsynchronousSocketGroup()
     udp.Socket[F](bind, reuseAddress = true).map(socket => new UdpTransport[F](socket))
   }
 }

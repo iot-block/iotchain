@@ -10,7 +10,12 @@ import org.scalajs.dom._
 import scodec.bits.ByteVector
 import jbok.evm.abi.parseContract
 
-case class ContractView(state: AppState) {
+@SuppressWarnings(Array(
+  "org.wartremover.warts.OptionPartial",
+  "org.wartremover.warts.EitherProjectionPartial",
+  "org.wartremover.warts.TryPartial",
+))
+final case class ContractView(state: AppState) {
   val watchForm = Form2(
     Constants(
       CustomInput("Address", "address", None, (addr: String) => InputValidator.isValidAddress(addr)),

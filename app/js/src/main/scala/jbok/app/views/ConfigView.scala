@@ -13,7 +13,11 @@ import jbok.common.execution._
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw._
 
-case class ConfigView(state: AppState) {
+@SuppressWarnings(Array(
+  "org.wartremover.warts.OptionPartial",
+  "org.wartremover.warts.EitherProjectionPartial",
+))
+final case class ConfigView(state: AppState) {
   val interfaces: Vars[String]       = Vars.empty[String]
   val host: Var[String]              = Var("127.0.0.1")
   val hostIsValid: Var[Boolean]      = Var(true)

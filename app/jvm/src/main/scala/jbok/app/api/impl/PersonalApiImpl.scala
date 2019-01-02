@@ -16,6 +16,10 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration.Duration
 import scala.util.Try
 
+@SuppressWarnings(Array(
+  "org.wartremover.warts.OptionPartial",
+  "org.wartremover.warts.EitherProjectionPartial",
+))
 object PersonalApiImpl {
   def apply(
       keyStore: KeyStorePlatform[IO],

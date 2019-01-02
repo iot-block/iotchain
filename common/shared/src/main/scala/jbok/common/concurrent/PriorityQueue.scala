@@ -86,7 +86,7 @@ object PriorityQueue {
       }
     }
 
-  case class Rank[A](a: A, priority: Int, insertionOrder: Long = 0)
+  final case class Rank[A](a: A, priority: Int, insertionOrder: Long = 0)
 
   implicit def rankOrder[A]: Order[Rank[A]] =
     Order.whenEqual(
@@ -94,7 +94,7 @@ object PriorityQueue {
       Order.by(_.insertionOrder)
     )
 
-  case class HeapQueue[A](queue: Heap[Rank[A]], nextId: Long) {
+  final case class HeapQueue[A](queue: Heap[Rank[A]], nextId: Long) {
     def enqueue(a: A, priority: Int): HeapQueue[A] = HeapQueue(
       queue add Rank(a, priority, nextId),
       nextId + 1

@@ -9,7 +9,7 @@ import scodec.bits.ByteVector
 
 import scala.util.Random
 
-case class SimAccount(keyPair: KeyPair, balance: BigInt, nonce: BigInt) {
+final case class SimAccount(keyPair: KeyPair, balance: BigInt, nonce: BigInt) {
   val address: Address = Address(keyPair)
 
   def nonceIncreased: SimAccount = this.copy(nonce = this.nonce + 1)
@@ -30,7 +30,7 @@ class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]])(implicit chai
   def genTx: IO[SignedTransaction] =
     for {
       acc <- accounts.get
-      sender = Random.shuffle(acc.values.toList).head
+      List(sender) = Random.shuffle(acc.values.toList)
       receiver <- newAccount
       value = genValue(sender, receiver)
       _ <- accounts.update(_ ++ Map(sender.address -> sender.balanceChanged(-value).nonceIncreased))

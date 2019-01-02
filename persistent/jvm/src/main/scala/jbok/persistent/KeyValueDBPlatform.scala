@@ -6,8 +6,11 @@ import jbok.persistent.leveldb.LevelDB
 
 trait KeyValueDBPlatform {
 
-  def _forPath[F[_]: Sync](path: String)(implicit T: Timer[F], M: Metrics[F]): F[KeyValueDB[F]] = path match {
-    case KeyValueDB.INMEM => KeyValueDB.inmem[F]
-    case x                => LevelDB[F](x)
-  }
+  def _forBackendAndPath[F[_]: Sync](backend: String, path: String)(implicit T: Timer[F],
+                                                                    M: Metrics[F]): F[KeyValueDB[F]] =
+    backend match {
+      case "inmem"   => KeyValueDB.inmem[F]
+      case "leveldb" => LevelDB[F](path)
+      case x         => throw new Exception(s"backend ${x} is not supported")
+    }
 }

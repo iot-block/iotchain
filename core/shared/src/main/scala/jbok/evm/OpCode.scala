@@ -851,7 +851,7 @@ case object LOG4 extends LogOp(0xa4)
 ///////////////////////////
 // System
 ///////////////////////////
-abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
+sealed abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] =
     if (state.context.readOnly) {
       Sync[F].pure(state.withError(WriteProtectionError))
@@ -960,7 +960,7 @@ abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
 
 case object CREATE extends CreateOp
 
-abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toByte, delta, alpha, _.G_zero) {
+sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toByte, delta, alpha, _.G_zero) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (params @ Seq(_, to, callValue, inOffset, inSize, outOffset, outSize), stack1) = getParams(state)
 

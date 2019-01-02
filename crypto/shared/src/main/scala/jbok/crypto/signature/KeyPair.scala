@@ -7,11 +7,11 @@ import io.circe.generic.JsonCodec
 import scodec.bits.ByteVector
 
 @JsonCodec
-case class KeyPair(public: KeyPair.Public, secret: KeyPair.Secret)
+final case class KeyPair(public: KeyPair.Public, secret: KeyPair.Secret)
 
 object KeyPair {
   @JsonCodec
-  case class Public(bytes: ByteVector) extends AnyVal
+  final case class Public(bytes: ByteVector) extends AnyVal
 
   object Public {
     def apply(hex: String): Public        = Public(ByteVector.fromValidHex(hex))
@@ -19,7 +19,7 @@ object KeyPair {
   }
 
   @JsonCodec
-  case class Secret(bytes: ByteVector) extends AnyVal {
+  final case class Secret(bytes: ByteVector) extends AnyVal {
     def d: BigInteger = new BigInteger(bytes.toArray)
   }
 

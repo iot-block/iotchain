@@ -28,15 +28,15 @@ object ProposalCheckResult {
   case object Success              extends ProposalCheckResult
 }
 
-case class Preprepare(view: View, block: Block)
+final case class Preprepare(view: View, block: Block)
 
 /**
   * @param digest proposal block hash
   */
-case class Subject(view: View, digest: ByteVector)
+final case class Subject(view: View, digest: ByteVector)
 
 //context for state transition
-case class StateContext[F[_]](
+final case class StateContext[F[_]](
     keyPair: KeyPair,
     validatorSet: Ref[F, ValidatorSet],
     current: Ref[F, RoundState],
@@ -123,7 +123,7 @@ case class StateContext[F[_]](
     current.get.map(rs => rs.preprepare.map(p => Subject(View(rs.round, rs.blockNumber), p.block.header.hash)))
 }
 
-case class View(
+final case class View(
     round: Int,
     blockNumber: BigInt
 )
@@ -132,7 +132,7 @@ object View {
 }
 
 @JsonCodec
-case class ValidatorSet(
+final case class ValidatorSet(
     proposer: Address,
     validators: List[Address]
 ) {
@@ -142,7 +142,7 @@ case class ValidatorSet(
   /**
     * f represent the constant F in Istanbul BFT defined
     */
-  def f:Int = Math.ceil(validators.size / 3.0).toInt - 1
+  def f: Int = Math.ceil(validators.size / 3.0).toInt - 1
 
   def contains(address: Address): Boolean = validators.contains(address)
 
@@ -153,16 +153,17 @@ case class ValidatorSet(
       case _                         => None
     }
 
-  private def roundRobinProposer(lastProposer: Address, round: Int): Option[Address] = {
-    if (validators.isEmpty) return None
+  private def roundRobinProposer(lastProposer: Address, round: Int): Option[Address] =
+    if (validators.isEmpty) {
+      None
+    } else {
+      val seed =
+        if (proposer == Address.empty || !validators.contains(lastProposer)) round
+        else validators.indexOf(lastProposer) + round
 
-    val seed =
-      if (proposer == Address.empty || !validators.contains(lastProposer)) round
-      else validators.indexOf(lastProposer) + round
-
-    val robin = seed % validators.size
-    Option(validators(robin.intValue()))
-  }
+      val robin = seed % validators.size
+      Some(validators(robin.intValue()))
+    }
 
   private def stickyProposer(lastProposer: Address, round: Int): Option[Address] = None
 
@@ -181,7 +182,7 @@ object ValidatorSet {
   ): ValidatorSet = ValidatorSet(validators.head, validators.toList)
 }
 
-case class MessageSet(
+final case class MessageSet(
     messages: Map[Address, IstanbulMessage]
 ) {
   def addMessage(message: IstanbulMessage): MessageSet =
@@ -192,7 +193,7 @@ object MessageSet {
   def empty: MessageSet = MessageSet(Map.empty)
 }
 
-case class RoundState(
+final case class RoundState(
     round: Int,
     blockNumber: BigInt,
     preprepare: Option[Preprepare],

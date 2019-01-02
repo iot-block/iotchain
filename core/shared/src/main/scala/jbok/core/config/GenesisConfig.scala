@@ -12,7 +12,7 @@ import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
 
 @JsonCodec
-case class GenesisConfig(
+final case class GenesisConfig(
     nonce: ByteVector,
     difficulty: BigInt,
     extraData: ByteVector,
@@ -62,5 +62,8 @@ object GenesisConfig {
     )
 
   def fromFile(path: String): IO[GenesisConfig] =
-    IO(File(path).lines.mkString("\n")).map(text => decode[GenesisConfig](text).right.get)
+    IO(File(path).lines.mkString("\n")).map(text => decode[GenesisConfig](text) match {
+      case Left(e) => throw new Exception(s"read genesis file from ${path} error, ${e}")
+      case Right(c) => c
+    })
 }

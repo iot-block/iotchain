@@ -215,28 +215,28 @@ object PrecompiledContracts {
   object BN256Pairing extends PrecompiledContract {
     def exec(inputData: ByteVector): ByteVector = {
       if (inputData.length % 192 != 0) {
-        return ByteVector.empty.padTo(32)
+        ByteVector.empty.padTo(32)
+      } else {
+        val pairs = inputData.toArray.sliding(192, 192).toList.map { input =>
+          val x = input.slice(0, 32)
+          val y = input.slice(32, 64)
+
+          val a = input.slice(64, 96)
+          val b = input.slice(96, 128)
+          val c = input.slice(128, 160)
+          val d = input.slice(160, 192)
+
+          for {
+            g1 <- CurvePoint(x, y)
+            g2 <- TwistPoint(a, b, c, d)
+          } yield (g1, g2)
+        }
+
+        pairs
+          .sequence[Option, (CurvePoint, TwistPoint)]
+          .map(ps => ByteVector(if (BN256.pairingCheck(ps)) 1 else 0).padLeft(32))
+          .getOrElse(ByteVector.empty.padTo(32))
       }
-
-      val pairs = inputData.toArray.sliding(192, 192).toList.map { input =>
-        val x = input.slice(0, 32)
-        val y = input.slice(32, 64)
-
-        val a = input.slice(64, 96)
-        val b = input.slice(96, 128)
-        val c = input.slice(128, 160)
-        val d = input.slice(160, 192)
-
-        for {
-          g1 <- CurvePoint(x, y)
-          g2 <- TwistPoint(a, b, c, d)
-        } yield (g1, g2)
-      }
-
-      pairs
-        .sequence[Option, (CurvePoint, TwistPoint)]
-        .map(ps => ByteVector(if (BN256.pairingCheck(ps)) 1 else 0).padLeft(32))
-        .getOrElse(ByteVector.empty.padTo(32))
     }
 
     def gas(inputData: ByteVector): BigInt =

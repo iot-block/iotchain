@@ -9,7 +9,6 @@ import jbok.JbokSpec
 import jbok.codec.rlp.RlpCodec
 import jbok.common.execution._
 import jbok.common.testkit._
-import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.peer.PeerNode
 import jbok.core.peer.discovery.KadPacket._
 import jbok.core.peer.discovery._
@@ -22,7 +21,7 @@ import scala.concurrent.duration._
 
 class DiscoverySpec extends JbokSpec {
   "Discovery" should {
-    val List(config1, config2) = FullNodeConfig.fill(testConfig, 2)
+    val List(config1, config2) = fillFullNodeConfigs(2)
 
     "roundtrip kad packets" in {
       def roundtrip[A <: KadPacket](a: A) = {

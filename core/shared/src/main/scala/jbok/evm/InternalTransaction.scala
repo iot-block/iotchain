@@ -14,7 +14,7 @@ import scodec.bits.ByteVector
   * @param data     - call data
   * @param value    - call value
   */
-case class InternalTransaction(
+final case class InternalTransaction(
     opcode: OpCode,
     from: Address,
     to: Option[Address],

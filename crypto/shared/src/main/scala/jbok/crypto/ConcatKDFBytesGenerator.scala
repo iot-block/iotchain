@@ -35,6 +35,6 @@ class ConcatKDFBytesGenerator(digest: Digest) {
           ByteVector(hashBuf).dropRight(digestSize - spaceLeft)
         }
       }
-      .reduce[ByteVector] { case (a, b) => a ++ b }
+      .foldLeft(ByteVector.empty)(_ ++ _)
   }
 }

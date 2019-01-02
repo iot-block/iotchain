@@ -4,11 +4,11 @@ import jbok.core.models.Address
 import scodec.bits.ByteVector
 
 object KeyStoreError {
-  case object KeyNotFound         extends Exception("KeyNotFound")
-  case object KeyAlreadyExist     extends Exception("KeyAlreadyExist")
-  case object DecryptionFailed    extends Exception("DecryptionFailed")
-  case object InvalidKeyFormat    extends Exception("InvalidKeyFormat")
-  case class IOError(msg: String) extends Exception(s"IO error, ${msg}")
+  final case object KeyNotFound         extends Exception("KeyNotFound")
+  final case object KeyAlreadyExist     extends Exception("KeyAlreadyExist")
+  final case object DecryptionFailed    extends Exception("DecryptionFailed")
+  final case object InvalidKeyFormat    extends Exception("InvalidKeyFormat")
+  final case class IOError(msg: String) extends Exception(s"IO error, ${msg}")
 }
 
 trait KeyStore[F[_]] {

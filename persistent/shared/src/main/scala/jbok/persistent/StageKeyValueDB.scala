@@ -6,12 +6,12 @@ import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import scodec.bits.ByteVector
 
-case class StageKeyValueDB[F[_]: Sync, K: RlpCodec, V: RlpCodec](
+final case class StageKeyValueDB[F[_]: Sync, K: RlpCodec, V: RlpCodec](
     namespace: ByteVector,
     inner: KeyValueDB[F],
     stage: Map[K, Option[V]]
 ) {
-  def get(key: K): F[V] = getOpt(key).map(_.get)
+  def get(key: K): F[V] = getOpt(key).flatMap(opt => Sync[F].fromOption(opt, DBErr.NotFound))
 
   def getOpt(key: K): F[Option[V]] =
     OptionT.fromOption[F](stage.get(key)).getOrElseF(inner.getOpt[K, V](key, namespace))
@@ -38,6 +38,7 @@ case class StageKeyValueDB[F[_]: Sync, K: RlpCodec, V: RlpCodec](
 }
 
 object StageKeyValueDB {
-  def apply[F[_]: Sync, K: RlpCodec, V: RlpCodec](namespace: ByteVector, inner: KeyValueDB[F]): StageKeyValueDB[F, K, V] =
+  def apply[F[_]: Sync, K: RlpCodec, V: RlpCodec](namespace: ByteVector,
+                                                  inner: KeyValueDB[F]): StageKeyValueDB[F, K, V] =
     new StageKeyValueDB[F, K, V](namespace, inner, Map.empty)
 }

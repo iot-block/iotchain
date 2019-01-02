@@ -11,7 +11,7 @@ import jbok.crypto.signature.KeyPair
 import jbok.network.Connection
 import scodec.bits.ByteVector
 
-case class Peer[F[_]](
+final case class Peer[F[_]](
     pk: KeyPair.Public,
     conn: Connection[F, Message],
     status: Ref[F, Status],
@@ -34,6 +34,9 @@ case class Peer[F[_]](
 
   def markTxs(stxs: SignedTransactions): F[Unit] =
     knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs)
+
+  override def toString: String =
+    s"Peer(${id})"
 }
 
 object Peer {

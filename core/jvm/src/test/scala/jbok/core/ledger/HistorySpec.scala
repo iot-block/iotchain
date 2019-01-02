@@ -4,14 +4,11 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.JbokSpec
 import jbok.codec.rlp.implicits._
-import jbok.core.models._
 import jbok.common.testkit._
+import jbok.core.models._
 import jbok.core.testkit._
 import jbok.crypto._
 import scodec.bits.ByteVector
-import jbok.core.config.defaults.reference
-
-import scala.io.Codec
 
 class HistorySpec extends JbokSpec {
   "History" should {

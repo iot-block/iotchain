@@ -7,6 +7,10 @@ import jbok.codec.rlp.RlpCodec
 import jbok.common.metrics.Metrics
 import scodec.bits.ByteVector
 
+object DBErr {
+  case object NotFound extends Exception("NotFound")
+}
+
 abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
   protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]]
 
@@ -39,7 +43,7 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
     OptionT(getOpt[Key, Val](key, namespace))
 
   final def get[Key: RlpCodec, Val: RlpCodec](key: Key, namespace: ByteVector): F[Val] =
-    getOpt[Key, Val](key, namespace).map(_.get)
+    getOpt[Key, Val](key, namespace).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
 
   final def put[Key: RlpCodec, Val: RlpCodec](key: Key, newVal: Val, namespace: ByteVector): F[Unit] =
     for {
@@ -57,7 +61,9 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
   final def has[Key: RlpCodec](key: Key, namespace: ByteVector): F[Boolean] =
     encode[Key](key, namespace) >>= hasRaw
 
-  final def writeBatch[Key: RlpCodec, Val: RlpCodec](put: List[(Key, Val)], del: List[Key], namespace: ByteVector): F[Unit] =
+  final def writeBatch[Key: RlpCodec, Val: RlpCodec](put: List[(Key, Val)],
+                                                     del: List[Key],
+                                                     namespace: ByteVector): F[Unit] =
     for {
       p <- put.traverse { case (k, v) => (encode[Key](k, namespace), encode[Val](v)).tupled }
       d <- del.traverse(k => encode[Key](k, namespace))
@@ -66,7 +72,7 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
 
   final def writeBatch[Key: RlpCodec, Val: RlpCodec](ops: List[(Key, Option[Val])], namespace: ByteVector): F[Unit] = {
     val (a, b) = ops.partition(_._2.isDefined)
-    val put    = a.map { case (k, v) => k -> v.get }
+    val put    = a.collect { case (k, Some(v)) => k -> v }
     val del    = b.map { case (k, _) => k }
     writeBatch[Key, Val](put, del, namespace)
   }
@@ -83,5 +89,7 @@ object KeyValueDB extends KeyValueDBPlatform {
 
   def inmem[F[_]: Sync]: F[KeyValueDB[F]] = InmemKeyValueDB[F]
 
-  def forPath[F[_]: Sync](path: String)(implicit T: Timer[F], M: Metrics[F]): F[KeyValueDB[F]] = _forPath[F](path)
+  def forBackendAndPath[F[_]: Sync](backend: String, path: String)(implicit T: Timer[F],
+                                                                   M: Metrics[F]): F[KeyValueDB[F]] =
+    _forBackendAndPath[F](backend, path)
 }

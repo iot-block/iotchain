@@ -5,7 +5,7 @@ import scala.concurrent.duration._
 import jbok.codec.json.implicits._
 
 @JsonCodec
-case class IstanbulConfig(
+final case class IstanbulConfig(
     period: FiniteDuration = 1.seconds, // Number of seconds between blocks to enforce
     epoch: Int = 30000, // Epoch length to reset votes and checkpoint
     defaultDifficulty: BigInt = BigInt(1), // Default block difficulty

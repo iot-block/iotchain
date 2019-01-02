@@ -20,7 +20,7 @@ class CreateOpcodeSpec extends JbokSpec {
     val creatorAddr              = Address(0xcafe)
     val endowment: UInt256       = 123
     implicit val chainId: BigInt = 61
-    val history                  = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+    val history                  = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
     val initWorld =
       history
         .getWorldState()

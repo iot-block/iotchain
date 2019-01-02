@@ -23,7 +23,7 @@ import scodec.bits.ByteVector
   * 3. call [[Consensus]] to seal this [[ExecutedBlock]] into a [[MinedBlock]]
   * 4. submit the [[MinedBlock]] to [[BlockExecutor]]
   */
-case class BlockMiner[F[_]](
+final case class BlockMiner[F[_]](
     config: MiningConfig,
     syncManager: SyncManager[F],
     haltWhenTrue: SignallingRef[F, Boolean]

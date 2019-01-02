@@ -10,7 +10,7 @@ import jbok.crypto._
   *
   * @param code the EVM bytecode as bytes
   */
-case class Program(code: ByteVector) {
+final case class Program(code: ByteVector) {
 
   def getByte(pc: Int): Byte =
     code.lift(pc).getOrElse(0)

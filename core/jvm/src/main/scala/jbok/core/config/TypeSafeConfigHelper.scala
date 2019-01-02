@@ -1,26 +1,44 @@
 package jbok.core.config
+
 import cats.data.NonEmptyList
 import com.typesafe.config._
 
 import scala.collection.JavaConverters._
 
-object ConfigHelper {
+object TypeSafeConfigHelper {
   val minCellLen = 16
   val maxCellLen = 48
 
-  private val system = ConfigFactory.systemProperties()
+  /** system properties */
+  val system: Config = ConfigFactory.systemProperties()
 
-  private val resource = ConfigFactory.parseResources("reference.conf")
+  /** unresolved reference */
+  val unresolvedReference: Config = ConfigFactory.parseResources("reference.conf")
 
   val reference: Config =
-    resource
-      .resolveWith(resource.withFallback(system))
+    unresolvedReference
+      .resolveWith(unresolvedReference.withFallback(system))
       .getConfig("jbok")
 
-  def overrideWith(config: Config): Config =
+  def overrideBy(config: Config): Config =
     config
-      .withFallback(resource.resolveWith(config.withFallback(resource).withFallback(system)))
+      .withFallback(unresolvedReference.resolveWith(config.withFallback(unresolvedReference).withFallback(system)))
       .getConfig("jbok")
+
+  def withIdentityAndPort(identity: String, port: Int): Config = {
+    val args = List(
+      "-identity",
+      identity,
+      "-peer.port",
+      port.toString,
+      "-peer.discoveryPort",
+      (port + 1).toString,
+      "-rpc.port",
+      (port + 2).toString
+    )
+    val Right(config) = parseCmdArgs(args)
+    overrideBy(config)
+  }
 
   private def pad(str: String, maxLen: Int): String =
     if (str.length > maxLen) {
@@ -41,11 +59,14 @@ object ConfigHelper {
         .mkString("\n")
   }
 
+  def maxOr(xs: List[Int], default: Int): Int =
+    xs.foldLeft(default)(_ max _)
+
   final case class ConfigGroup(key: String, items: List[ConfigItem]) {
-    val maxNameLen   = items.map(_.name.length).max max minCellLen min maxCellLen
-    val maxValueLen  = items.map(_.value.length).max max minCellLen min maxCellLen
-    val maxDescLen   = items.map(_.desc.length).max max minCellLen min maxCellLen
-    val maxOriginLen = items.map(_.origin.length).max max minCellLen min maxCellLen
+    val maxNameLen   = maxOr(items.map(_.name.length), 0) max minCellLen min maxCellLen
+    val maxValueLen  = maxOr(items.map(_.value.length), 0) max minCellLen min maxCellLen
+    val maxDescLen   = maxOr(items.map(_.desc.length), 0) max minCellLen min maxCellLen
+    val maxOriginLen = maxOr(items.map(_.origin.length), 0) max minCellLen min maxCellLen
 
     def render: String = {
       val header = List(
@@ -104,7 +125,7 @@ object ConfigHelper {
     Help(configItems)
   }
 
-  def parseConfig(args: List[String]): Either[Throwable, Config] = {
+  def parseCmdArgs(args: List[String]): Either[Throwable, Config] = {
     val pairs = args.grouped(2).toList.map {
       case List(key, _) if !key.startsWith("-") =>
         throw new Exception(s"$key {key} must start with '-'")

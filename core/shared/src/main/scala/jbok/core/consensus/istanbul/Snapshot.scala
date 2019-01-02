@@ -6,6 +6,7 @@ import _root_.io.circe._
 import _root_.io.circe.generic.JsonCodec
 import _root_.io.circe.parser._
 import _root_.io.circe.syntax._
+import cats.data.OptionT
 import jbok.codec.json.implicits._
 import jbok.core.models.{Address, BlockHeader}
 import jbok.persistent.KeyValueDB
@@ -20,7 +21,7 @@ import scala.collection.mutable.{ArrayBuffer, Map => MMap, Set => MSet}
 // Vote represents a single vote that an authorized signer made to modify the
 // list of authorizations.
 @JsonCodec
-case class Vote(
+final case class Vote(
     signer: Address, // Authorized signer that cast this vote
     block: BigInt, // Block number the vote was cast in (expire old votes)
     address: Address, // Account being voted on to change its authorization
@@ -30,12 +31,12 @@ case class Vote(
 // Tally is a simple vote tally to keep the current score of votes. Votes that
 // go against the proposal aren't counted since it's equivalent to not voting.
 @JsonCodec
-case class Tally(
+final case class Tally(
     authorize: Boolean, // Whether the vote is about authorizing or kicking someone
     votes: Int // Number of votes until now wanting to pass the proposal
 )
 
-case class Snapshot(
+final case class Snapshot(
     config: IstanbulConfig,
     number: BigInt, // Block number where the snapshot was created
     hash: ByteVector, // Block hash where the snapshot was created
@@ -98,25 +99,7 @@ object Snapshot {
 
   implicit val snapshotJsonDecoder: Decoder[Snapshot] = deriveDecoder[Snapshot]
 
-  implicit private[jbok] val byteArrayOrd: Ordering[Array[Byte]] = new Ordering[Array[Byte]] {
-    def compare(a: Array[Byte], b: Array[Byte]): Int =
-      if (a eq null) {
-        if (b eq null) 0
-        else -1
-      } else if (b eq null) 1
-      else {
-        val L = math.min(a.length, b.length)
-        var i = 0
-        while (i < L) {
-          if (a(i) < b(i)) return -1
-          else if (b(i) < a(i)) return 1
-          i += 1
-        }
-        if (L < b.length) -1
-        else if (L < a.length) 1
-        else 0
-      }
-  }
+  implicit val byteArrayOrd: Ordering[Array[Byte]] = Ordering.by((_: Array[Byte]).toIterable)
 
   implicit private[jbok] val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
@@ -133,12 +116,11 @@ object Snapshot {
     C.get[F](hash).flatMap {
       case Some(snap) => Sync[F].pure(snap.some)
       case None =>
-        db.getOpt[ByteVector, String](hash, namespace)
-          .map(_.map(json => decode[Snapshot](json).right.get))
-          .flatMap {
-            case Some(snap) => C.put[F](hash)(snap).as(Some(snap))
-            case None       => Sync[F].pure(None)
-          }
+        (for {
+          str  <- db.getOptT[ByteVector, String](hash, namespace)
+          snap <- OptionT.fromOption[F](decode[Snapshot](str).toOption)
+          _    <- OptionT.liftF(C.put[F](hash)(snap))
+        } yield snap).value
     }
 
   def apply(config: IstanbulConfig, number: BigInt, hash: ByteVector, validatorSet: ValidatorSet): Snapshot =

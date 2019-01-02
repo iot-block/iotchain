@@ -8,7 +8,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("Account")
 @JSExportAll
-case class Account(
+final case class Account(
     nonce: UInt256 = 0,
     balance: UInt256 = 0,
     storageRoot: ByteVector = Account.EmptyStorageRootHash,

@@ -9,11 +9,11 @@ import jbok.app.views.CustomInput
 import org.scalajs.dom.raw.{HTMLInputElement, HTMLTextAreaElement}
 import org.scalajs.dom.{Element, Event, KeyboardEvent}
 
-case class FormEntry(name: String, `type`: String = "text", value: Var[String] = Var("")) {
+final case class FormEntry(name: String, `type`: String = "text", value: Var[String] = Var("")) {
   val initValue = value.value
 }
 
-case class Form2(entries: Constants[CustomInput], submit: Map[String, CustomInput] => Unit) {
+final case class Form2(entries: Constants[CustomInput], submit: Map[String, CustomInput] => Unit) {
   val entryMap = entries.value.map(x => x.name -> x).toMap
 
   def clear() = entries.value.foreach(_.clear())
@@ -34,7 +34,7 @@ case class Form2(entries: Constants[CustomInput], submit: Map[String, CustomInpu
     </div>
 }
 
-case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Unit, idOpt: Option[String] = None) {
+final case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Unit, idOpt: Option[String] = None) {
   val id = idOpt getOrElse UUID.randomUUID().toString
 
   val entryMap = entries.value.map(x => x.name -> x).toMap

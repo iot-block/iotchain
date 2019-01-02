@@ -16,7 +16,8 @@ trait JbokSpec
     with PropertyChecks
     with BeforeAndAfterAll
     with BeforeAndAfterEach
-    with TimeLimitedTests {
+    with TimeLimitedTests
+    with CancelAfterFailure {
 
   override def timeLimit: Span = 60.seconds
 

@@ -9,7 +9,7 @@ object PowMode {
   case object FullFake extends PowMode
 }
 
-case class EthashConfig(
+final case class EthashConfig(
     cacheDir: String,
     cachesInMem: Int,
     cachesOnDisk: Int,

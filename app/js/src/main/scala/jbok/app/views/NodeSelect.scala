@@ -7,7 +7,8 @@ import com.thoughtworks.binding.Binding.Constants
 import org.scalajs.dom._
 import org.scalajs.dom.raw.HTMLSelectElement
 
-case class NodeSelect(state: AppState) {
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
+final case class NodeSelect(state: AppState) {
   @binding.dom
   def render: Binding[Element] = {
     val onChangeHandler = { event: Event =>

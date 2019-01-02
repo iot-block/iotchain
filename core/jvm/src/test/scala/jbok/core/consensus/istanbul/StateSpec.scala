@@ -16,7 +16,7 @@ import jbok.core.messages.IstanbulMessage
 
 import scala.collection.mutable.{Map => MMap}
 
-case class Expect(
+final case class Expect(
     state: State,
     proposer: Address,
     validators: List[Address],

@@ -6,8 +6,8 @@ import com.thoughtworks.binding.Binding.{Var, Vars}
 import org.scalajs.dom._
 
 object Nav {
-  case class Tab(name: String, content: Var[Binding[Node]], icon: String)
-  case class TabList(tabs: Vars[Tab], selected: Var[Tab])
+  final case class Tab(name: String, content: Var[Binding[Node]], icon: String)
+  final case class TabList(tabs: Vars[Tab], selected: Var[Tab])
   @binding.dom
   def renderEmpty: Binding[Node] =
     <div></div>

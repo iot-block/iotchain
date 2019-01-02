@@ -70,7 +70,7 @@ object EvmConfig {
 
 }
 
-case class EvmConfig(
+final case class EvmConfig(
     feeSchedule: FeeSchedule,
     opCodes: List[OpCode],
     preCompiledContracts: Map[Address, PrecompiledContract],

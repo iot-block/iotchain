@@ -5,6 +5,7 @@ import com.thoughtworks.binding.Binding
 import jbok.core.models.SignedTransaction
 import org.scalajs.dom.Element
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 object TxView {
   @binding.dom
   def render(tx: SignedTransaction): Binding[Element] =

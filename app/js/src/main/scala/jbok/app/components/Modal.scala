@@ -7,7 +7,7 @@ import com.thoughtworks.binding.Binding
 import org.scalajs.dom.raw.HTMLElement
 import org.scalajs.dom.{document, Element, Event}
 
-case class Modal(title: String, body: Binding[Element], onConfirm: () => Unit = { () =>
+final case class Modal(title: String, body: Binding[Element], onConfirm: () => Unit = { () =>
   }, onCancel: () => Unit = { () =>
   }, idOpt: Option[String] = None) {
   val id = idOpt getOrElse UUID.randomUUID().toString

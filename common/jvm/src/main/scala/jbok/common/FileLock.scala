@@ -7,7 +7,7 @@ import better.files.File
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 
-case class FileLockErr(path: Path) extends Exception(s"${path} is already locked")
+final case class FileLockErr(path: Path) extends Exception(s"${path} is already locked")
 
 object FileLock {
   private[this] val log = jbok.common.log.getLogger("FileLock")

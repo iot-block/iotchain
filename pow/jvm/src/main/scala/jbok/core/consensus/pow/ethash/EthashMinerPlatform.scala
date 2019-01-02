@@ -18,8 +18,8 @@ import scala.util.Random
 sealed trait MiningResult {
   def triedHashes: Int
 }
-case class MiningSuccessful(triedHashes: Int, pow: ProofOfWork, nonce: ByteVector) extends MiningResult
-case class MiningUnsuccessful(triedHashes: Int)                                    extends MiningResult
+final case class MiningSuccessful(triedHashes: Int, pow: ProofOfWork, nonce: ByteVector) extends MiningResult
+final case class MiningUnsuccessful(triedHashes: Int)                                    extends MiningResult
 
 class EthashMinerPlatform[F[_]](
     miningConfig: MiningConfig,

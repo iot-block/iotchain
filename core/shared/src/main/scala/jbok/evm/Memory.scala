@@ -3,7 +3,7 @@ package jbok.evm
 import jbok.core.models.UInt256
 import scodec.bits.ByteVector
 
-case class Memory(underlying: ByteVector) extends AnyVal {
+final case class Memory(underlying: ByteVector) extends AnyVal {
 
   def store(offset: UInt256, b: Byte): Memory = store(offset, ByteVector(b))
 

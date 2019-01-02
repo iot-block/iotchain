@@ -107,7 +107,7 @@ object testkit {
       blockPlacement <- getUInt256Gen(0, blockNumber)
       blockHeader = exampleBlockHeader.copy(number = blockNumber - blockPlacement)
       env = ExecEnv(ownerAddr, callerAddr, callerAddr, 0, inputData, value, program, blockHeader, 0)
-      history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+      history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
       world = history
         .getWorldState()
         .unsafeRunSync()

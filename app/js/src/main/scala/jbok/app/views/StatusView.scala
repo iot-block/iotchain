@@ -6,7 +6,7 @@ import jbok.app.{AppState, ClientStatus}
 import org.scalajs.dom._
 import org.scalajs.dom.raw.HTMLInputElement
 
-case class StatusView(state: AppState) {
+final case class StatusView(state: AppState) {
   @binding.dom
   def renderItem(title: String, value: String): Binding[Element] =
     <div class="status-item delimiter">

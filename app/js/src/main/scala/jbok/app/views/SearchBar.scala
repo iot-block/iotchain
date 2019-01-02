@@ -7,7 +7,7 @@ import org.scalajs.dom._
 import org.scalajs.dom.ext.KeyCode
 import org.scalajs.dom.raw.HTMLInputElement
 
-case class SearchBar(state: AppState) {
+final case class SearchBar(state: AppState) {
   val keyDownHandler = { event: KeyboardEvent =>
     (event.currentTarget, event.keyCode) match {
       case (input: HTMLInputElement, KeyCode.Enter) =>

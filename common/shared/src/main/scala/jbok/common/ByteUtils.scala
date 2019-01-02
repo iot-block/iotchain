@@ -4,6 +4,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 
 import scodec.bits.ByteVector
 
+@SuppressWarnings(Array("org.wartremover.warts.TraversableOps"))
 object ByteUtils {
   def or(arrays: ByteVector*): ByteVector = {
     require(arrays.map(_.length).distinct.length <= 1, "All the arrays should have the same length")

@@ -10,6 +10,7 @@ import jbok.core.models._
 import jbok.sdk.api.{BlockParam, CallTx, PublicAPI}
 import scodec.bits.ByteVector
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final class PublicApiImpl(
     historyConfig: HistoryConfig,
     miner: BlockMiner[IO]

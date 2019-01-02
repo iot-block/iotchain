@@ -7,7 +7,7 @@ object Fp2 {
   val One: Fp2  = Fp2(0, 1)
 }
 
-case class Fp2(x: BigInt, y: BigInt) {
+final case class Fp2(x: BigInt, y: BigInt) {
   def isZero: Boolean =
     (x == 0) && (y == 0)
 

@@ -35,7 +35,7 @@ object TwistPoint {
 
 }
 
-case class TwistPoint(x: Fp2, y: Fp2, z: Fp2, t: Fp2) {
+final case class TwistPoint(x: Fp2, y: Fp2, z: Fp2, t: Fp2) {
   def isOnCurve: Boolean =
     (y.square - x.square() * x) == TwistPoint.twistB
 

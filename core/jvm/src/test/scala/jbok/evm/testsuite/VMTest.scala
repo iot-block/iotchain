@@ -30,7 +30,7 @@ import scala.collection.JavaConverters._
 //Post          core.GenesisAlloc     `json:"post"`
 //PostStateRoot common.Hash           `json:"postStateRoot"`
 
-case class VMJson(
+final case class VMJson(
     _info: InfoJson,
     callcreates: List[CallCreateJson],
     env: EnvJson,
@@ -49,7 +49,7 @@ case class VMJson(
 //currentTimestamp: The current block’s timestamp.
 //previousHash: The previous block’s hash.
 
-case class EnvJson(
+final case class EnvJson(
     currentCoinbase: Address,
     currentDifficulty: BigInt,
     currentGasLimit: BigInt,
@@ -62,7 +62,7 @@ case class EnvJson(
 //code: The body code of the account, given as an array of byte values. See $DATA_ARRAY.
 //storage: The account’s storage, given as a mapping of keys to values. For key used notion of string as digital or hex number e.g: "1200" or "0x04B0" For values used $DATA_ARRAY.
 
-case class PrePostJson(balance: BigInt, nonce: BigInt, code: ByteVector, storage: Map[ByteVector, ByteVector])
+final case class PrePostJson(balance: BigInt, nonce: BigInt, code: ByteVector, storage: Map[ByteVector, ByteVector])
 
 //address: The address of the account under which the code is executing, to be returned by the ADDRESS instruction.
 //origin: The address of the execution’s origin, to be returned by the ORIGIN instruction.
@@ -73,7 +73,7 @@ case class PrePostJson(balance: BigInt, nonce: BigInt, code: ByteVector, storage
 //gasPrice: The price of gas for the transaction, as used by the GASPRICE instruction.
 //gas: The total amount of gas available for the execution, as would be returned by the GAS instruction were it be executed first.
 
-case class ExecJson(
+final case class ExecJson(
     address: Address,
     origin: Address,
     caller: Address,
@@ -89,9 +89,9 @@ case class ExecJson(
 //gasLimit: The amount of gas with which the operation was made.
 //value: The value or endowment with which the operation was made.
 
-case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLimit: BigInt, value: BigInt)
+final case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLimit: BigInt, value: BigInt)
 
-case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
+final case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
 class VMTest extends JbokSpec {
   def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: BigInt): WorldState[IO] = {
@@ -103,7 +103,7 @@ class VMTest extends JbokSpec {
       case (addr, account) => (addr, account.code)
     }
 
-    val history                  = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+    val history                  = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
 
     val storages = json.map {
       case (addr, account) =>

@@ -65,7 +65,7 @@ final class Discovery[F[_]](
       current <- T.clock.realTime(MILLISECONDS)
       id      <- F.delay(UUID.randomUUID())
       ping = Ping(peerNode, current + ttl.toMillis, id)
-      _ = log.debug(s"ping ${remote.udpAddress}")
+      _    = log.debug(s"ping ${remote.udpAddress}")
       kad <- sendAndWaitPacket(remote.udpAddress, ping)
       pong = kad.asInstanceOf[Pong]
     } yield pong
@@ -145,8 +145,7 @@ final class Discovery[F[_]](
       buckets <- table.getBuckets
       randomLast = Random
         .shuffle(buckets.zipWithIndex)
-        .filter(_._1.entries.nonEmpty)
-        .map(t => t._1.entries.last -> t._2)
+        .flatMap(t => t._1.entries.lastOption.map(last => last -> t._2))
         .headOption
       _ <- randomLast match {
         case Some((last, i)) => go(last, i)
@@ -164,14 +163,14 @@ final class Discovery[F[_]](
     */
   def lookup(targetPK: KeyPair.Public): F[Vector[PeerNode]] = {
     def go(ask: Vector[PeerNode], seen: Set[ByteVector], result: NodesByDistance): F[NodesByDistance] =
-      if (ask.isEmpty) {
-        F.pure(result)
-      } else {
-        findNode(ask.head, targetPK).flatMap { nodes =>
-          val unSeen  = nodes.filter(n => !seen.contains(n.id))
-          val updated = unSeen.foldLeft(result)((acc, node) => acc.pushed(node))
-          go(ask.tail, seen ++ unSeen.map(_.id), updated)
-        }
+      ask match {
+        case head +: tail =>
+          findNode(head, targetPK).flatMap { nodes =>
+            val unSeen  = nodes.filter(n => !seen.contains(n.id))
+            val updated = unSeen.foldLeft(result)((acc, node) => acc.pushed(node))
+            go(tail, seen ++ unSeen.map(_.id), updated)
+          }
+        case _ => F.pure(result)
       }
 
     for {

@@ -5,6 +5,7 @@ import cats.effect.IO
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
 
+@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object RpcServerMacro {
   def mountAPI[RpcServer, API: c.WeakTypeTag](c: blackbox.Context)(api: c.Expr[API]): c.Expr[RpcServer] = {
     import c.universe._
@@ -58,7 +59,7 @@ object RpcServerMacro {
         c.Expr[(String, String => IO[String])](q"""$methodName -> $handler""")
       })
 
-    val expr = c.Expr[RpcServer] {
+    val expr: c.Expr[RpcServer] = c.Expr[RpcServer] {
       q"""
         import _root_.io.circe.syntax._
         import _root_.io.circe.parser._

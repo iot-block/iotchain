@@ -24,7 +24,7 @@ object Assembly {
   implicit class ByteVectorAsByteCode(val bytes: ByteVector) extends ByteCode
 }
 
-case class Assembly(byteCode: ByteCode*) {
+final case class Assembly(byteCode: ByteCode*) {
   val code: ByteVector = byteCode.foldLeft(ByteVector.empty)(_.bytes ++ _.bytes)
 
   val program: Program = Program(code)

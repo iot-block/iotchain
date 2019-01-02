@@ -2,11 +2,11 @@ package jbok.core
 
 import cats.effect.IO
 import cats.effect.concurrent.{Deferred, Ref}
+import com.typesafe.config.Config
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
-import jbok.core.config.GenesisConfig
-import jbok.core.config.defaults.testReference
+import jbok.core.config.{ConfigLoader, GenesisConfig, TypeSafeConfigHelper}
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.istanbul.Istanbul.IstanbulExtra
 import jbok.core.consensus.istanbul.{Istanbul, Snapshot, _}
@@ -39,20 +39,34 @@ object testkit {
 
   val testGenesis = GenesisConfig.generate(0, testAlloc)
 
-  val testConfig =
-    testReference.copy(
-      genesisOrPath = Left(Clique.generateGenesisConfig(testGenesis, List(testMiner.address))),
-      mining = testReference.mining.copy(minerAddressOrKey = Right(testMiner.keyPair), period = 100.millis),
-      peer = testReference.peer.copy(nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()))
-    )
+  def fillConfigs(n: Int): List[Config] =
+    (0 until n).toList.map { i =>
+      TypeSafeConfigHelper.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
+    }
+
+  val genesis = Clique.generateGenesisConfig(testGenesis, List(testMiner.address))
+
+  def fillFullNodeConfigs(n: Int): List[FullNodeConfig] = {
+    fillConfigs(n).map { config =>
+      val fnc = ConfigLoader.loadFullNodeConfig[IO](config).unsafeRunSync()
+      fnc
+        .copy(
+          genesisOrPath = Left(genesis)
+        )
+        .withHistory(_.copy(dbBackend = "inmem"))
+        .withMining(_.copy(minerAddressOrKey = Right(testMiner.keyPair), period = 100.millis))
+        .withPeer(
+          _.copy(dbBackend = "inmem", nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())))
+    }
+  }
+
+  val testConfig: FullNodeConfig = fillFullNodeConfigs(1).head
 
   def istanbulTestConfig(keypairs: List[KeyPair]): FullNodeConfig = {
     val genesisConfig = prepareIstanbulConfig(keypairs, testMiner)
-    testReference.copy(
+    testConfig.copy(
       consensusAlgo = "istanbul",
-      genesisOrPath = Left(genesisConfig),
-      mining = testReference.mining.copy(minerAddressOrKey = Right(testMiner.keyPair), period = 500.millis),
-      peer = testReference.peer.copy(nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()))
+      genesisOrPath = Left(genesisConfig)
     )
   }
 
@@ -61,7 +75,7 @@ object testkit {
     val p = config.consensusAlgo match {
       case "clique" =>
         for {
-          history   <- History.forPath[IO](config.history.chainDataDir)
+          history   <- History.forBackendAndPath[IO](config.history.dbBackend, config.history.chainDataDir)
           blockPool <- BlockPool(history, BlockPoolConfig())
           clique    <- Clique(config.mining, config.genesis, history, Some(testMiner.keyPair))
           consensus = new CliqueConsensus[IO](clique, blockPool)
@@ -75,7 +89,7 @@ object testkit {
   def genIstanbulConsensus(selfPk: KeyPair)(implicit config: FullNodeConfig): IO[Consensus[IO]] = {
     implicit val cache = CacheBuilder.build[IO, Snapshot](128).unsafeRunSync()
     for {
-      history   <- History.forPath[IO](config.history.chainDataDir)
+      history   <- History.forBackendAndPath[IO](config.history.dbBackend, config.history.chainDataDir)
       blockPool <- BlockPool[IO](history, BlockPoolConfig())
       promise   <- Deferred[IO, Int]
       istanbul  <- Istanbul[IO](IstanbulConfig(), history, config.genesis, selfPk, StateNewRound)

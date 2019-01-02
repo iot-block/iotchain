@@ -11,7 +11,7 @@ import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.store.namespaces
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
-import jbok.persistent.StageKeyValueDB
+import jbok.persistent.{DBErr, StageKeyValueDB}
 import scodec.Codec
 import scodec.bits.ByteVector
 import shapeless._
@@ -54,7 +54,7 @@ final case class WorldState[F[_]](
     this.copy(touchedAccounts = Set.empty)
 
   def getAccount(address: Address): F[Account] =
-    getAccountOpt(address).value.map(_.get)
+    getAccountOpt(address).getOrElseF(F.raiseError(DBErr.NotFound))
 
   def getStorage(address: Address): F[Storage[F]] =
     OptionT.fromOption[F](contractStorages.get(address)).getOrElseF {

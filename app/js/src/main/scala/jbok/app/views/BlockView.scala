@@ -10,7 +10,7 @@ import org.scalajs.dom._
 
 import scala.scalajs.js.Date
 
-case class BlockView(state: AppState) {
+final case class BlockView(state: AppState) {
 
   @binding.dom
   val overview: Binding[Element] =

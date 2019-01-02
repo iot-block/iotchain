@@ -19,7 +19,7 @@ import scodec.bits.ByteVector
   * @param halted a flag to indicate program termination
   * @param error indicates whether the program terminated abnormally
   */
-case class ProgramState[F[_]: Sync](
+final case class ProgramState[F[_]: Sync](
     context: ProgramContext[F],
     gas: BigInt,
     world: WorldState[F],

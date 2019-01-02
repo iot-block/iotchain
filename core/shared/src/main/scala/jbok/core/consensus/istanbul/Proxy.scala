@@ -13,11 +13,11 @@ object Proxy {
   def finalizeMessage[F[_]](msgCode: Int, payload: ByteVector, context: StateContext[F])(
       implicit F: Concurrent[F]): F[IstanbulMessage] =
     for {
-      proposal <- context.proposal
+      proposal <- context.proposal.flatMap(opt => F.fromOption(opt, new Exception("unexpected None")))
       msgForSign <- msgCode match {
         case IstanbulMessage.msgCommitCode =>
           for {
-            seal <- F.pure(proposal.get.header.hash ++ ByteVector(IstanbulMessage.msgCommitCode))
+            seal <- F.pure(proposal.header.hash ++ ByteVector(IstanbulMessage.msgCommitCode))
             sig  <- context.signFunc(seal)
           } yield IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, Some(sig))
         case _ => F.pure(IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, None))

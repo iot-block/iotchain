@@ -17,11 +17,12 @@ import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
 import jbok.core.validators.{HeaderValidator, TxValidator}
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
+import jbok.persistent.DBErr
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
 
-case class BlockExecutor[F[_]](
+final case class BlockExecutor[F[_]](
     config: HistoryConfig,
     consensus: Consensus[F],
     peerManager: PeerManager[F],
@@ -52,7 +53,7 @@ case class BlockExecutor[F[_]](
   def handlePendingBlock(pending: PendingBlock): F[ExecutedBlock[F]] =
     for {
       best             <- history.getBestBlock
-      currentTd        <- history.getTotalDifficultyByHash(best.header.hash).map(_.get)
+      currentTd        <- history.getTotalDifficultyByHash(best.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
       (result, txs)    <- executeTransactions(pending.block, shortCircuit = false)
       transactionsRoot <- MerklePatriciaTrie.calcMerkleRoot[F, SignedTransaction](txs)
       receiptsRoot     <- MerklePatriciaTrie.calcMerkleRoot[F, Receipt](result.receipts)
@@ -127,7 +128,7 @@ case class BlockExecutor[F[_]](
   private[jbok] def executeBlock(block: Block): F[ExecutedBlock[F]] =
     for {
       (result, _) <- executeTransactions(block, shortCircuit = true)
-      parentTd    <- history.getTotalDifficultyByHash(block.header.parentHash).map(_.get)
+      parentTd    <- history.getTotalDifficultyByHash(block.header.parentHash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
       executed = ExecutedBlock(block, result.world, result.gasUsed, result.receipts, parentTd + block.header.difficulty)
       postProcessed <- consensus.postProcess(executed)
       persisted     <- postProcessed.world.persisted
@@ -409,13 +410,13 @@ case class BlockExecutor[F[_]](
 }
 
 object BlockExecutor {
-  case class BlockExecResult[F[_]](
+  final case class BlockExecResult[F[_]](
       world: WorldState[F],
       gasUsed: BigInt = 0,
       receipts: List[Receipt] = Nil
   )
 
-  case class TxExecResult[F[_]](
+  final case class TxExecResult[F[_]](
       world: WorldState[F],
       gasUsed: BigInt,
       logs: List[TxLogEntry],

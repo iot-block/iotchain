@@ -25,7 +25,7 @@ import jbok.core.sync.SyncManager
 import jbok.network.rpc.RpcServer
 import jbok.network.server.Server
 
-case class FullNode[F[_]](
+final case class FullNode[F[_]](
     config: FullNodeConfig,
     syncManager: SyncManager[F],
     miner: BlockMiner[F],
@@ -73,11 +73,11 @@ object FullNode {
       T: Timer[IO],
       CS: ContextShift[IO]
   ): IO[FullNode[IO]] = {
-    implicit val chainId = config.genesis.chainId
+    implicit val chainId: BigInt = config.genesis.chainId
     for {
       _ <- ScribeLog.setHandlers[IO](
         ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel))),
-        ScribeLogPlatform.fileHandler(config.logsdir, Some(Level.fromName(config.logLevel)))
+        ScribeLogPlatform.fileHandler(config.logDir, Some(Level.fromName(config.logLevel)))
       )
       metrics  <- Metrics.default[IO]
       keystore <- KeyStorePlatform[IO](config.keystore.keystoreDir)
@@ -90,7 +90,8 @@ object FullNode {
         case Left(_)   => IO.pure(None)
         case Right(kp) => IO.pure(kp.some)
       }
-      history   <- History.forPath[IO](config.history.chainDataDir)(F, chainId, T, metrics)
+      history <- History
+        .forBackendAndPath[IO](config.history.dbBackend, config.history.chainDataDir)(F, chainId, T, metrics)
       blockPool <- BlockPool(history, BlockPoolConfig())
       clique    <- Clique(config.mining, config.genesis, history, minerKey)
       consensus = new CliqueConsensus[IO](clique, blockPool)

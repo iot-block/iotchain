@@ -33,9 +33,9 @@ object MptNode {
       else Left(node.hash)
   }
 
-  case class LeafNode(key: Nibbles, value: ByteVector)     extends MptNode
-  case class ExtensionNode(key: Nibbles, child: NodeEntry) extends MptNode
-  case class BranchNode(branches: List[Option[NodeEntry]], value: Option[ByteVector]) extends MptNode {
+  final case class LeafNode(key: Nibbles, value: ByteVector)     extends MptNode
+  final case class ExtensionNode(key: Nibbles, child: NodeEntry) extends MptNode
+  final case class BranchNode(branches: List[Option[NodeEntry]], value: Option[ByteVector]) extends MptNode {
     def activated: List[(Int, Option[NodeEntry])] =
       branches.zipWithIndex
         .filter(_._1.isDefined)
@@ -95,34 +95,35 @@ object MptNode {
 
   implicit lazy val nodeCodec: RlpCodec[MptNode] = nop {
     RlpCodec[List[ByteVector]].narrow[MptNode](
-      list =>
-        list.size match {
-          case 2 =>
-            HexPrefix.decode(list.head) map {
-              case (true, k)  => LeafNode(k, list(1))
-              case (false, k) => ExtensionNode(k, entryCodec.decode(list(1).bits).require.value)
-            }
+      {
+        case key :: value :: Nil =>
+          HexPrefix.decode(key) map {
+            case (true, k)  => LeafNode(k, value)
+            case (false, k) => ExtensionNode(k, entryCodec.decode(value.bits).require.value)
+          }
 
-          case 17 =>
-            list.splitAt(16) match {
-              case (branches, value) =>
-                branches
-                  .foldLeft(Attempt.successful(List[Option[NodeEntry]]())) {
-                    case (attempt, branch) =>
-                      attempt.flatMap(entries => entryOptCodec.decode(branch.bits).map(r => entries :+ r.value))
-                  }
-                  .flatMap { nodes =>
-                    bytes
-                      .decode(value.head.bits)
-                      .map(r =>
-                        r.value match {
-                          case ByteVector.empty => BranchNode(nodes, None)
-                          case v                => BranchNode(nodes, Some(v))
-                      })
-                  }
-            }
+        case list if list.length == 17 =>
+          list.splitAt(16) match {
+            case (branches, value :: Nil) =>
+              branches
+                .foldLeft(Attempt.successful(List[Option[NodeEntry]]())) {
+                  case (attempt, branch) =>
+                    attempt.flatMap(entries => entryOptCodec.decode(branch.bits).map(r => entries :+ r.value))
+                }
+                .flatMap { nodes =>
+                  bytes
+                    .decode(value.bits)
+                    .map(r =>
+                      r.value match {
+                        case ByteVector.empty => BranchNode(nodes, None)
+                        case v                => BranchNode(nodes, Some(v))
+                    })
+                }
 
-          case size => Failure(Err(s"invalid node list size $size"))
+            case _ => ???
+          }
+
+        case list => Failure(Err(s"invalid node list length ${list.length}"))
       }, {
         case LeafNode(k, v) =>
           List(HexPrefix.encode(k, isLeaf = true), v)

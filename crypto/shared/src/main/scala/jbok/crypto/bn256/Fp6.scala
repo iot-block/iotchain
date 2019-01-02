@@ -6,7 +6,7 @@ object Fp6 {
   val One: Fp6  = Fp6(Fp2.Zero, Fp2.Zero, Fp2.One)
 }
 
-case class Fp6(x: Fp2, y: Fp2, z: Fp2) {
+final case class Fp6(x: Fp2, y: Fp2, z: Fp2) {
   def isZero: Boolean = x.isZero && y.isZero && z.isZero
 
   def isOne: Boolean = x.isZero && y.isZero && z.isOne

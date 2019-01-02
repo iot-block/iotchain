@@ -13,7 +13,7 @@ import scodec.bits.ByteVector
   * @param internalTxs       list of internal transactions (for debugging/tracing) if enabled in config
   * @param error             defined when the program terminated abnormally
   */
-case class ProgramResult[F[_]](
+final case class ProgramResult[F[_]](
     returnData: ByteVector,
     gasRemaining: BigInt,
     world: WorldState[F],

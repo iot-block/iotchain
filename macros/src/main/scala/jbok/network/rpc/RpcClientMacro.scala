@@ -48,9 +48,10 @@ object RpcClientMacro {
       val parameterLists      = macroUtils.getParameterLists(method)
       val parametersAsTuple   = macroUtils.getParametersAsTuple(method)
       val parameterType: Tree = macroUtils.getParameterType(method)
-      val resultType: Type    = method.returnType.typeArgs.head
-
-      java.util.UUID.randomUUID().toString
+      val resultType: Type = method.returnType.typeArgs match {
+        case head :: tail => head
+        case _            => throw new Exception("resultType must have nonEmpty typeArgs")
+      }
 
       val body =
         q"""

@@ -274,7 +274,7 @@ case object StateCommitted extends State {
             case Some(block) =>
               for {
                 commits <- context.current.get.map(_.commits.messages.values.toList)
-                committedSeals = commits.map(msg => msg.committedSig.get)
+                committedSeals = commits.flatMap(_.committedSig)
                 result <- insertBlock(block, committedSeals)
                 _ <- if (!result) {
 

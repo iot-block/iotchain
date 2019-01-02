@@ -4,7 +4,7 @@ import jbok.crypto.signature.{CryptoSignature, KeyPair}
 import jbok.core.rlpx.handshake.AuthInitiateEcdsaCodec._
 import scodec.bits.ByteVector
 
-case class AuthInitiateMessage(
+final case class AuthInitiateMessage(
     signature: CryptoSignature,
     ephemeralPublicHash: ByteVector,
     publicKey: ByteVector,
@@ -34,9 +34,9 @@ object AuthInitiateMessage {
   }
 }
 
-case class AuthInitiateMessageV4(signature: CryptoSignature, publicKey: ByteVector, nonce: ByteVector, version: Int)
+final case class AuthInitiateMessageV4(signature: CryptoSignature, publicKey: ByteVector, nonce: ByteVector, version: Int)
 
-case class AuthResponseMessage(ephemeralPublicKey: KeyPair.Public, nonce: ByteVector, knownPeer: Boolean) {
+final case class AuthResponseMessage(ephemeralPublicKey: KeyPair.Public, nonce: ByteVector, knownPeer: Boolean) {
   lazy val encoded: ByteVector = ByteVector(
     ephemeralPublicKey.bytes.toArray ++ nonce.toArray ++ Array(if (knownPeer) 1.toByte else 0.toByte)
   )
@@ -57,4 +57,4 @@ object AuthResponseMessage {
     )
 }
 
-case class AuthResponseMessageV4(ephemeralPublicKey: KeyPair.Public, nonce: ByteVector, version: Int)
+final case class AuthResponseMessageV4(ephemeralPublicKey: KeyPair.Public, nonce: ByteVector, version: Int)

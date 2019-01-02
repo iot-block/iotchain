@@ -4,15 +4,18 @@ import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
-import jbok.sdk.api.BlockParam
 import jbok.app.AppState
-import jbok.core.models.{Account, Address, UInt256}
+import jbok.core.models.{Account, Address}
 import jbok.sdk.api.{BlockParam, TransactionRequest}
 import org.scalajs.dom.raw.HTMLButtonElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
 
-case class SendTxView(state: AppState) {
+@SuppressWarnings(Array(
+  "org.wartremover.warts.OptionPartial",
+  "org.wartremover.warts.EitherProjectionPartial",
+))
+final case class SendTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]
 
   val currentId                     = state.currentId.value

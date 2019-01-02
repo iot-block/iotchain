@@ -21,7 +21,7 @@ class PrecompiledContractsSpec extends JbokSpec {
 
     implicit val bigInt: BigInt = BigInt(0)
 
-    val history = History.forPath[IO](KeyValueDB.INMEM).unsafeRunSync()
+    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
     val world = history
       .getWorldState()
       .unsafeRunSync()

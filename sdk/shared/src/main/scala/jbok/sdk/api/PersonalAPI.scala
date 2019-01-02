@@ -11,7 +11,7 @@ import scala.scalajs.js.annotation.JSExportTopLevel
 
 @JSExportTopLevel("TransactionRequest")
 @JsonCodec
-case class TransactionRequest(
+final case class TransactionRequest(
     from: Address,
     to: Option[Address] = None,
     value: Option[BigInt] = None,

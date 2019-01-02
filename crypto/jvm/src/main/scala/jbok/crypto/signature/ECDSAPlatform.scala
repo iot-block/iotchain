@@ -53,7 +53,10 @@ object ECDSAPlatform extends Signature[ECDSA] {
     val signer = new ECDSASigner(new HMacDSAKCalculator(new SHA256Digest()))
     signer.init(true, new ECPrivateKeyParameters(keyPair.secret.d, domain))
     val Array(r, s) = signer.generateSignature(hash)
-    val v           = calculateRecId(r, toCanonicalS(s), keyPair, hash, chainId).get
+    val v = calculateRecId(r, toCanonicalS(s), keyPair, hash, chainId) match {
+      case Some(recId) => recId
+      case None        => throw new Exception("unexpected error")
+    }
 
     val pointSign: BigInt = getRecoveryId(chainId, v).getOrElse(v)
 

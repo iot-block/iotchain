@@ -44,13 +44,13 @@ abstract class Consensus[F[_]](val history: History[F], val pool: BlockPool[F]) 
 
 object Consensus {
   sealed trait Result
-  case class Forward(blocks: List[Block])                         extends Result
-  case class Fork(oldBranch: List[Block], newBranch: List[Block]) extends Result
-  case class Stash(block: Block)                                  extends Result
-  case class Discard(reason: Throwable)                           extends Result
+  final case class Forward(blocks: List[Block])                         extends Result
+  final case class Fork(oldBranch: List[Block], newBranch: List[Block]) extends Result
+  final case class Stash(block: Block)                                  extends Result
+  final case class Discard(reason: Throwable)                           extends Result
 
   sealed trait BranchResult
-  case class BetterBranch(newBranch: NonEmptyList[BlockHeader]) extends BranchResult
-  case object NoChainSwitch                                     extends BranchResult
-  case object InvalidBranch                                     extends BranchResult
+  final case class BetterBranch(newBranch: NonEmptyList[BlockHeader]) extends BranchResult
+  final case object NoChainSwitch                                     extends BranchResult
+  final case object InvalidBranch                                     extends BranchResult
 }

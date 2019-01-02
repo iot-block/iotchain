@@ -8,21 +8,21 @@ import jbok.evm.EvmConfig
 import cats.implicits._
 
 object TxInvalid {
-  case object TxSignatureInvalid             extends Exception("SignedTransactionInvalid")
-  case class TxSyntaxInvalid(reason: String) extends Exception(s"TransactionSyntaxInvalid: ${reason}")
-  case class TxNonceInvalid(txNonce: UInt256, senderNonce: UInt256)
+  final case object TxSignatureInvalid             extends Exception("SignedTransactionInvalid")
+  final case class TxSyntaxInvalid(reason: String) extends Exception(s"TransactionSyntaxInvalid: ${reason}")
+  final case class TxNonceInvalid(txNonce: UInt256, senderNonce: UInt256)
       extends Exception(
         s"TxNonceInvalid(got tx nonce $txNonce but sender nonce in mpt is: $senderNonce)"
       )
-  case class TxNotEnoughGasForIntrinsicInvalid(txGasLimit: BigInt, txIntrinsicGas: BigInt)
+  final case class TxNotEnoughGasForIntrinsicInvalid(txGasLimit: BigInt, txIntrinsicGas: BigInt)
       extends Exception(
         s"TxNotEnoughGasForIntrinsicInvalid(xx gas limit ($txGasLimit) < tx intrinsic gas ($txIntrinsicGas))"
       )
-  case class TxSenderCantPayUpfrontCostInvalid(upfrontCost: UInt256, senderBalance: UInt256)
+  final case class TxSenderCantPayUpfrontCostInvalid(upfrontCost: UInt256, senderBalance: UInt256)
       extends Exception(
         s"TxSenderCantPayUpfrontCostInvalid(upfrontcost ($upfrontCost) > sender balance ($senderBalance))"
       )
-  case class TrxGasLimitTooBigInvalid(txGasLimit: BigInt, accumGasUsed: BigInt, blockGasLimit: BigInt)
+  final case class TrxGasLimitTooBigInvalid(txGasLimit: BigInt, accumGasUsed: BigInt, blockGasLimit: BigInt)
       extends Exception(
         s"TxGasLimitTooBigInvalid(tx gas limit ($txGasLimit) + acc gas ($accumGasUsed) > block gas limit ($blockGasLimit))"
       )

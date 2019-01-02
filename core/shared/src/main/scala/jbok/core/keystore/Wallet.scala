@@ -5,7 +5,7 @@ import cats.implicits._
 import jbok.core.models.{Address, SignedTransaction, Transaction}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 
-case class Wallet(address: Address, keyPair: KeyPair) {
+final case class Wallet(address: Address, keyPair: KeyPair) {
   def signTx[F[_]: Sync](tx: Transaction)(implicit chainId: BigInt): F[SignedTransaction] =
     SignedTransaction.sign[F](tx, keyPair)
 }

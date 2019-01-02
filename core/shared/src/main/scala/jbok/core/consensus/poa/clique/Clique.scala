@@ -12,7 +12,7 @@ import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
 import jbok.crypto.signature._
-import jbok.persistent.CacheBuilder
+import jbok.persistent.{CacheBuilder, DBErr}
 import scalacache._
 import scodec.bits._
 
@@ -28,10 +28,16 @@ final class Clique[F[_]](
 
   import config._
 
-  lazy val signer: Address = Address(keyPair.get)
+  lazy val signer: Address = keyPair match {
+    case Some(kp) => Address(kp)
+    case None     => throw new Exception("no signer keyPair defined")
+  }
 
   def sign(bv: ByteVector): F[CryptoSignature] =
-    Signature[ECDSA].sign[F](bv.toArray, keyPair.get, history.chainId)
+    keyPair match {
+      case Some(kp) => Signature[ECDSA].sign[F](bv.toArray, kp, history.chainId)
+      case None     => F.raiseError(new Exception("no signer keyPair defined"))
+    }
 
   def applyHeaders(
       number: BigInt,
@@ -55,12 +61,16 @@ final class Clique[F[_]](
       case None =>
         // No snapshot for this header, gather the header and move backward(recur)
         for {
-          (h, p) <- if (parents.nonEmpty) {
-            // If we have explicit parents, pick from there (enforced)
-            F.pure((parents.last, parents.slice(0, parents.length - 1)))
-          } else {
-            // No explicit parents (or no more left), reach out to the database
-            history.getBlockHeaderByHash(hash).map(header => header.get -> parents)
+          (h, p) <- parents.lastOption match {
+            case Some(last) =>
+              // If we have explicit parents, pick from there (enforced)
+              F.pure((last, parents.slice(0, parents.length - 1)))
+            case None =>
+              // No explicit parents (or no more left), reach out to the database
+              history.getBlockHeaderByHash(hash).flatMap {
+                case Some(header) => F.pure(header -> parents)
+                case None => ???
+              }
           }
           snap <- applyHeaders(number - 1, h.parentHash, p, h :: headers)
         } yield snap
@@ -83,7 +93,7 @@ final class Clique[F[_]](
 object Clique {
   sealed trait CliqueAlgo
   object CliqueAlgo extends CliqueAlgo
-  case class CliqueExtra(signer: List[Address], signature: CryptoSignature, auth: Boolean = false)
+  final case class CliqueExtra(signer: List[Address], signature: CryptoSignature, auth: Boolean = false)
       extends Extra[CliqueAlgo]
 
   val extraVanity   = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity

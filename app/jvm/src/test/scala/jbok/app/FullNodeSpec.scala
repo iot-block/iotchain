@@ -2,11 +2,10 @@ package jbok.app
 
 import cats.effect.IO
 import cats.implicits._
+import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
-import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.testkit._
-import fs2._
 
 import scala.concurrent.duration._
 
@@ -25,7 +24,7 @@ class FullNodeSpec extends JbokSpec {
     }
 
     "create a bunch of nodes and connect with ring" in {
-      val configs = FullNodeConfig.fill(config, 10)
+      val configs = fillFullNodeConfigs(10)
       val nodes   = configs.map(config => FullNode.forConfig(config).unsafeRunSync())
 
       val p = for {
@@ -47,7 +46,7 @@ class FullNodeSpec extends JbokSpec {
 
     "create a bunch of nodes and connect with star" in {
       val N       = 10
-      val configs = FullNodeConfig.fill(config, N)
+      val configs = fillFullNodeConfigs(N)
       val nodes   = configs.map(config => FullNode.forConfig(config).unsafeRunSync())
 
       val p = for {
@@ -66,7 +65,7 @@ class FullNodeSpec extends JbokSpec {
 
     "create a bunch of nodes and connect with star and broadcast some blocks" in {
       val N       = 4
-      val configs = FullNodeConfig.fill(config, N)
+      val configs = fillFullNodeConfigs(N)
       val nodes   = configs.map(config => FullNode.forConfig(config).unsafeRunSync())
 
       val miner = nodes.head.miner

@@ -11,8 +11,7 @@ import jbok.app.api.{NodeInfo, SimulationAPI, SimulationEvent}
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.defaults.testReference
-import jbok.core.config.{ConfigHelper, GenesisConfig}
+import jbok.core.config.{ConfigLoader, GenesisConfig, TypeSafeConfigHelper}
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models.{Account, Address}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
@@ -22,7 +21,7 @@ import scala.collection.mutable.{ListBuffer => MList}
 import scala.concurrent.duration._
 import scala.util.Random
 
-case class Node(
+final case class Node(
     nodeInfo: NodeInfo,
     peerNodeUri: String,
     jbokClient: JbokClient
@@ -44,13 +43,17 @@ class SimulationImpl(
   val blockTime: FiniteDuration             = 5.seconds
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val tconfig = testReference.copy(logsdir = ".").withMining(_.copy(period = blockTime))
-    val fullNodeConfigs = FullNodeConfig
-      .fill(tconfig, n)
-      .map(
-        x =>
-          x.withHistory(_.copy(chainDataDir = s"${x.datadir}/chainData"))
-            .withPeer(_.copy(peerDataDir = s"${x.datadir}/peerData")))
+    val basicConfigs = (0 until n).toList.map { i =>
+      TypeSafeConfigHelper.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
+    }
+
+    val fullNodeConfigs = basicConfigs.map { config =>
+      val fnc = ConfigLoader.loadFullNodeConfig[IO](config).unsafeRunSync()
+      fnc
+        .copy(logDir = ".")
+        .withMining(_.copy(period = blockTime))
+    }
+
     println(s"configs: ${fullNodeConfigs.head}")
 
     val signers             = (1 to n).toList.traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]()).unsafeRunSync()

@@ -14,7 +14,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("SignedTransaction")
 @JSExportAll
-case class SignedTransaction(
+final case class SignedTransaction(
     nonce: BigInt,
     gasPrice: BigInt,
     gasLimit: BigInt,

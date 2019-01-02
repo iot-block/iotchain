@@ -5,14 +5,14 @@ import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.{AppState, ContractAddress}
-import jbok.sdk.api.{BlockParam, CallTx}
 import jbok.core.models.{Account, Address}
 import jbok.sdk.api.{BlockParam, CallTx, TransactionRequest}
 import org.scalajs.dom.raw.HTMLInputElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
 
-case class DeployContractView(state: AppState) {
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
+final case class DeployContractView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]
 
   val currentId                     = state.currentId.value

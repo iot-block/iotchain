@@ -12,7 +12,7 @@ import jbok.core.models.UInt256
 class Stack private (private val underlying: List[UInt256], val maxSize: Int) {
   def pop: (UInt256, Stack) = underlying.headOption match {
     case Some(word) =>
-      (word, copy(underlying.tail))
+      (word, copy(underlying.drop(1)))
 
     case None =>
       (UInt256.Zero, this)
@@ -50,10 +50,10 @@ class Stack private (private val underlying: List[UInt256], val maxSize: Int) {
     * Swap i-th and the top-most elements of the stack. i=0 is the top-most element (and that would be a no-op)
     */
   def swap(i: Int): Stack =
-    if (i <= 0 || i >= underlying.length) {
-      this
-    } else {
-      copy(underlying(i) :: underlying.updated(i, underlying.head).tail)
+    underlying.headOption match {
+      case None                                        => this
+      case Some(_) if i <= 0 || i >= underlying.length => this
+      case Some(head)                                  => copy(underlying(i) :: underlying.updated(i, head).drop(1))
     }
 
   def size: Int =

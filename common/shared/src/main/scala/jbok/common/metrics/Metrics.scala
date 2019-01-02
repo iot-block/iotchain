@@ -7,7 +7,7 @@ import cats.implicits._
 import scala.concurrent.duration._
 
 trait EffectMetrics[F[_]] { self: Metrics[F] =>
-  def time[A](name: String, labels: String*)(fa: F[A])(implicit F: Sync[F], T: Timer[F]): F[A] =
+  def timeF[A](name: String, labels: String*)(fa: F[A])(implicit F: Sync[F], T: Timer[F]): F[A] =
     for {
       start   <- T.clock.monotonic(NANOSECONDS)
       attempt <- fa.attempt
@@ -21,7 +21,7 @@ trait EffectMetrics[F[_]] { self: Metrics[F] =>
       }
     } yield a
 
-  def gauge[A](name: String, labels: String*)(fa: F[A])(implicit F: Sync[F]): F[A] =
+  def gaugeF[A](name: String, labels: String*)(fa: F[A])(implicit F: Sync[F]): F[A] =
     for {
       _       <- self.gauge(name, labels.toList)(1.0)
       attempt <- fa.attempt

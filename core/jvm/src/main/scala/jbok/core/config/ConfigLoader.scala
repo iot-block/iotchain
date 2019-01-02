@@ -15,11 +15,11 @@ import scala.reflect.ClassTag
 object ConfigLoader {
   def loadFullNodeConfig[F[_]](config: Config)(implicit F: Sync[F]): F[FullNodeConfig] =
     for {
-      rootdir       <- F.delay(config.getString("rootdir"))
-      datadir       <- F.delay(config.getString("datadir"))
+      rootDir       <- F.delay(config.getString("rootDir"))
+      dataDir       <- F.delay(config.getString("dataDir"))
       identity      <- F.delay(config.getString("identity"))
       logLevel      <- F.delay(config.getString("logLevel"))
-      logsdir       <- F.delay(config.getString("logsdir"))
+      logDir        <- F.delay(config.getString("logDir"))
       genesisOrPath <- F.delay(ConfigLoader.loadOrThrow[Either[GenesisConfig, String]](config, "genesisOrPath"))
       history       <- F.delay(ConfigLoader.loadOrThrow[HistoryConfig](config, "history"))
       keystore      <- F.delay(ConfigLoader.loadOrThrow[KeyStoreConfig](config, "keystore"))
@@ -30,11 +30,11 @@ object ConfigLoader {
       rpc           <- F.delay(ConfigLoader.loadOrThrow[RpcConfig](config, "rpc"))
     } yield
       FullNodeConfig(
-        rootdir,
-        datadir,
+        rootDir,
         identity,
+        dataDir,
         logLevel,
-        logsdir,
+        logDir,
         genesisOrPath,
         history,
         keystore,

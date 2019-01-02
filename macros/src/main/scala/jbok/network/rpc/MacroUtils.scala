@@ -44,15 +44,14 @@ class MacroUtils[CONTEXT <: blackbox.Context](val c: CONTEXT) {
       })
     })
 
-  def getParameters(method: MethodSymbol): Seq[TermName] =
-    method.paramLists.flatMap(parameterList => parameterList.map(parameter => parameter.asTerm.name))
+  def getParameters(method: MethodSymbol): List[TermName] =
+    method.paramLists.flatMap(parameterList => parameterList.map(parameter => parameter.asTerm.name)).toList
 
   def getParametersAsTuple(method: MethodSymbol) = {
     val parameters = getParameters(method)
-    if (parameters.size == 1) {
-      q"${parameters.head}"
-    } else {
-      q"(..$parameters)"
+    parameters match {
+      case head :: Nil => q"${head}"
+      case _           => q"(..$parameters)"
     }
   }
 }

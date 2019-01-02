@@ -16,7 +16,7 @@ import scodec.bits.ByteVector
   * @param blockHeader I_H
   * @param callDepth   I_e
   */
-case class ExecEnv(
+final case class ExecEnv(
     ownerAddr: Address,
     callerAddr: Address,
     originAddr: Address,

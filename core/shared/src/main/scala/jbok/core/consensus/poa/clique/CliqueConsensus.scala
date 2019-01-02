@@ -13,6 +13,7 @@ import jbok.core.pool.BlockPool
 import jbok.core.pool.BlockPool.Leaf
 import jbok.core.validators.BlockValidator
 import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
+import jbok.persistent.DBErr
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
@@ -96,10 +97,10 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
                  })
 
               for {
-                _ <- T.sleep(delay.millis)
-                bytes <- Clique.sigHash[F](executed.block.header)
+                _      <- T.sleep(delay.millis)
+                bytes  <- Clique.sigHash[F](executed.block.header)
                 signed <- clique.sign(bytes)
-                _ = log.trace(s"${clique.signer} mined block(${executed.block.header.number})")
+                _     = log.trace(s"${clique.signer} mined block(${executed.block.header.number})")
                 extra = CliqueExtra(Nil, signed)
                 extraBytes <- extra.asBytesF[F]
                 header = executed.block.header.copy(extra = extraBytes)
@@ -117,12 +118,9 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
       _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap[Unit] {
         case Some(parent) =>
           val result = for {
-//              _ <- check(Set(Clique.diffInTurn, Clique.diffNoTurn).contains(block.header.difficulty), "wrong difficulty")
             _ <- check(calcGasLimit(parent.gasLimit) == block.header.gasLimit, "wrong gasLimit")
             _ <- check(block.header.unixTimestamp == parent.unixTimestamp + clique.config.period.toMillis,
                        "wrong timestamp")
-//              _ <- check(block.header.mixHash == ByteVector.empty, "wrong mixHash")
-//              _ <- check(Set(Clique.nonceAuthVote, Clique.nonceDropVote).contains(block.header.nonce), "wrong nonce")
           } yield ()
           result match {
             case Left(e)  => F.raiseError(new Exception(s"block verified invalid because ${e}"))
@@ -144,11 +142,14 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
           F.raiseError[Unit](HeaderParentNotFoundInvalid)
       }
       best   <- history.getBestBlock
-      bestTd <- history.getTotalDifficultyByHash(best.header.hash).map(_.get)
+      bestTd <- history.getTotalDifficultyByHash(best.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
       result <- if (block.header.number == best.header.number + 1) {
         for {
-          topBlockHash <- pool.addBlock(block).map(_.get.hash)
-          topBlocks    <- pool.getBranch(topBlockHash, delete = true)
+          topBlockHash <- pool.addBlock(block).map {
+            case Some(leaf) => leaf.hash
+            case None       => ???
+          }
+          topBlocks <- pool.getBranch(topBlockHash, delete = true)
         } yield Consensus.Forward(topBlocks)
       } else {
         pool.addBlock(block).flatMap[Consensus.Result] {
@@ -187,7 +188,7 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
             }
             .unzip
 
-          val oldBranch = a.takeWhile(_.isDefined).map(_.get)
+          val oldBranch = a.takeWhile(_.isDefined).collect { case Some(b) => b }
 
           val currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
           val newBranchDifficulty     = newBranch.map(_.difficulty).sum
@@ -217,8 +218,8 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
 
       case Some(block) =>
         for {
-          receipts <- history.getReceiptsByHash(block.header.hash).map(_.get)
-          td       <- history.getTotalDifficultyByHash(block.header.hash).map(_.get)
+          receipts <- history.getReceiptsByHash(block.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
+          td       <- history.getTotalDifficultyByHash(block.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
           _        <- history.delBlock(block.header.hash, false)
           removed  <- removeBlocksUntil(parent, fromNumber - 1)
         } yield (block, receipts, td) :: removed
@@ -233,15 +234,19 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
     * 2. headers form a chain
     */
   private def checkHeaders(headers: List[BlockHeader]): F[Boolean] =
-    headers.nonEmpty.pure[F] &&
-      ((headers.head.number == 0).pure[F] || history.getBlockHeaderByHash(headers.head.parentHash).map(_.isDefined)) &&
-      headers
-        .zip(headers.tail)
-        .forall {
-          case (parent, child) =>
-            parent.hash == child.parentHash && parent.number + 1 == child.number
-        }
-        .pure[F]
+    headers match {
+      case head :: tail =>
+        ((head.number == 0).pure[F] || history.getBlockHeaderByHash(head.parentHash).map(_.isDefined)) &&
+          headers
+            .zip(tail)
+            .forall {
+              case (parent, child) =>
+                parent.hash == child.parentHash && parent.number + 1 == child.number
+            }
+            .pure[F]
+
+      case Nil => F.pure(false)
+    }
 
   private def calcDifficulty(snapshot: Snapshot, signer: Address, number: BigInt): BigInt =
     if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn
