@@ -252,12 +252,17 @@ object testkit {
       postTransactionStateHash <- genBoundedByteVector(32, 32)
       cumulativeGasUsed        <- bigIntGen
       logsBloomFilter          <- genBoundedByteVector(256, 256)
+      txHash                   <- genBoundedByteVector(32, 32)
+      gasUsed                  <- bigIntGen
     } yield
       Receipt(
         postTransactionStateHash = postTransactionStateHash,
         cumulativeGasUsed = cumulativeGasUsed,
         logsBloomFilter = logsBloomFilter,
-        logs = Nil
+        logs = Nil,
+        txHash = txHash,
+        contractAddress = None,
+        gasUsed = gasUsed
       )
   }
 

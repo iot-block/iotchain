@@ -22,5 +22,6 @@ case class ProgramResult[F[_]](
     internalTxs: List[InternalTransaction],
     gasRefund: BigInt,
     error: Option[ProgramError],
-    isRevert: Boolean = false
+    isRevert: Boolean = false,
+    contractAddress: Option[Address] = None,
 )

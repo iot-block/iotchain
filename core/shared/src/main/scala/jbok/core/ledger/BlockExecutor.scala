@@ -83,9 +83,13 @@ case class BlockExecutor[F[_]](
     val gasLimit      = stx.gasLimit
     val vmConfig      = EvmConfig.forBlock(blockHeader.number, config)
     for {
-      _       <- txValidator.validateSimulateTx(stx)
-      world1  <- history.getWorldState(config.accountStartNonce, Some(stateRoot))
-      world2  <- updateSenderAccountBeforeExecution(senderAddress, stx, world1)
+      _      <- txValidator.validateSimulateTx(stx)
+      world1 <- history.getWorldState(config.accountStartNonce, Some(stateRoot))
+      (senderAccount, world2) <- world1
+        .getAccountOpt(senderAddress)
+        .map(a => (a, world1))
+        .getOrElse((Account.empty(UInt256.Zero), world1.putAccount(senderAddress, Account.empty(UInt256.Zero))))
+      world3  <- updateSenderAccountBeforeExecution(senderAddress, stx, world2)
       context <- prepareProgramContext(stx, senderAddress, blockHeader, world2, vmConfig)
       result  <- runVM(stx, context, vmConfig)
       totalGasToRefund = calcTotalGasToRefund(stx, result)
@@ -96,7 +100,12 @@ case class BlockExecutor[F[_]](
            |gas refund: ${totalGasToRefund}""".stripMargin
       )
 
-      TxExecResult(result.world, gasLimit - totalGasToRefund, result.logs, result.returnData, result.error)
+      TxExecResult(result.world,
+                   gasLimit - totalGasToRefund,
+                   result.logs,
+                   result.returnData,
+                   result.error,
+                   result.contractAddress)
     }
   }
 
@@ -204,7 +213,10 @@ case class BlockExecutor[F[_]](
               postTransactionStateHash = stateRootHash,
               cumulativeGasUsed = accGas + txResult.gasUsed,
               logsBloomFilter = BloomFilter.create(txResult.logs),
-              logs = txResult.logs
+              logs = txResult.logs,
+              txHash = stx.hash,
+              gasUsed = txResult.gasUsed,
+              contractAddress = txResult.contractAddress
             )
             executeTransactions(
               tail,
@@ -260,7 +272,12 @@ case class BlockExecutor[F[_]](
            |return data: ${result.returnData.toHex}
            |gas refund: ${totalGasToRefund}, gas paid to miner: ${executionGasToPayToMiner}""".stripMargin
       )
-      TxExecResult(world2, executionGasToPayToMiner, resultWithErrorHandling.logs, result.returnData, result.error)
+      TxExecResult(world2,
+                   executionGasToPayToMiner,
+                   resultWithErrorHandling.logs,
+                   result.returnData,
+                   result.error,
+                   result.contractAddress)
     }
 
   private def updateSenderAccountBeforeExecution(
@@ -324,7 +341,8 @@ case class BlockExecutor[F[_]](
     } else {
       // Code storage succeeded
       result.copy(gasRemaining = result.gasRemaining - codeDepositCost,
-                  world = result.world.putCode(address, result.returnData))
+                  world = result.world.putCode(address, result.returnData),
+                  contractAddress = Some(address))
     }
   }
 
@@ -402,7 +420,8 @@ object BlockExecutor {
       gasUsed: BigInt,
       logs: List[TxLogEntry],
       vmReturnData: ByteVector,
-      vmError: Option[ProgramError]
+      vmError: Option[ProgramError],
+      contractAddress: Option[Address] = None
   )
 
   def apply[F[_]](
