@@ -14,6 +14,7 @@ import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.{ConfigLoader, GenesisConfig, TypeSafeConfigHelper}
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models.{Account, Address}
+import jbok.core.peer.PeerNode
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 
@@ -43,52 +44,33 @@ class SimulationImpl(
   val blockTime: FiniteDuration             = 5.seconds
 
   override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val basicConfigs = (0 until n).toList.map { i =>
-      TypeSafeConfigHelper.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
-    }
+    val configs = configBuilder(n, m)
 
-    val fullNodeConfigs = basicConfigs.map { config =>
-      val fnc = ConfigLoader.loadFullNodeConfig[IO](config).unsafeRunSync()
-      fnc
-        .copy(logDir = ".")
-        .withMining(_.copy(period = blockTime))
-    }
-
-    println(s"configs: ${fullNodeConfigs.head}")
-
-    val signers             = (1 to n).toList.traverse[IO, KeyPair](_ => Signature[ECDSA].generateKeyPair[IO]()).unsafeRunSync()
-    val (configs, minersKP) = selectMiner(n, m, fullNodeConfigs, signers)
-    val genesisConfig       = Clique.generateGenesisConfig(genesisConfigWithAlloc, minersKP.map(Address(_)))
-
+    val nodeInfos = configs.map(infoFromNode)
     log.info(s"create $n node(s)")
 
     for {
-      newNodes <- configs.zipWithIndex.traverse[IO, FullNode[IO]] {
-        case (config, idx) =>
-          val fullNodeConfig = config.copy(genesisOrPath = Left(genesisConfig))
-          FullNode.forConfig(fullNodeConfig)
-      }
-      _ <- newNodes.tail.traverse[IO, Unit](_.peerManager.addPeerNode(newNodes.head.peerManager.peerNode))
-      _ <- newNodes.traverse(_.start)
-      _ <- T.sleep(5.seconds)
+      miner <- FullNode.forConfig(configs.head)
+      _     <- miner.start
+      _     <- T.sleep(3.seconds)
+      nodes <- configs.tail.traverse(FullNode.forConfig)
+      _     <- nodes.traverse(_.start)
+      _     <- T.sleep(3.seconds)
       _ = log.info("node start, then client to connect")
-      jbokClients <- newNodes.traverse[IO, JbokClient](x =>
-        jbok.app.client.JbokClient(new URI(infoFromNode(x).rpcAddr)))
+      jbokClients <- nodeInfos.traverse[IO, JbokClient](x => jbok.app.client.JbokClient(new URI(x.rpcAddr)))
       miner = jbokClients.head
       _ <- txGraphGen.keyPairs.toList.traverse[IO, Address](kp =>
         miner.personal.importRawKey(kp.keyPair.secret.bytes, ""))
       _ <- id2NodeNetwork.update(
-        _ ++ newNodes
+        _ ++ nodeInfos
           .zip(jbokClients)
           .map {
-            case (fullNode, jbokClient) =>
-              fullNode.peerManager.peerNode.uri.toString -> Node(infoFromNode(fullNode),
-                                                                 fullNode.peerManager.peerNode.uri.toString,
-                                                                 jbokClient)
+            case (ni, jbokClient) =>
+              ni.id -> Node(ni, ni.id, jbokClient)
           }
           .toMap)
       _ <- stxStream(2).compile.drain.start
-    } yield newNodes.map(x => infoFromNode(x))
+    } yield nodeInfos
   }
 
   override def getNodes: IO[List[NodeInfo]] = id2NodeNetwork.get.map(_.values.toList.map(_.nodeInfo))
@@ -160,30 +142,74 @@ class SimulationImpl(
       }
       .onFinalize[IO](IO.delay(log.info("stx stream stop.")))
 
-  private def infoFromNode(fullNode: FullNode[IO]): NodeInfo =
-    NodeInfo(fullNode.peerManager.peerNode.uri.toString, fullNode.config.peer.host, fullNode.config.rpc.port)
-
-  private def selectMiner(
-      n: Int,
-      m: Int,
-      fullNodeConfigs: List[FullNodeConfig],
-      signers: List[KeyPair]
-  ): (List[FullNodeConfig], List[KeyPair]) =
-    if (m == 0) (fullNodeConfigs, List.empty)
-    else {
-      val gap                    = (n + m - 1) / m
-      val miners: MList[KeyPair] = MList.empty
-      val configs = fullNodeConfigs.zip(signers).zipWithIndex.map {
-        case ((config, signer), index) =>
-          if (index % gap == 0) {
-            miners += signer
-            config.withMining(_.copy(enabled = true, minerAddressOrKey = Right(signer)))
-          } else
-            config.withMining(_.copy(enabled = false, minerAddressOrKey = Right(signer)))
+  private def infoFromNode(config: FullNodeConfig): NodeInfo = {
+    val uri = PeerNode((config.peer.nodekeyOrPath match {
+      case Left(keyPair) => keyPair
+      case Right(_)      => ???
+    }).public, config.peer.host, config.peer.port, config.peer.discoveryPort).uri.toString
+    NodeInfo(uri, config.peer.host, config.rpc.port)
+  }
+  private def configBuilder(n: Int, m: Int): List[FullNodeConfig] = {
+    def selectMiner(
+        fullNodeConfigs: List[FullNodeConfig],
+        m: Int
+    ): (List[FullNodeConfig], List[KeyPair]) =
+      if (m == 0) (fullNodeConfigs, List.empty)
+      else {
+        val n                      = fullNodeConfigs.size
+        val gap                    = (n + m - 1) / m
+        val miners: MList[KeyPair] = MList.empty
+        val configs = fullNodeConfigs.zipWithIndex.map {
+          case (config, index) =>
+            if (index % gap == 0) {
+              config.mining.minerAddressOrKey.map(miners += _)
+              config.withMining(_.copy(enabled = true))
+            } else
+              config
+        }
+        (configs, miners.toList)
       }
-      (configs, miners.toList)
+
+    def connect(fullNodeConfigs: List[FullNodeConfig], topology: String): List[FullNodeConfig] =
+      topology match {
+        case "star" =>
+          fullNodeConfigs.headOption
+            .map { config =>
+              val kp = config.peer.nodekeyOrPath match {
+                case Left(keyPair) => keyPair
+                case Right(_)      => Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+              }
+              val bootUris =
+                List(PeerNode(kp.public, config.peer.host, config.peer.port, config.peer.discoveryPort).uri.toString)
+              val tails = fullNodeConfigs.tail.map(_.withPeer(_.copy(bootUris = bootUris)))
+              config :: tails
+            }
+            .getOrElse(List.empty)
+        case "ring" => ???
+        case "mesh" => ???
+        case _ =>
+          log.warn("unknow topology.")
+          fullNodeConfigs
+      }
+    val rawConfigs = (0 until n).toList.map { i =>
+      TypeSafeConfigHelper.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
     }
 
+    val basicConfigs = rawConfigs.map { config =>
+      val fnc = ConfigLoader.loadFullNodeConfig[IO](config).unsafeRunSync()
+      fnc
+        .copy(logLevel = "DEBUG")
+        .copy(logDir = ".")
+        .withMining(
+          _.copy(period = blockTime, minerAddressOrKey = Right(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())))
+        .withPeer(_.copy(nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())))
+    }
+
+    val (configWithMiners, minersKP) = selectMiner(basicConfigs, m)
+    val ConfigWithBoots              = connect(configWithMiners, "star")
+    val genesisConfig                = Clique.generateGenesisConfig(genesisConfigWithAlloc, minersKP.map(Address(_)))
+    ConfigWithBoots.map(config => config.copy(genesisOrPath = Left(genesisConfig)))
+  }
 }
 
 object SimulationImpl {

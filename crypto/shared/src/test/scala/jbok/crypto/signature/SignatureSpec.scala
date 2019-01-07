@@ -11,7 +11,7 @@ class SignatureSpec extends JbokAsyncSpec {
   "ECDSA" should {
     val ecdsa = Signature[ECDSA]
 
-    "generate keypair length" in {
+    "guarantee generate keypair length" in {
       for {
         keyPair <- ecdsa.generateKeyPair[IO]()
         _ = keyPair.public.bytes.length shouldBe 64
