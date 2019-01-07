@@ -9,7 +9,7 @@ import cats.effect.{ExitCode, IO}
 import cats.implicits._
 import fs2._
 import jbok.app.TestnetBuilder.Topology
-import jbok.app.api.SimulationAPI
+import jbok.app.api.{SimulationAPI, TestNetTxGen}
 import jbok.app.simulations.SimulationImpl
 import jbok.codec.rlp.implicits._
 import jbok.common.metrics.Metrics
@@ -88,6 +88,12 @@ object MainApp extends StreamApp {
           ec <- runStream(server.stream)
         } yield ec
 
+      case "txgen" :: tail =>
+        for {
+          txtg <- TestNetTxGen()
+          ec   <- runStream(txtg.run)
+        } yield ExitCode.Success
+
       case "build-testnet" :: _ =>
         TestnetBuilder()
           .withN(4)
@@ -102,6 +108,7 @@ object MainApp extends StreamApp {
         for {
           _ <- IO(println(version))
           _ <- IO(println(banner))
+          _ <- IO(println(TypeSafeConfigHelper.printConfig(TypeSafeConfigHelper.reference).render))
         } yield ExitCode.Error
     }
 }
