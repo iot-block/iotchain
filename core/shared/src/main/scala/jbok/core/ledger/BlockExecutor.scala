@@ -95,7 +95,7 @@ final case class BlockExecutor[F[_]](
       result  <- runVM(stx, context, vmConfig)
       totalGasToRefund = calcTotalGasToRefund(stx, result)
     } yield {
-      log.debug(
+      log.trace(
         s"""SimulateTransaction(${stx.hash.toHex.take(7)}) execution end with ${result.error} error.
            |result.returnData: ${result.returnData.toHex}
            |gas refund: ${totalGasToRefund}""".stripMargin

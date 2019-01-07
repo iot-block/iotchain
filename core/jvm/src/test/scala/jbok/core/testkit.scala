@@ -2,11 +2,10 @@ package jbok.core
 
 import cats.effect.IO
 import cats.effect.concurrent.{Deferred, Ref}
-import com.typesafe.config.Config
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
-import jbok.core.config.{ConfigLoader, GenesisConfig, TypeSafeConfigHelper}
+import jbok.core.config.GenesisConfig
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.istanbul.Istanbul.IstanbulExtra
 import jbok.core.consensus.istanbul.{Istanbul, Snapshot, _}
@@ -39,26 +38,23 @@ object testkit {
 
   val testGenesis = GenesisConfig.generate(0, testAlloc)
 
-  def fillConfigs(n: Int): List[Config] =
+  def fillConfigs(n: Int): List[FullNodeConfig] =
     (0 until n).toList.map { i =>
-      TypeSafeConfigHelper.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
+      FullNodeConfig.reference.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
     }
 
   val genesis = Clique.generateGenesisConfig(testGenesis, List(testMiner.address))
 
-  def fillFullNodeConfigs(n: Int): List[FullNodeConfig] = {
+  def fillFullNodeConfigs(n: Int): List[FullNodeConfig] =
     fillConfigs(n).map { config =>
-      val fnc = ConfigLoader.loadFullNodeConfig[IO](config).unsafeRunSync()
-      fnc
+      config
         .copy(
-          genesisOrPath = Left(genesis)
+          genesisConfig = Some(genesis)
         )
         .withHistory(_.copy(dbBackend = "inmem"))
-        .withMining(_.copy(minerAddressOrKey = Right(testMiner.keyPair), period = 100.millis))
-        .withPeer(
-          _.copy(dbBackend = "inmem", nodekeyOrPath = Left(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())))
+        .withMining(_.copy(minerKeyPair = Some(testMiner.keyPair), period = 100.millis))
+        .withPeer(_.copy(dbBackend = "inmem", nodekey = Some(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())))
     }
-  }
 
   val testConfig: FullNodeConfig = fillFullNodeConfigs(1).head
 
@@ -66,7 +62,7 @@ object testkit {
     val genesisConfig = prepareIstanbulConfig(keypairs, testMiner)
     testConfig.copy(
       consensusAlgo = "istanbul",
-      genesisOrPath = Left(genesisConfig)
+      genesisConfig = Some(genesisConfig)
     )
   }
 
@@ -75,7 +71,7 @@ object testkit {
     val p = config.consensusAlgo match {
       case "clique" =>
         for {
-          history   <- History.forBackendAndPath[IO](config.history.dbBackend, config.history.chainDataDir)
+          history   <- History.forBackendAndPath[IO](config.history.dbBackend, config.chainDataDir)
           blockPool <- BlockPool(history, BlockPoolConfig())
           clique    <- Clique(config.mining, config.genesis, history, Some(testMiner.keyPair))
           consensus = new CliqueConsensus[IO](clique, blockPool)
@@ -89,7 +85,7 @@ object testkit {
   def genIstanbulConsensus(selfPk: KeyPair)(implicit config: FullNodeConfig): IO[Consensus[IO]] = {
     implicit val cache = CacheBuilder.build[IO, Snapshot](128).unsafeRunSync()
     for {
-      history   <- History.forBackendAndPath[IO](config.history.dbBackend, config.history.chainDataDir)
+      history   <- History.forBackendAndPath[IO](config.history.dbBackend, config.chainDataDir)
       blockPool <- BlockPool[IO](history, BlockPoolConfig())
       promise   <- Deferred[IO, Int]
       istanbul  <- Istanbul[IO](IstanbulConfig(), history, config.genesis, selfPk, StateNewRound)
@@ -369,7 +365,7 @@ object testkit {
     implicit val chainId: BigInt = config.genesis.chainId
     val consensus                = random[Consensus[IO]]
     val history                  = consensus.history
-    PeerManagerPlatform[IO](config.peer, history).unsafeRunSync()
+    PeerManagerPlatform[IO](config, history).unsafeRunSync()
   }
 
   def genBlockPool(implicit config: FullNodeConfig): Gen[BlockPool[IO]] = {
@@ -395,7 +391,7 @@ object testkit {
   implicit def arbBlockExecutor(implicit config: FullNodeConfig): Arbitrary[BlockExecutor[IO]] = Arbitrary {
     implicit val chainId = config.genesis.chainId
     val consensus        = random[Consensus[IO]]
-    val pm = PeerManagerPlatform[IO](config.peer, consensus.history)
+    val pm = PeerManagerPlatform[IO](config, consensus.history)
       .unsafeRunSync()
     BlockExecutor[IO](config.history, consensus, pm).unsafeRunSync()
   }

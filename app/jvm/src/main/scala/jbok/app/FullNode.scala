@@ -80,22 +80,22 @@ object FullNode {
         ScribeLogPlatform.fileHandler(config.logDir, Some(Level.fromName(config.logLevel)))
       )
       metrics  <- Metrics.default[IO]
-      keystore <- KeyStorePlatform[IO](config.keystore.keystoreDir)
-      minerKey <- config.mining.minerAddressOrKey match {
-        case Left(address) if config.mining.enabled =>
+      keystore <- KeyStorePlatform[IO](config.keystoreDir)
+      minerKey <- config.mining.minerKeyPair match {
+        case None if config.mining.enabled =>
           keystore
             .readPassphrase("unlock your mining account>")
-            .flatMap(p => keystore.unlockAccount(address, p))
+            .flatMap(p => keystore.unlockAccount(config.mining.minerAddress, p))
             .map(_.keyPair.some)
-        case Left(_)   => IO.pure(None)
-        case Right(kp) => IO.pure(kp.some)
+        case None     => IO.pure(None)
+        case Some(kp) => IO.pure(kp.some)
       }
       history <- History
-        .forBackendAndPath[IO](config.history.dbBackend, config.history.chainDataDir)(F, chainId, T, metrics)
+        .forBackendAndPath[IO](config.history.dbBackend, config.chainDataDir)(F, chainId, T, metrics)
       blockPool <- BlockPool(history, BlockPoolConfig())
       clique    <- Clique(config.mining, config.genesis, history, minerKey)
       consensus = new CliqueConsensus[IO](clique, blockPool)
-      peerManager <- PeerManagerPlatform[IO](config.peer, history)
+      peerManager <- PeerManagerPlatform[IO](config, history)
       executor    <- BlockExecutor[IO](config.history, consensus, peerManager)
       syncManager <- SyncManager(config.sync, executor)(F, T, metrics)
       miner       <- BlockMiner[IO](config.mining, syncManager)

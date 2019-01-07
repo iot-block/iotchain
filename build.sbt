@@ -110,8 +110,6 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
       "com.outr"       %%% "scribe"        % "2.7.0",
       // files
       "com.github.pathikrit" %% "better-files" % "3.5.0",
-      // config
-      "com.github.pureconfig" %% "pureconfig" % "0.10.0",
       // test
       "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
       "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test,

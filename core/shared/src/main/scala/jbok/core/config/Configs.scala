@@ -4,19 +4,24 @@ import java.net.InetSocketAddress
 
 import jbok.core.models.{Address, UInt256}
 import jbok.core.peer.PeerNode
-import jbok.crypto.signature.KeyPair
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits._
+import _root_.io.circe.syntax._
+import _root_.io.circe.parser._
+import _root_.io.circe.generic.auto._
+import better.files.{DefaultCharset, File}
+import cats.effect.IO
 
 import scala.concurrent.duration._
+import jbok.codec.json.implicits._
+
+import scala.io.Source
 
 object Configs {
   final case class FullNodeConfig(
-      rootDir: String,
       identity: String,
-      dataDir: String,
       logLevel: String,
-      logDir: String,
-      genesisOrPath: Either[GenesisConfig, String],
+      genesisConfig: Option[GenesisConfig],
       history: HistoryConfig,
       keystore: KeyStoreConfig,
       peer: PeerConfig,
@@ -24,19 +29,39 @@ object Configs {
       txPool: TxPoolConfig,
       mining: MiningConfig,
       rpc: RpcConfig,
-      consensusAlgo: String = "clique"
+      consensusAlgo: String
   ) {
-    lazy val genesis: GenesisConfig = genesisOrPath match {
-      case Left(g)     => g
-      case Right(path) => GenesisConfig.fromFile(path).unsafeRunSync()
+    val dataDir: String = {
+      val home = System.getProperty("user.home")
+      s"${home}/.jbok/${identity}"
     }
 
-    lazy val lockPath: String = s"${dataDir}/LOCK"
+    val keystoreDir: String =
+      s"${dataDir}/keystore"
 
-    lazy val genesisPath: String = s"${dataDir}/genesis.conf"
+    val chainDataDir: String =
+      s"${dataDir}/chainData"
 
-    def withGenesis(f: GenesisConfig => GenesisConfig): FullNodeConfig =
-      copy(genesisOrPath = Left(f(genesis)))
+    val nodeKeyPath: String =
+      s"${dataDir}/nodekey"
+
+    val logDir: String = s"${dataDir}/logs"
+
+    val lockPath: String = s"${dataDir}/LOCK"
+
+    val genesisPath: String = s"${dataDir}/genesis.json"
+
+    lazy val genesis: GenesisConfig = genesisConfig match {
+      case Some(g) => g
+      case None    => GenesisConfig.fromFile(genesisPath).unsafeRunSync()
+    }
+
+    val nodeKeyPair: KeyPair = peer.nodekey.getOrElse(PeerConfig.loadOrGenerateNodeKey(nodeKeyPath))
+
+    def withIdentityAndPort(identity: String, port: Int): FullNodeConfig =
+      copy(identity = identity)
+        .withPeer(_.copy(port = port, discoveryPort = port + 1))
+        .withRpc(_.copy(port = port + 2))
 
     def withHistory(f: HistoryConfig => HistoryConfig): FullNodeConfig =
       copy(history = f(history))
@@ -58,16 +83,17 @@ object Configs {
 
     def withRpc(f: RpcConfig => RpcConfig): FullNodeConfig =
       copy(rpc = f(rpc))
+
+    def toJson: String =
+      this.asJson.spaces2
   }
 
   final case class KeyStoreConfig(
-      dbBackend: String,
-      keystoreDir: String
+      dbBackend: String
   )
 
   final case class HistoryConfig(
       dbBackend: String,
-      chainDataDir: String,
       frontierBlockNumber: BigInt = 0,
       homesteadBlockNumber: BigInt = 1150000,
       tangerineWhistleBlockNumber: BigInt = 2463000,
@@ -85,11 +111,10 @@ object Configs {
   final case class PeerConfig(
       port: Int,
       host: String,
-      nodekeyOrPath: Either[KeyPair, String],
+      nodekey: Option[KeyPair],
       enableDiscovery: Boolean,
       discoveryPort: Int,
       dbBackend: String,
-      peerDataDir: String,
       bootUris: List[String],
       updatePeersInterval: FiniteDuration,
       maxOutgoingPeers: Int,
@@ -101,6 +126,32 @@ object Configs {
     val bindAddr: InetSocketAddress      = new InetSocketAddress(host, port)
     val discoveryAddr: InetSocketAddress = new InetSocketAddress(host, discoveryPort)
     val bootNodes: List[PeerNode]        = bootUris.flatMap(s => PeerNode.fromStr(s).toOption.toList)
+  }
+
+  object PeerConfig {
+    def loadNodeKey(path: String): KeyPair = {
+      val line   = File(path).lines(DefaultCharset).headOption.getOrElse("")
+      val secret = KeyPair.Secret(line)
+      val pubkey = Signature[ECDSA].generatePublicKey[IO](secret).unsafeRunSync()
+      KeyPair(pubkey, secret)
+    }
+
+    def saveNodeKey(path: String, keyPair: KeyPair): IO[Unit] =
+      IO(File(path).createIfNotExists(createParents = true).overwrite(keyPair.secret.bytes.toHex))
+
+    def loadOrGenerateNodeKey(path: String): KeyPair =
+      IO(loadNodeKey(path)).attempt
+        .flatMap {
+          case Left(e) =>
+            for {
+              keyPair <- Signature[ECDSA].generateKeyPair[IO]()
+              _       <- saveNodeKey(path, keyPair)
+            } yield keyPair
+
+          case Right(nodeKey) =>
+            IO.pure(nodeKey)
+        }
+        .unsafeRunSync()
   }
 
   final case class RpcConfig(
@@ -122,7 +173,8 @@ object Configs {
       enabled: Boolean,
       ommersPoolSize: Int,
       blockCacheSize: Int,
-      minerAddressOrKey: Either[Address, KeyPair],
+      minerKeyPair: Option[KeyPair],
+      minerAddress: Address,
       coinbase: Address,
       extraData: ByteVector,
       mineRounds: Int,
@@ -152,4 +204,16 @@ object Configs {
       banDuration: FiniteDuration,
       requestTimeout: FiniteDuration
   )
+
+  object FullNodeConfig {
+    def fromJson(json: String): FullNodeConfig =
+      decode[FullNodeConfig](json) match {
+        case Left(e)  => throw e
+        case Right(c) => c
+      }
+
+    val reference: FullNodeConfig =
+      FullNodeConfig.fromJson(
+        Source.fromInputStream(this.getClass.getResourceAsStream("/reference.json")).getLines().mkString("\n"))
+  }
 }

@@ -7,14 +7,14 @@ import _root_.io.circe.syntax._
 import better.files.File
 import cats.effect.{ExitCode, IO}
 import cats.implicits._
-import com.typesafe.config.Config
 import fs2._
+import jbok.app.TestnetBuilder.Topology
 import jbok.app.api.SimulationAPI
 import jbok.app.simulations.SimulationImpl
 import jbok.codec.rlp.implicits._
 import jbok.common.metrics.Metrics
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.{TypeSafeConfigHelper, ConfigLoader, GenesisConfig}
+import jbok.core.config.GenesisConfig
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.keystore.KeyStorePlatform
 import jbok.network.rpc.RpcServer
@@ -35,64 +35,35 @@ object MainApp extends StreamApp {
                   ||/__\|   |/__\|   |/__\|   |/__\|
                   |""".stripMargin
 
-  def parseConfig(args: List[String]): IO[Config] =
+  def loadConfig(path: String): IO[FullNodeConfig] =
     for {
-      cmdConfig <- IO(TypeSafeConfigHelper.parseCmdArgs(args).right.get)
-      config = TypeSafeConfigHelper.overrideBy(cmdConfig)
+      _ <- IO(println(version))
+      _ <- IO(println(banner))
+      config = FullNodeConfig.fromJson(File(path).lines.mkString("\n"))
+      _ <- IO(config.toJson)
     } yield config
-
-  def loadConfig(config: Config): IO[FullNodeConfig] =
-    for {
-      fullNodeConfig <- ConfigLoader.loadFullNodeConfig[IO](config)
-      _              <- IO(println(version))
-      _              <- IO(println(banner))
-      _              <- IO(println(TypeSafeConfigHelper.printConfig(config).render))
-    } yield fullNodeConfig
 
   override def run(args: List[String]): IO[ExitCode] =
     args match {
-      case "node" :: tail =>
+      case "node" :: path :: Nil =>
         runStream {
           for {
-            config         <- Stream.eval(parseConfig(tail))
-            fullNodeConfig <- Stream.eval(loadConfig(config))
+            fullNodeConfig <- Stream.eval(loadConfig(path))
             fullNode       <- FullNode.stream(fullNodeConfig)
             _              <- fullNode.stream
           } yield ()
         }
 
-      case "test-node" :: tail =>
-        runStream {
-          val testArgs = List(
-            "-logLevel",
-            "DEBUG",
-            "-mining.enabled",
-            "true",
-            "-rpc.enabled",
-            "true",
-            "-history.chainDataDir",
-            "inmem"
-          )
-          for {
-            config         <- Stream.eval(parseConfig(testArgs ++ tail))
-            fullNodeConfig <- Stream.eval(loadConfig(config))
-            fullNode       <- FullNode.stream(fullNodeConfig)
-            _              <- fullNode.stream
-          } yield ()
-        }
-
-      case "genesis" :: tail =>
+      case "genesis" :: Nil =>
         for {
-          config         <- parseConfig(tail)
-          fullNodeConfig <- loadConfig(config)
-          keystore       <- KeyStorePlatform[IO](fullNodeConfig.keystore.keystoreDir)
+          keystore <- KeyStorePlatform[IO](FullNodeConfig.reference.keystoreDir)
           address <- keystore.listAccounts.flatMap(
             _.headOption.fold(keystore.readPassphrase("please input your passphrase>") >>= keystore.newAccount)(IO.pure)
           )
           _ <- keystore.readPassphrase(s"unlock address ${address}>").flatMap(p => keystore.unlockAccount(address, p))
           signers = List(address)
           genesis = Clique.generateGenesisConfig(GenesisConfig.generate(0, Map.empty), signers)
-          _ <- IO(File(fullNodeConfig.genesisPath).createIfNotExists().overwrite(genesis.asJson.spaces2))
+          _ <- IO(File(FullNodeConfig.reference.genesisPath).createIfNotExists().overwrite(genesis.asJson.spaces2))
         } yield ExitCode.Success
 
       case "simulation" :: tail =>
@@ -109,11 +80,20 @@ object MainApp extends StreamApp {
           ec <- runStream(server.stream)
         } yield ec
 
+      case "build-testnet" :: _ =>
+        TestnetBuilder()
+          .withN(4)
+          .withBalance(BigInt("1000000000000000"))
+          .withChainId(1)
+          .withTopology(Topology.Star)
+          .withMiners(1)
+          .build
+          .as(ExitCode.Success)
+
       case _ =>
         for {
           _ <- IO(println(version))
           _ <- IO(println(banner))
-          _ <- IO(println(TypeSafeConfigHelper.printConfig(TypeSafeConfigHelper.reference).render))
         } yield ExitCode.Error
     }
 }
