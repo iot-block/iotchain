@@ -75,10 +75,16 @@ object FullNode {
   ): IO[FullNode[IO]] = {
     implicit val chainId: BigInt = config.genesis.chainId
     for {
-      _ <- ScribeLog.setHandlers[IO](
-        ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel))),
-        ScribeLogPlatform.fileHandler(config.logDir, Some(Level.fromName(config.logLevel)))
-      )
+      _ <- if (config.logHandler.contains("file")) {
+        ScribeLog.setHandlers[IO](
+          ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel))),
+          ScribeLogPlatform.fileHandler(config.logDir, Some(Level.fromName(config.logLevel)))
+        )
+      } else {
+        ScribeLog.setHandlers[IO](
+          ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel)))
+        )
+      }
       metrics  <- Metrics.default[IO]
       keystore <- KeyStorePlatform[IO](config.keystoreDir)
       minerKey <- config.mining.minerKeyPair match {

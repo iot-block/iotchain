@@ -49,7 +49,8 @@ object testkit {
     fillConfigs(n).map { config =>
       config
         .copy(
-          genesisConfig = Some(genesis)
+          genesisConfig = Some(genesis),
+          logHandler = "console",
         )
         .withHistory(_.copy(dbBackend = "inmem"))
         .withMining(_.copy(minerKeyPair = Some(testMiner.keyPair), period = 100.millis))

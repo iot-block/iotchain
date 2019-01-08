@@ -84,7 +84,6 @@ final case class BlockExecutor[F[_]](
     val gasLimit      = stx.gasLimit
     val vmConfig      = EvmConfig.forBlock(blockHeader.number, config)
     for {
-      _      <- TxValidator.checkSyntacticValidity[F](stx)
       world1 <- history.getWorldState(config.accountStartNonce, Some(stateRoot))
       (senderAccount, world2) <- world1
         .getAccountOpt(senderAddress)
@@ -128,7 +127,9 @@ final case class BlockExecutor[F[_]](
   private[jbok] def executeBlock(block: Block): F[ExecutedBlock[F]] =
     for {
       (result, _) <- executeTransactions(block, shortCircuit = true)
-      parentTd    <- history.getTotalDifficultyByHash(block.header.parentHash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
+      parentTd <- history
+        .getTotalDifficultyByHash(block.header.parentHash)
+        .flatMap(opt => F.fromOption(opt, DBErr.NotFound))
       executed = ExecutedBlock(block, result.world, result.gasUsed, result.receipts, parentTd + block.header.difficulty)
       postProcessed <- consensus.postProcess(executed)
       persisted     <- postProcessed.world.persisted

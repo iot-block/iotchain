@@ -1,6 +1,7 @@
 {
   "identity" : "node0",
   "logLevel" : "DEBUG",
+  "logHandler" : "console,file",
   "genesisConfig" : null,
   "history" : {
     "dbBackend" : "leveldb",

@@ -21,6 +21,7 @@ object Configs {
   final case class FullNodeConfig(
       identity: String,
       logLevel: String,
+      logHandler: String,
       genesisConfig: Option[GenesisConfig],
       history: HistoryConfig,
       keystore: KeyStoreConfig,
