@@ -29,7 +29,7 @@ object TxInvalid {
 }
 
 class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[F]) {
-  val secp256k1n: BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337")
+  import TxValidator._
 
   def validate(
       stx: SignedTransaction,
@@ -39,52 +39,12 @@ class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[F]) {
       accGasUsed: BigInt
   ): F[Unit] =
     for {
-      _ <- checkSyntacticValidity(stx)
-      _ <- validateSignatureFormat(stx)
+      _ <- checkSyntacticValidity[F](stx)
       _ <- validateNonce(stx.nonce, senderAccount.nonce)
       _ <- validateGasLimitEnoughForIntrinsicGas(stx, blockHeader.number)
       _ <- validateAccountHasEnoughGasToPayUpfrontCost(senderAccount.balance, upfrontGasCost)
       _ <- validateBlockHasEnoughGasLimitForTx(stx.gasLimit, accGasUsed, blockHeader.gasLimit)
     } yield ()
-
-  def validateSimulateTx(stx: SignedTransaction): F[Unit] =
-    checkSyntacticValidity(stx)
-
-  /** Validates if the transaction is syntactically valid (lengths of the transaction fields are correct) */
-  private def checkSyntacticValidity(stx: SignedTransaction): F[Unit] = {
-    import stx._
-
-    val maxNonceValue = BigInt(2).pow(8 * 32) - 1
-    val maxGasValue   = BigInt(2).pow(8 * 32) - 1
-    val maxValue      = BigInt(2).pow(8 * 32) - 1
-    val maxR          = BigInt(2).pow(8 * 32) - 1
-    val maxS          = BigInt(2).pow(8 * 32) - 1
-
-    if (nonce > maxNonceValue)
-      F.raiseError(TxSyntaxInvalid(s"Invalid nonce: $nonce > $maxNonceValue"))
-    else if (gasLimit > maxGasValue)
-      F.raiseError(TxSyntaxInvalid(s"Invalid gasLimit: $gasLimit > $maxGasValue"))
-    else if (gasPrice > maxGasValue)
-      F.raiseError(TxSyntaxInvalid(s"Invalid gasPrice: $gasPrice > $maxGasValue"))
-    else if (value > maxValue)
-      F.raiseError(TxSyntaxInvalid(s"Invalid value: $value > $maxValue"))
-    else if (r > maxR)
-      F.raiseError(TxSyntaxInvalid(s"Invalid signatureRandom: $r > $maxR"))
-    else if (s > maxS)
-      F.raiseError(TxSyntaxInvalid(s"Invalid signature: $s > $maxS"))
-    else
-      F.unit
-  }
-
-  /** Validates if the transaction signature is valid as stated in appendix F in YP */
-  private def validateSignatureFormat(stx: SignedTransaction): F[Unit] = {
-    import stx._
-
-    val validR = r > 0 && r < secp256k1n
-    val validS = s > 0 && s < secp256k1n / 2
-    if (validR && validS) F.unit
-    else F.raiseError(TxSignatureInvalid)
-  }
 
   /**
     * Validates if the transaction nonce matches current sender account's nonce
@@ -135,4 +95,32 @@ class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[F]) {
                                                   blockGasLimit: BigInt): F[BigInt] =
     if (gasLimit + accGasUsed <= blockGasLimit) F.pure(gasLimit)
     else F.raiseError(TrxGasLimitTooBigInvalid(gasLimit, accGasUsed, blockGasLimit))
+}
+
+object TxValidator {
+  val secp256k1n: BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337")
+  val maxNonceValue = BigInt(2).pow(8 * 32) - 1
+  val maxGasValue   = BigInt(2).pow(8 * 32) - 1
+  val maxValue      = BigInt(2).pow(8 * 32) - 1
+
+  /** Validates if the transaction is syntactically valid (lengths of the transaction fields are correct) */
+  def checkSyntacticValidity[F[_]](stx: SignedTransaction)(implicit F: Sync[F]): F[Unit] = {
+    import stx._
+
+    val validR = r > 0 && r < secp256k1n
+    val validS = s > 0 && s < (secp256k1n / 2) + 1
+
+    if (nonce > maxNonceValue)
+      F.raiseError(TxSyntaxInvalid(s"Invalid nonce: $nonce > $maxNonceValue"))
+    else if (gasLimit > maxGasValue)
+      F.raiseError(TxSyntaxInvalid(s"Invalid gasLimit: $gasLimit > $maxGasValue"))
+    else if (gasPrice > maxGasValue)
+      F.raiseError(TxSyntaxInvalid(s"Invalid gasPrice: $gasPrice > $maxGasValue"))
+    else if (value > maxValue)
+      F.raiseError(TxSyntaxInvalid(s"Invalid value: $value > $maxValue"))
+    else if (!validR || !validS)
+      F.raiseError(TxSignatureInvalid)
+    else
+      F.unit
+  }
 }

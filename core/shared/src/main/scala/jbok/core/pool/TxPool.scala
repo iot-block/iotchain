@@ -7,6 +7,7 @@ import jbok.core.config.Configs.TxPoolConfig
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.SignedTransaction
 import jbok.core.peer._
+import jbok.core.validators.TxValidator
 
 import scala.concurrent.duration._
 
@@ -34,6 +35,7 @@ final class TxPool[F[_]] private (
 
   def addOrUpdateTransaction(newStx: SignedTransaction): F[Unit] =
     for {
+      _       <- TxValidator.checkSyntacticValidity(newStx)
       current <- T.clock.realTime(MILLISECONDS)
       _ <- pending.update { txs =>
         val (_, b) = txs.partition {

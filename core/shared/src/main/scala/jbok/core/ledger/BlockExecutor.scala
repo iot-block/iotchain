@@ -84,7 +84,7 @@ final case class BlockExecutor[F[_]](
     val gasLimit      = stx.gasLimit
     val vmConfig      = EvmConfig.forBlock(blockHeader.number, config)
     for {
-      _      <- txValidator.validateSimulateTx(stx)
+      _      <- TxValidator.checkSyntacticValidity[F](stx)
       world1 <- history.getWorldState(config.accountStartNonce, Some(stateRoot))
       (senderAccount, world2) <- world1
         .getAccountOpt(senderAddress)
