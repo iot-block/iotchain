@@ -13,10 +13,7 @@ import jbok.common.execution._
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw._
 
-@SuppressWarnings(Array(
-  "org.wartremover.warts.OptionPartial",
-  "org.wartremover.warts.EitherProjectionPartial",
-))
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final case class ConfigView(state: AppState) {
   val interfaces: Vars[String]       = Vars.empty[String]
   val host: Var[String]              = Var("127.0.0.1")
@@ -180,11 +177,11 @@ final case class ConfigView(state: AppState) {
       {renderSimulationAdd.bind}
     </div>
 
-  val addHost: Var[String]                     = Var("127.0.0.1")
-  val addHostIsValid: Var[Boolean]             = Var(true)
-  val addPort: Var[String]                     = Var("30316")
-  val addPortIsValid: Var[Boolean]             = Var(true)
-  val connectedStatus: Var[Option[IO[String]]] = Var(None)
+  val addHost: Var[String]                 = Var("127.0.0.1")
+  val addHostIsValid: Var[Boolean]         = Var(true)
+  val addPort: Var[String]                 = Var("30316")
+  val addPortIsValid: Var[Boolean]         = Var(true)
+  val connectedStatus: Var[Option[String]] = Var(None)
 
   private val onInputHandlerAdd = { event: Event =>
     event.currentTarget match {
@@ -214,15 +211,16 @@ final case class ConfigView(state: AppState) {
               IO.pure("connect failed.")
             } else {
               val nodeInfo = NodeInfo(peerNodeUriOpt.get, addHost.value, addPort.value.toInt)
-              state.addNodeInfo(nodeInfo)
               for {
                 jbokClient <- jbok.app.client.JbokClient(new URI(nodeInfo.rpcAddr))
                 _ = state.clients.value += (peerNodeUriOpt.get -> jbokClient)
+                _ = state.addNodeInfo(nodeInfo)
               } yield "connected."
             }
+            _ = connectedStatus.value = Some(tip)
           } yield tip
 
-          connectedStatus.value = Some(p)
+          p.unsafeToFuture()
         }
       case _ =>
     }
@@ -271,7 +269,7 @@ final case class ConfigView(state: AppState) {
                 <b> status: </b>
               </div>
               <div class="config-row-item">
-              {Spinner.render(FutureBinding(status.unsafeToFuture())).bind}
+              {status}
               </div>
             </div>
         }

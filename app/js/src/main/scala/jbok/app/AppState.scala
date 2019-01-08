@@ -18,9 +18,9 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration._
 
 final case class ClientStatus(number: Var[BigInt] = Var(0),
-                        gasPrice: Var[BigInt] = Var(0),
-                        gasLimit: Var[BigInt] = Var(0),
-                        miningStatus: Var[String] = Var("idle"))
+                              gasPrice: Var[BigInt] = Var(0),
+                              gasLimit: Var[BigInt] = Var(0),
+                              miningStatus: Var[String] = Var("idle"))
 
 final case class BlockHistory(bestBlockNumber: Var[BigInt] = Var(-1), history: Vars[Block] = Vars.empty)
 
@@ -152,7 +152,7 @@ final case class AppState(
     } yield ()
 
   def updateAccounts(id: String, client: JbokClient): IO[Unit] = {
-    val addresses = simuAddress.value.toList ++ addressInNode.value
+    val addresses = addressInNode.value
       .get(id)
       .map(_.value.toList)
       .getOrElse(List.empty[Address])

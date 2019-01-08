@@ -5,12 +5,11 @@ import java.net._
 import cats.effect.IO
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import com.typesafe.config.ConfigFactory
 import fs2._
 import jbok.app.client.JbokClient
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.FullNodeConfig
-import jbok.core.config.{ConfigLoader, GenesisConfig}
+import jbok.core.config.GenesisConfig
 import jbok.core.keystore.KeyStorePlatform
 import jbok.core.models.{Account, Address}
 import jbok.crypto.signature.KeyPair
@@ -38,7 +37,8 @@ class TestNetTxGen(clients: Ref[IO, Map[String, JbokClient]],
         client = cs.values.toList.head
         accounts <- getAccounts(keyPairs.map(Address.apply), client)
         stxs     <- TxGen.genTxs(2, keyPairs.zip(accounts).toMap, genesisConfig.chainId)
-        _        <- stxs.traverse[IO, ByteVector](stx => client.public.sendRawTransaction(stx.asBytes))
+        _ = log.info(s"send stxs to client: ${client.status.unsafeRunSync()}")
+        _ <- stxs.traverse[IO, ByteVector](stx => client.public.sendRawTransaction(stx.asBytes))
       } yield ()
 
     Stream
@@ -75,28 +75,26 @@ object TestNetTxGen {
 
   private def loadGenessisConfig(path: String): IO[GenesisConfig] = GenesisConfig.fromFile(path)
 
-  private def loadFullNodeConfigs(paths: List[String]): IO[List[FullNodeConfig]] =
-    paths
-      .map(p => ConfigFactory.parseFile(new java.io.File(p)).getConfig("jbok"))
-      .traverse[IO, FullNodeConfig](ConfigLoader.loadFullNodeConfig[IO])
+  private def loadFullNodeConfigs(paths: List[String]): List[FullNodeConfig] =
+    paths.map(path => FullNodeConfig.fromJson(File(path).lines.mkString("\n")))
 
   private def parseFileDir: IO[(String, String, List[String])] = {
     val homePath = System.getProperty("user.home")
-    val path     = homePath + "/.jbok"
+    val jbokPath = homePath + "/.jbok"
     for {
-      dir <- IO { File.apply(path) }
+      dir <- IO { File.apply(jbokPath) }
       files <- if (!dir.exists || !dir.isDirectory || dir.list.isEmpty) {
-        IO.raiseError(new Exception(s"not a jbok home dir: ${path}."))
+        IO.raiseError(new Exception(s"not a jbok home dir: ${jbokPath}."))
       } else {
         IO {
           dir.list.toList.sortBy(_.toString)
         }
       }
-      keyPairDir         = (files.head / "keystore").toString
-      genesisConfigDir   = (files.head / "genesis.conf").toString
-      fullNodeConfigsDir = files.map(_ / "jbok.conf").map(_.toString)
-      _                  = println(fullNodeConfigsDir)
-    } yield (keyPairDir, genesisConfigDir, fullNodeConfigsDir)
+      keyPairPath         = (files.head / "keystore").toString
+      genesisConfigPath   = (files.head / "genesis.json").toString
+      fullNodeConfigsPath = files.map(_ / "app.json").map(_.toString)
+      _                   = println(fullNodeConfigsPath)
+    } yield (keyPairPath, genesisConfigPath, fullNodeConfigsPath)
   }
 
   def apply(): IO[TestNetTxGen] =
@@ -104,7 +102,7 @@ object TestNetTxGen {
       (keyPairDir, genesisDir, fullNodeDir) <- parseFileDir
       keyPairs                              <- loadKeyPairs(keyPairDir)
       genesisConfig                         <- loadGenessisConfig(genesisDir)
-      fullNodeConfigs                       <- loadFullNodeConfigs(fullNodeDir)
+      fullNodeConfigs                       <- loadFullNodeConfigs(fullNodeDir).pure[IO]
       clients                               <- Ref.of[IO, Map[String, JbokClient]](Map.empty)
     } yield new TestNetTxGen(clients, genesisConfig, fullNodeConfigs, keyPairs)
 }

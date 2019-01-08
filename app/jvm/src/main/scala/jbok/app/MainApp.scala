@@ -75,16 +75,13 @@ object MainApp extends StreamApp {
         } yield ExitCode.Success
 
       case "simulation" :: tail =>
-        val bind       = new InetSocketAddress("localhost", 8888)
-        val peerCount  = 4
-        val minerCount = 1
+        val bind = new InetSocketAddress("localhost", 8888)
         for {
           impl      <- SimulationImpl()
           rpcServer <- RpcServer().map(_.mountAPI[SimulationAPI](impl))
           metrics   <- Metrics.default[IO]
           server = Server.websocket(bind, rpcServer.pipe, metrics)
-          _ <- impl.createNodesWithMiner(peerCount, minerCount)
-          _ = timer.sleep(5000.millis)
+          _      = timer.sleep(5000.millis)
           ec <- runStream(server.stream)
         } yield ec
 
@@ -108,7 +105,6 @@ object MainApp extends StreamApp {
         for {
           _ <- IO(println(version))
           _ <- IO(println(banner))
-          _ <- IO(println(TypeSafeConfigHelper.printConfig(TypeSafeConfigHelper.reference).render))
         } yield ExitCode.Error
     }
 }

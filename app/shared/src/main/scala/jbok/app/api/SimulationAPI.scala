@@ -20,8 +20,6 @@ final case class NodeInfo(
 
 trait SimulationAPI {
   // simulation network for test
-  def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]]
-
   def getAccounts: IO[List[(Address, Account)]]
 
   def getCoin(address: Address, value: BigInt): IO[Unit]
