@@ -56,9 +56,9 @@ object Configs {
       case None    => GenesisConfig.fromFile(genesisPath).unsafeRunSync()
     }
 
-    val nodeKeyPair: KeyPair = peer.nodekey.getOrElse(PeerConfig.loadOrGenerateNodeKey(nodeKeyPath))
+    lazy val nodeKeyPair: KeyPair = peer.nodekey.getOrElse(PeerConfig.loadOrGenerateNodeKey(nodeKeyPath))
 
-    val peerNode: PeerNode = PeerNode(nodeKeyPair.public, peer.host, peer.port, peer.discoveryPort)
+    lazy val peerNode: PeerNode = PeerNode(nodeKeyPair.public, peer.host, peer.port, peer.discoveryPort)
 
     def withIdentityAndPort(identity: String, port: Int): FullNodeConfig =
       copy(identity = identity)
