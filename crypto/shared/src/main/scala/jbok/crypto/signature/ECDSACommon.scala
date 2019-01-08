@@ -1,6 +1,6 @@
 package jbok.crypto.signature
 
-object ECDSAChainIdConvert {
+object ECDSACommon {
   def getPointSign(chainId: BigInt, recoveryId: BigInt): Option[BigInt] =
     if (recoveryId == chainId * 2 + NEW_NEGATIVE_POINT_SIGN) {
       Some(NEGATIVE_POINT_SIGN)
@@ -29,4 +29,13 @@ object ECDSAChainIdConvert {
   val NEW_NEGATIVE_POINT_SIGN: BigInt       = 27
   val NEW_POSITIVE_POINT_SIGN: BigInt       = 28
   val allowedPointSigns                     = Set(NEGATIVE_POINT_SIGN, POSITIVE_POINT_SIGN)
+
+  val curveOrder     = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337")
+  val halfCurveOrder = curveOrder / 2
+  def toCanonicalS(s: BigInt): BigInt =
+    if (s.compareTo(halfCurveOrder) <= 0) {
+      s
+    } else {
+      curveOrder - s
+    }
 }

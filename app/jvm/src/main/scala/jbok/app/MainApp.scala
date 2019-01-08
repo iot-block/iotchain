@@ -9,7 +9,7 @@ import cats.effect.{ExitCode, IO}
 import cats.implicits._
 import fs2._
 import jbok.app.TestnetBuilder.Topology
-import jbok.app.api.SimulationAPI
+import jbok.app.api.{SimulationAPI, TestNetTxGen}
 import jbok.app.simulations.SimulationImpl
 import jbok.codec.rlp.implicits._
 import jbok.common.metrics.Metrics
@@ -75,18 +75,21 @@ object MainApp extends StreamApp {
         } yield ExitCode.Success
 
       case "simulation" :: tail =>
-        val bind       = new InetSocketAddress("localhost", 8888)
-        val peerCount  = 4
-        val minerCount = 1
+        val bind = new InetSocketAddress("localhost", 8888)
         for {
           impl      <- SimulationImpl()
           rpcServer <- RpcServer().map(_.mountAPI[SimulationAPI](impl))
           metrics   <- Metrics.default[IO]
           server = Server.websocket(bind, rpcServer.pipe, metrics)
-          _ <- impl.createNodesWithMiner(peerCount, minerCount)
-          _ = timer.sleep(5000.millis)
+          _      = timer.sleep(5000.millis)
           ec <- runStream(server.stream)
         } yield ec
+
+      case "txgen" :: tail =>
+        for {
+          txtg <- TestNetTxGen()
+          ec   <- runStream(txtg.run)
+        } yield ExitCode.Success
 
       case "build-testnet" :: _ =>
         TestnetBuilder()

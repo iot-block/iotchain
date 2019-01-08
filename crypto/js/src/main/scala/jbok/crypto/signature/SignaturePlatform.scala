@@ -14,7 +14,7 @@ trait SignaturePlatform {
 }
 
 private object ECDSAPlatform extends Signature[ECDSA] {
-  import ECDSAChainIdConvert._
+  import ECDSACommon._
   val secp256k1 = new EC("secp256k1")
 
   override def generateKeyPair[F[_]](random: Option[Random])(implicit F: Sync[F]): F[KeyPair] = F.delay {
@@ -33,13 +33,16 @@ private object ECDSAPlatform extends Signature[ECDSA] {
 
   override def sign[F[_]](hash: Array[Byte], keyPair: KeyPair, chainId: BigInt)(
       implicit F: Sync[F]): F[CryptoSignature] = F.delay {
-    val kp        = secp256k1.keyFromPrivate(keyPair.secret.bytes.toHex, "hex")
-    val sig       = secp256k1.sign(new Uint8Array(hash.toJSArray), kp)
-    val r         = new BigInteger(sig.r.toString)
-    val s         = new BigInteger(sig.s.toString)
-    val pointSign = sig.recoveryParam + NEGATIVE_POINT_SIGN
-    val v: BigInt = getRecoveryId(chainId, pointSign).getOrElse(pointSign)
-    CryptoSignature(r, s, v)
+    val kp  = secp256k1.keyFromPrivate(keyPair.secret.bytes.toHex, "hex")
+    val sig = secp256k1.sign(new Uint8Array(hash.toJSArray), kp)
+    val r   = new BigInteger(sig.r.toString)
+    val s   = new BigInteger(sig.s.toString)
+    val pointSign = calculatePointSign(r, toCanonicalS(s), keyPair, hash, chainId) match {
+      case Some(recId) => recId
+      case None        => throw new Exception("unexpected error")
+    }
+    val rid: BigInt = getRecoveryId(chainId, pointSign).getOrElse(pointSign)
+    CryptoSignature(r, toCanonicalS(s), rid)
   }
 
   override def verify[F[_]](hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt)(
@@ -68,4 +71,14 @@ private object ECDSAPlatform extends Signature[ECDSA] {
     val s = new BN(sig.s.toString(16), 16)
     SignatureEC(r, s, recoveryParam = (sig.v - NEGATIVE_POINT_SIGN).toInt)
   }
+
+  private def calculatePointSign(r: BigInt,
+                                 s: BigInt,
+                                 keyPair: KeyPair,
+                                 hash: Array[Byte],
+                                 chainId: BigInt): Option[BigInt] =
+    allowedPointSigns.find(
+      v =>
+        recoverPublic(hash, CryptoSignature(r, s, getRecoveryId(chainId, v).getOrElse(v)), chainId)
+          .contains(keyPair.public))
 }

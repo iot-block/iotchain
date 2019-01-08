@@ -1,8 +1,12 @@
 package jbok.crypto.signature
 
 import cats.effect.IO
+import cats.implicits._
 import jbok.JbokAsyncSpec
 import jbok.crypto._
+import scodec.bits.ByteVector
+
+import scala.math.BigInt
 
 class SignatureSpec extends JbokAsyncSpec {
   val hash = "jbok".utf8bytes.kec256.toArray
@@ -72,5 +76,23 @@ class SignatureSpec extends JbokAsyncSpec {
         _ = public shouldBe Some(kp.public)
       } yield ()
     }
+
+    "encrypt message by known secret key" in {
+      for {
+        secret <- KeyPair
+          .Secret("0xcfb8493e50c4aacda5813b2b48f13b4af17106993dbf142877e2e346dfc40668")
+          .pure[IO]
+        public <- ecdsa.generatePublicKey[IO](secret)
+        keyPair = KeyPair(public, secret)
+        _       = println(keyPair)
+        sig <- ecdsa.sign[IO]("Actions speak louder than words.".getBytes, keyPair, 0)
+
+        _ = sig.bytes shouldBe ByteVector
+          .fromValidHex(
+            "0xe0f71d96ea314543db806aaa63179fc08abac87b7c43ec3b27395dd8b45512db372572d08384c1c777d95548c8e35334f4f7de0f70909fb3c644b8f98b9851601c")
+          .toArray
+      } yield ()
+    }
+
   }
 }

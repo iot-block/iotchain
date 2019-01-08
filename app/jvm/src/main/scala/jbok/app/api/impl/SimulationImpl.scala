@@ -41,44 +41,6 @@ class SimulationImpl(
   val genesisConfigWithAlloc: GenesisConfig = txGraphGen.genesisConfig
   val blockTime: FiniteDuration             = 5.seconds
 
-  override def createNodesWithMiner(n: Int, m: Int): IO[List[NodeInfo]] = {
-    val configs =
-      TestnetBuilder()
-        .withN(n)
-        .withBalance(BigInt("1000000000000000"))
-        .withChainId(1)
-        .withTopology(Topology.Ring)
-        .withMiners(m)
-        .build
-        .unsafeRunSync()
-
-    val nodeInfos = configs.map(infoFromNode)
-    log.info(s"create $n node(s)")
-
-    for {
-      miner <- FullNode.forConfig(configs.head)
-      _     <- miner.start
-      _     <- T.sleep(3.seconds)
-      nodes <- configs.tail.traverse(FullNode.forConfig)
-      _     <- nodes.traverse(_.start)
-      _     <- T.sleep(3.seconds)
-      _ = log.info("node start, then client to connect")
-      jbokClients <- nodeInfos.traverse[IO, JbokClient](x => jbok.app.client.JbokClient(new URI(x.rpcAddr)))
-      miner = jbokClients.head
-      _ <- txGraphGen.keyPairs.toList.traverse[IO, Address](kp =>
-        miner.personal.importRawKey(kp.keyPair.secret.bytes, ""))
-      _ <- id2NodeNetwork.update(
-        _ ++ nodeInfos
-          .zip(jbokClients)
-          .map {
-            case (ni, jbokClient) =>
-              ni.id -> Node(ni, ni.id, jbokClient)
-          }
-          .toMap)
-      _ <- stxStream(2).compile.drain.start
-    } yield nodeInfos
-  }
-
   override def getNodes: IO[List[NodeInfo]] = id2NodeNetwork.get.map(_.values.toList.map(_.nodeInfo))
 
   override def getNodeInfo(id: String): IO[Option[NodeInfo]] =
