@@ -23,7 +23,7 @@ import org.bouncycastle.math.ec.custom.sec.SecP256K1Curve
 
 object ECDSAPlatform extends Signature[ECDSA] {
 
-  import ECDSAChainIdConvert._
+  import ECDSACommon._
 
   val curve: ECNamedCurveParameterSpec = ECNamedCurveTable.getParameterSpec("secp256k1")
   val domain: ECDomainParameters       = new ECDomainParameters(curve.getCurve, curve.getG, curve.getN, curve.getH)
@@ -53,14 +53,14 @@ object ECDSAPlatform extends Signature[ECDSA] {
     val signer = new ECDSASigner(new HMacDSAKCalculator(new SHA256Digest()))
     signer.init(true, new ECPrivateKeyParameters(keyPair.secret.d, domain))
     val Array(r, s) = signer.generateSignature(hash)
-    val v = calculateRecId(r, toCanonicalS(s), keyPair, hash, chainId) match {
+    val pointSign = calculatePointSign(r, toCanonicalS(s), keyPair, hash, chainId) match {
       case Some(recId) => recId
       case None        => throw new Exception("unexpected error")
     }
 
-    val pointSign: BigInt = getRecoveryId(chainId, v).getOrElse(v)
+    val rid: BigInt = getRecoveryId(chainId, pointSign).getOrElse(pointSign)
 
-    CryptoSignature(r, toCanonicalS(s), pointSign)
+    CryptoSignature(r, toCanonicalS(s), rid)
   }
 
   override def verify[F[_]](hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt)(
@@ -105,18 +105,11 @@ object ECDSAPlatform extends Signature[ECDSA] {
   private[jbok] def toECPublicKeyParameters(public: KeyPair.Public) =
     new ECPublicKeyParameters(curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR_BYTE +: public.bytes.toArray), domain)
 
-  private[jbok] def toCanonicalS(s: BigInteger): BigInt =
-    BigInt(if (s.compareTo(halfCurveOrder) <= 0) {
-      s
-    } else {
-      curve.getN.subtract(s)
-    })
-
-  private[jbok] def calculateRecId(r: BigInt,
-                                   s: BigInt,
-                                   keyPair: KeyPair,
-                                   hash: Array[Byte],
-                                   chainId: BigInt): Option[BigInt] =
+  private[jbok] def calculatePointSign(r: BigInt,
+                                       s: BigInt,
+                                       keyPair: KeyPair,
+                                       hash: Array[Byte],
+                                       chainId: BigInt): Option[BigInt] =
     allowedPointSigns.find(
       v =>
         recoverPublic(hash, CryptoSignature(r, s, getRecoveryId(chainId, v).getOrElse(v)), chainId)

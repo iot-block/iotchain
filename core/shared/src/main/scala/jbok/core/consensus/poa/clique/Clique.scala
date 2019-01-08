@@ -141,7 +141,7 @@ object Clique {
       extra <- F.delay(RlpCodec.decode[CliqueExtra](header.extra.bits).require.value)
       sig = extra.signature
       hash <- sigHash[F](header)
-      chainId = ECDSAChainIdConvert.getChainId(sig.v)
+      chainId = ECDSACommon.getChainId(sig.v)
     } yield {
       chainId.flatMap(
         Signature[ECDSA]

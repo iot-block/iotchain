@@ -20,12 +20,13 @@ object KeyPair {
 
   @JsonCodec
   final case class Secret(bytes: ByteVector) extends AnyVal {
-    def d: BigInteger = new BigInteger(bytes.toArray)
+    def d: BigInteger = new BigInteger(1, bytes.toArray)
   }
 
   object Secret {
-    def apply(d: BigInteger): Secret      = Secret(ByteVector(d.toByteArray).takeRight(32).padLeft(32))
-    def apply(hex: String): Secret        = Secret(ByteVector.fromValidHex(hex))
-    def apply(bytes: Array[Byte]): Secret = Secret(ByteVector(bytes))
+    def apply(d: BigInteger): Secret      = apply(ByteVector(d.toByteArray))
+    def apply(hex: String): Secret        = apply(ByteVector.fromValidHex(hex))
+    def apply(bytes: Array[Byte]): Secret = apply(ByteVector(bytes))
+    def apply(bv: ByteVector): Secret     = new Secret(bv.takeRight(32).padLeft(32))
   }
 }

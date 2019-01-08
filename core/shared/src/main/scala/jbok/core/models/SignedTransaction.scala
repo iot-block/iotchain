@@ -29,7 +29,7 @@ final case class SignedTransaction(
 
   lazy val hash: ByteVector = bytes.kec256
 
-  lazy val chainIdOpt: Option[BigInt] = ECDSAChainIdConvert.getChainId(v)
+  lazy val chainIdOpt: Option[BigInt] = ECDSACommon.getChainId(v)
 
   lazy val senderAddress: Option[Address] = chainIdOpt.flatMap(chainId => SignedTransaction.getSender(this, chainId))
 
