@@ -29,7 +29,6 @@
     "maxOutgoingPeers" : 10,
     "maxIncomingPeers" : 10,
     "maxPendingPeers" : 10,
-    "handshakeTimeout" : "10seconds",
     "timeout" : "10seconds"
   },
   "sync" : {

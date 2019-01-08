@@ -45,6 +45,14 @@ object MainApp extends StreamApp {
 
   override def run(args: List[String]): IO[ExitCode] =
     args match {
+      case "node" :: Nil =>
+        runStream {
+          for {
+            fullNode       <- FullNode.stream(FullNodeConfig.reference)
+            _              <- fullNode.stream
+          } yield ()
+        }
+
       case "node" :: path :: Nil =>
         runStream {
           for {

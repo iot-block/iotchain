@@ -19,10 +19,11 @@ import jbok.crypto.signature.KeyPair
 import jbok.network.Connection
 import jbok.network.common.TcpUtil
 import scala.concurrent.duration._
+import jbok.common._
 
 sealed abstract class PeerErr(message: String) extends Exception(message)
 object PeerErr {
-  final case object HandshakeTimeout                         extends PeerErr("handshake timeout")
+  case object HandshakeTimeout                         extends PeerErr("handshake timeout")
   final case class Incompatible(self: Status, other: Status) extends PeerErr(s"incompatible peer ${self} ${other}")
 }
 
@@ -54,8 +55,7 @@ abstract class PeerManager[F[_]](
           val stream = for {
             conn <- eval(TcpUtil.socketToConnection[F, Message](res, true))
             _    <- eval(conn.start)
-            peer <- eval(
-              handshakeIncoming(conn).timeoutTo(config.handshakeTimeout, F.raiseError(PeerErr.HandshakeTimeout)))
+            peer <- eval(handshakeIncoming(conn).timeoutTo(config.timeout, F.raiseError(PeerErr.HandshakeTimeout)))
             _ = log.debug(s"${peer.id} handshaked")
             _ <- eval(incoming.update(_ + (peer.pk -> peer)))
             _ <- peer.conn.reads
@@ -63,12 +63,11 @@ abstract class PeerManager[F[_]](
               .to(messageQueue.enqueue)
               .onFinalize(incoming.update(_ - peer.pk) >> F.delay(log.debug(s"${peer.id} disconnected")))
           } yield ()
+
           stream.handleErrorWith {
             case PeerErr.HandshakeTimeout => Stream.eval(F.delay(log.warn("timeout")))
             case e: PeerErr.Incompatible  => Stream.eval(F.delay(log.warn(e.getMessage)))
-            case e =>
-              log.error("unexpected listen error", e)
-              Stream.raiseError[F](e)
+            case e                        => Stream.eval(F.delay(log.error("unexpected listen error", e)))
           }
       }
       .parJoin(maxOpen)
@@ -82,13 +81,12 @@ abstract class PeerManager[F[_]](
   private def connect(
       to: PeerNode,
   ): Stream[F, Unit] = {
-    val connect0 = {
+    def connect0: Stream[F, Unit] = {
       val res = io.tcp.Socket.client[F](to.tcpAddress, keepAlive = true, noDelay = true)
       val stream = for {
         conn <- eval(TcpUtil.socketToConnection[F, Message](res, false))
         _    <- eval(conn.start)
-        peer <- eval(
-          handshakeOutgoing(conn, to.pk).timeoutTo(config.handshakeTimeout, F.raiseError(PeerErr.HandshakeTimeout)))
+        peer <- eval(handshakeOutgoing(conn, to.pk).timeoutTo(config.timeout, F.raiseError(PeerErr.HandshakeTimeout)))
         _ = log.debug(s"${peer.id} handshaked")
         _ <- eval(outgoing.update(_ + (peer.pk -> peer)))
         _ <- peer.conn.reads
@@ -101,15 +99,17 @@ abstract class PeerManager[F[_]](
       } yield ()
 
       stream.handleErrorWith {
-        case PeerErr.HandshakeTimeout => Stream.eval(F.delay(log.warn("timeout")))
-        case e: PeerErr.Incompatible  => Stream.eval(F.delay(log.warn(e.getMessage)))
-        case e =>
-          log.error("unexpected connect error", e)
-          Stream.raiseError[F](e)
+        case PeerErr.HandshakeTimeout =>
+          for {
+            _ <- eval(F.delay(log.warn(s"connect to ${to} timeout")))
+            _ <- connect0
+          } yield ()
+        case e: PeerErr.Incompatible => Stream.eval(F.delay(log.warn(e.getMessage)))
+        case e                       => Stream.eval(F.delay(log.error("unexpected connect error", e)))
       }
     }
 
-    Stream.eval(outgoing.get.map(_.contains(to.pk))).flatMap {
+    Stream.eval(outgoing.get.map(_.contains(to.pk)) || incoming.get.map(_.contains(to.pk))).flatMap {
       case true =>
         log.debug(s"already connected, ignore")
         Stream.empty.covary[F]

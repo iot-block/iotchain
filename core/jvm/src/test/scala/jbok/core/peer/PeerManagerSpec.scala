@@ -6,7 +6,6 @@ import fs2._
 import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.common.testkit._
-import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.testkit._
 
 import scala.concurrent.duration._

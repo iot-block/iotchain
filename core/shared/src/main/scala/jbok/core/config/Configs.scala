@@ -58,6 +58,8 @@ object Configs {
 
     val nodeKeyPair: KeyPair = peer.nodekey.getOrElse(PeerConfig.loadOrGenerateNodeKey(nodeKeyPath))
 
+    val peerNode: PeerNode = PeerNode(nodeKeyPair.public, peer.host, peer.port, peer.discoveryPort)
+
     def withIdentityAndPort(identity: String, port: Int): FullNodeConfig =
       copy(identity = identity)
         .withPeer(_.copy(port = port, discoveryPort = port + 1))
@@ -120,8 +122,7 @@ object Configs {
       maxOutgoingPeers: Int,
       maxIncomingPeers: Int,
       maxPendingPeers: Int,
-      handshakeTimeout: FiniteDuration,
-      timeout: FiniteDuration,
+      timeout: FiniteDuration
   ) {
     val bindAddr: InetSocketAddress      = new InetSocketAddress(host, port)
     val discoveryAddr: InetSocketAddress = new InetSocketAddress(host, discoveryPort)
