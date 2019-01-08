@@ -23,14 +23,15 @@ object TxGen {
 
     implicit val chainId: BigInt = cId
 
-    def genTx: IO[SignedTransaction] = {
-      val List(sender, receiver) = Random.shuffle(simuAccountsMap.values.toList).take(2)
-      val toValue                = value.min(sender.balance)
-      val tx                     = Transaction(sender.nonce, gasPrice, gasLimit, Some(receiver.address), toValue, ByteVector.empty)
-      simuAccountsMap += sender.address   -> sender.nonceIncreased.balanceChanged(-toValue)
-      simuAccountsMap += receiver.address -> receiver.balanceChanged(toValue)
-      SignedTransaction.sign[IO](tx, sender.keyPair)
-    }
+    def genTx: IO[SignedTransaction] =
+      for {
+        List(sender, receiver) <- IO(Random.shuffle(simuAccountsMap.values.toList).take(2))
+        toValue = value.min(sender.balance)
+        tx      = Transaction(sender.nonce, gasPrice, gasLimit, Some(receiver.address), toValue, ByteVector.empty)
+        _       = simuAccountsMap += sender.address -> sender.nonceIncreased.balanceChanged(-toValue)
+        _       = simuAccountsMap += receiver.address -> receiver.balanceChanged(toValue)
+        stx <- SignedTransaction.sign[IO](tx, sender.keyPair)
+      } yield stx
 
     Stream.repeatEval(genTx).take(nTx).compile.toList
   }

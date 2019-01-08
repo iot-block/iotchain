@@ -37,8 +37,7 @@ class TestNetTxGen(clients: Ref[IO, Map[String, JbokClient]],
         client = cs.values.toList.head
         accounts <- getAccounts(keyPairs.map(Address.apply), client)
         stxs     <- TxGen.genTxs(2, keyPairs.zip(accounts).toMap, genesisConfig.chainId)
-        _ = log.info(s"send stxs to client: ${client.status.unsafeRunSync()}")
-        _ <- stxs.traverse[IO, ByteVector](stx => client.public.sendRawTransaction(stx.asBytes))
+        _        <- stxs.traverse[IO, ByteVector](stx => client.public.sendRawTransaction(stx.asBytes))
       } yield ()
 
     Stream
@@ -54,8 +53,9 @@ class TestNetTxGen(clients: Ref[IO, Map[String, JbokClient]],
 
   def run: Stream[IO, Unit] =
     for {
-      jbokClients <- Stream.eval(
-        fullNodeConfigs.traverse[IO, JbokClient](x => jbok.app.client.JbokClient(new URI(x.rpc.addr.toString))))
+//      _ <- Stream.eval(fullNodeConfigs.traverse(fnc => IO.delay(println(".toString))))
+      jbokClients <- Stream.eval(fullNodeConfigs.traverse[IO, JbokClient](x =>
+        jbok.app.client.JbokClient(new URI(s"ws://${x.rpc.host}:${x.rpc.port}"))))
       _ <- Stream.eval(clients.update(_ ++ fullNodeConfigs.map(_.identity).zip(jbokClients).toMap))
       _ <- Stream.eval(T.sleep(3.seconds))
       _ <- stxStream
@@ -64,21 +64,24 @@ class TestNetTxGen(clients: Ref[IO, Map[String, JbokClient]],
 }
 
 object TestNetTxGen {
-  private def loadKeyPairs(path: String): IO[List[KeyPair]] =
-    for {
-      ksp       <- KeyStorePlatform[IO](path)
-      addresses <- ksp.listAccounts
-      keyPairs <- addresses.traverse[IO, KeyPair] { address =>
-        ksp.unlockAccount(address, "").map(_.keyPair)
-      }
-    } yield keyPairs
+  private def loadKeyPairs(pathes: List[String]): IO[List[KeyPair]] =
+    pathes
+      .traverse[IO, List[KeyPair]](path =>
+        for {
+          ksp       <- KeyStorePlatform[IO](path)
+          addresses <- ksp.listAccounts
+          keyPairs <- addresses.traverse[IO, KeyPair] { address =>
+            ksp.unlockAccount(address, "").map(_.keyPair)
+          }
+        } yield keyPairs)
+      .map(_.flatten)
 
   private def loadGenessisConfig(path: String): IO[GenesisConfig] = GenesisConfig.fromFile(path)
 
   private def loadFullNodeConfigs(paths: List[String]): List[FullNodeConfig] =
     paths.map(path => FullNodeConfig.fromJson(File(path).lines.mkString("\n")))
 
-  private def parseFileDir: IO[(String, String, List[String])] = {
+  private def parseFileDir: IO[(List[String], String, List[String])] = {
     val homePath = System.getProperty("user.home")
     val jbokPath = homePath + "/.jbok"
     for {
@@ -90,7 +93,7 @@ object TestNetTxGen {
           dir.list.toList.sortBy(_.toString)
         }
       }
-      keyPairPath         = (files.head / "keystore").toString
+      keyPairPath         = files.map(_ / "keystore").map(_.toString)
       genesisConfigPath   = (files.head / "genesis.json").toString
       fullNodeConfigsPath = files.map(_ / "app.json").map(_.toString)
       _                   = println(fullNodeConfigsPath)
