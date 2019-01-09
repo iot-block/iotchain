@@ -94,7 +94,7 @@ object MainApp extends StreamApp {
       case "build-testnet" :: _ =>
         TestnetBuilder()
           .withN(4)
-          .withBalance(BigInt("1000000000000000"))
+          .withBalance(BigInt("1" + "0" * 28))
           .withChainId(1)
           .withTopology(Topology.Star)
           .withMiners(1)

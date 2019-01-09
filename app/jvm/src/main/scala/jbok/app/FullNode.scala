@@ -89,10 +89,7 @@ object FullNode {
       keystore <- KeyStorePlatform[IO](config.keystoreDir)
       minerKey <- config.mining.minerKeyPair match {
         case None if config.mining.enabled =>
-          keystore
-            .readPassphrase("unlock your mining account>")
-            .flatMap(p => keystore.unlockAccount(config.mining.minerAddress, p))
-            .map(_.keyPair.some)
+          keystore.unlockAccount(config.mining.minerAddress, "").map(_.keyPair.some)
         case None     => IO.pure(None)
         case Some(kp) => IO.pure(kp.some)
       }
