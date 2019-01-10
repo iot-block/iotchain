@@ -259,7 +259,7 @@ lazy val sdk = crossProject(JSPlatform, JVMPlatform)
     version in webpack := "4.8.1",
     version in startWebpackDevServer := "3.1.4",
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
-    webpackBundlingMode := BundlingMode.LibraryAndApplication()
+    jsEnv in Test := new org.scalajs.jsenv.nodejs.NodeJSEnv()
   )
   .dependsOn(core % CompileAndTest, common % CompileAndTest)
 
@@ -287,9 +287,10 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
   .settings(
     name := "jbok-network",
     libraryDependencies ++= http4s ++ Seq(
-      "com.spinoco"              %% "fs2-http"  % "0.4.0",
-      "com.offbynull.portmapper" % "portmapper" % "2.0.5",
-      "org.bitlet"               % "weupnp"     % "0.1.4",
+      "com.spinoco"              %% "fs2-http"   % "0.4.0",
+      "com.spinoco"              %% "fs2-crypto" % "0.4.0",
+      "com.offbynull.portmapper" % "portmapper"  % "2.0.5",
+      "org.bitlet"               % "weupnp"      % "0.1.4",
     )
   )
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
@@ -307,7 +308,9 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
       "com.github.cb372"          %%% "scalacache-core"       % V.scalacache,
       "com.github.cb372"          %% "scalacache-cats-effect" % V.scalacache,
       "com.github.cb372"          %% "scalacache-caffeine"    % V.scalacache,
-      "io.lettuce"                % "lettuce-core"            % "5.1.3.RELEASE"
+      "io.lettuce"                % "lettuce-core"            % "5.1.3.RELEASE",
+      "org.tpolecat"              %% "doobie-core"            % "0.6.0",
+      "org.xerial"                % "sqlite-jdbc"             % "3.25.2"
     )
   )
   .dependsOn(common % CompileAndTest, codec)

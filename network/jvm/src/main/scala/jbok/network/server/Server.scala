@@ -3,6 +3,7 @@ package jbok.network.server
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 
+import _root_.io.prometheus.client.CollectorRegistry
 import cats.effect._
 import cats.implicits._
 import fs2._
@@ -19,7 +20,6 @@ import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.websocket.WebSocketFrame
 import scodec.Codec
 import scodec.bits.BitVector
-import _root_.io.prometheus.client.CollectorRegistry
 
 import scala.concurrent.duration._
 
@@ -48,6 +48,7 @@ object Server {
       bind: InetSocketAddress,
       pipe: Pipe[F, A, A],
       metrics: Metrics[F],
+      handler: Option[String => F[String]] = None,
       maxOpen: Int = Int.MaxValue
   )(
       implicit F: ConcurrentEffect[F],
@@ -89,6 +90,19 @@ object Server {
             }
 
             WebSocketBuilder[F].build(toClient, fromClient)
+          }
+
+        case req @ POST -> Root =>
+          handler match {
+            case Some(h) =>
+              for {
+                request <- req.as[String]
+                result <- h(request)
+                resp   <- Ok(result)
+              } yield resp
+
+            case None =>
+              Forbidden()
           }
       }
 
