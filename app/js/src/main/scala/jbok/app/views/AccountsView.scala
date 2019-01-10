@@ -29,28 +29,6 @@ final case class AccountsView(state: AppState) {
     newAccountForm.clear()
   val newAccountModal = Modal("new account", newAccountForm.render(), () => onConfirm(), () => onCancel())
 
-  val getCoinForm = Form2(
-    Constants(CustomInput("Address", "address", None, (addr: String) => InputValidator.isValidAddress(addr))), { data =>
-      if (data.values.forall(_.isValid)) {
-        val p = for {
-          sc <- SimuClient(state.config.value.uri)
-          address = Address(ByteVector.fromValidHex(data("Address").value))
-          _ <- sc.simulation.getCoin(address, BigInt("100000000"))
-        } yield ()
-        p.unsafeToFuture()
-      }
-    }
-  )
-
-  def onConfirm2(): Unit = {
-    getCoinForm.submit(getCoinForm.entryMap)
-    getCoinForm.clear()
-  }
-  def onCancel2(): Unit =
-    getCoinForm.clear()
-
-  val getCoinModal = Modal("get conins", getCoinForm.render(), () => onConfirm2(), () => onCancel2())
-
   @binding.dom
   def render: Binding[Element] =
     <div>
@@ -98,7 +76,6 @@ final case class AccountsView(state: AppState) {
       }
       <div class="flex">
         {newAccountModal.render().bind}
-        {getCoinModal.render().bind}
       </div>
     </div>
 
