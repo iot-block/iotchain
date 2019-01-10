@@ -17,9 +17,12 @@ import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.GenesisConfig
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.keystore.KeyStorePlatform
+import jbok.core.models.Address
 import jbok.network.rpc.RpcServer
 import jbok.network.server.Server
+import scodec.bits.ByteVector
 
+import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
@@ -48,8 +51,8 @@ object MainApp extends StreamApp {
       case "node" :: Nil =>
         runStream {
           for {
-            fullNode       <- FullNode.stream(FullNodeConfig.reference)
-            _              <- fullNode.stream
+            fullNode <- FullNode.stream(FullNodeConfig.reference)
+            _        <- fullNode.stream
           } yield ()
         }
 
@@ -70,7 +73,7 @@ object MainApp extends StreamApp {
           )
           _ <- keystore.readPassphrase(s"unlock address ${address}>").flatMap(p => keystore.unlockAccount(address, p))
           signers = List(address)
-          genesis = Clique.generateGenesisConfig(GenesisConfig.generate(0, Map.empty), signers)
+          genesis = Clique.generateGenesisConfig(GenesisConfig.generate(0, ListMap.empty), signers)
           _ <- IO(File(FullNodeConfig.reference.genesisPath).createIfNotExists().overwrite(genesis.asJson.spaces2))
         } yield ExitCode.Success
 
@@ -87,19 +90,29 @@ object MainApp extends StreamApp {
 
       case "txgen" :: tail =>
         for {
-          txtg <- TestNetTxGen()
+          nTx  <- tail.headOption.flatMap(s => scala.util.Try(s.toInt).toOption).getOrElse(2).pure[IO]
+          txtg <- TestNetTxGen(nTx)
           ec   <- runStream(txtg.run)
         } yield ExitCode.Success
 
-      case "build-testnet" :: _ =>
-        TestnetBuilder()
-          .withN(4)
-          .withBalance(BigInt("1" + "0" * 28))
-          .withChainId(1)
-          .withTopology(Topology.Star)
-          .withMiners(1)
-          .build
-          .as(ExitCode.Success)
+      case "build-testnet" :: tail =>
+        for {
+          addresses <- tail
+            .map(hex => ByteVector.fromHex(hex.toLowerCase))
+            .filter(_.exists(_.length <= 20))
+            .traverse[Option, Address](_.map(Address.apply))
+            .getOrElse(List.empty)
+            .distinct
+            .pure[IO]
+          _ = println(addresses)
+          _ <- TestnetBuilder()
+            .withN(4)
+            .withAlloc(addresses, BigInt("1" + "0" * 28))
+            .withChainId(1)
+            .withTopology(Topology.Star)
+            .withMiners(1)
+            .build
+        } yield ExitCode.Success
 
       case _ =>
         for {

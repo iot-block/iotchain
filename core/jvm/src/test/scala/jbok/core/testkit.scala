@@ -10,7 +10,7 @@ import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus}
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.messages._
-import jbok.core.mining.{BlockMiner, SimAccount, TxGenerator}
+import jbok.core.mining.{BlockMiner, SimAccount, TxGen}
 import jbok.core.models._
 import jbok.core.peer.discovery.{Discovery, PeerTable}
 import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerNode, PeerStorePlatform, PeerType}
@@ -25,6 +25,7 @@ import jbok.persistent.testkit._
 import org.scalacheck._
 import scodec.bits.ByteVector
 
+import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
 
 object testkit {
@@ -32,7 +33,7 @@ object testkit {
     SimAccount(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
 
   val testAlloc =
-    Map(testMiner.address -> testMiner.balance)
+    ListMap(testMiner.address -> testMiner.balance)
 
   implicit val chainId: BigInt = 1
 
@@ -326,8 +327,7 @@ object testkit {
     implicit val chainId = config.genesis.chainId
     for {
       size <- Gen.chooseNum(min, max)
-      generator = TxGenerator(testMiner).unsafeRunSync()
-      txs       = generator.genTxs.take(size).compile.toList.unsafeRunSync()
+      txs = TxGen.genTxs(size, List(testMiner.keyPair -> Account.empty()).toMap).unsafeRunSync()
     } yield txs
   }
 

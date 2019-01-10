@@ -11,10 +11,7 @@ import org.scalajs.dom.raw.HTMLButtonElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
 
-@SuppressWarnings(Array(
-  "org.wartremover.warts.OptionPartial",
-  "org.wartremover.warts.EitherProjectionPartial",
-))
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final case class SendTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]
 
@@ -76,7 +73,7 @@ final case class SendTxView(state: AppState) {
       val p = for {
         gasPrice <- client.get.public.getGasPrice
         hash     <- client.get.personal.sendTransaction(txRequest.copy(gasPrice = Some(gasPrice)), password)
-        stx      <- client.get.public.getTransactionByHash(hash)
+        stx      <- client.get.public.getTransactionByHashFromHistory(hash)
         _ = stx.map(state.stxs.value(currentId.get).value += _)
         _ = state.receipts.value(currentId.get).value += (hash -> Var(None))
       } yield ()

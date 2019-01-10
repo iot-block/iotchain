@@ -33,16 +33,21 @@ final class PublicApiImpl(
   override def getBlockByNumber(blockNumber: BigInt): IO[Option[Block]] =
     history.getBlockByNumber(blockNumber)
 
-  override def getTransactionByHash(txHash: ByteVector): IO[Option[SignedTransaction]] = {
-    val pending = OptionT(txPool.getPendingTransactions.map(_.keys.toList.find(_.hash == txHash)))
+  override def getTransactionByHashFromHistory(txHash: ByteVector): IO[Option[SignedTransaction]] = {
     val inBlock = for {
       loc   <- OptionT(history.getTransactionLocation(txHash))
       block <- OptionT(history.getBlockByHash(loc.blockHash))
       stx   <- OptionT.fromOption[IO](block.body.transactionList.lift(loc.txIndex))
     } yield stx
 
-    pending.orElseF(inBlock.value).value
+    inBlock.value
   }
+
+  override def getTransactionsInTxPool(address: Address): IO[List[SignedTransaction]] =
+    txPool.getPendingTransactions.map(_.keys.toList.filter(_.senderAddress.exists(_ == address)))
+
+  override def getTransactionByHashFromTxPool(txHash: ByteVector): IO[Option[SignedTransaction]] =
+    txPool.getPendingTransactions.map(_.keys.toList.find(_.hash == txHash))
 
   override def getTransactionReceipt(txHash: ByteVector): IO[Option[Receipt]] = {
     val r = for {
@@ -101,6 +106,20 @@ final class PublicApiImpl(
     } yield gasPrice
   }
 
+  override def getEstimatedNonce(address: Address): IO[BigInt] =
+    for {
+      pending <- txPool.getPendingTransactions
+      latestNonceOpt = scala.util
+        .Try(pending.collect {
+          case (stx, _) if stx.senderAddress.get == address => stx.nonce
+        }.max)
+        .toOption
+      bn              <- history.getBestBlockNumber
+      currentNonceOpt <- history.getAccount(address, bn).map(_.map(_.nonce.toBigInt))
+      defaultNonce     = historyConfig.accountStartNonce.toBigInt
+      maybeNextTxNonce = latestNonceOpt.map(_ + 1).getOrElse(defaultNonce) max currentNonceOpt.getOrElse(defaultNonce)
+    } yield maybeNextTxNonce
+
   override def isMining: IO[Boolean] = miner.haltWhenTrue.get.map(!_)
 
   override def sendSignedTransaction(stx: SignedTransaction): IO[ByteVector] =
@@ -118,7 +137,7 @@ final class PublicApiImpl(
       txResult     <- miner.executor.simulateTransaction(stx, block.header)
     } yield txResult.vmReturnData
 
-  override def estimateGas(callTx: CallTx, blockParam: BlockParam): IO[BigInt] =
+  override def getEstimatedGas(callTx: CallTx, blockParam: BlockParam): IO[BigInt] =
     for {
       (stx, block) <- doCall(callTx, blockParam)
       gas          <- miner.executor.binarySearchGasEstimation(stx, block.header)
@@ -173,35 +192,6 @@ final class PublicApiImpl(
     for {
       account <- resolveAccount(address, blockParam)
     } yield account.nonce.toBigInt
-
-  override def getAccountTransactions(address: Address,
-                                      fromBlock: BlockParam,
-                                      toBlock: BlockParam): IO[List[SignedTransaction]] = {
-    def collectTxs: PartialFunction[SignedTransaction, SignedTransaction] = {
-      case stx if stx.senderAddress.nonEmpty && stx.senderAddress.get == address => stx
-      case stx if stx.receivingAddress == address                                => stx
-    }
-
-    val bestNumber = history.getBestBlockNumber.unsafeRunSync()
-
-    def resolveNumber(param: BlockParam): BigInt = param match {
-      case BlockParam.Earliest      => 0
-      case BlockParam.Latest        => bestNumber
-      case BlockParam.WithNumber(n) => n
-    }
-
-    val sn = resolveNumber(fromBlock)
-    val en = resolveNumber(toBlock)
-
-    for {
-      blocks <- (sn to en).toList.filter(_ >= BigInt(0)).traverse(history.getBlockByNumber)
-      stxsFromBlock = blocks.collect {
-        case Some(block) => block.body.transactionList.collect(collectTxs)
-      }.flatten
-      pendingStxs <- txPool.getPendingTransactions
-      stxsFromPool = pendingStxs.keys.toList.collect(collectTxs)
-    } yield stxsFromBlock ++ stxsFromPool
-  }
 
   /////////////////////
   /////////////////////

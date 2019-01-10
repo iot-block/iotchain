@@ -14,6 +14,8 @@ import jbok.core.models.Address
 import jbok.core.peer.PeerNode
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 
+import scala.collection.immutable.ListMap
+
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 class TestnetBuilder(
     n: Int = 0,
@@ -21,7 +23,7 @@ class TestnetBuilder(
     miners: List[Address] = Nil,
     keyPairs: List[KeyPair] = Nil,
     chainId: BigInt = 0,
-    alloc: Map[Address, BigInt] = Map.empty
+    alloc: ListMap[Address, BigInt] = ListMap.empty
 ) {
   type Self = TestnetBuilder
 
@@ -31,7 +33,7 @@ class TestnetBuilder(
       miners: List[Address] = miners,
       keyPairs: List[KeyPair] = keyPairs,
       chainId: BigInt = chainId,
-      alloc: Map[Address, BigInt] = alloc
+      alloc: ListMap[Address, BigInt] = alloc
   ): Self = new TestnetBuilder(
     n,
     configs,
@@ -51,7 +53,6 @@ class TestnetBuilder(
     require(keyPairs.length == n)
     require(nodeKeyPairs.length == n)
     require(chainId > 0)
-    require(alloc.size == keyPairs.length)
   }
 
   def build: IO[List[FullNodeConfig]] = {
@@ -111,8 +112,9 @@ class TestnetBuilder(
   def withChainId(bigInt: BigInt): Self =
     copy(chainId = bigInt)
 
-  def withBalance(bigInt: BigInt): Self = {
-    val alloc = keyPairs.map(kp => Address(kp) -> bigInt).toMap
+  def withAlloc(addresses: List[Address], bigInt: BigInt): Self = {
+    val alloc = ListMap((keyPairs.map(kp => Address(kp)) ++ addresses).map(_ -> bigInt): _*)
+    println(alloc)
     copy(alloc = alloc)
   }
 

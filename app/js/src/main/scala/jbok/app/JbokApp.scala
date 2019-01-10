@@ -80,7 +80,7 @@ object JbokApp {
             .foreach { client =>
               val p = for {
                 account <- client.public.getAccount(address, BlockParam.Latest)
-                txs     <- client.public.getAccountTransactions(address, BlockParam.Earliest, BlockParam.Latest)
+                txs     <- client.personal.getAccountTransactions(address, BlockParam.Earliest, BlockParam.Latest)
                 _ = state.selectedAccount.value = Some((address, account, txs))
                 _ = tabList.selected.value.content.value_=(accountView)
               } yield ()
@@ -111,7 +111,7 @@ object JbokApp {
             }
             .foreach { client =>
               val p = for {
-                block <- client.public.getTransactionByHash(hash)
+                block <- client.public.getTransactionByHashFromHistory(hash)
 //                _ = state.selectedBlock.value = block
 //                _ = tabList.selected.value = blockTab
               } yield ()

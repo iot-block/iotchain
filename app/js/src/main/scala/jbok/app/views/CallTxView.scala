@@ -174,14 +174,14 @@ final case class CallTxView(state: AppState) {
         val password = if (passphase.value.isEmpty) Some("") else Some(passphase.value)
         val p = for {
           account  <- client.get.public.getAccount(fromSubmit.get, BlockParam.Latest)
-          gasLimit <- client.get.public.estimateGas(callTx, BlockParam.Latest)
+          gasLimit <- client.get.public.getEstimatedGas(callTx, BlockParam.Latest)
           gasPrice <- client.get.public.getGasPrice
           _ = txStatus.value = s"gas limit: $gasLimit, gas price: $gasPrice"
           txHash <- client.get.personal
             .sendTransaction(
               txRequest.copy(nonce = Some(account.nonce), gasLimit = Some(gasLimit), gasPrice = Some(gasPrice)),
               password)
-          stx <- client.get.public.getTransactionByHash(txHash)
+          stx <- client.get.public.getTransactionByHashFromHistory(txHash)
           _ = stx.map(state.stxs.value(currentId.get).value += _)
           _ = state.receipts.value(currentId.get).value += (txHash -> Var(None))
           _ = txStatus.value = s"send transaction success: ${txHash}"
