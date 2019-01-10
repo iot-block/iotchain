@@ -116,10 +116,8 @@ final class PublicApiImpl(
         .toOption
       bn              <- history.getBestBlockNumber
       currentNonceOpt <- history.getAccount(address, bn).map(_.map(_.nonce.toBigInt))
-      maybeNextTxNonce = latestNonceOpt
-        .map(_ + 1)
-        .getOrElse(historyConfig.accountStartNonce.toBigInt) max currentNonceOpt.getOrElse(
-        historyConfig.accountStartNonce.toBigInt)
+      defaultNonce     = historyConfig.accountStartNonce.toBigInt
+      maybeNextTxNonce = latestNonceOpt.map(_ + 1).getOrElse(defaultNonce) max currentNonceOpt.getOrElse(defaultNonce)
     } yield maybeNextTxNonce
 
   override def isMining: IO[Boolean] = miner.haltWhenTrue.get.map(!_)

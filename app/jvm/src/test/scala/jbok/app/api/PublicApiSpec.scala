@@ -8,7 +8,6 @@ import jbok.common.testkit.random
 import jbok.core.mining.BlockMiner
 import jbok.core.models.{Address, SignedTransaction, Transaction}
 import jbok.core.testkit._
-import jbok.common.testkit._
 import jbok.sdk.api.{BlockParam, CallTx}
 import scodec.bits.ByteVector
 
@@ -191,21 +190,22 @@ class PublicApiSpec extends JbokSpec {
     }
 
     "getEstimatedNonce" in {
-      val miner     = random[BlockMiner[IO]]
-      val publicApi = PublicApiImpl(config.history, miner)
-      val tx        = Transaction(0, 1, 21000, Address.empty, 100000, ByteVector.empty)
-      val parent    = miner.history.getBestBlock.unsafeRunSync()
-      val stx       = SignedTransaction.sign[IO](tx, testMiner.keyPair).unsafeRunSync()
+      val miner            = random[BlockMiner[IO]]
+      val publicApi        = PublicApiImpl(config.history, miner)
+      val txs              = random[List[SignedTransaction]](genTxs(2, 2))
+      val parent           = miner.history.getBestBlock.unsafeRunSync()
+      val List(stx1, stx2) = txs
+      val defaultNonce     = testConfig.history.accountStartNonce.toBigInt
 
-      publicApi.getEstimatedNonce(testMiner.address).unsafeRunSync() shouldBe testConfig.history.accountStartNonce
-      publicApi.sendSignedTransaction(stx).unsafeRunSync()
-      publicApi.getEstimatedNonce(testMiner.address).unsafeRunSync() shouldBe (testConfig.history.accountStartNonce + 1)
+      publicApi.getEstimatedNonce(testMiner.address).unsafeRunSync() shouldBe defaultNonce
+      publicApi.sendSignedTransaction(stx1).unsafeRunSync()
+      publicApi.getEstimatedNonce(testMiner.address).unsafeRunSync() shouldBe defaultNonce + 1
 
       val List(minedBlock) = miner.stream.take(1).compile.toList.unsafeRunSync()
 
-      publicApi.getEstimatedNonce(testMiner.address).unsafeRunSync() shouldBe (testConfig.history.accountStartNonce + 1)
-      publicApi.sendSignedTransaction(stx).unsafeRunSync()
-      publicApi.getEstimatedNonce(testMiner.address).unsafeRunSync() shouldBe (testConfig.history.accountStartNonce + 2)
+      publicApi.getEstimatedNonce(testMiner.address).unsafeRunSync() shouldBe defaultNonce + 1
+      publicApi.sendSignedTransaction(stx2).unsafeRunSync()
+      publicApi.getEstimatedNonce(testMiner.address).unsafeRunSync() shouldBe defaultNonce + 2
     }
 
     "return account" in {

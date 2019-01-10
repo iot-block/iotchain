@@ -10,7 +10,7 @@ import jbok.app.client.JbokClient
 import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.config.GenesisConfig
 import jbok.core.keystore.KeyStorePlatform
-import jbok.core.models.{Account, Address}
+import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.mining.TxGen
 import jbok.crypto.signature.KeyPair
 import jbok.sdk.api.BlockParam
@@ -30,7 +30,13 @@ class TestNetTxGen(clients: Ref[IO, Map[String, JbokClient]],
   implicit val chainId: BigInt = genesisConfig.chainId
 
   private def getAccounts(addresses: List[Address], jbokClient: JbokClient): IO[List[Account]] =
-    addresses.traverse[IO, Account](jbokClient.public.getAccount(_, BlockParam.Latest))
+    for {
+      accounts <- addresses.traverse[IO, Account](jbokClient.public.getAccount(_, BlockParam.Latest))
+      nonces   <- addresses.traverse[IO, BigInt](jbokClient.public.getEstimatedNonce)
+      newAccounts = accounts.zip(nonces).map {
+        case (account, nonce) => account.copy(nonce = UInt256(nonce))
+      }
+    } yield newAccounts
 
   private def stxStream: Stream[IO, Unit] = {
     def submitStxsToNetwork =
@@ -44,7 +50,7 @@ class TestNetTxGen(clients: Ref[IO, Map[String, JbokClient]],
       } yield ()
 
     Stream
-      .awakeEvery[IO](fullNodeConfigs.head.mining.period * 2)
+      .awakeEvery[IO](fullNodeConfigs.head.mining.period)
       .evalMap[IO, Unit] { _ =>
         submitStxsToNetwork
       }
