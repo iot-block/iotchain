@@ -9,6 +9,7 @@ import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 import jbok.common.execution._
+import jbok.core.testkit._
 
 class CallOpcodesSpec extends JbokSpec {
 

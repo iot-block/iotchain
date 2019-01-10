@@ -51,7 +51,7 @@ trait SnapshotFixture {
     val extraBytes = extra.asBytes
 //    val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val signed    = header.copy(extra = extraBytes)
-    val recovered = Clique.ecrecover[IO](signed).unsafeRunSync().get
+    val recovered = Clique.ecrecover[IO](signed, testGenesis.chainId).unsafeRunSync().get
     require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")
     signed
   }
@@ -116,8 +116,8 @@ class SnapshotSpec extends JbokSpec {
           beneficiary = coinbase.bytes,
           extra = extraBytes
         )
-      val signed = sign(header, "A")
-      Clique.ecrecover[IO](signed).unsafeRunSync().get shouldBe signer
+      val signed = sign(header, "A")(testGenesis.chainId)
+      Clique.ecrecover[IO](signed, testGenesis.chainId).unsafeRunSync().get shouldBe signer
     }
 
     "single signer, no votes cast" in {

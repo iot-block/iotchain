@@ -18,6 +18,7 @@ import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 import jbok.common.execution._
+import jbok.core.testkit._
 
 import scala.collection.JavaConverters._
 
@@ -103,7 +104,7 @@ class VMTest extends JbokSpec {
       case (addr, account) => (addr, account.code)
     }
 
-    val history                  = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
 
     val storages = json.map {
       case (addr, account) =>

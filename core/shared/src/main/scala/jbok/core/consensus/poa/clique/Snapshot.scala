@@ -196,7 +196,7 @@ object Snapshot {
     }
 
   /** apply creates a new authorization snapshot by applying the given headers to the original one */
-  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader])(implicit F: Sync[F]): F[Snapshot] =
+  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader], chainId: BigInt)(implicit F: Sync[F]): F[Snapshot] =
     if (headers.isEmpty) {
       snapshot.pure[F]
     } else {
@@ -214,18 +214,18 @@ object Snapshot {
 
       headers.foldLeftM(snapshot)((snap, header) => {
         val cleared = snap.clearStaleVotes(header.number).deleteOldestRecent(header.number)
-        Snapshot.applyHeader(cleared, header)
+        Snapshot.applyHeader(cleared, header, chainId)
       })
     }
 
   /** create a new snapshot by applying a given header */
-  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader)(implicit F: Sync[F]): F[Snapshot] = F.delay {
+  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader, chainId: BigInt)(implicit F: Sync[F]): F[Snapshot] = F.delay {
     val number      = header.number
     val extra       = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value
     val beneficiary = Address(header.beneficiary)
 
     // Resolve the authorization key and check against signers
-    val signerOpt = Clique.ecrecover[IO](header).unsafeRunSync()
+    val signerOpt = Clique.ecrecover[IO](header, chainId).unsafeRunSync()
     signerOpt match {
       case None =>
       case Some(s) if !snap.signers.contains(s) =>

@@ -35,7 +35,7 @@ final class TxPool[F[_]] private (
 
   def addOrUpdateTransaction(newStx: SignedTransaction): F[Unit] =
     for {
-      _       <- TxValidator.checkSyntacticValidity(newStx)
+      _       <- TxValidator.checkSyntacticValidity(newStx, peerManager.history.chainId)
       current <- T.clock.realTime(MILLISECONDS)
       _ <- pending.update { txs =>
         val (_, b) = txs.partition {

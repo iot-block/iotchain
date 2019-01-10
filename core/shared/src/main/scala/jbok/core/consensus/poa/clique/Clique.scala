@@ -54,7 +54,7 @@ final class Clique[F[_]](
         // Previous snapshot found, apply any pending headers on top of it
         log.trace(s"applying ${headers.length} headers")
         for {
-          newSnap <- Snapshot.applyHeaders[F](s, headers)
+          newSnap <- Snapshot.applyHeaders[F](s, headers, history.chainId)
           _       <- Snapshot.storeSnapshot[F](newSnap, history.db, checkpointInterval)
         } yield newSnap
 
@@ -69,7 +69,7 @@ final class Clique[F[_]](
               // No explicit parents (or no more left), reach out to the database
               history.getBlockHeaderByHash(hash).flatMap {
                 case Some(header) => F.pure(header -> parents)
-                case None => ???
+                case None         => ???
               }
           }
           snap <- applyHeaders(number - 1, h.parentHash, p, h :: headers)
@@ -136,17 +136,13 @@ object Clique {
   }
 
   /** Retrieve the signature from the header extra-data */
-  def ecrecover[F[_]](header: BlockHeader)(implicit F: Sync[F]): F[Option[Address]] =
+  def ecrecover[F[_]](header: BlockHeader, chainId: BigInt)(implicit F: Sync[F]): F[Option[Address]] =
     for {
       extra <- F.delay(RlpCodec.decode[CliqueExtra](header.extra.bits).require.value)
       sig = extra.signature
       hash <- sigHash[F](header)
-      chainId = ECDSACommon.getChainId(sig.v)
     } yield {
-      chainId.flatMap(
-        Signature[ECDSA]
-          .recoverPublic(hash.toArray, sig, _)
-          .map(pub => Address(pub.bytes.kec256)))
+      Signature[ECDSA].recoverPublic(hash.toArray, sig, chainId).map(pub => Address(pub.bytes.kec256))
     }
 
   def generateGenesisConfig(template: GenesisConfig, signers: List[Address]): GenesisConfig =

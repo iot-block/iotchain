@@ -8,11 +8,12 @@ import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 import jbok.common.execution._
+import jbok.core.testkit._
 
 class CallOpcodesSpecByzantium extends JbokSpec {
 
   val config     = EvmConfig.ByzantiumConfigBuilder(None)
-  val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+  val history    = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
 
   val fxt = new CallOpFixture(config, startState)

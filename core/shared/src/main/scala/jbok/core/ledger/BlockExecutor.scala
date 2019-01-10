@@ -198,6 +198,7 @@ final case class BlockExecutor[F[_]](
             if (shortCircuit) {
               F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
             } else {
+              txPool.removeTransactions(stx :: Nil) >>
               executeTransactions(
                 tail,
                 header,
@@ -435,6 +436,6 @@ object BlockExecutor {
       txPool    <- TxPool[F](TxPoolConfig(), peerManager)
       ommerPool <- OmmerPool[F](consensus.history)
       semaphore <- Semaphore(1)
-      txValidator = new TxValidator[F](config)
+      txValidator = new TxValidator[F](config, consensus.history.chainId)
     } yield BlockExecutor(config, consensus, peerManager, txValidator, txPool, ommerPool, semaphore)
 }

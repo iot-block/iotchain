@@ -7,6 +7,7 @@ import jbok.core.models.UInt256
 import jbok.persistent.KeyValueDB
 import jbok.common.testkit._
 import jbok.common.execution._
+import jbok.core.testkit._
 
 class CallOpcodesSpecSpuriousDragon extends JbokSpec {
 

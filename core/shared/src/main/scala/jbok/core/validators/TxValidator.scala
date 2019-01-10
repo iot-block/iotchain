@@ -28,7 +28,7 @@ object TxInvalid {
       )
 }
 
-class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[F]) {
+class TxValidator[F[_]](blockChainConfig: HistoryConfig, chainId: BigInt)(implicit F: Sync[F]) {
   import TxValidator._
 
   def validate(
@@ -39,7 +39,7 @@ class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[F]) {
       accGasUsed: BigInt
   ): F[Unit] =
     for {
-      _ <- checkSyntacticValidity[F](stx)
+      _ <- checkSyntacticValidity[F](stx, chainId)
       _ <- validateNonce(stx.nonce, senderAccount.nonce)
       _ <- validateGasLimitEnoughForIntrinsicGas(stx, blockHeader.number)
       _ <- validateAccountHasEnoughGasToPayUpfrontCost(senderAccount.balance, upfrontGasCost)
@@ -104,7 +104,7 @@ object TxValidator {
   val maxValue      = BigInt(2).pow(8 * 32) - 1
 
   /** Validates if the transaction is syntactically valid (lengths of the transaction fields are correct) */
-  def checkSyntacticValidity[F[_]](stx: SignedTransaction)(implicit F: Sync[F]): F[Unit] = {
+  def checkSyntacticValidity[F[_]](stx: SignedTransaction, chainId: BigInt)(implicit F: Sync[F]): F[Unit] = {
     import stx._
 
     val validR = r > 0 && r < secp256k1n
@@ -119,6 +119,8 @@ object TxValidator {
     else if (value > maxValue)
       F.raiseError(TxSyntaxInvalid(s"Invalid value: $value > $maxValue"))
     else if (!validR || !validS)
+      F.raiseError(TxSignatureInvalid)
+    else if (stx.senderAddress.isEmpty || !stx.chainIdOpt.contains(chainId))
       F.raiseError(TxSignatureInvalid)
     else
       F.unit

@@ -31,3 +31,4 @@ project/plugins/project/
 node_modules
 package-lock.json
 sdk/**/*.js
+*.db

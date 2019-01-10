@@ -3,6 +3,7 @@ package jbok.network.common
 import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.implicits._
+import fs2.Chunk.ByteVectorChunk
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
 import fs2.io.tcp.Socket
@@ -22,7 +23,7 @@ private[jbok] object TcpUtil {
     })
 
   def encode[F[_]: Sync, A: Codec](a: A): F[Chunk[Byte]] =
-    Sync[F].delay(Chunk.array(Codec[A].encode(a).require.toByteArray))
+    Sync[F].delay(ByteVectorChunk(Codec[A].encode(a).require.bytes))
 
   def encodeStream[F[_]: Effect, A: Codec](a: A): Stream[F, Byte] =
     for {

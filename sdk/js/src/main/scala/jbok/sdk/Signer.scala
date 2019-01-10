@@ -22,6 +22,6 @@ object Signer {
       public <- Signature[ECDSA].generatePublicKey[IO](secret)
       keyPair = KeyPair(public, secret)
       stx <- SignedTransaction.sign[IO](tx, keyPair)(Sync[IO], chainId)
-      _   <- TxValidator.checkSyntacticValidity[IO](stx)
+      _   <- TxValidator.checkSyntacticValidity[IO](stx, chainId)
     } yield stx).unsafeRunSync()
 }
