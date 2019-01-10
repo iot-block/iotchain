@@ -1,11 +1,11 @@
 package jbok.core.mining
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import fs2._
-import jbok.core.models.{Address, SignedTransaction, Transaction}
+import jbok.core.models.{Account, Address, SignedTransaction, Transaction}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
+import scala.collection.mutable.{Map => MMap}
 
 import scala.util.Random
 
@@ -17,42 +17,42 @@ final case class SimAccount(keyPair: KeyPair, balance: BigInt, nonce: BigInt) {
   def balanceChanged(delta: BigInt): SimAccount = this.copy(balance = this.balance + delta)
 }
 
-class TxGenerator(val accounts: Ref[IO, Map[Address, SimAccount]])(implicit chainId: BigInt) {
-  def newAccount: IO[SimAccount] = Signature[ECDSA].generateKeyPair[IO]().map(kp => SimAccount(kp, 0, 0))
-
-  def genValue(sender: SimAccount, receiver: SimAccount): BigInt =
-    BigInt("1000000")
+object TxGen {
+  val value: BigInt = BigInt(100000)
 
   val gasPrice: BigInt = BigInt(1)
 
   val gasLimit: BigInt = BigInt(21000)
 
-  def genTx: IO[SignedTransaction] =
-    for {
-      acc <- accounts.get
-      List(sender) = Random.shuffle(acc.values.toList)
-      receiver <- newAccount
-      value = genValue(sender, receiver)
-      _ <- accounts.update(_ ++ Map(sender.address -> sender.balanceChanged(-value).nonceIncreased))
-//                 receiver.address -> receiver.balanceChanged(value)))
-      tx = Transaction(
-        sender.nonce,
-        gasPrice,
-        gasLimit,
-        Some(receiver.address),
-        value,
-        ByteVector.empty
-      )
-      stx <- SignedTransaction.sign[IO](tx, sender.keyPair)
-    } yield stx
+  def genTxs(nTx: Int, accounts: Map[KeyPair, Account])(implicit chainId: BigInt): IO[List[SignedTransaction]] = {
+    val simuAccountsMap: MMap[Address, SimAccount] = MMap(accounts.toList.map {
+      case (keyPair, account) => Address(keyPair) -> SimAccount(keyPair, account.balance, account.nonce)
+    }: _*)
 
-  def genTxs: Stream[IO, SignedTransaction] =
-    Stream.repeatEval(genTx)
-}
+    def genTxMutually: IO[SignedTransaction] =
+      for {
+        List(sender, receiver) <- IO(Random.shuffle(simuAccountsMap.values.toList).take(2))
+        toValue = value.min(sender.balance)
+        tx      = Transaction(sender.nonce, gasPrice, gasLimit, Some(receiver.address), toValue, ByteVector.empty)
+        _       = simuAccountsMap += sender.address -> sender.nonceIncreased.balanceChanged(-toValue)
+        _       = simuAccountsMap += receiver.address -> receiver.balanceChanged(toValue)
+        stx <- SignedTransaction.sign[IO](tx, sender.keyPair)
+      } yield stx
 
-object TxGenerator {
-  def apply(miner: SimAccount)(implicit chainId: BigInt): IO[TxGenerator] =
-    for {
-      accounts <- Ref.of[IO, Map[Address, SimAccount]](Map(miner.address -> miner))
-    } yield new TxGenerator(accounts)
+    def genTxRandomThrow: IO[SignedTransaction] =
+      for {
+        List(sender) <- IO(Random.shuffle(simuAccountsMap.values.toList))
+        receiver     <- Signature[ECDSA].generateKeyPair[IO]().map(Address.apply)
+        _  = simuAccountsMap += sender.address -> sender.nonceIncreased.balanceChanged(-value)
+        tx = Transaction(sender.nonce, gasPrice, gasLimit, Some(receiver), value, ByteVector.empty)
+        stx <- SignedTransaction.sign[IO](tx, sender.keyPair)
+      } yield stx
+
+    if (accounts.size == 1)
+      Stream.repeatEval(genTxRandomThrow).take(nTx).compile.toList
+    else if (accounts.size > 2)
+      Stream.repeatEval(genTxMutually).take(nTx).compile.toList
+    else
+      IO.raiseError(new Exception("no account to generate txs."))
+  }
 }
