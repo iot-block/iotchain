@@ -83,17 +83,6 @@ final case class AppState(
     clients.value -= node.id
   }
 
-//  def initAccountsTx = {
-//    _ = addressInNode.value.map {
-//      case (id, addresses) =>
-//        for {
-//          stxs <- addresses.value.toList.traverse(address => clients.value(id).public.getAccountTransactions(address, 1, 10))
-//          _ = addresses.zip(stxs)
-//        } yield ()
-//
-//    }
-//  }
-
   def updateStatus(id: String, client: JbokClient): IO[Unit] =
     for {
       bestBlockNumber <- client.public.bestBlockNumber
@@ -101,13 +90,7 @@ final case class AppState(
       isMining        <- client.public.isMining
       gasPrice        <- client.public.getGasPrice
       miningStatus = if (isMining) "Mining" else "idle"
-      gasLimit = block
-        .map { b =>
-          val gasLimits = b.body.transactionList.map(_.gasLimit)
-          if (gasLimits.isEmpty) BigInt(0)
-          else gasLimits.min
-        }
-        .getOrElse(BigInt(0))
+      gasLimit     = block.map(_.header.gasLimit).getOrElse(BigInt(0))
       _ = if (status.value.contains(id)) {
         status.value(id).number.value = bestBlockNumber
         status.value(id).miningStatus.value = miningStatus

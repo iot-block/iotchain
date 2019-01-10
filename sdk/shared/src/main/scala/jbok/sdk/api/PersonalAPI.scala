@@ -1,7 +1,7 @@
 package jbok.sdk.api
 
 import io.circe.generic.JsonCodec
-import jbok.core.models.{Address, Transaction}
+import jbok.core.models.{Address, SignedTransaction, Transaction}
 import jbok.crypto.signature._
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
@@ -57,4 +57,6 @@ trait PersonalAPI[F[_]] {
   def deleteWallet(address: Address): F[Boolean]
 
   def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): F[Boolean]
+
+  def getAccountTransactions(address: Address, fromBlock: BlockParam, toBlock: BlockParam): F[List[SignedTransaction]]
 }

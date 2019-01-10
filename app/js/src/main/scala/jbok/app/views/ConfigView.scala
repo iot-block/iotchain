@@ -195,6 +195,7 @@ final case class ConfigView(state: AppState) {
             addPortIsValid.value = InputValidator.isValidPort(addPort.value)
         }
         port.value = input.value.trim
+        connectedStatus.value = None
       case _ =>
     }
   }

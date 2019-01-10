@@ -66,7 +66,7 @@ final case class DeployContractView(state: AppState) {
                                                                    gasPrice = Some(gasPrice.max(1)),
                                                                    gasLimit = Some(defaultGasLimit)),
                                                     password)
-        stx <- client.get.public.getTransactionByHash(hash)
+        stx <- client.get.public.getTransactionByHashFromHistory(hash)
         _       = stx.map(state.stxs.value(currentId.get).value += _)
         _       = state.receipts.value(currentId.get).value += (hash -> Var(None))
         address = ContractAddress.getContractAddress(fromSubmit, account.nonce)
