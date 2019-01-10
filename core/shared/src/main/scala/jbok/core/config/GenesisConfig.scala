@@ -11,6 +11,8 @@ import jbok.core.models._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
 
+import scala.collection.immutable.ListMap
+
 @JsonCodec
 final case class GenesisConfig(
     nonce: ByteVector,
@@ -49,7 +51,7 @@ final case class GenesisConfig(
 }
 
 object GenesisConfig {
-  def generate(chainId: BigInt, alloc: Map[Address, BigInt]): GenesisConfig =
+  def generate(chainId: BigInt, alloc: ListMap[Address, BigInt]): GenesisConfig =
     GenesisConfig(
       nonce = hex"0x42",
       difficulty = BigInt("1024"),
@@ -62,8 +64,9 @@ object GenesisConfig {
     )
 
   def fromFile(path: String): IO[GenesisConfig] =
-    IO(File(path).lines.mkString("\n")).map(text => decode[GenesisConfig](text) match {
-      case Left(e) => throw new Exception(s"read genesis file from ${path} error, ${e}")
-      case Right(c) => c
+    IO(File(path).lines.mkString("\n")).map(text =>
+      decode[GenesisConfig](text) match {
+        case Left(e)  => throw new Exception(s"read genesis file from ${path} error, ${e}")
+        case Right(c) => c
     })
 }
