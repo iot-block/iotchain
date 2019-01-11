@@ -55,7 +55,6 @@ object WsClientNode {
             }
 
             ws.onerror = { event: ErrorEvent =>
-              println(s"onerror: ${scala.scalajs.js.JSON.stringify(event)}")
               cb(Left(new Exception(event.toString)))
             }
           }
