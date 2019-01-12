@@ -6,7 +6,7 @@ import java.util.UUID
 import cats.effect.IO
 import jbok.codec.rlp.implicits._
 import jbok.common.execution._
-import jbok.network.client.{Client, WsClientNode}
+import jbok.network.client.{Client, HttpClient, WsClientNode}
 import jbok.network.rpc.RpcClient
 
 import scala.scalajs.js
@@ -37,5 +37,10 @@ object SdkClient {
     } yield new SdkClient(rpcClient)
 
     client.unsafeToFuture().toJSPromise
+  }
+
+  def http(url: String): SdkClient = {
+    val doReq = (s: String) => HttpClient.request(url, s)
+    new SdkClient(RpcClient(doReq))
   }
 }

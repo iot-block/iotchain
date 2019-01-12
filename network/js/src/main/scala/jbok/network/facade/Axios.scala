@@ -7,11 +7,13 @@ import scala.scalajs.js.annotation.JSImport
 @JSImport("axios", JSImport.Namespace)
 object Axios extends js.Object {
   def get(url: String): js.Promise[Response] = js.native
+
+  def post(url: String, data: String): js.Promise[Response] = js.native
 }
 
 @js.native
 trait Response extends js.Object {
-  def data: String = js.native
+  def data: js.Any = js.native
 
   def status: Int = js.native
 
