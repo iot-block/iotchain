@@ -14,6 +14,7 @@ import org.http4s.server.blaze.BlazeServerBuilder
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
+import jbok.common.execution._
 
 final case class TransactionQueryRes(code: Int, msg: String, data: List[TransactionQueryData])
 final case class TransactionQueryData(
@@ -34,7 +35,7 @@ final case class TransactionQueryData(
     location: Int
 )
 
-object ScanService extends IOApp {
+object ScanService {
   object AddressParamMatcher extends QueryParamDecoderMatcher[String]("address")
   object StartParamMatcher   extends OptionalQueryParamDecoderMatcher[Long]("start")
   object EndParamMatcher     extends OptionalQueryParamDecoderMatcher[Long]("end")
@@ -64,7 +65,7 @@ object ScanService extends IOApp {
   val httpApp =
     Router("/v1/transaction" -> transactionService).orNotFound
 
-  override def run(args: List[String]): IO[ExitCode] = {
+  def run(args: List[String]): IO[ExitCode] = {
     val builder = BlazeServerBuilder[IO]
       .bindLocal(10086)
       .withHttpApp(httpApp)

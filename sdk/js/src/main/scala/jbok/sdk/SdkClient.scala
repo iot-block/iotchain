@@ -40,7 +40,7 @@ object SdkClient {
   }
 
   def http(url: String): SdkClient = {
-    val doReq = (s: String) => HttpClient.request(url, s)
+    val doReq = (s: String) => HttpClient.post(url, s).map(_.data)
     new SdkClient(RpcClient(doReq))
   }
 }

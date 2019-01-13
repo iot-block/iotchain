@@ -119,20 +119,22 @@ object ScanServiceStore {
 
   def select(address: Address, start: Long, end: Option[Long], page: Int, size: Int): IO[List[TransactionQueryData]] = {
     val leqEnd = end match {
-      case Some(e) => fr"blockNumber <= ${e}"
+      case Some(e) => fr"AND blockNumber <= ${e}"
       case None    => fr""
     }
 
-    (fr"""
+    val sql = fr"""
        select id, txHash, nonce, fromAddress, toAddress, value, payload, v, r, s, gasUsed, gasPrice, blockNumber, blockHash, location
        from transactions
        where (fromAddress = ${address.toString} OR toAddress = ${address.toString}) AND
-       blockNumber >= ${start} AND """ ++ leqEnd ++
-      fr"""
+       blockNumber >= ${start}
+      """ ++ leqEnd ++ fr"""
        order by blockNumber, location DESC
        limit ${size}
        offset ${(page - 1) * size}
-       """)
+       """
+
+    sql
       .queryWithLogHandler[TransactionQueryData](logHandler)
       .to[List]
       .transact(xa)
