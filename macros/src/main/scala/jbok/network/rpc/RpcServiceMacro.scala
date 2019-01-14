@@ -5,9 +5,8 @@ import cats.effect.IO
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-object RpcServerMacro {
-  def mountAPI[RpcServer, API: c.WeakTypeTag](c: blackbox.Context)(api: c.Expr[API]): c.Expr[RpcServer] = {
+object RpcServiceMacro {
+  def mountAPI[RpcService, API: c.WeakTypeTag](c: blackbox.Context)(api: c.Expr[API]): c.Expr[RpcService] = {
     import c.universe._
 
     val apiType = weakTypeOf[API]
@@ -42,14 +41,14 @@ object RpcServerMacro {
 
           q"""
             (json: String) => {
-              decode[JsonRpcRequest[$parameterType]](json) match {
+              decode[RpcRequest[$parameterType]](json) match {
                 case Left(e) =>
                   val id = parse(json).flatMap(_.hcursor.downField("id").as[String]).toOption.getOrElse("")
-                  IO.pure(JsonRpcErrorResponse(id, JsonRpcErrors.invalidRequest).asJson.noSpaces)
+                  IO.pure(RpcErrorResponse(id, RpcErrors.invalidRequest).asJson.noSpaces)
                 case Right(req) =>
                   $run.attempt.map {
-                    case Left(e) => JsonRpcErrorResponse(req.id, JsonRpcErrors.internalError).asJson.noSpaces
-                    case Right(x) => JsonRpcResultResponse(req.id, x).asJson.noSpaces
+                    case Left(e) => RpcErrorResponse(req.id, RpcErrors.internalError).asJson.noSpaces
+                    case Right(x) => RpcResultResponse(req.id, x).asJson.noSpaces
                   }
               }
             }
@@ -59,12 +58,12 @@ object RpcServerMacro {
         c.Expr[(String, String => IO[String])](q"""$methodName -> $handler""")
       })
 
-    val expr: c.Expr[RpcServer] = c.Expr[RpcServer] {
+    val expr: c.Expr[RpcService] = c.Expr[RpcService] {
       q"""
         import _root_.io.circe.syntax._
         import _root_.io.circe.parser._
         import jbok.codec.json.implicits._
-        import jbok.network.json._
+        import jbok.network.rpc.jsonrpc._
 
         ${c.prefix.tree}.addHandlers($handlers)
        """

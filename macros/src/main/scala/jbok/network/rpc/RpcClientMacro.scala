@@ -16,7 +16,7 @@ object RpcClientMacro {
           import _root_.io.circe.syntax._
           import _root_.io.circe.parser._
           import jbok.codec.json.implicits._
-          import jbok.network.json._
+          import jbok.network.rpc.jsonrpc._
           import cats.effect.IO
           import scala.scalajs.js.annotation.JSExport
 
@@ -49,29 +49,23 @@ object RpcClientMacro {
       val parametersAsTuple   = macroUtils.getParametersAsTuple(method)
       val parameterType: Tree = macroUtils.getParameterType(method)
       val resultType: Type = method.returnType.typeArgs match {
-        case head :: tail => head
-        case _            => throw new Exception("resultType must have nonEmpty typeArgs")
+        case head :: _ => head
+        case _         => throw new Exception("resultType must have nonEmpty typeArgs")
       }
 
-      val body =
-        q"""
-          val request: JsonRpcRequest[$parameterType] =
-            JsonRpcRequest[$parameterType](
+      q"""
+        override def $methodName(...$parameterLists): IO[${resultType}] = {
+          val request: RpcRequest[$parameterType] =
+            RpcRequest[$parameterType](
               id = java.util.UUID.randomUUID().toString,
               method = ${methodName.toString},
               params = $parametersAsTuple
             )
 
-          client.request(request.asJson.noSpaces).map(x => decode[JsonRpcResultResponse[$resultType]](x)).flatMap {
-            case Left(e) => IO.raiseError(new Exception("parsing JsonRpcResponse failed"))
+          ${c.prefix.tree}.jsonrpc(request.asJson).map(_.as[RpcResultResponse[$resultType]]).flatMap {
+            case Left(e) => IO.raiseError(e)
             case Right(x) => IO.pure(x.result)
           }
-       """
-
-      q"""
-        @JSExport
-        override def $methodName(...$parameterLists): IO[${resultType}] = {
-          $body
         }
       """
     }

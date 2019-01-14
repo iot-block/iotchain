@@ -37,7 +37,7 @@ object testkit {
     TcpClient[IO, Data](new URI(s"tcp://localhost:${port}")).unsafeRunSync()
 
   def genWsServer(port: Int): Gen[Server[IO]] =
-    Server.websocket[IO, Data](new InetSocketAddress(port), echoPipe, metrics)
+    Server.http[IO, Data](new InetSocketAddress(port), echoPipe, metrics)
 
   def genWsClient(port: Int): Gen[Client[IO, Data]] =
     WsClient[IO, Data](new URI(s"tcp://localhost:${port}")).unsafeRunSync()

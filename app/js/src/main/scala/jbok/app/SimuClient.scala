@@ -12,7 +12,7 @@ import jbok.codec.rlp.implicits._
 final case class SimuClient(uri: URI, simulation: SimulationAPI)
 
 object SimuClient {
-  import jbok.network.rpc.RpcServer._
+  import jbok.network.rpc.RpcService._
   def apply(uri: URI): IO[SimuClient] =
     for {
       client <- WsClient[IO, String](uri)

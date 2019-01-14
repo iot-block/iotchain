@@ -7,10 +7,10 @@ import better.files.File
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 
-final case class FileLockErr(path: Path) extends Exception(s"${path} is already locked")
-
 object FileLock {
   private[this] val log = jbok.common.log.getLogger("FileLock")
+
+  final case class FileLockErr(path: Path) extends Exception(s"${path} is already locked")
 
   def lock[F[_]](path: Path, content: String = "")(implicit F: Sync[F]): Resource[F, Unit] =
     Resource

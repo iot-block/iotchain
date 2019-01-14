@@ -58,14 +58,3 @@ object WsClient {
       Client[F, A](stream, in, out, promises, uri, haltWhenTrue)
     }
 }
-
-object WsClientForNode {
-  def apply[F[_], A: Codec: RequestId](
-      uri: URI,
-      maxQueued: Int = 64,
-      maxBytes: Int = 256 * 1024
-  )(implicit F: ConcurrentEffect[F],
-    T: Timer[F],
-    CS: ContextShift[F],
-    AG: AsynchronousChannelGroup): F[Connection[F, A]] = WsClient(uri, maxQueued, maxBytes)
-}

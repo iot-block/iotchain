@@ -44,7 +44,7 @@ object Server {
     Server(bind, stream)
   }
 
-  def websocket[F[_], A: Codec](
+  def http[F[_], A: Codec](
       bind: InetSocketAddress,
       pipe: Pipe[F, A, A],
       metrics: Metrics[F],

@@ -1,7 +1,9 @@
 package jbok.common
+
 import better.files.File
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.common.FileLock.FileLockErr
 
 class FileLockSpec extends JbokSpec {
   "FileLock" should {

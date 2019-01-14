@@ -27,7 +27,7 @@ final case class JbokClient(
 }
 
 object JbokClient {
-  import jbok.network.rpc.RpcServer._
+  import jbok.network.rpc.RpcService._
 
   def apply(uri: URI)(implicit F: ConcurrentEffect[IO]): IO[JbokClient] =
     for {

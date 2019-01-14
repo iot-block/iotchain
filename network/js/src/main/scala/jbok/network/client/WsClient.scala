@@ -1,4 +1,5 @@
 package jbok.network.client
+
 import java.net.URI
 
 import cats.effect._
@@ -7,8 +8,7 @@ import cats.implicits._
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
 import jbok.network.common.RequestId
-import org.scalajs.dom
-import org.scalajs.dom._
+import jbok.network.facade.{ErrorEvent, Event, MessageEvent, WebSocket}
 import scodec.Codec
 import scodec.bits.BitVector
 
@@ -46,23 +46,23 @@ object WsClient {
 
       println(s"connecting to ${url}")
 
-      val resource: Resource[F, dom.WebSocket] = Resource.make {
+      val resource: Resource[F, WebSocket] = Resource.make {
         for {
-          ws <- F.delay(new dom.WebSocket(url))
+          ws <- F.delay(new WebSocket(url))
           _ = ws.binaryType = "arraybuffer" // so we can cast blob as arrayBuffer
-          opened <- F.async[dom.WebSocket] { cb =>
+          opened <- F.async[WebSocket] { cb =>
             ws.onopen = { event: Event =>
               cb(Right(ws))
             }
 
-            ws.onerror = { event: Event =>
+            ws.onerror = { event: ErrorEvent =>
               cb(Left(new Exception(event.toString)))
             }
           }
           _ = println("connection established")
         } yield opened
       } { socket =>
-        F.delay(socket.close(0, ""))
+        F.delay(socket.close())
       }
 
       val stream = Stream.resource(resource).flatMap { ws =>

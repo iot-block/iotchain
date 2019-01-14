@@ -2,7 +2,7 @@ package jbok.network.rpc
 
 import cats.effect.IO
 import io.circe.generic.JsonCodec
-import jbok.network.json.JsonRpcErrors
+import jbok.network.rpc.jsonrpc.RpcErrors
 
 @JsonCodec
 final case class Person(name: String, age: Int)
@@ -24,5 +24,5 @@ class TestApiImpl extends TestAPI[IO] {
 
   override def qux(name: String, age: Int): IO[Person] = IO.pure(Person(name, age))
 
-  override def error: IO[Unit] = IO.raiseError(JsonRpcErrors.internalError)
+  override def error: IO[Unit] = IO.raiseError(RpcErrors.internalError)
 }

@@ -6,7 +6,7 @@ import java.util.UUID
 import cats.effect.IO
 import jbok.codec.rlp.implicits._
 import jbok.common.execution._
-import jbok.network.client.{Client, HttpClient, WsClientNode}
+import jbok.network.client.{Client, HttpClient, WsClient}
 import jbok.network.rpc.RpcClient
 
 import scala.scalajs.js
@@ -24,7 +24,7 @@ class SdkClient(client: RpcClient[IO]) {
 @JSExportTopLevel("Client")
 @JSExportAll
 object SdkClient {
-  import jbok.network.rpc.RpcServer._
+  import jbok.network.rpc.RpcService._
 
   private def getJbokClient(uri: URI, client: Client[IO, String]): IO[RpcClient[IO]] =
     client.start.map(_ => RpcClient(client))
@@ -32,7 +32,7 @@ object SdkClient {
   def ws(url: String): js.Promise[SdkClient] = {
     val uri = new URI(url)
     val client = for {
-      client    <- WsClientNode[IO, String](uri)
+      client    <- WsClient[IO, String](uri)
       rpcClient <- getJbokClient(uri, client)
     } yield new SdkClient(rpcClient)
 

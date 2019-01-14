@@ -22,7 +22,7 @@ import jbok.core.mining.BlockMiner
 import jbok.core.peer.PeerManagerPlatform
 import jbok.core.pool.{BlockPool, BlockPoolConfig}
 import jbok.core.sync.SyncManager
-import jbok.network.rpc.RpcServer
+import jbok.network.rpc.RpcService
 import jbok.network.server.Server
 
 final case class FullNode[F[_]](
@@ -30,7 +30,7 @@ final case class FullNode[F[_]](
     syncManager: SyncManager[F],
     miner: BlockMiner[F],
     keyStore: KeyStore[F],
-    rpc: RpcServer,
+    rpc: RpcService,
     server: Server[F],
     haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
@@ -107,8 +107,8 @@ object FullNode {
       publicAPI = PublicApiImpl(config.history, miner)
       privateAPI <- PersonalApiImpl(keystore, history, config.history, executor.txPool)
       adminAPI = AdminApiImpl(peerManager)
-      rpc <- RpcServer().map(_.mountAPI(publicAPI).mountAPI(privateAPI).mountAPI(adminAPI))
-      server = Server.websocket(config.rpc.addr, rpc.pipe, metrics, Some(rpc.handle _))
+      rpc <- RpcService().map(_.mountAPI(publicAPI).mountAPI(privateAPI).mountAPI(adminAPI))
+      server = Server.http(config.rpc.addr, rpc.pipe, metrics, Some(rpc.handle _))
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keystore, rpc, server, haltWhenTrue)
   }
