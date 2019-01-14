@@ -851,12 +851,19 @@ case object LOG4 extends LogOp(0xa4)
 ///////////////////////////
 // System
 ///////////////////////////
-sealed abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
+sealed abstract class CreateOp(code: Int, delta: Int, alpha: Int)
+    extends OpCode(code.toByte, delta, alpha, _.G_create) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] =
     if (state.context.readOnly) {
       Sync[F].pure(state.withError(WriteProtectionError))
     } else {
-      val (Seq(endowment, inOffset, inSize), stack1) = state.stack.pop(3)
+      val (Seq(endowment, inOffset, inSize), stack) = state.stack.pop(3)
+      val (salt, stack1) = this match {
+        case CREATE => ByteVector.empty -> stack
+        case CREATE2 =>
+          val (Seq(salt), newStack) = stack.pop(1)
+          salt.bytes -> newStack
+      }
 
       val validCall =
         (state.env.callDepth < EvmConfig.MaxCallDepth).pure[F] && state.ownBalance.map(_ >= endowment)
@@ -866,7 +873,10 @@ sealed abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
           val (initCode, memory1) = state.memory.load(inOffset, inSize)
 
           for {
-            (newAddress, world1) <- state.world.createAddressWithOpCode(state.env.ownerAddr)
+            (newAddress, world1) <- this match {
+              case CREATE  => state.world.createAddressWithOpCode(state.env.ownerAddr)
+              case CREATE2 => state.world.create2AddressWithOpCode(state.env.ownerAddr, salt, initCode)
+            }
             world2 <- world1
               .initialiseAccount(newAddress)
               .flatMap(_.transfer(state.env.ownerAddr, newAddress, endowment))
@@ -954,11 +964,18 @@ sealed abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
 
   def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
     val (Seq(_, inOffset, inSize), _) = state.stack.pop(3)
-    state.config.calcMemCost(state.memory.size, inOffset, inSize)
+    val gas                           = state.config.calcMemCost(state.memory.size, inOffset, inSize)
+    if (this == CREATE) {
+      gas
+    } else {
+      gas + wordsForBytes(inSize) * state.config.feeSchedule.G_sha3word
+    }
   }
 }
 
-case object CREATE extends CreateOp
+case object CREATE extends CreateOp(0xf0, 3, 1)
+
+case object CREATE2 extends CreateOp(0xf5, 4, 1)
 
 sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toByte, delta, alpha, _.G_zero) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {

@@ -12,6 +12,7 @@ import jbok.core.store.namespaces
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.persistent.{DBErr, StageKeyValueDB}
+import scodec.bits._
 import scodec.Codec
 import scodec.bits.ByteVector
 import shapeless._
@@ -139,6 +140,9 @@ final case class WorldState[F[_]](
       Address.apply(hash)
     }
 
+  def createContractAddressWithSalt(creatorAddr: Address, salt: ByteVector, initCode: ByteVector): F[Address] =
+    F.pure(Address((hex"0xff" ++ creatorAddr.bytes ++ salt ++ initCode.kec256).kec256.drop(12)))
+
   /**
     * Increases the creator's nonce and creates a new address based on the address and the new nonce of the creator
     *
@@ -151,6 +155,15 @@ final case class WorldState[F[_]](
       updatedWorld = putAccount(creatorAddr, creatorAccount.increaseNonce())
       createdAddress <- updatedWorld.createContractAddress(creatorAddr)
     } yield createdAddress -> updatedWorld
+
+  def create2AddressWithOpCode(creatorAddr: Address,
+                               salt: ByteVector,
+                               initCode: ByteVector): F[(Address, WorldState[F])] =
+    for {
+      creatorAccount <- getAccount(creatorAddr)
+      updateWorld = putAccount(creatorAddr, creatorAccount.increaseNonce())
+      createdAddress <- updateWorld.createContractAddressWithSalt(creatorAddr, salt, initCode)
+    } yield createdAddress -> updateWorld
 
   /**
     * Determines if account of provided address is dead.

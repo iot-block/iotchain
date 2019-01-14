@@ -262,5 +262,45 @@ class WorldStateSpec extends JbokSpec {
 
       val w3 = history.getWorldState(stateRootHash = Some(root2)).unsafeRunSync()
     }
+
+    "create contract address" in new Fixture {
+      val testcases: List[(Address, ByteVector, ByteVector, Address)] = List(
+        (Address(hex"0x0000000000000000000000000000000000000000"),
+         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+         hex"0x00",
+         Address(hex"0x4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38")),
+        (Address(hex"0xdeadbeef00000000000000000000000000000000"),
+         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+         hex"0x00",
+         Address(hex"0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3")),
+        (Address(hex"0xdeadbeef00000000000000000000000000000000"),
+         hex"0x000000000000000000000000feed000000000000000000000000000000000000",
+         hex"0x00",
+         Address(hex"0xD04116cDd17beBE565EB2422F2497E06cC1C9833")),
+        (Address(hex"0x0000000000000000000000000000000000000000"),
+         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+         hex"0xdeadbeef",
+         Address(hex"0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e")),
+        (Address(hex"0x00000000000000000000000000000000deadbeef"),
+         hex"0x00000000000000000000000000000000000000000000000000000000cafebabe",
+         hex"0xdeadbeef",
+         Address(hex"0x60f3f640a8508fC6a86d45DF051962668E1e8AC7")),
+        (Address(hex"0x00000000000000000000000000000000deadbeef"),
+         hex"0x00000000000000000000000000000000000000000000000000000000cafebabe",
+         hex"0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+         Address(hex"0x1d8bfDC5D46DC4f61D6b6115972536eBE6A8854C")),
+        (Address(hex"0x0000000000000000000000000000000000000000"),
+         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+         hex"0x",
+         Address(hex"0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0"))
+      )
+      val w1 = history.getWorldState().unsafeRunSync()
+
+      testcases.foreach {
+        case (address, salt, initCode, expected) =>
+          w1.createContractAddressWithSalt(address, salt, initCode)
+            .unsafeRunSync() shouldBe expected
+      }
+    }
   }
 }
