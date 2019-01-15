@@ -143,8 +143,8 @@ object OpCodes {
       REVERT +: HomesteadOpCodes
 
   val ConstantinopleOpCodes: List[OpCode] =
-//    CREATE2 +: EXTCODEHASH +: // eip status draft on 2018.12
-    SHL +: SHR +: SAR +: ByzantiumOpCodes
+    CREATE2 +: EXTCODEHASH +:
+      SHL +: SHR +: SAR +: ByzantiumOpCodes
 }
 
 object OpCode {
@@ -414,7 +414,7 @@ case object GASPRICE extends ConstOp(0x3a.toByte) {
   override def f[F[_]: Sync](state: ProgramState[F]): UInt256 = state.env.gasPrice
 }
 
-case object EXTCODESIZE extends OpCode(0x3b.toByte, 1, 1, _.G_extcode) with ConstGas {
+case object EXTCODESIZE extends OpCode(0x3b.toByte, 1, 1, _.G_extcodecopy) with ConstGas {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (addr, stack1) = state.stack.pop
     state.world.getCode(Address(addr)).map { code =>
@@ -425,7 +425,7 @@ case object EXTCODESIZE extends OpCode(0x3b.toByte, 1, 1, _.G_extcode) with Cons
   }
 }
 
-case object EXTCODECOPY extends OpCode(0x3c.toByte, 4, 0, _.G_extcode) {
+case object EXTCODECOPY extends OpCode(0x3c.toByte, 4, 0, _.G_extcodecopy) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (Seq(address, memOffset, codeOffset, size), stack1) = state.stack.pop(4)
     state.world.getCode(Address(address)).map { code =>
@@ -465,6 +465,18 @@ case object RETURNDATACOPY extends OpCode(0x3e.toByte, 3, 0, _.G_verylow) {
     val memCost                   = state.config.calcMemCost(state.memory.size, offset, size)
     val copyCost                  = state.config.feeSchedule.G_copy * wordsForBytes(size)
     (memCost + copyCost).pure[F]
+  }
+}
+
+case object EXTCODEHASH extends OpCode(0x3f.toByte, 1, 1, _.G_extcodehash) with ConstGas {
+  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
+    val (address, stack1) = state.stack.pop
+
+    for {
+      accountOpt <- state.world.getAccountOpt(Address(address)).value
+      codeHash = accountOpt.map(a => UInt256(a.codeHash)).getOrElse(UInt256.Zero)
+      stack2   = stack1.push(codeHash)
+    } yield state.withStack(stack2).step()
   }
 }
 

@@ -12,7 +12,7 @@ import jbok.crypto._
 
 class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.ByzantiumConfigBuilder(None)
+  override val config = EvmConfig.ConstantinopleConfigBuilder(None)
 
   def executeOp(op: OpCode, stateIn: ProgramState[IO]): ProgramState[IO] =
     // gas is not tested in this spec
@@ -313,6 +313,33 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
         val expectedState = stateIn.withStack(stateOut.stack).withMemory(stateOut.memory).step()
         stateOut shouldBe expectedState
+      }
+    }
+  }
+
+  test(EXTCODEHASH) { op =>
+    val stateGen = getProgramStateGen(
+      stackGen = getStackGen(maxWord = UInt256(160))
+    )
+    val codeHashGen = getByteVectorGen(32, 32)
+
+    forAll(stateGen, codeHashGen) { (stateIn, codeHash) =>
+      val stateOut = executeOp(op, stateIn)
+      withStackVerification(op, stateIn, stateOut) {
+        val (_, stack1) = stateIn.stack.pop
+        stateOut shouldBe stateIn.withStack(stack1.push(UInt256.Zero)).step()
+      }
+
+      val (addr, stack1) = stateIn.stack.pop
+      val account        = Account(codeHash = codeHash)
+      val world1         = stateIn.world.putAccount(Address(addr), account)
+
+      val stateInWithAccount  = stateIn.withWorld(world1)
+      val stateOutWithAccount = executeOp(op, stateInWithAccount)
+
+      withStackVerification(op, stateInWithAccount, stateOutWithAccount) {
+        val stack2 = stack1.push(UInt256(account.codeHash))
+        stateOutWithAccount shouldBe stateInWithAccount.withStack(stack2).step()
       }
     }
   }
@@ -797,7 +824,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     }
   }
 
-  verifyAllOpCodesRegistered(except = CREATE, CALL, CALLCODE, DELEGATECALL, STATICCALL)
+  verifyAllOpCodesRegistered(except = CREATE, CREATE2, CALL, CALLCODE, DELEGATECALL, STATICCALL)
 
   test("sliceBytes helper") {
     def zeroes(i: Int): ByteVector =

@@ -180,7 +180,8 @@ object FeeSchedule {
     override val G_sha3word: BigInt      = 6
     override val G_copy: BigInt          = 3
     override val G_blockhash: BigInt     = 20
-    override val G_extcode: BigInt       = 20
+    override val G_extcodecopy: BigInt   = 20
+    override val G_extcodehash: BigInt   = 0
   }
 
   object Frontier extends FrontierFeeSchedule
@@ -196,7 +197,7 @@ object FeeSchedule {
     override val G_call: BigInt         = 700
     override val G_balance: BigInt      = 400
     override val G_selfdestruct: BigInt = 5000
-    override val G_extcode: BigInt      = 700
+    override val G_extcodecopy: BigInt  = 700
   }
 
   object TangerineWhistle extends TangerineWhistleFeeSchedule
@@ -206,6 +207,10 @@ object FeeSchedule {
   }
 
   object SpuriousDragon extends SpuriousDragonFeeSchedule
+
+  trait ConstantinopleFeeSchedule extends SpuriousDragonFeeSchedule {
+    override val G_extcodehash: BigInt = 400
+  }
 }
 
 trait FeeSchedule {
@@ -243,5 +248,6 @@ trait FeeSchedule {
   val G_sha3word: BigInt
   val G_copy: BigInt
   val G_blockhash: BigInt
-  val G_extcode: BigInt
+  val G_extcodecopy: BigInt
+  val G_extcodehash: BigInt
 }

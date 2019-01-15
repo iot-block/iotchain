@@ -10,7 +10,7 @@ import scodec.bits.ByteVector
 
 class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
+  override val config = EvmConfig.ConstantinopleConfigBuilder(None)
 
   import config.feeSchedule._
 
@@ -49,7 +49,8 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     CALLDATALOAD   -> G_verylow,
     CALLDATASIZE   -> G_base,
     RETURNDATASIZE -> G_base,
-    EXTCODESIZE    -> G_extcode,
+    EXTCODESIZE    -> G_extcodecopy,
+    EXTCODEHASH    -> G_extcodehash,
     BLOCKHASH      -> G_blockhash,
     COINBASE       -> G_base,
     TIMESTAMP      -> G_base,
@@ -326,12 +327,12 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   test(EXTCODECOPY) { op =>
     val table = Table[UInt256, BigInt](
       ("size", "expectedGas"),
-      (0, G_extcode),
-      (1, G_extcode + G_copy * 1),
-      (32, G_extcode + G_copy * 1),
-      (33, G_extcode + G_copy * 2),
-      (Two ** 16, G_extcode + G_copy * 2048),
-      (Two ** 16 + 1, G_extcode + G_copy * 2049)
+      (0, G_extcodecopy),
+      (1, G_extcodecopy + G_copy * 1),
+      (32, G_extcodecopy + G_copy * 1),
+      (33, G_extcodecopy + G_copy * 2),
+      (Two ** 16, G_extcodecopy + G_copy * 2048),
+      (Two ** 16 + 1, G_extcodecopy + G_copy * 2049)
     )
 
     forAll(table) { (size, expectedGas) =>
@@ -342,7 +343,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
     }
 
-    val maxGas = 2 * (G_extcode + G_copy * 8)
+    val maxGas = 2 * (G_extcodecopy + G_copy * 8)
     val stateGen = getProgramStateGen(
       stackGen = getStackGen(elems = 4, maxUInt = UInt256(256)),
       gasGen = getBigIntGen(max = maxGas),
@@ -355,7 +356,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val (Seq(_, offset, _, size), _) = stateIn.stack.pop(4)
       val memCost                      = config.calcMemCost(stateIn.memory.size, offset, size)
       val copyCost                     = G_copy * wordsForBytes(size)
-      val expectedGas                  = G_extcode + memCost + copyCost
+      val expectedGas                  = G_extcodecopy + memCost + copyCost
 
       verifyGas(expectedGas, stateIn, stateOut)
     }
@@ -557,5 +558,5 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
   }
 
-  verifyAllOpCodesRegistered(except = CREATE, CALL, CALLCODE, DELEGATECALL, INVALID)
+  verifyAllOpCodesRegistered(except = CREATE, CREATE2, CALL, CALLCODE, DELEGATECALL, STATICCALL, INVALID)
 }
