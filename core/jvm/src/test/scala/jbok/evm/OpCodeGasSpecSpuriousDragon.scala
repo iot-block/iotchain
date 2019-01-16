@@ -1,24 +1,24 @@
 package jbok.evm
 
+import cats.effect.IO
+import jbok.common.testkit.random
 import jbok.core.models.{Account, Address}
+import jbok.core.testkit.uint256Gen
 import jbok.evm.testkit._
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FunSuite, Matchers}
 
 class OpCodeGasSpecSpuriousDragon extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
+  implicit override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
 
   import config.feeSchedule._
 
   test(SELFDESTRUCT) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 1),
-      evmConfig = config
-    )
-
     // Sending refund to a non-existent account
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack       = random[Stack](arbStack(op.delta, uint256Gen().filter(Address(_) != ownerAddr)).arbitrary)
+      val stateIn     = state.withStack(stack)
       val (refund, _) = stateIn.stack.pop
       whenever(
         stateIn.world.getAccountOpt(Address(refund)).isEmpty.unsafeRunSync() && stateIn.ownBalance
@@ -30,7 +30,9 @@ class OpCodeGasSpecSpuriousDragon extends FunSuite with OpCodeTesting with Match
     }
 
     // Sending refund to an already existing account not dead account
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack          = random[Stack](arbStack(op.delta, uint256Gen().filter(Address(_) != ownerAddr)).arbitrary)
+      val stateIn        = state.withStack(stack)
       val (refund, _)    = stateIn.stack.pop
       val world          = stateIn.world.putAccount(Address(refund), Account.empty().increaseNonce())
       val updatedStateIn = stateIn.withWorld(world)
@@ -40,7 +42,9 @@ class OpCodeGasSpecSpuriousDragon extends FunSuite with OpCodeTesting with Match
     }
 
     // Owner account was already selfdestructed
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack       = random[Stack](arbStack(op.delta, uint256Gen().filter(Address(_) != ownerAddr)).arbitrary)
+      val stateIn     = state.withStack(stack)
       val (refund, _) = stateIn.stack.pop
       whenever(
         stateIn.world.getAccountOpt(Address(refund)).isEmpty.unsafeRunSync() && stateIn.ownBalance

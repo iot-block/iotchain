@@ -9,10 +9,12 @@ import scodec.bits.ByteVector
 import jbok.evm.testkit._
 import UInt256._
 import jbok.crypto._
+import jbok.common.testkit._
+import jbok.core.testkit._
 
 class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.ConstantinopleConfigBuilder(None)
+  implicit override val config = EvmConfig.ConstantinopleConfigBuilder(None)
 
   def executeOp(op: OpCode, stateIn: ProgramState[IO]): ProgramState[IO] =
     // gas is not tested in this spec
@@ -41,7 +43,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(STOP) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { stateIn: ProgramState[IO] =>
       val stateOut = executeOp(op, stateIn)
       stateOut.halted shouldBe true
       stateIn shouldBe stateOut.copy(halted = stateIn.halted)
@@ -49,7 +51,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(unaryOps: _*) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { stateIn: ProgramState[IO] =>
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -64,7 +66,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(binaryOps: _*) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { stateIn: ProgramState[IO] =>
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -79,7 +81,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(ternaryOps: _*) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { stateIn: ProgramState[IO] =>
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -94,7 +96,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(constOps.filter(_ != MSIZE): _*) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { stateIn: ProgramState[IO] =>
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -108,11 +110,8 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(MSIZE) { op =>
-    val stateGen = getProgramStateGen(
-      memGen = getMemoryGen(256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stateIn  = state.withMemory(memory)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -125,12 +124,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(SHA3) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(maxSize = 256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -146,7 +142,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(BALANCE) { op =>
-    forAll(getProgramStateGen(), getUInt256Gen()) { (stateIn, accountBalance) =>
+    forAll { (stateIn: ProgramState[IO], accountBalance: UInt256) =>
       val stateOut = executeOp(op, stateIn)
       withStackVerification(op, stateIn, stateOut) {
         val (_, stack1) = stateIn.stack.pop
@@ -169,12 +165,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(CALLDATALOAD) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      inputDataGen = getByteVectorGen(0, 256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -189,13 +182,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(CALLDATACOPY) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(256),
-      inputDataGen = getByteVectorGen(0, 256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -211,13 +200,10 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(RETURNDATACOPY) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(256),
-      returnDataGen = getByteVectorGen(256, 256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val data     = random[ByteVector](genBoundedByteVector(256, 256))
+      val stateIn  = state.withStack(stack).withReturnData(data)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -237,13 +223,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(CODECOPY) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(256),
-      codeGen = getByteVectorGen(0, 256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -259,12 +241,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(EXTCODESIZE) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256))
-    )
-    val codeGen = getByteVectorGen(0, 512)
-
-    forAll(stateGen, codeGen) { (stateIn, extCode) =>
+    forAll { (stateIn: ProgramState[IO], program: Program) =>
       val stateOut = executeOp(op, stateIn)
       withStackVerification(op, stateIn, stateOut) {
         val (_, stack1) = stateIn.stack.pop
@@ -272,37 +249,26 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       }
 
       val (addr, stack1) = stateIn.stack.pop
-      val program        = Program(extCode)
       val world1         = stateIn.world.putCode(Address(addr), program.code)
 
       val stateInWithExtCode  = stateIn.withWorld(world1)
       val stateOutWithExtCode = executeOp(op, stateInWithExtCode)
 
       withStackVerification(op, stateInWithExtCode, stateOutWithExtCode) {
-        val stack2 = stack1.push(UInt256(extCode.size))
+        val stack2 = stack1.push(UInt256(program.code.size))
         stateOutWithExtCode shouldBe stateInWithExtCode.withStack(stack2).step()
       }
     }
   }
 
   test(EXTCODECOPY) { op =>
-    val stateGen: Gen[ProgramState[IO]] = for {
-      extCode <- getByteVectorGen(0, 256)
-
-      stateIn <- getProgramStateGen(
-        stackGen = getStackGen(maxWord = UInt256(256)),
-        memGen = getMemoryGen(256),
-        codeGen = getByteVectorGen(0, 256)
-      )
-
-      doSave <- Gen.oneOf(false, true, true)
-
-      addr  = Address(stateIn.stack.pop._1)
-      hash  = extCode.kec256
-      world = if (doSave) stateIn.world.putAccount(addr, Account.empty().copy(codeHash = hash)) else stateIn.world
-    } yield stateIn.withWorld(world)
-
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], program: Program) =>
+      val stack  = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val doSave = random[Boolean](Gen.oneOf(false, true))
+      val world =
+        if (doSave) state.world.putAccount(Address(stack.pop._1), Account.empty().copy(codeHash = program.code.kec256))
+        else state.world
+      val stateIn  = state.withStack(stack).withWorld(world)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -318,12 +284,10 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(EXTCODEHASH) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(160))
-    )
-    val codeHashGen = getByteVectorGen(32, 32)
-
-    forAll(stateGen, codeHashGen) { (stateIn, codeHash) =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val codeHash = random[ByteVector](genBoundedByteVector(32, 32))
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
       withStackVerification(op, stateIn, stateOut) {
         val (_, stack1) = stateIn.stack.pop
@@ -345,15 +309,11 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(BLOCKHASH) { op =>
-    val stateGen: Gen[ProgramState[IO]] = for {
-      stateIn <- getProgramStateGen(
-        stackGen = getStackGen(maxWord = UInt256(512)),
-        blockNumberGen = getUInt256Gen(0, 512)
-      )
-    } yield stateIn
-
-    forAll(stateGen) { stateIn =>
-      val stateOut = executeOp(op, stateIn)
+    forAll { state: ProgramState[IO] =>
+      val blockNumberRange = random[UInt256](uint256Gen(0, 512))
+      val stack            = state.stack.push(UInt256((state.env.blockHeader.number - blockNumberRange).max(0)))
+      val stateIn          = state.withStack(stack)
+      val stateOut         = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
         val (blockHeaderNumber, stack1) = stateIn.stack.pop
@@ -375,22 +335,21 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(POP) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(32, uint256Gen()).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
-        stateOut shouldBe stateIn.withStack(stateOut.stack).step()
+        stateOut shouldBe stateIn.withStack(stateIn.stack.pop(1)._2).step()
       }
     }
   }
 
   test(MLOAD) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack).withMemory(memory)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -405,12 +364,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(MSTORE) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -424,12 +380,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(MSTORE8) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -443,12 +396,18 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(SLOAD) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(UInt256(256)),
-      storageGen = getStorageGen(256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack   = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val storage = state.world.getStorage(state.ownAddress).unsafeRunSync()
+      val toStored = random[List[UInt256]](Gen.listOfN(512, uint256Gen(UInt256(256)))).zipWithIndex
+        .map {
+          case (w, i) => UInt256(i) -> w
+        }
+        .foldLeft(storage) {
+          case (s, (k, v)) => s.store(k, v)
+        }
+      val world    = state.world.putStorage(state.ownAddress, toStored)
+      val stateIn  = state.withStack(stack).withWorld(world)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -463,12 +422,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(SSTORE) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(UInt256(256)),
-      storageGen = getStorageGen(256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -482,26 +438,16 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(JUMP) { op =>
-    // have about 1 in 2 opcodes be a JUMPDEST
-    val opcodes   = config.opCodes ++ List.fill(config.opCodes.size)(JUMPDEST)
-    val opcodeGen = Gen.oneOf(opcodes).map(_.code.toByte)
-
     // 80% of jump destinations arguments will be within codesize bound
     def stackValueGen(codeSize: UInt256): Gen[UInt256] = Gen.frequency(
-      8 -> getUInt256Gen(0, codeSize),
-      1 -> getUInt256Gen(codeSize, Int.MaxValue),
-      1 -> getUInt256Gen(Int.MaxValue, UInt256.MaxValue)
+      8 -> uint256Gen(0, codeSize),
+      1 -> uint256Gen(codeSize, Int.MaxValue),
+      1 -> uint256Gen(Int.MaxValue, UInt256.MaxValue)
     )
 
-    val stateGen = for {
-      codeSize <- Gen.choose(0, 256)
-      state <- getProgramStateGen(
-        stackGen = getStackGen(valueGen = stackValueGen(codeSize)),
-        codeGen = getByteVectorGen(codeSize, codeSize, opcodeGen)
-      )
-    } yield state
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, stackValueGen(state.program.code.size)).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -542,10 +488,10 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     )
 
     forAll(table) { (destination, isValid) =>
-      val stackIn     = Stack.empty().push(destination)
-      val stateSample = getProgramStateGen().sample.get
-      val stateIn     = stateWithCode(stateSample.copy(stack = stackIn), code)
-      val stateOut    = executeOp(op, stateIn)
+      val stackIn  = Stack.empty().push(destination)
+      val state    = random[ProgramState[IO]]
+      val stateIn  = stateWithCode(state.copy(stack = stackIn), code)
+      val stateOut = executeOp(op, stateIn)
 
       val expectedState =
         if (isValid)
@@ -558,28 +504,16 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(JUMPI) { op =>
-    // have about 1 in 2 opcodes be a JUMPDEST
-    val opcodes   = config.opCodes ++ List.fill(config.opCodes.size)(JUMPDEST)
-    val opcodeGen = Gen.oneOf(opcodes).map(_.code.toByte)
-
-    // 40% of conditionals arguments will be false (zero)
-    // 80% of jump destinations arguments will be within codesize bound
     def stackValueGen(codeSize: UInt256): Gen[UInt256] = Gen.frequency(
       4 -> Gen.const(UInt256.Zero),
-      4 -> getUInt256Gen(0, codeSize),
-      1 -> getUInt256Gen(codeSize, Int.MaxValue),
-      1 -> getUInt256Gen(Int.MaxValue, UInt256.MaxValue)
+      4 -> uint256Gen(0, codeSize),
+      1 -> uint256Gen(codeSize, Int.MaxValue),
+      1 -> uint256Gen(Int.MaxValue, UInt256.MaxValue)
     )
 
-    val stateGen = for {
-      codeSize <- Gen.choose(0, 256)
-      state <- getProgramStateGen(
-        stackGen = getStackGen(valueGen = stackValueGen(codeSize)),
-        codeGen = getByteVectorGen(codeSize, codeSize, opcodeGen)
-      )
-    } yield state
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, stackValueGen(state.program.code.size)).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -627,10 +561,10 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     )
 
     forAll(table) { (destination, cond, isValid) =>
-      val stackIn     = Stack.empty().push(List(cond, destination))
-      val stateSample = getProgramStateGen().sample.get
-      val stateIn     = stateWithCode(stateSample.copy(stack = stackIn), code)
-      val stateOut    = executeOp(op, stateIn)
+      val stackIn  = Stack.empty().push(List(cond, destination))
+      val state    = random[ProgramState[IO]]
+      val stateIn  = stateWithCode(state.copy(stack = stackIn), code)
+      val stateOut = executeOp(op, stateIn)
 
       val expectedState =
         if (cond.isZero)
@@ -645,7 +579,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(JUMPDEST) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { stateIn: ProgramState[IO] =>
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -655,9 +589,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(pushOps: _*) { op =>
-    val stateGen = getProgramStateGen(codeGen = getByteVectorGen(0, 32))
-
-    forAll(stateGen) { stateIn =>
+    forAll { stateIn: ProgramState[IO] =>
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -670,7 +602,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(dupOps: _*) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(16, uint256Gen()).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -682,7 +616,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(swapOps: _*) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(16, uint256Gen()).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -694,12 +630,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(logOps: _*) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(maxSize = 256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack).withMemory(memory)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -715,12 +648,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(RETURN) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(maxSize = 256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack).withMemory(memory)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -740,12 +670,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(REVERT) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(maxWord = UInt256(256)),
-      memGen = getMemoryGen(maxSize = 256)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val stateIn  = state.withStack(stack).withMemory(memory)
       val stateOut = executeOp(op, stateIn)
 
       withStackVerification(op, stateIn, stateOut) {
@@ -766,7 +693,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(INVALID) { op =>
-    forAll(getProgramStateGen()) { stateIn =>
+    forAll { stateIn: ProgramState[IO] =>
       val stateOut = executeOp(op, stateIn)
 
       val expectedState = stateIn.withError(InvalidOpCode(op.code))
@@ -775,11 +702,9 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(SELFDESTRUCT) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(valueGen = getUInt256Gen().filter(Address(_) != ownerAddr))
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen().filter(Address(_) != ownerAddr)).arbitrary)
+      val stateIn  = state.withStack(stack)
       val stateOut = executeOp(op, stateIn)
       withStackVerification(op, stateIn, stateOut) {
         val (refundAddr, stack1) = stateIn.stack.pop
@@ -805,12 +730,12 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
     forAll(table) {
       case (refundAddr, initialEther, transferredEther) =>
-        val stackIn     = Stack.empty().push(refundAddr.toUInt256)
-        val stateSample = getProgramStateGen().sample.get
-        val initialWorld = stateSample.world
+        val stackIn = Stack.empty().push(refundAddr.toUInt256)
+        val state   = random[ProgramState[IO]]
+        val world = state.world
           .putAccount(refundAddr, Account.empty())
           .putAccount(ownerAddr, Account.empty().increaseBalance(initialEther))
-        val stateIn = stateSample.copy(world = initialWorld, stack = stackIn)
+        val stateIn = state.withWorld(world).withStack(stackIn)
 
         val stateOut = executeOp(op, stateIn)
 
@@ -852,7 +777,7 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     )
 
     forAll(table) { (dataSize, sliceOffset, sliceSize, expectedSize, expectedContentFn) =>
-      val bytes = getByteVectorGen(dataSize, dataSize).sample.get
+      val bytes = random[ByteVector](genBoundedByteVector(dataSize, dataSize))
       val slice = OpCode.sliceBytes(bytes, sliceOffset, sliceSize)
 
       slice.size shouldBe expectedSize

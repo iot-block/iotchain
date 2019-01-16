@@ -83,13 +83,12 @@ case class CreateOpFixture(config: EvmConfig) {
   val newAddrByCreate  = initWorld.createAddressWithOpCode(creatorAddr).unsafeRunSync()._1
   val newAddrByCreate2 = initWorld.create2AddressWithOpCode(creatorAddr, salt, createCode.code).unsafeRunSync()._1
 
-  val copyCodeGas      = G_copy * wordsForBytes(contractCode.code.size) + config.calcMemCost(0, 0, contractCode.code.size)
-  val codeHashGas      = G_sha3word * wordsForBytes(contractCode.code.size)
-  val memGas           = config.calcMemCost(contractCode.code.size, 0, contractCode.code.size)
-  val storeGas         = G_sset
-  val createOpGasUsed  = G_create + memGas
-  val create2OpGasUsed = G_create + codeHashGas + memGas
-  println(s"codeHashGas: ${codeHashGas}")
+  val copyCodeGas           = G_copy * wordsForBytes(contractCode.code.size) + config.calcMemCost(0, 0, contractCode.code.size)
+  val codeHashGas           = G_sha3word * wordsForBytes(contractCode.code.size)
+  val memGas                = config.calcMemCost(contractCode.code.size, 0, contractCode.code.size)
+  val storeGas              = G_sset
+  val createOpGasUsed       = G_create + memGas
+  val create2OpGasUsed      = G_create + codeHashGas + memGas
   val gasRequiredForInit    = initPart(contractCode.code.size.toInt).linearConstGas(config) + copyCodeGas + storeGas
   val depositGas            = config.calcCodeDepositCost(contractCode.code)
   val gasRequiredForCreate  = gasRequiredForInit + depositGas + createOpGasUsed

@@ -6,7 +6,7 @@ import org.scalatest.{FunSuiteLike, Matchers}
 trait OpCodeTesting extends FunSuiteLike {
   matchers: Matchers =>
 
-  val config: EvmConfig
+  implicit val config: EvmConfig
 
   lazy val unaryOps    = config.opCodes.collect { case op: UnaryOp                   => op }
   lazy val binaryOps   = config.opCodes.collect { case op: BinaryOp                  => op }

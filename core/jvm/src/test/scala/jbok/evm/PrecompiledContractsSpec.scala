@@ -6,10 +6,9 @@ import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.ledger.History
 import jbok.core.models.{Address, UInt256}
+import jbok.core.testkit._
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, Signature}
-import jbok.evm.testkit._
-import jbok.core.testkit._
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 
@@ -19,8 +18,6 @@ class PrecompiledContractsSpec extends JbokSpec {
     val origin = Address(0xcafebabe)
     val env    = ExecEnv(recipient, origin, origin, 1000, inputData, 0, Program(ByteVector.empty), null, 0)
 
-    implicit val bigInt: BigInt = BigInt(0)
-
     val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
     val world = history
       .getWorldState()
@@ -29,14 +26,13 @@ class PrecompiledContractsSpec extends JbokSpec {
   }
 
   "ECDSARECOVER" in {
-    val keyPair         = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val bytesGen        = getByteVectorGen(1, 128)
-    val chainId: BigInt = 0
+    val keyPair  = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+    val bytesGen = genBoundedByteVector(1, 128)
 
     forAll(bytesGen) { bytes =>
       val hash             = bytes.kec256
-      val validSig         = Signature[ECDSA].sign[IO](hash.toArray, keyPair, chainId).unsafeRunSync()
-      val recoveredPub     = Signature[ECDSA].recoverPublic(hash.toArray, validSig, chainId).get
+      val validSig         = Signature[ECDSA].sign[IO](hash.toArray, keyPair, 0).unsafeRunSync()
+      val recoveredPub     = Signature[ECDSA].recoverPublic(hash.toArray, validSig, 0).get
       val recoveredAddress = recoveredPub.bytes.kec256.slice(12, 32).padLeft(32)
       val inputData        = hash ++ UInt256(validSig.v).bytes ++ UInt256(validSig.r).bytes ++ UInt256(validSig.s).bytes
 
@@ -83,7 +79,7 @@ class PrecompiledContractsSpec extends JbokSpec {
   }
 
   "SHA256" in {
-    val bytesGen = getByteVectorGen(0, 256)
+    val bytesGen = genBoundedByteVector(0, 256)
     forAll(bytesGen) { bytes =>
       val context = buildContext(PrecompiledContracts.Sha256Addr, bytes)
       val result  = VM.run(context).unsafeRunSync()
@@ -96,7 +92,7 @@ class PrecompiledContractsSpec extends JbokSpec {
   }
 
   "RIPEMD160" in {
-    val bytesGen = getByteVectorGen(0, 256)
+    val bytesGen = genBoundedByteVector(0, 256)
     forAll(bytesGen) { bytes =>
       val context = buildContext(PrecompiledContracts.Rip160Addr, bytes)
       val result  = VM.run(context).unsafeRunSync()
@@ -109,7 +105,7 @@ class PrecompiledContractsSpec extends JbokSpec {
   }
 
   "IDENTITY" in {
-    val bytesGen = getByteVectorGen(0, 256)
+    val bytesGen = genBoundedByteVector(0, 256)
     forAll(bytesGen) { bytes =>
       val context = buildContext(PrecompiledContracts.IdAddr, bytes)
       val result  = VM.run(context).unsafeRunSync()

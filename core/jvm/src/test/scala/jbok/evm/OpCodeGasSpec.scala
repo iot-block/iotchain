@@ -1,8 +1,10 @@
 package jbok.evm
 
 import cats.effect.IO
+import jbok.common.testkit.{genBoundedByteVector, random}
 import jbok.core.models.UInt256._
 import jbok.core.models.{Account, Address, UInt256}
+import jbok.core.testkit.uint256Gen
 import jbok.evm.testkit._
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{FunSuite, Matchers}
@@ -10,7 +12,7 @@ import scodec.bits.ByteVector
 
 class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
-  override val config = EvmConfig.ConstantinopleConfigBuilder(None)
+  implicit override val config = EvmConfig.SpuriousDragonConfigBuilder(None)
 
   import config.feeSchedule._
 
@@ -49,7 +51,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     CALLDATALOAD   -> G_verylow,
     CALLDATASIZE   -> G_base,
     RETURNDATASIZE -> G_base,
-    EXTCODESIZE    -> G_extcodecopy,
+    EXTCODESIZE    -> G_extcodesize,
     EXTCODEHASH    -> G_extcodehash,
     BLOCKHASH      -> G_blockhash,
     COINBASE       -> G_base,
@@ -95,7 +97,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       config.calcMemCost(memSize, offset, dataSize) shouldEqual expectedCost
     }
 
-    val uint = getUInt256Gen(max = Two ** 32)
+    val uint = uint256Gen(max = Two ** 32)
     forAll(uint, uint, uint) { (memSize, offset, dataSize) =>
       val memNeeded: UInt256 = if (dataSize > 0) offset + dataSize else 0
 
@@ -117,10 +119,10 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(constGasOps: _*) { op =>
-    val stateGen = getProgramStateGen(stackGen = getStackGen(elems = op.delta),
-                                      gasGen = getBigIntGen(max = op.constGasFn(config.feeSchedule) * 2))
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(op.constGasFn(config.feeSchedule) * 2)))
+      val stateIn  = state.withStack(stack).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
       verifyGas(constGasFees(op), stateIn, stateOut)
     }
@@ -140,18 +142,15 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
     forAll(table) { (m, expectedGas) =>
       val stackIn  = Stack.empty().push(m).push(Zero)
-      val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).copy(gas = expectedGas)
+      val stateIn  = random[ProgramState[IO]].withStack(stackIn).copy(gas = expectedGas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
       verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
     }
 
-    val maxGas = G_exp + G_expbyte * 32
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 2),
-      gasGen = getBigIntGen(max = maxGas)
-    )
-
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen()).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(G_exp + G_expbyte * 32)))
+      val stateIn  = state.withStack(stack).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(_, m: UInt256), _) = stateIn.stack.pop(2)
@@ -175,20 +174,18 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     forAll(table) { (size, expectedGas) =>
       val stackIn  = Stack.empty().push(size).push(Zero)
       val memIn    = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
-      val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
+      val stateIn  = random[ProgramState[IO]].withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
       verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
     }
 
     val memSize = 256
     val maxGas  = G_sha3 + G_sha3word * 8
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 2, maxUInt = UInt256(memSize)),
-      gasGen = getBigIntGen(max = maxGas),
-      memGen = getMemoryGen(memSize)
-    )
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = memSize)).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn  = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(offset, size), _) = stateIn.stack.pop(2)
@@ -214,20 +211,17 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     forAll(table) { (size, expectedGas) =>
       val stackIn  = Stack.empty().push(size).push(Zero).push(Zero)
       val memIn    = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
-      val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
+      val stateIn  = random[ProgramState[IO]].withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
       verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
     }
 
     val maxGas = G_verylow + G_copy * 8
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 3, maxUInt = UInt256(256)),
-      memGen = getMemoryGen(256),
-      gasGen = getBigIntGen(max = maxGas),
-      codeGen = getByteVectorGen(0, 256)
-    )
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = 256)).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn  = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(offset, _, size), _) = stateIn.stack.pop(3)
@@ -252,7 +246,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val stackIn    = Stack.empty().push(size).push(Zero).push(Zero)
       val memIn      = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
       val returnData = ByteVector.fill(64)(0)
-      val stateIn = getProgramStateGen().sample.get
+      val stateIn = random[ProgramState[IO]]
         .withStack(stackIn)
         .withMemory(memIn)
         .withReturnData(returnData)
@@ -262,14 +256,12 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     }
 
     val maxGas = G_verylow + G_copy * 64
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 3, maxUInt = UInt256(256)),
-      memGen = getMemoryGen(256),
-      gasGen = getBigIntGen(min = maxGas, max = maxGas),
-      returnDataGen = getByteVectorGen(256, 256)
-    )
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = 256)).arbitrary)
+      val gas      = random[UInt256](uint256Gen(UInt256(maxGas), UInt256(maxGas)))
+      val data     = random[ByteVector](genBoundedByteVector(256, 256))
+      val stateIn  = state.withStack(stack).withMemory(memory).withReturnData(data).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(offset, dataOffset, size), _) = stateIn.stack.pop(3)
@@ -299,20 +291,17 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     forAll(table) { (size, expectedGas) =>
       val stackIn  = Stack.empty().push(size).push(Zero).push(Zero)
       val memIn    = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
-      val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
+      val stateIn  = random[ProgramState[IO]].withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
       verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
     }
 
     val maxGas = G_verylow + G_copy * 8
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 3, maxUInt = UInt256(256)),
-      memGen = getMemoryGen(256),
-      gasGen = getBigIntGen(max = maxGas),
-      codeGen = getByteVectorGen(0, 256)
-    )
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = 256)).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn  = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(offset, _, size), _) = stateIn.stack.pop(3)
@@ -338,19 +327,17 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     forAll(table) { (size, expectedGas) =>
       val stackIn  = Stack.empty().push(List(size, Zero, Zero, Zero))
       val memIn    = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
-      val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
+      val stateIn  = random[ProgramState[IO]].withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
       verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
     }
 
     val maxGas = 2 * (G_extcodecopy + G_copy * 8)
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 4, maxUInt = UInt256(256)),
-      gasGen = getBigIntGen(max = maxGas),
-      memGen = getMemoryGen(256)
-    )
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = 256)).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn  = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(_, offset, _, size), _) = stateIn.stack.pop(4)
@@ -363,15 +350,13 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(MLOAD) { op =>
-    val memSize     = 256
-    val maxGasUsage = G_verylow + config.calcMemCost(memSize, memSize, memSize)
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 2, maxUInt = UInt256(memSize)),
-      gasGen = getBigIntGen(max = maxGasUsage),
-      memGen = getMemoryGen(memSize)
-    )
+    val memSize = 256
+    val maxGas  = G_verylow + config.calcMemCost(memSize, memSize, memSize)
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack       = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(memSize))).arbitrary)
+      val gas         = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn     = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut    = op.execute(stateIn).unsafeRunSync()
       val (offset, _) = stateIn.stack.pop
       val expectedGas = G_verylow + config.calcMemCost(stateIn.memory.size, offset, UInt256.Size)
@@ -381,15 +366,13 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(MSTORE) { op =>
-    val memSize     = 256
-    val maxGasUsage = G_verylow + config.calcMemCost(memSize, memSize, memSize)
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 2, maxUInt = UInt256(memSize)),
-      gasGen = getBigIntGen(max = maxGasUsage),
-      memGen = getMemoryGen(memSize)
-    )
+    val memSize = 256
+    val maxGas  = G_verylow + config.calcMemCost(memSize, memSize, memSize)
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack       = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(memSize))).arbitrary)
+      val gas         = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn     = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut    = op.execute(stateIn).unsafeRunSync()
       val (offset, _) = stateIn.stack.pop
       val expectedGas = G_verylow + config.calcMemCost(stateIn.memory.size, offset, UInt256.Size)
@@ -399,15 +382,13 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(MSTORE8) { op =>
-    val memSize     = 256
-    val maxGasUsage = G_verylow + config.calcMemCost(memSize, memSize, memSize)
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 2, maxUInt = UInt256(memSize)),
-      gasGen = getBigIntGen(max = maxGasUsage),
-      memGen = getMemoryGen(memSize)
-    )
+    val memSize = 256
+    val maxGas  = G_verylow + config.calcMemCost(memSize, memSize, memSize)
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack       = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(memSize))).arbitrary)
+      val gas         = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn     = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut    = op.execute(stateIn).unsafeRunSync()
       val (offset, _) = stateIn.stack.pop
       val expectedGas = G_verylow + config.calcMemCost(stateIn.memory.size, offset, 1)
@@ -426,19 +407,17 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
     forAll(table) { (offset, value, expectedGas, expectedRefund) =>
       val stackIn  = Stack.empty().push(value).push(offset)
-      val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).withStorage(storage).copy(gas = expectedGas)
+      val stateIn  = random[ProgramState[IO]].withStack(stackIn).withStorage(storage).copy(gas = expectedGas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
       verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
     }
 
-    val maxGasUsage = G_sset + G_sreset
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 2, maxUInt = Two),
-      gasGen = getBigIntGen(max = maxGasUsage),
-      storageGen = getStorageGen(3, getUInt256Gen(max = One))
-    )
+    val maxGas = G_sset + G_sreset
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = Two)).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn  = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(offset, value), _) = stateIn.stack.pop(2)
@@ -463,18 +442,17 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
       val topics   = List.fill(op.delta - 2)(Zero)
       val stackIn  = Stack.empty().push(topics).push(size).push(Zero)
       val memIn    = Memory.empty.store(Zero, Array.fill[Byte](size.toInt)(-1))
-      val stateIn  = getProgramStateGen().sample.get.withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
+      val stateIn  = random[ProgramState[IO]].withStack(stackIn).withMemory(memIn).copy(gas = expectedGas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
       verifyGas(expectedGas, stateIn, stateOut, allowOOG = false)
     }
 
     val maxGas = G_log + G_logdata * 256 + G_logtopic * 4 + config.calcMemCost(256, 256, 256)
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 6, maxUInt = UInt256(256)),
-      gasGen = getBigIntGen(max = maxGas)
-    )
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn  = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(offset, size, _*), _) = stateIn.stack.pop(op.delta)
@@ -488,12 +466,11 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
   test(RETURN) { op =>
     val maxGas = config.calcMemCost(256, 256, 256)
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 2, maxUInt = UInt256(256)),
-      gasGen = getBigIntGen(max = maxGas)
-    )
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn  = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(offset, size), _) = stateIn.stack.pop(2)
@@ -505,12 +482,11 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
 
   test(REVERT) { op =>
     val maxGas = config.calcMemCost(256, 256, 256)
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 2, maxUInt = UInt256(256)),
-      gasGen = getBigIntGen(max = maxGas)
-    )
 
-    forAll(stateGen) { stateIn =>
+    forAll { (state: ProgramState[IO], memory: Memory) =>
+      val stack    = random[Stack](arbStack(op.delta, uint256Gen(max = UInt256(256))).arbitrary)
+      val gas      = random[UInt256](uint256Gen(max = UInt256(maxGas)))
+      val stateIn  = state.withStack(stack).withMemory(memory).copy(gas = gas)
       val stateOut = op.execute(stateIn).unsafeRunSync()
 
       val (Seq(offset, size), _) = stateIn.stack.pop(2)
@@ -521,12 +497,10 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(SELFDESTRUCT) { op =>
-    val stateGen = getProgramStateGen(
-      stackGen = getStackGen(elems = 1)
-    )
-
     // Sending refund to a non-existent account
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack       = random[Stack](arbStack(op.delta, uint256Gen().filter(Address(_) != ownerAddr)).arbitrary)
+      val stateIn     = state.withStack(stack)
       val (refund, _) = stateIn.stack.pop
       whenever(stateIn.world.getAccountOpt(Address(refund)).isEmpty.unsafeRunSync()) {
         val stateOut = op.execute(stateIn).unsafeRunSync()
@@ -536,7 +510,9 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     }
 
     // Sending refund to an already existing account
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack          = random[Stack](arbStack(op.delta, uint256Gen().filter(Address(_) != ownerAddr)).arbitrary)
+      val stateIn        = state.withStack(stack)
       val (refund, _)    = stateIn.stack.pop
       val world          = stateIn.world.putAccount(Address(refund), Account(nonce = 1))
       val updatedStateIn = stateIn.withWorld(world)
@@ -546,7 +522,9 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
     }
 
     // Owner account was already selfdestructed
-    forAll(stateGen) { stateIn =>
+    forAll { state: ProgramState[IO] =>
+      val stack       = random[Stack](arbStack(op.delta, uint256Gen().filter(Address(_) != ownerAddr)).arbitrary)
+      val stateIn     = state.withStack(stack)
       val (refund, _) = stateIn.stack.pop
       whenever(stateIn.world.getAccountOpt(Address(refund)).isEmpty.unsafeRunSync()) {
         val updatedStateIn = stateIn.withAddressToDelete(stateIn.context.env.ownerAddr)

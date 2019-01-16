@@ -2,19 +2,19 @@ package jbok.evm
 
 import cats.effect.IO
 import jbok.JbokSpec
+import jbok.common.execution._
+import jbok.common.testkit._
 import jbok.core.ledger.History
 import jbok.core.models._
+import jbok.core.testkit._
 import jbok.crypto._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import jbok.common.testkit._
-import jbok.common.execution._
-import jbok.core.testkit._
 
 class CallOpcodesSpec extends JbokSpec {
 
   val config     = EvmConfig.FrontierConfigBuilder(None)
-  val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+  val history    = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
   import config.feeSchedule._
 

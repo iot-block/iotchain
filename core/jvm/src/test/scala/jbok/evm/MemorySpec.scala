@@ -2,7 +2,7 @@ package jbok.evm
 
 import jbok.JbokSpec
 import jbok.core.models.UInt256
-import jbok.evm.testkit._
+import jbok.core.testkit._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen._
 import org.scalacheck.{Arbitrary, Gen}
@@ -22,7 +22,6 @@ class MemorySpec extends JbokSpec {
     else
       ByteVector((start until (start + size)).map(_.toByte): _*)
 
-
   def randomSizeByteArrayGen(minSize: Int, maxSize: Int): Gen[Array[Byte]] =
     Gen.choose(minSize, maxSize).flatMap(byteArrayOfNItemsGen(_))
 
@@ -37,7 +36,7 @@ class MemorySpec extends JbokSpec {
         whenever(initialMemorySize >= 0 && idx >= 0) {
           val memory = Memory.empty.store(0, zeros(initialMemorySize)).store(idx, b)
 
-          val expectedSize = math.max(initialMemorySize, idx + 1)
+          val expectedSize     = math.max(initialMemorySize, idx + 1)
           val expectedContents = zeros(expectedSize).update(idx, b)
 
           memory.size shouldEqual expectedSize
@@ -47,11 +46,11 @@ class MemorySpec extends JbokSpec {
     }
 
     "Store an UInt256" in {
-      forAll(choose(10, 100), getUInt256Gen(), choose(0, 200)) { (initialMemorySize, uint, idx) =>
+      forAll(choose(10, 100), uint256Gen(), choose(0, 200)) { (initialMemorySize, uint, idx) =>
         whenever(initialMemorySize >= 0 && idx >= 0) {
           val memory = Memory.empty.store(0, zeros(initialMemorySize)).store(idx, uint)
 
-          val expectedSize = math.max(initialMemorySize, idx + UInt256.Size)
+          val expectedSize     = math.max(initialMemorySize, idx + UInt256.Size)
           val expectedContents = zeros(idx) ++ uint.bytes ++ zeros(memory.size - idx - UInt256.Size)
 
           memory.size shouldEqual expectedSize
@@ -82,7 +81,7 @@ class MemorySpec extends JbokSpec {
     "Store a ByteVector" in {
       forAll(choose(10, 100), randomSizeByteArrayGen(0, 100), choose(0, 200)) { (initialMemorySize, arr, idx) =>
         whenever(initialMemorySize >= 0 && idx >= 0) {
-          val bs = ByteVector(arr)
+          val bs     = ByteVector(arr)
           val memory = Memory.empty.store(0, zeros(initialMemorySize)).store(idx, bs)
 
           val requiredSize = if (bs.isEmpty) 0 else idx + bs.length
@@ -102,11 +101,11 @@ class MemorySpec extends JbokSpec {
     "Load an UInt256" in {
       forAll(choose(0, 100), choose(0, 200)) { (initialMemorySize, idx) =>
         whenever(initialMemorySize >= 0 && idx >= 0) {
-          val initialMemory = Memory.empty.store(0, consecutiveBytes(initialMemorySize))
+          val initialMemory  = Memory.empty.store(0, consecutiveBytes(initialMemorySize))
           val (uint, memory) = initialMemory.load(idx)
 
           val expectedMemorySize = math.max(initialMemorySize, idx + UInt256.Size)
-          val expectedContents = consecutiveBytes(initialMemorySize) ++ zeros(expectedMemorySize - initialMemorySize)
+          val expectedContents   = consecutiveBytes(initialMemorySize) ++ zeros(expectedMemorySize - initialMemorySize)
           val expectedResult = UInt256(
             if (idx >= initialMemorySize)
               zeros(UInt256.Size)
@@ -127,11 +126,11 @@ class MemorySpec extends JbokSpec {
       forAll(choose(0, 100), choose(0, 200), choose(1, 100)) { (initialMemorySize, idx, size) =>
         whenever(initialMemorySize >= 0 && idx >= 0 && size > 0) {
           val initialMemory = Memory.empty.store(0, consecutiveBytes(initialMemorySize))
-          val (bs, memory) = initialMemory.load(idx, size)
+          val (bs, memory)  = initialMemory.load(idx, size)
 
-          val requiredSize = if (size == 0) 0 else idx + size
+          val requiredSize       = if (size == 0) 0 else idx + size
           val expectedMemorySize = math.max(initialMemorySize, requiredSize)
-          val expectedContents = consecutiveBytes(initialMemorySize) ++ zeros(expectedMemorySize - initialMemorySize)
+          val expectedContents   = consecutiveBytes(initialMemorySize) ++ zeros(expectedMemorySize - initialMemorySize)
           val expectedResult =
             if (idx >= initialMemorySize)
               zeros(size)
@@ -161,7 +160,7 @@ class MemorySpec extends JbokSpec {
       )
 
       forAll(table) { (initialSize, offset, dataSize, expectedDelta) =>
-        val initMem = Memory.empty.store(0, zeros(initialSize))
+        val initMem    = Memory.empty.store(0, zeros(initialSize))
         val updatedMem = initMem.store(offset, consecutiveBytes(dataSize))
         (updatedMem.size - initMem.size) shouldEqual expectedDelta
       }
@@ -182,7 +181,7 @@ class MemorySpec extends JbokSpec {
       )
 
       forAll(table) { (initialSize, offset, dataSize, expectedDelta) =>
-        val initMem = Memory.empty.store(0, zeros(initialSize))
+        val initMem    = Memory.empty.store(0, zeros(initialSize))
         val updatedMem = initMem.load(offset, dataSize)._2
         (updatedMem.size - initMem.size) shouldEqual expectedDelta
       }
@@ -202,7 +201,7 @@ class MemorySpec extends JbokSpec {
       )
 
       forAll(table) { (initialSize, offset, dataSize, expectedDelta) =>
-        val initMem = Memory.empty.store(0, zeros(initialSize))
+        val initMem    = Memory.empty.store(0, zeros(initialSize))
         val updatedMem = initMem.expand(offset, dataSize)
         (updatedMem.size - initMem.size) shouldEqual expectedDelta
       }

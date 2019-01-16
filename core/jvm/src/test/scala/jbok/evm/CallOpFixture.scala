@@ -1,9 +1,10 @@
 package jbok.evm
 
 import cats.effect.IO
+import jbok.common.testkit._
 import jbok.core.models.{Account, Address, UInt256}
+import jbok.core.testkit._
 import jbok.crypto._
-import jbok.evm.testkit._
 import scodec.bits.ByteVector
 
 class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
@@ -96,7 +97,7 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
     RETURN
   )
 
-  val inputData       = getUInt256Gen().sample.get.bytes
+  val inputData       = random[UInt256].bytes
   val expectedMemCost = config.calcMemCost(inputData.size, inputData.size, inputData.size / 2)
 
   val initialBalance = UInt256(1000)

@@ -414,7 +414,7 @@ case object GASPRICE extends ConstOp(0x3a.toByte) {
   override def f[F[_]: Sync](state: ProgramState[F]): UInt256 = state.env.gasPrice
 }
 
-case object EXTCODESIZE extends OpCode(0x3b.toByte, 1, 1, _.G_extcodecopy) with ConstGas {
+case object EXTCODESIZE extends OpCode(0x3b.toByte, 1, 1, _.G_extcodesize) with ConstGas {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (addr, stack1) = state.stack.pop
     state.world.getCode(Address(addr)).map { code =>
@@ -587,22 +587,63 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
     } else {
       val (Seq(offset, value), stack1) = state.stack.pop(2)
       for {
-        storage  <- state.storage
-        oldValue <- storage.load(offset)
-        refund: BigInt = if (value.isZero && !oldValue.isZero) state.config.feeSchedule.R_sclear else 0
+        refund  <- gasMetering(state).map(_._2)
+        storage <- state.storage
         updatedStorage = storage.store(offset, value)
       } yield {
         state.withStack(stack1).withStorage(updatedStorage).refundGas(refund).step()
       }
     }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] =
+    gasMetering(state).map(_._1)
+
+  private def gasMetering[F[_]: Sync](state: ProgramState[F]): F[(BigInt, BigInt)] = {
     val (Seq(offset, value), _) = state.stack.pop(2)
     for {
-      storage  <- state.storage
-      oldValue <- storage.load(offset)
+      storage         <- state.storage
+      oldValue        <- storage.load(offset)
+      originalStorage <- state.world.getOriginalStorage(state.ownAddress)
+      original        <- originalStorage.load(offset)
     } yield {
-      if (oldValue.isZero && !value.isZero) state.config.feeSchedule.G_sset else state.config.feeSchedule.G_sreset
+      if (!state.config.sstoreGasMetering) {
+        if (oldValue.isZero && !value.isZero) state.config.feeSchedule.G_sset -> 0.toBigInt
+        else if (!oldValue.isZero && value.isZero)
+          state.config.feeSchedule.G_sreset    -> state.config.feeSchedule.R_sclear
+        else state.config.feeSchedule.G_sreset -> 0.toBigInt
+      } else {
+        if (oldValue == value) {
+          state.config.feeSchedule.G_snoop -> 0.toBigInt
+        } else {
+          if (oldValue == original) {
+            if (original.isZero) {
+              state.config.feeSchedule.G_sset -> 0.toBigInt
+            } else {
+              val refund = if (value.isZero) state.config.feeSchedule.R_sclear else 0.toBigInt
+              state.config.feeSchedule.G_sfresh -> refund
+            }
+          } else {
+            val refund = if (!original.isZero) {
+              if (oldValue.isZero) {
+                -state.config.feeSchedule.R_sclear
+              } else if (value.isZero) {
+                state.config.feeSchedule.R_sclear
+              } else {
+                0.toBigInt
+              }
+            } else if (original == value) {
+              if (original.isZero) {
+                state.config.feeSchedule.R_sresetclear
+              } else {
+                state.config.feeSchedule.R_sreset
+              }
+            } else {
+              0.toBigInt
+            }
+            state.config.feeSchedule.G_sdirty -> refund
+          }
+        }
+      }
     }
   }
 }

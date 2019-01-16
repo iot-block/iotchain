@@ -5,8 +5,8 @@ import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.models.{Account, Address, UInt256}
+import jbok.core.testkit._
 import jbok.evm.WorldState
-import jbok.evm.testkit._
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 
@@ -40,8 +40,8 @@ class WorldStateSpec extends JbokSpec {
     }
 
     "put then get storage" in new Fixture {
-      val addr  = getUInt256Gen().sample.getOrElse(UInt256.MaxValue)
-      val value = getUInt256Gen().sample.getOrElse(UInt256.MaxValue)
+      val addr  = uint256Gen().sample.getOrElse(UInt256.MaxValue)
+      val value = uint256Gen().sample.getOrElse(UInt256.MaxValue)
 
       val storage = world
         .getStorage(address1)
@@ -54,6 +54,37 @@ class WorldStateSpec extends JbokSpec {
         .unsafeRunSync()
         .load(addr)
         .unsafeRunSync() shouldEqual value
+    }
+
+    "put then get original storage" in new Fixture {
+      val addr     = UInt256.Zero
+      val original = uint256Gen().sample.getOrElse(UInt256.MaxValue)
+      val current  = uint256Gen().sample.getOrElse(UInt256.MaxValue)
+      val account  = Account(0, 100)
+      val world1   = world.putAccount(address1, account).persisted.unsafeRunSync()
+
+      val originalStorage = world1
+        .getStorage(address1)
+        .unsafeRunSync()
+        .store(addr, original)
+
+      val world2 = world1.putStorage(address1, originalStorage).persisted.unsafeRunSync()
+
+      val currentStorage = world1.getStorage(address1).unsafeRunSync().store(addr, current)
+
+      world2
+        .putStorage(address1, currentStorage)
+        .getStorage(address1)
+        .unsafeRunSync()
+        .load(addr)
+        .unsafeRunSync() shouldEqual current
+
+      world2
+        .putStorage(address1, currentStorage)
+        .getOriginalStorage(address1)
+        .unsafeRunSync()
+        .load(addr)
+        .unsafeRunSync() shouldEqual original
     }
 
     "transfer value to other address" in new Fixture {
