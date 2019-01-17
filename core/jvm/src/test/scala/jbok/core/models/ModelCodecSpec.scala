@@ -4,9 +4,9 @@ import jbok.JbokSpec
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.testkit._
-import scodec.bits.ByteVector
+import jbok.codec.testkit._
 
-class ModelCodecSpec extends JbokSpec with jbok.codec.testkit {
+class ModelCodecSpec extends JbokSpec {
   implicit val config = testConfig
 
   "model rlp codecs" should {

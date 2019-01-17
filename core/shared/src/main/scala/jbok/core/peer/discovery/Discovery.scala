@@ -8,6 +8,8 @@ import cats.effect.implicits._
 import cats.effect.{ConcurrentEffect, Resource, Timer}
 import cats.implicits._
 import fs2._
+import jbok.codec.rlp.RlpCodec
+import jbok.common._
 import jbok.core.config.Configs.PeerConfig
 import jbok.core.peer.discovery.KadPacket._
 import jbok.core.peer.discovery.PeerTable._
@@ -15,11 +17,12 @@ import jbok.core.peer.{PeerNode, PeerStore}
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.network.transport.UdpTransport
+import jbok.network.{Message, Request, Response}
 import scodec.bits.ByteVector
-import jbok.common._
 
 import scala.concurrent.duration._
 import scala.util.Random
+import jbok.codec.rlp.implicits._
 
 sealed abstract class ErrDiscovery(reason: String) extends Exception(reason)
 
@@ -36,7 +39,7 @@ final class Discovery[F[_]](
     transport: UdpTransport[F],
     val keyPair: KeyPair,
     val table: PeerTable[F],
-    promises: Ref[F, Map[UUID, Deferred[F, KadPacket]]],
+    promises: Ref[F, Map[UUID, Deferred[F, Response[F]]]],
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   import Discovery._
 
@@ -46,36 +49,45 @@ final class Discovery[F[_]](
 
   val peerNode = table.selfNode
 
-  private def sendAndWaitPacket(remote: InetSocketAddress, packet: KadPacket): F[KadPacket] =
+  private def sendAndWaitPacket[A](remote: InetSocketAddress, request: Request[F])(implicit C: RlpCodec[A]): F[A] =
     Resource
       .make {
-        Deferred[F, KadPacket].flatMap(p => promises.update(_ + (packet.id -> p)).as(packet.id -> p))
+        Deferred[F, Response[F]].flatMap(p => promises.update(_ + (request.id -> p)).as(request.id -> p))
       } {
         case (id, _) =>
           promises.update(_ - id)
       }
       .use {
         case (_, promise) =>
-          transport.send[KadPacket](remote, packet) >> promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout))
+          transport.send(remote, request) >>
+            promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout)).flatMap(_.bodyAs[A])
       }
 
   /** send a [[Ping]] message to the remote node and wait for the [[Pong]]. */
   def ping(remote: PeerNode): F[Pong] =
     for {
       current <- T.clock.realTime(MILLISECONDS)
-      id      <- F.delay(UUID.randomUUID())
-      ping = Ping(peerNode, current + ttl.toMillis, id)
-      _    = log.debug(s"ping ${remote.udpAddress}")
-      kad <- sendAndWaitPacket(remote.udpAddress, ping)
-      pong = kad.asInstanceOf[Pong]
+      ping = Ping(peerNode, current + ttl.toMillis)
+      request <- Request[F, Ping]("Ping", ping)
+      _ = log.debug(s"Ping ${remote.udpAddress}")
+      pong     <- sendAndWaitPacket[Pong](remote.udpAddress, request)
+      received <- T.clock.realTime(MILLISECONDS)
+      _        <- checkExpiration(received, pong.expiration)
+      _        <- F.delay(log.debug(s"receive a pong from ${remote}"))
+      _        <- store.putLastPong(pong.from.id, received)
     } yield pong
 
   /** re send a [[Ping]] message to the remote node when received a [[Ping]] from it */
   def reping(remote: PeerNode, id: UUID): F[Unit] =
     for {
       current <- T.clock.realTime(MILLISECONDS)
-      ping = Ping(peerNode, current + ttl.toMillis, id)
-      _ <- sendAndWaitPacket(remote.udpAddress, ping).start
+      ping = Ping(peerNode, current + ttl.toMillis)
+      request  <- Request[F, Ping]("Ping", ping, id)
+      pong     <- sendAndWaitPacket[Pong](remote.udpAddress, request)
+      received <- T.clock.realTime(MILLISECONDS)
+      _        <- checkExpiration(received, pong.expiration)
+      _        <- F.delay(log.debug(s"receive a pong from ${remote}"))
+      _        <- store.putLastPong(pong.from.id, received)
     } yield ()
 
   /** send a [[FindNode]] request to the remote node and wait for the [[Neighbours]] */
@@ -91,10 +103,10 @@ final class Discovery[F[_]](
         } else {
           F.unit
         }
-        id <- F.delay(UUID.randomUUID())
-        findNode = FindNode(peerNode, targetPK, current + ttl.toMillis, id)
-        neighbours <- sendAndWaitPacket(remote.udpAddress, findNode)
-      } yield neighbours.asInstanceOf[Neighbours]
+        findNode = FindNode(peerNode, targetPK, current + ttl.toMillis)
+        request    <- Request[F, FindNode]("FindNode", findNode)
+        neighbours <- sendAndWaitPacket[Neighbours](remote.udpAddress, request)
+      } yield neighbours
 
     for {
       fails <- store.getFails(remote.id)
@@ -189,41 +201,31 @@ final class Discovery[F[_]](
       F.unit
     }
 
-  private val pipe: Pipe[F, (InetSocketAddress, KadPacket), (InetSocketAddress, KadPacket)] = { input =>
+  private val pipe: Pipe[F, (InetSocketAddress, Message[F]), (InetSocketAddress, Message[F])] = { input =>
     val output = input
-      .evalMap[F, Option[(InetSocketAddress, KadPacket)]] {
-        case (remote, Ping(from, expiration, id)) =>
+      .evalMap[F, Option[(InetSocketAddress, Message[F])]] {
+        case (remote, req @ Request(id, "Ping", _)) =>
           for {
-            current <- T.clock.realTime(MILLISECONDS)
-            _       <- checkExpiration(current, expiration)
+            Ping(from, expiration) <- req.bodyAs[Ping]
+            current                <- T.clock.realTime(MILLISECONDS)
+            _                      <- checkExpiration(current, expiration)
             _ = log.debug(s"receive a ping from ${remote}")
             _ <- store.putLastPing(from.id, current)
-            pong = Pong(peerNode, current + ttl.toMillis, id)
+            pong = Pong(peerNode, current + ttl.toMillis)
             lastPong <- store.getLastPong(from.id)
             _ <- (promises.get.map(_.get(id).isEmpty) && (current - lastPong > bondExpiration.toMillis).pure[F]).ifM(
-              F.delay(log.debug(s"re-ping to ${from.udpAddress}"))
-                >> reping(from, id),
+              F.delay(log.debug(s"re-ping to ${from.udpAddress}")) >> reping(from, id).start.void,
               F.unit
             )
-          } yield Some(remote -> pong)
+            resp <- Response.ok[F, Pong](id, pong)
+          } yield Some(remote -> resp)
 
-        case (remote, pong @ Pong(from, expiration, id)) =>
+        case (remote, req @ Request(id, "FindNode", _)) =>
           for {
-            current <- T.clock.realTime(MILLISECONDS)
-            _       <- checkExpiration(current, expiration)
-            _       <- F.delay(log.debug(s"receive a pong from ${remote}"))
-            _       <- store.putLastPong(from.id, current)
-            _ <- promises.get.map(_.get(id)).flatMap {
-              case Some(p) => p.complete(pong)
-              case None    => F.raiseError[Unit](ErrUnsolicitedReply)
-            }
-          } yield None
-
-        case (remote, FindNode(from, pk, expiration, id)) =>
-          for {
-            current  <- T.clock.realTime(MILLISECONDS)
-            _        <- checkExpiration(current, expiration)
-            lastPong <- store.getLastPong(from.id)
+            FindNode(from, pk, expiration) <- req.bodyAs[FindNode]
+            current                        <- T.clock.realTime(MILLISECONDS)
+            _                              <- checkExpiration(current, expiration)
+            lastPong                       <- store.getLastPong(from.id)
             _ <- if (current - lastPong > bondExpiration.toMillis) {
               F.raiseError(ErrUnknownNode)
             } else {
@@ -232,19 +234,20 @@ final class Discovery[F[_]](
             _      = log.debug(s"received FindNode request from ${remote}")
             target = pk.bytes.kec256
             xs <- table.closest(target, PeerTable.bucketSize).map(_.entries)
-            neighbors = Neighbours(peerNode, xs.toList, current + ttl.toMillis, id)
-          } yield Some(remote -> neighbors)
+            neighbors = Neighbours(peerNode, xs.toList, current + ttl.toMillis)
+            resp <- Response.ok[F, Neighbours](id, neighbors)
+          } yield Some(remote -> resp)
 
-        case (remote, n @ Neighbours(_, _, expiration, id)) =>
+        case (_, resp @ Response(id, _, _, _)) =>
           for {
-            current <- T.clock.realTime(MILLISECONDS)
-            _       <- checkExpiration(current, expiration)
-            _ = log.debug(s"received Neighbours response from ${remote}")
-            _ <- promises.get.map(_.get(id)).flatMap {
-              case Some(p) => p.complete(n)
+            _ <- promises.get.flatMap(_.get(id) match {
+              case Some(p) => p.complete(resp)
               case None    => F.raiseError[Unit](ErrUnsolicitedReply)
-            }
+            })
           } yield None
+
+        case unexpected =>
+          F.raiseError(new Exception(s"received ${unexpected}"))
       }
 
     output.unNone
@@ -275,7 +278,7 @@ object Discovery {
       store: PeerStore[F]
   )(implicit T: Timer[F]): F[Discovery[F]] =
     for {
-      promises <- Ref.of[F, Map[UUID, Deferred[F, KadPacket]]](Map.empty)
+      promises <- Ref.of[F, Map[UUID, Deferred[F, Response[F]]]](Map.empty)
       selfNode = PeerNode(keyPair.public, config.host, config.port, config.discoveryPort)
       table <- PeerTable[F](selfNode, store, Vector.empty)
     } yield new Discovery[F](config, transport, keyPair, table, promises)

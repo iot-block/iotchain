@@ -1,58 +1,68 @@
 package jbok.network
 
+import java.util.UUID
+
+import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.implicits._
-import cats.effect._
 import cats.implicits._
 import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
-import jbok.network.common.RequestId
-import scodec.Codec
+import jbok.codec.rlp.RlpCodec
 
-/**
-  * wraps a raw connection that can read and write bytes
-  * support request response pattern by [[RequestId]] and [[cats.effect.concurrent.Deferred]]
-  */
-final case class Connection[F[_], A: Codec: RequestId](
+final case class Connection[F[_]](
     stream: Stream[F, Unit],
-    in: Queue[F, A],
-    out: Queue[F, A],
-    promises: Ref[F, Map[String, Deferred[F, A]]],
+    in: Queue[F, Message[F]],
+    out: Queue[F, Message[F]],
+    promises: Ref[F, Map[UUID, Deferred[F, Response[F]]]],
     incoming: Boolean,
     haltWhenTrue: SignallingRef[F, Boolean]
 )(implicit F: Concurrent[F], CS: ContextShift[F]) {
-  def write(a: A): F[Unit] =
-    out.enqueue1(a)
+  def write(message: Message[F]): F[Unit] =
+    out.enqueue1(message)
 
-  def sink: Sink[F, A] =
+  def sink: Sink[F, Message[F]] =
     out.enqueue
 
-  def read: F[A] =
+  def read: F[Message[F]] =
     in.dequeue1
 
-  def reads: Stream[F, A] =
+  def reads: Stream[F, Message[F]] =
     in.dequeue.interruptWhen(haltWhenTrue)
 
-  def request(a: A): F[A] =
+  def request(req: Request[F]): F[Response[F]] =
     Resource
-      .make[F, (String, Deferred[F, A])] {
+      .make[F, (UUID, Deferred[F, Response[F]])] {
         for {
-          id      <- F.delay(RequestId[A].id(a))
-          promise <- Deferred[F, A]
-          _       <- promises.update(_ + (id -> promise))
-        } yield (id, promise)
+          promise <- Deferred[F, Response[F]]
+          _       <- promises.update(_ + (req.id -> promise))
+        } yield (req.id, promise)
       } {
         case (id, _) =>
           promises.update(_ - id)
       }
       .use {
         case (_, promise) =>
-          write(a) >> promise.get
+          write(req) >> promise.get
       }
 
+  def expect[A](req: Request[F])(implicit C: RlpCodec[A]): F[A] =
+    request(req).flatMap(_.bodyAs[A])
+
   def start: F[Fiber[F, Unit]] =
-    haltWhenTrue.set(false) >> stream.interruptWhen(haltWhenTrue).compile.drain.start
+    stream.compile.drain.start
 
   def close: F[Unit] =
     haltWhenTrue.set(true)
+}
+
+object Connection {
+  def dummy[F[_]](implicit F: Concurrent[F], CS: ContextShift[F]): F[Connection[F]] =
+    for {
+      in           <- Queue.bounded[F, Message[F]](1)
+      out          <- Queue.bounded[F, Message[F]](1)
+      promises     <- Ref.of[F, Map[UUID, Deferred[F, Response[F]]]](Map.empty)
+      haltWhenTrue <- SignallingRef[F, Boolean](true)
+      stream = Stream.empty.covaryAll[F, Unit]
+    } yield Connection[F](stream, in, out, promises, true, haltWhenTrue)
 }

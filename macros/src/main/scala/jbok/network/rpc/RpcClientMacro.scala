@@ -13,12 +13,11 @@ object RpcClientMacro {
     val expr = c.Expr[API] {
       q"""
         new $returnType {
-          import _root_.io.circe.syntax._
-          import _root_.io.circe.parser._
-          import jbok.codec.json.implicits._
-          import jbok.network.rpc.jsonrpc._
           import cats.effect.IO
-          import scala.scalajs.js.annotation.JSExport
+          import _root_.io.circe.syntax._
+          import jbok.codec.json.implicits._
+          import jbok.codec.rlp.implicits._
+          import jbok.network.{Request}
 
           ..$members
         }
@@ -55,16 +54,22 @@ object RpcClientMacro {
 
       q"""
         override def $methodName(...$parameterLists): IO[${resultType}] = {
-          val request: RpcRequest[$parameterType] =
-            RpcRequest[$parameterType](
-              id = java.util.UUID.randomUUID().toString,
+          val request: Request[IO] =
+            Request.withJsonBody[IO](
+              id = java.util.UUID.randomUUID(),
               method = ${methodName.toString},
-              params = $parametersAsTuple
+              body = $parametersAsTuple.asJson
             )
 
-          ${c.prefix.tree}.jsonrpc(request.asJson).map(_.as[RpcResultResponse[$resultType]]).flatMap {
-            case Left(e) => IO.raiseError(e)
-            case Right(x) => IO.pure(x.result)
+          val p = for {
+            resp   <- ${c.prefix.tree}.request(request)
+            json   <- resp.bodyAsJson
+            result <- IO.fromEither(json.as[$resultType])
+          } yield result
+
+          p.attempt.flatMap {
+            case Left(e)     => IO.raiseError(e)
+            case Right(resp) => IO.pure(resp)
           }
         }
       """

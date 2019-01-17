@@ -9,17 +9,14 @@ import cats.implicits._
 import org.bouncycastle.asn1.x9.X9IntegerConverter
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.crypto.generators.ECKeyPairGenerator
-import org.bouncycastle.crypto.params.{
-  ECDomainParameters,
-  ECKeyGenerationParameters,
-  ECPrivateKeyParameters,
-  ECPublicKeyParameters
-}
+import org.bouncycastle.crypto.params.{ECDomainParameters, ECKeyGenerationParameters, ECPrivateKeyParameters, ECPublicKeyParameters}
 import org.bouncycastle.crypto.signers.{ECDSASigner, HMacDSAKCalculator}
 import org.bouncycastle.jce.ECNamedCurveTable
 import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec
 import org.bouncycastle.math.ec.ECPoint
 import org.bouncycastle.math.ec.custom.sec.SecP256K1Curve
+
+import scala.util.Try
 
 object ECDSAPlatform extends Signature[ECDSA] {
 
@@ -77,17 +74,19 @@ object ECDSAPlatform extends Signature[ECDSA] {
 
     val bytesOpt = getPointSign(chainId, sig.v).flatMap { recovery =>
       if (sig.r.compareTo(prime) < 0) {
-        val R = constructPoint(sig.r, recovery.toInt)
-        if (R.multiply(order).isInfinity) {
-          val e    = new BigInteger(1, hash)
-          val rInv = sig.r.modInverse(order)
-          //Q = r^(-1)(sR - eG)
-          val q: ECPoint =
-            R.multiply(sig.s.bigInteger).subtract(curve.getG.multiply(e)).multiply(rInv.bigInteger)
-          Some(q.getEncoded(false).tail)
-        } else {
-          None
-        }
+        Try {
+          val R = constructPoint(sig.r, recovery.toInt)
+          if (R.multiply(order).isInfinity) {
+            val e    = new BigInteger(1, hash)
+            val rInv = sig.r.modInverse(order)
+            //Q = r^(-1)(sR - eG)
+            val q: ECPoint =
+              R.multiply(sig.s.bigInteger).subtract(curve.getG.multiply(e)).multiply(rInv.bigInteger)
+            q.getEncoded(false).tail
+          } else {
+            throw new Exception("")
+          }
+        }.toOption
       } else {
         None
       }

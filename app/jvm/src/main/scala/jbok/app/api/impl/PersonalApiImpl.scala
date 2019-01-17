@@ -10,7 +10,6 @@ import jbok.core.models.{Address, SignedTransaction}
 import jbok.core.pool.TxPool
 import jbok.crypto._
 import jbok.crypto.signature._
-import jbok.network.rpc.jsonrpc.RpcErrors
 import jbok.sdk.api.{BlockParam, PersonalAPI, TransactionRequest}
 import scodec.bits.ByteVector
 
@@ -81,7 +80,7 @@ object PersonalApiImpl {
                 case Some(wallet) =>
                   sendTransaction(tx, wallet)
                 case None =>
-                  IO.raiseError(RpcErrors.invalidRequest)
+                  IO.raiseError(new Exception("invalidRequest"))
               }
           }
 

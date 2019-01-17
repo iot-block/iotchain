@@ -1,42 +1,25 @@
 package jbok.network.client
 
 import java.net.URI
+import java.util.UUID
 
 import cats.effect.IO
 import jbok.JbokAsyncSpec
-import jbok.codec.rlp.implicits._
 import jbok.common.execution._
-import jbok.network.common.{RequestId, RequestMethod}
+import jbok.network.Request
 
 import scala.concurrent.ExecutionContext
 
 class WsClientSpec extends JbokAsyncSpec {
 
   implicit override def executionContext: ExecutionContext = EC
-
-  implicit val requestId     = RequestId.empty[String]
-  implicit val requestMethod = RequestMethod.none[String]
-
   "WsClient" should {
     "echo" ignore {
       val uri = new URI("ws://echo.websocket.org:80")
       for {
-        client <- WsClient[IO, String](uri)
+        client <- WsClient[IO](uri)
         _      <- client.start
-        _      <- client.write("ohoho")
-        resp   <- client.read
-        _ = println(resp)
-      } yield ()
-    }
-  }
-
-  "WsClientNode" should {
-    "echo" ignore {
-      val uri = new URI("ws://echo.websocket.org:80")
-      for {
-        client <- WsClient[IO, String](uri)
-        _      <- client.start
-        _      <- client.write("ohoho")
+        _      <- client.write(Request.withTextBody[IO](UUID.randomUUID(), "", "ohoho"))
         resp   <- client.read
         _ = println(resp)
       } yield ()

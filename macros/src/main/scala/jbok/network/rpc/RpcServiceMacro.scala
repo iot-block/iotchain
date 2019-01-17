@@ -1,6 +1,7 @@
 package jbok.network.rpc
 
 import cats.effect.IO
+import jbok.network.{Request, Response}
 
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
@@ -26,44 +27,43 @@ object RpcServiceMacro {
             .map(index => TermName(s"_${index + 1}"))
             .map(fieldName => q"$params.$fieldName")
 
-        val handler = c.Expr[String => IO[String]] {
+        val handler = c.Expr[Request[IO] => IO[Response[IO]]] {
           val run = if (parameterTypes.isEmpty) {
             q"$api.$method"
           } else if (parameterTypes.size == 1) {
-            q"$api.$method(req.params)"
+            q"$api.$method(body)"
           } else {
             val params = TermName("params")
             q"""
-              val $params: $parameterType = req.params
+              val $params: $parameterType = body
               $api.$method(..${paramsAsTuple(params)})
             """
           }
 
           q"""
-            (json: String) => {
-              decode[RpcRequest[$parameterType]](json) match {
+            (req: Request[IO]) => {
+              req.bodyAsJson.unsafeRunSync().as[$parameterType] match {
                 case Left(e) =>
-                  val id = parse(json).flatMap(_.hcursor.downField("id").as[String]).toOption.getOrElse("")
-                  IO.pure(RpcErrorResponse(id, RpcErrors.invalidRequest).asJson.noSpaces)
-                case Right(req) =>
+                  IO.pure(Response.badRequest[IO](req.id))
+
+                case Right(body) =>
                   $run.attempt.map {
-                    case Left(e) => RpcErrorResponse(req.id, RpcErrors.internalError).asJson.noSpaces
-                    case Right(x) => RpcResultResponse(req.id, x).asJson.noSpaces
+                    case Left(e)  => Response.internalError[IO](req.id)
+                    case Right(x) => Response.withJsonBody[IO](req.id, 200, "", x.asJson)
                   }
               }
             }
           """
         }
 
-        c.Expr[(String, String => IO[String])](q"""$methodName -> $handler""")
+        c.Expr[(String, Request[IO] => IO[Response[IO]])](q"""$methodName -> $handler""")
       })
 
     val expr: c.Expr[RpcService] = c.Expr[RpcService] {
       q"""
-        import _root_.io.circe.syntax._
-        import _root_.io.circe.parser._
+        import jbok.network.{Request, Response}
         import jbok.codec.json.implicits._
-        import jbok.network.rpc.jsonrpc._
+        import _root_.io.circe.syntax._
 
         ${c.prefix.tree}.addHandlers($handlers)
        """

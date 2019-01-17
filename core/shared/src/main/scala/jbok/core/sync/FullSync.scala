@@ -14,6 +14,8 @@ import jbok.core.messages._
 import jbok.core.models._
 import jbok.core.peer.{Peer, PeerSelectStrategy}
 import jbok.core.sync.SyncStatus.FullSyncing
+import jbok.network.Request
+import jbok.codec.rlp.implicits._
 
 import scala.concurrent.duration._
 
@@ -68,14 +70,15 @@ final case class FullSync[F[_]](
   private def requestPeer(status: FullSyncing[F]): F[List[Block]] = {
     val limit = config.maxBlockHeadersPerRequest min (status.target - status.start + 1).toInt
     for {
-      _     <- log.debug(s"request BlockHeader [${status.start}, ${status.start + limit})").pure[F]
-      start <- T.clock.monotonic(MILLISECONDS)
+      _       <- log.debug(s"request BlockHeader [${status.start}, ${status.start + limit})").pure[F]
+      start   <- T.clock.monotonic(MILLISECONDS)
+      request <- Request[F, GetBlockHeaders]("GetBlockHeaders", GetBlockHeaders(Left(status.start), limit, 0, false))
       synced <- status.peer.conn
-        .request(GetBlockHeaders(Left(status.start), limit, 0, false))
+        .expect[BlockHeaders](request)
         .timeout(config.requestTimeout)
         .attempt
         .flatMap {
-          case Right(BlockHeaders(headers, _)) =>
+          case Right(BlockHeaders(headers)) =>
             T.clock.monotonic(MILLISECONDS).map { end =>
               log.debug(s"received ${headers.length} BlockHeader(s) in ${end - start}ms")
             } >> handleBlockHeaders(status.peer, status.start, headers)
@@ -113,9 +116,10 @@ final case class FullSync[F[_]](
       case Nil => ()
     }
     for {
-      start <- T.clock.monotonic(MILLISECONDS)
-      imported <- peer.conn.request(GetBlockBodies(hashes)).timeout(config.requestTimeout).attempt.flatMap {
-        case Right(BlockBodies(bodies, _)) =>
+      start   <- T.clock.monotonic(MILLISECONDS)
+      request <- Request[F, GetBlockBodies]("GetBlockBodies", GetBlockBodies(hashes))
+      imported <- peer.conn.expect[BlockBodies](request).timeout(config.requestTimeout).attempt.flatMap {
+        case Right(BlockBodies(bodies)) =>
           if (bodies.isEmpty) {
             F.delay(log.debug(s"got empty bodies from ${peer.id}, retry in ${config.checkForNewBlockInterval}"))
               .as(List.empty[Block])

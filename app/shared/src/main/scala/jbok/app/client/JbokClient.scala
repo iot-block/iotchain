@@ -12,7 +12,7 @@ import jbok.sdk.api.{AdminAPI, PersonalAPI, PublicAPI}
 
 final case class JbokClient(
     uri: URI,
-    client: Client[IO, String],
+    client: Client[IO],
     public: PublicAPI[IO],
     personal: PersonalAPI[IO],
     admin: AdminAPI[IO]
@@ -21,9 +21,6 @@ final case class JbokClient(
   private val rpcClient = RpcClient(client)
 
   def status: IO[Boolean] = client.haltWhenTrue.get.map(!_)
-
-  def jsonrpc(json: String, id: String = UUID.randomUUID().toString): IO[String] =
-    rpcClient.jsonrpc(json, id)
 }
 
 object JbokClient {
@@ -31,7 +28,7 @@ object JbokClient {
 
   def apply(uri: URI)(implicit F: ConcurrentEffect[IO]): IO[JbokClient] =
     for {
-      client <- WsClient[IO, String](uri)
+      client <- WsClient[IO](uri)
       public   = RpcClient(client).useAPI[PublicAPI[IO]]
       personal = RpcClient(client).useAPI[PersonalAPI[IO]]
       admin    = RpcClient(client).useAPI[AdminAPI[IO]]

@@ -1,12 +1,10 @@
 package jbok.network.discovery
 
-import java.util.UUID
-
 import cats.effect.IO
 import cats.implicits._
 import fs2._
 import jbok.JbokSpec
-import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.implicits._
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.peer.PeerNode
@@ -15,6 +13,7 @@ import jbok.core.peer.discovery._
 import jbok.core.testkit._
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.testkit._
+import jbok.codec.testkit._
 import org.scalacheck.Gen
 
 import scala.concurrent.duration._
@@ -24,16 +23,11 @@ class DiscoverySpec extends JbokSpec {
     val List(config1, config2) = fillFullNodeConfigs(2)
 
     "roundtrip kad packets" in {
-      def roundtrip[A <: KadPacket](a: A) = {
-        val bits = RlpCodec[KadPacket].encode(a).require
-        RlpCodec.decode[KadPacket](bits).require.value shouldBe a
-      }
-
-      val ping      = Ping(random[PeerNode], Long.MaxValue, UUID.randomUUID())
-      val pong      = Pong(random[PeerNode], Long.MaxValue, UUID.randomUUID())
-      val findNode  = FindNode(random[PeerNode], random[KeyPair].public, Long.MaxValue, UUID.randomUUID())
+      val ping      = Ping(random[PeerNode], Long.MaxValue)
+      val pong      = Pong(random[PeerNode], Long.MaxValue)
+      val findNode  = FindNode(random[PeerNode], random[KeyPair].public, Long.MaxValue)
       val nodes     = random[List[PeerNode]](Gen.listOfN(16, arbPeerNode.arbitrary))
-      val neighbors = Neighbours(random[PeerNode], nodes, Long.MaxValue, UUID.randomUUID())
+      val neighbors = Neighbours(random[PeerNode], nodes, Long.MaxValue)
 
       roundtrip(ping)
       roundtrip(pong)

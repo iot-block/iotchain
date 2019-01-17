@@ -5,7 +5,7 @@ import cats.effect.implicits._
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
-import fs2.concurrent.InspectableQueue
+import fs2.concurrent.{InspectableQueue, Queue}
 import jbok.codec.rlp.implicits._
 import jbok.common._
 import jbok.core.config.Configs.SyncConfig
@@ -15,7 +15,7 @@ import jbok.core.peer.{Peer, PeerManager}
 import jbok.core.sync.NodeHash.{EvmCodeHash, StateMptNodeHash, StorageMptNodeHash}
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MptNode
-import scodec.Codec
+import jbok.network.{Message, Request}
 import scodec.bits.ByteVector
 
 import scala.util.Random
@@ -30,12 +30,7 @@ import scala.util.Random
   */
 final class FastSync[F[_]](
     config: SyncConfig,
-    peerManager: PeerManager[F],
-    bodyQueue: InspectableQueue[F, ByteVector],
-    receiptQueue: InspectableQueue[F, ByteVector],
-    nodeQueue: InspectableQueue[F, NodeHash],
-    jobQueue: InspectableQueue[F, Option[Message]],
-    running: Ref[F, Int]
+    peerManager: PeerManager[F]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = jbok.common.log.getLogger("FastSync")
 
@@ -48,7 +43,7 @@ final class FastSync[F[_]](
     Stream.eval(F.delay(log.info(s"start fast sync"))) ++ Stream
       .eval(initState)
       .flatMap {
-        case Some(state) => startFastSync(state)
+        case Some(state) => fastSync(state)
         case None        => Stream.empty
       }
       .onFinalize(F.delay(s"finish fast sync"))
@@ -70,63 +65,117 @@ final class FastSync[F[_]](
       }
     } yield stateOpt
 
-  private def startFastSync(state: FastSyncState[F]): Stream[F, Unit] =
+  private def fastSync(state: FastSyncState[F]): Stream[F, Unit] =
+    downloadAll(state) ++ downloadNodeData(state)
+
+  def downloadHeaders(peer: Peer[F], current: BigInt, target: BigInt): F[List[BlockHeader]] = {
+    val start = current + 1
+    val limit = (BigInt(maxBlockHeadersPerRequest) min (target - start + 1)).toInt
     for {
-      bestBlockNumber <- Stream.eval(history.getBestBlockNumber)
-      _               <- Stream.eval(nodeQueue.enqueue1(StateMptNodeHash(state.target.stateRoot)))
-      _ <- if (bestBlockNumber >= state.target.number) {
-        Stream.eval(F.delay(log.info("fast sync finished, switching to full mode")))
-      } else {
-        val getNode =
-          nodeQueue.dequeue
-            .chunkLimit(maxNodesPerRequest)
-            .map(chunk => GetNodeData(chunk.toList))
+      request               <- Request[F, GetBlockHeaders]("GetBlockHeaders", GetBlockHeaders(Left(start), limit, 0, false))
+      BlockHeaders(headers) <- peer.conn.expect[BlockHeaders](request)
+    } yield headers
+  }
 
-        val getBody =
-          bodyQueue.dequeue
-            .chunkLimit(maxBlockBodiesPerRequest)
-            .map(chunk => GetBlockBodies(chunk.toList))
-
-        val getReceipt =
-          receiptQueue.dequeue.chunkLimit(maxReceiptsPerRequest).map(chunk => GetReceipts(chunk.toList))
-
-        val getHeader = {
-          val nextBlockNumber = bestBlockNumber + 1
-          val numRequests =
-            math
-              .ceil((state.target.number - nextBlockNumber).toDouble / maxBlockHeadersPerRequest.toDouble)
-              .toInt
-
-          Stream
-            .emits(
-              (0 until numRequests).map { i =>
-                val start = nextBlockNumber + i * maxBlockHeadersPerRequest
-                val limit =
-                  maxBlockHeadersPerRequest min (state.target.number - start + 1).toInt
-                GetBlockHeaders(
-                  Left(start),
-                  limit,
-                  0,
-                  false
-                )
-              }
-            )
-            .covary[F]
-        }
-
-        val enqueue =
-          Stream(
-            getNode,
-            getBody,
-            getReceipt,
-            getHeader
-          ).map(_.covaryOutput[Message]).parJoinUnbounded.map(_.some) to jobQueue.enqueue
-
-        download(state.goodPeers, jobQueue.dequeue.unNoneTerminate)
-          .concurrently(enqueue)
-          .evalMap(_ => history.putBestBlockNumber(state.target.number))
-      }
+  def downloadBlocks(peer: Peer[F], current: BigInt, target: BigInt): F[Unit] =
+    for {
+      headers <- downloadHeaders(peer, current, target)
+      hashes = headers.map(_.hash)
+      bodyReq             <- Request[F, GetBlockBodies]("GetBlockBodies", GetBlockBodies(hashes))
+      receiptReq          <- Request[F, GetReceipts]("GetReceipts", GetReceipts(hashes))
+      BlockBodies(bodies) <- peer.conn.expect[BlockBodies](bodyReq)
+      Receipts(receipts)  <- peer.conn.expect[Receipts](receiptReq)
+      _                   <- headers.traverse(header => history.putBlockHeader(header, updateTD = true))
+      _                   <- hashes.zip(bodies).traverse { case (hash, body) => history.putBlockBody(hash, body) }
+      _                   <- hashes.zip(receipts).traverse { case (hash, receipts) => history.putReceipts(hash, receipts) }
+      _                   <- history.putBestBlockNumber(headers.map(_.number).foldLeft(BigInt(0))(_ max _))
     } yield ()
+
+  def downloadAll(state: FastSyncState[F]): Stream[F, Unit] =
+    Stream
+      .repeatEval[F, Option[Unit]] {
+        for {
+          bestBlockNumber <- history.getBestBlockNumber
+          res <- if (bestBlockNumber >= state.target.number) {
+            F.delay(log.info("fast sync finished, switching to full mode")).as(none)
+          } else {
+            for {
+              peer <- randomPeer(state.goodPeers)
+              _    <- downloadBlocks(peer, bestBlockNumber, state.target.number)
+            } yield ().some
+          }
+        } yield res
+      }
+      .takeWhile(_.isEmpty)
+      .unNoneTerminate
+
+  def downloadNodeData(state: FastSyncState[F]): Stream[F, Unit] =
+    Stream
+      .eval(Queue.unbounded[F, GetNodeData])
+      .flatMap(queue =>
+        queue.dequeue.evalMap { getNodeData =>
+          for {
+            peer    <- randomPeer(state.goodPeers)
+            request <- Request[F, GetNodeData]("GetNodeData", getNodeData)
+            resp    <- peer.conn.expect[NodeData](request)
+            requested = getNodeData.nodeHashes.map(x => x.v -> x).toMap
+            hashes <- resp.values.traverse(value => handleNode(requested(value.kec256), value)).map(_.flatten)
+            _      <- queue.enqueue1(GetNodeData(hashes))
+          } yield ()
+      })
+
+  def handleNode(nodeHash: NodeHash, value: ByteVector): F[List[NodeHash]] = nodeHash match {
+    case StateMptNodeHash(hash) =>
+      val node: MptNode = RlpCodec.decode[MptNode](value.bits).require.value
+      val hashes = node match {
+        case MptNode.LeafNode(_, value) =>
+          val account = RlpCodec.decode[Account](value.bits).require.value
+          val codeHash = account.codeHash match {
+            case Account.EmptyCodeHash => Nil
+            case hash                  => EvmCodeHash(hash) :: Nil
+          }
+          val storageHash = account.storageRoot match {
+            case Account.EmptyStorageRootHash => Nil
+            case hash                         => StorageMptNodeHash(hash) :: Nil
+          }
+          codeHash ++ storageHash
+
+        case MptNode.BranchNode(branches, _) =>
+          branches.collect {
+            case Some(Left(hash)) => StateMptNodeHash(hash)
+          }
+
+        case MptNode.ExtensionNode(_, child) =>
+          child match {
+            case Left(hash) => StateMptNodeHash(hash) :: Nil
+            case Right(_)   => Nil
+          }
+      }
+
+      history.putMptNode(hash, value).as(hashes)
+
+    case StorageMptNodeHash(hash) =>
+      val node: MptNode = RlpCodec.decode[MptNode](value.bits).require.value
+      val hashes = node match {
+        case MptNode.LeafNode(_, _) =>
+          Nil
+
+        case MptNode.BranchNode(branches, _) =>
+          branches.collect {
+            case Some(Left(hash)) => StorageMptNodeHash(hash)
+          }
+
+        case MptNode.ExtensionNode(_, child) =>
+          child match {
+            case Left(hash) => StorageMptNodeHash(hash) :: Nil
+            case Right(_)   => Nil
+          }
+      }
+      history.putMptNode(hash, value).as(hashes)
+
+    case EvmCodeHash(hash) =>
+      history.putCode(hash, value).as(Nil)
+  }
 
   /**
     * ask at least [[minPeersToChooseTargetBlock]] peers
@@ -149,7 +198,7 @@ final class FastSync[F[_]](
     peersStatus
       .traverse {
         case (peer, status) =>
-          requestBlockHeaders(peer, status.bestNumber, 1)
+          downloadHeaders(peer, status.bestNumber, 1)
             .map(headers => peer -> headers.head)
             .attemptT
             .toOption
@@ -168,37 +217,6 @@ final class FastSync[F[_]](
     }
 
   /**
-    * download with [[maxConcurrentRequests]]
-    *
-    * should block when no more concurrency or available peer
-    */
-  private def download(peers: List[Peer[F]], requests: Stream[F, Message]): Stream[F, Unit] =
-    requests
-      .map { request =>
-        for {
-          _    <- Stream.eval(running.update(_ + 1))
-          peer <- Stream.eval(randomPeer(peers))
-          _ <- Stream.eval(request match {
-            case req: GetBlockHeaders => handleBlockHeaders(peer, req)
-            case req: GetBlockBodies  => handleBlockBodies(peer, req)
-            case req: GetNodeData     => handleNodeData(peer, req)
-            case req: GetReceipts     => handleReceipts(peer, req)
-            case _                    => F.unit
-          })
-          _ <- Stream.eval(running.update(_ - 1))
-          _ <- Stream.eval(isDone.ifM(jobQueue.enqueue1(None), F.unit))
-        } yield ()
-      }
-      .parJoin(maxConcurrentRequests)
-
-  private def isDone: F[Boolean] =
-    jobQueue.getSize.map(_ == 0) &&
-      bodyQueue.getSize.map(_ == 0) &&
-      receiptQueue.getSize.map(_ == 0) &&
-      nodeQueue.getSize.map(_ == 0) &&
-      running.get.map(_ == 0)
-
-  /**
     * choose a median number of all *active* peers as our target number
     * make sure we have enough peers that have the same stateRoot for that target number
     */
@@ -208,7 +226,7 @@ final class FastSync[F[_]](
       val targetBlockNumber      = BigInt(0).max(chosenBlockHeader.number - fastSyncOffset)
       val targetHeaders = received.traverse {
         case (peer, _) =>
-          requestBlockHeaders(peer, targetBlockNumber, 1).map { headers =>
+          downloadHeaders(peer, targetBlockNumber, 1).map { headers =>
             headers.find(_.number == targetBlockNumber) match {
               case Some(targetBlockHeader) =>
                 Some(peer -> targetBlockHeader)
@@ -247,222 +265,118 @@ final class FastSync[F[_]](
     headers(headers.length / 2)
   }
 
-  private def requestBlockHeaders(peer: Peer[F], start: BigInt, limit: Int): F[List[BlockHeader]] = {
-    log.trace(s"request block headers from ${peer.id}")
-    val request = GetBlockHeaders(Left(start), limit, 0, false)
-    for {
-      response <- peer.conn.request(request).map(_.asInstanceOf[BlockHeaders]).timeout(config.requestTimeout)
-    } yield response.headers
-  }
-
-  /**
-    * persist received [[BlockHeaders]] and
-    * start corresponding [[GetBlockBodies]] and [[GetReceipts]] request
-    */
-  private def handleBlockHeaders(peer: Peer[F], request: GetBlockHeaders): F[Unit] =
-    peer.conn
-      .request(request)
-      .timeout(config.requestTimeout)
-      .attempt
-      .flatMap {
-        case Right(res) =>
-          val response = res.asInstanceOf[BlockHeaders]
-          log.debug(s"downloaded ${response.headers.length} BlockHeader(s) from ${peer.id}")
-
-          val blockHashes = response.headers.map(_.hash)
-
-          if (isHeadersConsistent(response.headers) && response.headers.length == request.maxHeaders) {
-            (Stream
-              .emits(response.headers)
-              .evalMap(header => history.putBlockHeader(header, updateTD = true)) ++
-              Stream
-                .emits(blockHashes)
-                .to(bodyQueue.enqueue) ++
-              Stream
-                .emits(blockHashes)
-                .to(receiptQueue.enqueue)).compile.drain
-          } else {
-            // TODO we should consider ban peer here
-            F.unit
-          }
-
-        case Left(e) =>
-          log.warn("handle block headers error", e)
-          jobQueue.enqueue1(request.some)
-      }
-
-  /**
-    * persist received [[BlockBodies]] and
-    * enqueue all remaining request into the [[bodyQueue]]
-    */
-  private[jbok] def handleBlockBodies(peer: Peer[F], request: GetBlockBodies): F[Unit] =
-    peer.conn
-      .request(request)
-      .timeout(config.requestTimeout)
-      .attempt
-      .flatMap {
-        case Right(res) =>
-          val response = res.asInstanceOf[BlockBodies]
-          log.debug(s"downloaded ${response.bodies.length} BlockBody(s) from ${peer.id}")
-          val receivedBodies  = response.bodies
-          val receivedHashes  = request.hashes.take(receivedBodies.size)
-          val remainingHashes = request.hashes.drop(receivedBodies.size)
-
-          (Stream
-            .emits(receivedHashes.zip(receivedBodies))
-            .evalMap { case (hash, body) => history.putBlockBody(hash, body) } ++
-            Stream
-              .emits(remainingHashes)
-              .to(bodyQueue.enqueue)).compile.drain
-
-        case Left(e) =>
-          log.warn("handle block bodies error", e)
-          jobQueue.enqueue1(Some(request))
-      }
-
-  /**
-    * persist received [[Receipts]] and
-    * enqueue all remaining request into the [[receiptQueue]]
-    */
-  private[jbok] def handleReceipts(peer: Peer[F], request: GetReceipts): F[Unit] =
-    peer.conn
-      .request(request)
-      .timeout(config.requestTimeout)
-      .attempt
-      .flatMap {
-        case Right(res) =>
-          val response = res.asInstanceOf[Receipts]
-          log.debug(s"downloaded ${response.receiptsForBlocks.length} Receipt(s) from ${peer.id}")
-          val receivedReceipts = response.receiptsForBlocks
-          val receivedHashes   = request.blockHashes.take(receivedReceipts.size)
-          val remainingHashes  = request.blockHashes.drop(receivedReceipts.size)
-
-          (Stream
-            .emits(receivedHashes.zip(receivedReceipts))
-            .evalMap { case (hash, receipts) => history.putReceipts(hash, receipts) } ++
-            Stream
-              .emits(remainingHashes)
-              .to(receiptQueue.enqueue)).compile.drain
-
-        case Left(e) =>
-          log.warn("handle receipts error", e)
-          jobQueue.enqueue1(Some(request))
-      }
-
-  /**
-    * persist received `Accounts Node`, `Storage Node` and `Code` and
-    * enqueue all unfinished work into the [[nodeQueue]]
-    */
-  private[jbok] def handleNodeData(peer: Peer[F], request: GetNodeData): F[Unit] = {
-    peer.conn
-      .request(request)
-      .timeout(config.requestTimeout)
-      .attempt
-      .flatMap {
-        case Right(res) =>
-          val response = res.asInstanceOf[NodeData]
-          log.debug(s"downloaded ${response.values.length} NodeData from ${peer.id}")
-          val requested = request.nodeHashes.map(x => x.v -> x).toMap
-          val (receivedNodeHashes, childrenHashes, receivedAccounts, receivedStorages, receivedEvmCodes) =
-            response.values.foldLeft(
-              (Set[NodeHash](),
-               List[NodeHash](),
-               List[(NodeHash, ByteVector)](),
-               List[(NodeHash, ByteVector)](),
-               List[(NodeHash, ByteVector)]())) {
-              case ((receivedHashes, childHashes, receivedAccounts, receivedStorages, receivedEvmCodes), value) =>
-                val receivedHash = value.kec256
-                requested.get(receivedHash) match {
-                  case None =>
-                    (receivedHashes, childHashes, receivedAccounts, receivedStorages, receivedEvmCodes)
-
-                  case Some(x: StateMptNodeHash) =>
-                    val node: MptNode = RlpCodec.decode[MptNode](value.bits).require.value
-                    val hashes = node match {
-                      case MptNode.LeafNode(_, value) =>
-                        val account = RlpCodec.decode[Account](value.bits).require.value
-                        val codeHash = account.codeHash match {
-                          case Account.EmptyCodeHash => Nil
-                          case hash                  => EvmCodeHash(hash) :: Nil
-                        }
-                        val storageHash = account.storageRoot match {
-                          case Account.EmptyStorageRootHash => Nil
-                          case hash                         => StorageMptNodeHash(hash) :: Nil
-                        }
-                        codeHash ++ storageHash
-
-                      case MptNode.BranchNode(branches, _) =>
-                        branches.collect {
-                          case Some(Left(hash)) => StateMptNodeHash(hash)
-                        }
-
-                      case MptNode.ExtensionNode(_, child) =>
-                        child match {
-                          case Left(hash) => StateMptNodeHash(hash) :: Nil
-                          case Right(_)   => Nil
-                        }
-                    }
-                    (receivedHashes + x,
-                     childHashes ++ hashes,
-                     (x, value) :: receivedAccounts,
-                     receivedStorages,
-                     receivedEvmCodes)
-
-                  case Some(x: StorageMptNodeHash) =>
-                    val node: MptNode = RlpCodec.decode[MptNode](value.bits).require.value
-                    val hashes = node match {
-                      case MptNode.LeafNode(_, _) =>
-                        Nil
-
-                      case MptNode.BranchNode(branches, _) =>
-                        branches.collect {
-                          case Some(Left(hash)) => StorageMptNodeHash(hash)
-                        }
-
-                      case MptNode.ExtensionNode(_, child) =>
-                        child match {
-                          case Left(hash) => StorageMptNodeHash(hash) :: Nil
-                          case Right(_)   => Nil
-                        }
-                    }
-                    (receivedHashes + x,
-                     childHashes ++ hashes,
-                     receivedAccounts,
-                     (x, value) :: receivedStorages,
-                     receivedEvmCodes)
-
-                  case Some(x: EvmCodeHash) =>
-                    (receivedHashes + x,
-                     childHashes,
-                     receivedAccounts,
-                     receivedStorages,
-                     (x, value) :: receivedEvmCodes)
-                }
-            }
-
-          val remainingHashes = request.nodeHashes.filterNot(receivedNodeHashes.contains)
-
-          (Stream
-            .emits(receivedAccounts)
-            .covary[F]
-            .evalMap { case (hash, bytes) => history.putMptNode(hash.v, bytes) } ++
-            Stream
-              .emits(receivedStorages)
-              .covary[F]
-              .evalMap { case (hash, bytes) => history.putMptNode(hash.v, bytes) } ++
-            Stream
-              .emits(receivedEvmCodes)
-              .covary[F]
-              .evalMap { case (hash, code) => history.putCode(hash.v, code) } ++
-            Stream
-              .emits(remainingHashes ++ childrenHashes)
-              .covary[F]
-              .to(nodeQueue.enqueue)).compile.drain
-
-        case _ =>
-          jobQueue.enqueue1(Some(request))
-      }
-  }
+//  private[jbok] def handleNodeData(peer: Peer[F], request: GetNodeData): F[Unit] = {
+//    Request[F, GetNodeData]("getNodeData", request).flatMap { request =>
+//      peer.conn
+//        .expect[NodeData](request)
+//        .timeout(config.requestTimeout)
+//        .attempt
+//        .flatMap {
+//          case Right(response) =>
+//            log.debug(s"downloaded ${response.values.length} NodeData from ${peer.id}")
+//            val requested = request.nodeHashes.map(x => x.v -> x).toMap
+//            val (receivedNodeHashes, childrenHashes, receivedAccounts, receivedStorages, receivedEvmCodes) =
+//              response.values.foldLeft(
+//                (Set[NodeHash](),
+//                 List[NodeHash](),
+//                 List[(NodeHash, ByteVector)](),
+//                 List[(NodeHash, ByteVector)](),
+//                 List[(NodeHash, ByteVector)]())) {
+//                case ((receivedHashes, childHashes, receivedAccounts, receivedStorages, receivedEvmCodes), value) =>
+//                  val receivedHash = value.kec256
+//                  requested.get(receivedHash) match {
+//                    case None =>
+//                      (receivedHashes, childHashes, receivedAccounts, receivedStorages, receivedEvmCodes)
+//
+//                    case Some(x: StateMptNodeHash) =>
+//                      val node: MptNode = RlpCodec.decode[MptNode](value.bits).require.value
+//                      val hashes = node match {
+//                        case MptNode.LeafNode(_, value) =>
+//                          val account = RlpCodec.decode[Account](value.bits).require.value
+//                          val codeHash = account.codeHash match {
+//                            case Account.EmptyCodeHash => Nil
+//                            case hash                  => EvmCodeHash(hash) :: Nil
+//                          }
+//                          val storageHash = account.storageRoot match {
+//                            case Account.EmptyStorageRootHash => Nil
+//                            case hash                         => StorageMptNodeHash(hash) :: Nil
+//                          }
+//                          codeHash ++ storageHash
+//
+//                        case MptNode.BranchNode(branches, _) =>
+//                          branches.collect {
+//                            case Some(Left(hash)) => StateMptNodeHash(hash)
+//                          }
+//
+//                        case MptNode.ExtensionNode(_, child) =>
+//                          child match {
+//                            case Left(hash) => StateMptNodeHash(hash) :: Nil
+//                            case Right(_)   => Nil
+//                          }
+//                      }
+//                      (receivedHashes + x,
+//                       childHashes ++ hashes,
+//                       (x, value) :: receivedAccounts,
+//                       receivedStorages,
+//                       receivedEvmCodes)
+//
+//                    case Some(x: StorageMptNodeHash) =>
+//                      val node: MptNode = RlpCodec.decode[MptNode](value.bits).require.value
+//                      val hashes = node match {
+//                        case MptNode.LeafNode(_, _) =>
+//                          Nil
+//
+//                        case MptNode.BranchNode(branches, _) =>
+//                          branches.collect {
+//                            case Some(Left(hash)) => StorageMptNodeHash(hash)
+//                          }
+//
+//                        case MptNode.ExtensionNode(_, child) =>
+//                          child match {
+//                            case Left(hash) => StorageMptNodeHash(hash) :: Nil
+//                            case Right(_)   => Nil
+//                          }
+//                      }
+//                      (receivedHashes + x,
+//                       childHashes ++ hashes,
+//                       receivedAccounts,
+//                       (x, value) :: receivedStorages,
+//                       receivedEvmCodes)
+//
+//                    case Some(x: EvmCodeHash) =>
+//                      (receivedHashes + x,
+//                       childHashes,
+//                       receivedAccounts,
+//                       receivedStorages,
+//                       (x, value) :: receivedEvmCodes)
+//                  }
+//              }
+//
+//            val remainingHashes = request.nodeHashes.filterNot(receivedNodeHashes.contains)
+//
+//            (Stream
+//              .emits(receivedAccounts)
+//              .covary[F]
+//              .evalMap { case (hash, bytes) => history.putMptNode(hash.v, bytes) } ++
+//              Stream
+//                .emits(receivedStorages)
+//                .covary[F]
+//                .evalMap { case (hash, bytes) => history.putMptNode(hash.v, bytes) } ++
+//              Stream
+//                .emits(receivedEvmCodes)
+//                .covary[F]
+//                .evalMap { case (hash, code) => history.putCode(hash.v, code) } ++
+//              Stream
+//                .emits(remainingHashes ++ childrenHashes)
+//                .covary[F]
+//                .to(nodeQueue.enqueue)).compile.drain
+//
+//          case _ =>
+//            F.unit
+////            jobQueue.enqueue1(Some(request))
+//        }
+//    }
+//  }
 
   private def isHeadersConsistent(headers: List[BlockHeader]): Boolean =
     if (headers.length > 1) {
@@ -483,7 +397,7 @@ object FastSync {
       bodyQueue    <- InspectableQueue.bounded[F, ByteVector](maxQueueSize)
       receiptQueue <- InspectableQueue.bounded[F, ByteVector](maxQueueSize)
       nodeQueue    <- InspectableQueue.bounded[F, NodeHash](maxQueueSize)
-      jobQueue     <- InspectableQueue.bounded[F, Option[Message]](maxQueueSize)
+      jobQueue     <- InspectableQueue.bounded[F, Option[Request[F]]](maxQueueSize)
       running      <- Ref.of[F, Int](0)
-    } yield new FastSync[F](config, pm, bodyQueue, receiptQueue, nodeQueue, jobQueue, running)
+    } yield new FastSync[F](config, pm)
 }

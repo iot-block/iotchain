@@ -1,45 +1,43 @@
 package jbok.network
 
 import java.net.{InetSocketAddress, URI}
-import java.util.UUID
 
 import cats.effect.IO
 import fs2._
-import jbok.codec.rlp.implicits._
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.network.client.{Client, TcpClient, WsClient}
-import jbok.network.common.{RequestId, RequestMethod}
-import jbok.network.server.Server
+import jbok.network.server.{Server, TcpServer, WsServer}
 import org.scalacheck.Gen
 
 object testkit {
-  case class Data(id: String, data: String)
-  object Data {
-    def apply(data: String): Data = {
-      val uuid = UUID.randomUUID().toString
-      Data(uuid, data)
-    }
-    implicit val requestIdForData = new RequestId[Data] {
-      override def id(a: Data): String = a.id
-    }
-    implicit val requestMethodForData: RequestMethod[Data] = new RequestMethod[Data] {
-      override def method(a: Data): Option[String] = None
-    }
-  }
+  val log = jbok.common.log.getLogger("testkit")
+  val echoPipe: Pipe[IO, Message[IO], Message[IO]] =
+    _.evalMap[IO, Option[Message[IO]]] {
+      case req: Request[IO] =>
+        log.debug(s"received req: ${req}")
+        IO.pure(Some(Response(req.id, body = req.body)))
+      case res: Response[IO] =>
+        log.debug(s"received res: ${res}")
+        IO.pure(None)
+    }.unNone
 
-  val echoPipe: Pipe[IO, Data, Data] = _.map(identity)
+  val echoUdpPipe: Pipe[IO, (InetSocketAddress, Message[IO]), (InetSocketAddress, Message[IO])] =
+    _.evalMap[IO, Option[(InetSocketAddress, Message[IO])]] {
+      case (remote, req: Request[IO])  => IO.pure(Some(remote -> Response(req.id, body = req.body)))
+      case (remote, res: Response[IO]) => IO.pure(None)
+    }.unNone
 
   def genTcpServer(port: Int): Gen[Server[IO]] =
-    Server.tcp[IO, Data](new InetSocketAddress(port), echoPipe)
+    TcpServer.bind[IO](new InetSocketAddress(port), echoPipe)
 
-  def genTcpClient(port: Int): Gen[Client[IO, Data]] =
-    TcpClient[IO, Data](new URI(s"tcp://localhost:${port}")).unsafeRunSync()
+  def genTcpClient(port: Int): Gen[Client[IO]] =
+    TcpClient[IO](new URI(s"tcp://localhost:${port}")).unsafeRunSync()
 
   def genWsServer(port: Int): Gen[Server[IO]] =
-    Server.http[IO, Data](new InetSocketAddress(port), echoPipe, metrics)
+    WsServer.bind[IO](new InetSocketAddress(port), echoPipe, metrics)
 
-  def genWsClient(port: Int): Gen[Client[IO, Data]] =
-    WsClient[IO, Data](new URI(s"tcp://localhost:${port}")).unsafeRunSync()
+  def genWsClient(port: Int): Gen[Client[IO]] =
+    WsClient[IO](new URI(s"tcp://localhost:${port}")).unsafeRunSync()
 
 }

@@ -8,6 +8,8 @@ import jbok.core.messages.SignedTransactions
 import jbok.core.models.SignedTransaction
 import jbok.core.peer._
 import jbok.core.validators.TxValidator
+import jbok.network.Request
+import jbok.codec.rlp.implicits._
 
 import scala.concurrent.duration._
 
@@ -70,7 +72,9 @@ final class TxPool[F[_]] private (
     } yield alive
 
   def broadcast(stxs: SignedTransactions): F[Unit] =
-    peerManager.distribute(PeerSelectStrategy.withoutTxs(stxs), stxs)
+    Request[F, SignedTransactions]("SignedTransactions", stxs).flatMap { message =>
+      peerManager.distribute(PeerSelectStrategy.withoutTxs(stxs), message)
+    }
 }
 
 object TxPool {

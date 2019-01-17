@@ -8,6 +8,7 @@ import scodec.{Attempt, DecodeResult, Err}
 
 import scala.concurrent.duration.{FiniteDuration, _}
 
+object testkit extends testkit
 trait testkit extends Matchers {
   def roundtripAndMatch[A](a: A, expected: ByteVector)(implicit c: RlpCodec[A]) = {
     roundtrip[A](a)

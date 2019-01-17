@@ -7,15 +7,14 @@ import cats.implicits._
 import fs2.io.udp
 import fs2.io.udp.{AsynchronousSocketGroup, Packet, Socket}
 import fs2.{Pipe, _}
-import jbok.network.common.TcpUtil
-import scodec.Codec
+import jbok.network.Message
 
 final class UdpTransport[F[_]](socket: Socket[F])(implicit F: ConcurrentEffect[F],
                                                   CS: ContextShift[F],
                                                   AG: AsynchronousSocketGroup) {
   private[this] val log = jbok.common.log.getLogger("UdpTransport")
 
-  def serve[A: Codec](pipe: Pipe[F, (InetSocketAddress, A), (InetSocketAddress, A)]): Stream[F, Unit] =
+  def serve(pipe: Pipe[F, (InetSocketAddress, Message[F]), (InetSocketAddress, Message[F])]): Stream[F, Unit] =
     Stream
       .eval(socket.localAddress)
       .flatMap { bind =>
@@ -23,7 +22,7 @@ final class UdpTransport[F[_]](socket: Socket[F])(implicit F: ConcurrentEffect[F
         socket
           .reads()
           .evalMap(p =>
-            TcpUtil
+            Message
               .decodeChunk(p.bytes)
               .map(a => {
                 log.trace(s"received msg from ${p.remote}")
@@ -32,15 +31,15 @@ final class UdpTransport[F[_]](socket: Socket[F])(implicit F: ConcurrentEffect[F
           .through(pipe)
           .evalMap {
             case (remote, a) =>
-              TcpUtil.encode(a).map(chunk => Packet(remote, chunk))
+              a.encodeChunk.map(chunk => Packet(remote, chunk))
           }
           .to(socket.writes())
       }
       .handleErrorWith(e => Stream.eval(F.delay(log.warn(s"transport error", e))))
       .onFinalize(F.delay(log.trace(s"serving terminated")))
 
-  def send[A: Codec](remote: InetSocketAddress, a: A): F[Unit] =
-    TcpUtil.encode(a).flatMap(chunk => socket.write(Packet(remote, chunk)))
+  def send(remote: InetSocketAddress, message: Message[F]): F[Unit] =
+    message.encodeChunk.flatMap(chunk => socket.write(Packet(remote, chunk)))
 }
 
 object UdpTransport {

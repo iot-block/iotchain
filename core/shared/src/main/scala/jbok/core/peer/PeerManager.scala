@@ -1,4 +1,5 @@
 package jbok.core.peer
+
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 
@@ -10,20 +11,21 @@ import cats.implicits._
 import fs2.Stream._
 import fs2._
 import fs2.concurrent.Queue
+import jbok.common._
 import jbok.common.concurrent.PriorityQueue
 import jbok.core.config.Configs.PeerConfig
 import jbok.core.ledger.History
 import jbok.core.messages._
 import jbok.core.peer.PeerSelectStrategy.PeerSelectStrategy
 import jbok.crypto.signature.KeyPair
-import jbok.network.Connection
 import jbok.network.common.TcpUtil
+import jbok.network.{Connection, Message}
+
 import scala.concurrent.duration._
-import jbok.common._
 
 sealed abstract class PeerErr(message: String) extends Exception(message)
 object PeerErr {
-  case object HandshakeTimeout                         extends PeerErr("handshake timeout")
+  case object HandshakeTimeout                               extends PeerErr("handshake timeout")
   final case class Incompatible(self: Status, other: Status) extends PeerErr(s"incompatible peer ${self} ${other}")
 }
 
@@ -34,7 +36,7 @@ abstract class PeerManager[F[_]](
     val incoming: Ref[F, Map[KeyPair.Public, Peer[F]]],
     val outgoing: Ref[F, Map[KeyPair.Public, Peer[F]]],
     val nodeQueue: PriorityQueue[F, PeerNode],
-    val messageQueue: Queue[F, Request[F]]
+    val messageQueue: Queue[F, PeerRequest[F]]
 )(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F], AG: AsynchronousChannelGroup) {
   private[this] val log = jbok.common.log.getLogger("PeerManager")
 
@@ -53,13 +55,13 @@ abstract class PeerManager[F[_]](
 
         case Right(res) =>
           val stream = for {
-            conn <- eval(TcpUtil.socketToConnection[F, Message](res, true))
+            conn <- eval(TcpUtil.socketToConnection[F](res, true))
             _    <- eval(conn.start)
             peer <- eval(handshakeIncoming(conn).timeoutTo(config.timeout, F.raiseError(PeerErr.HandshakeTimeout)))
             _ = log.debug(s"${peer.id} handshaked")
             _ <- eval(incoming.update(_ + (peer.pk -> peer)))
             _ <- peer.conn.reads
-              .map(msg => Request(peer, msg))
+              .map(msg => PeerRequest(peer, msg))
               .to(messageQueue.enqueue)
               .onFinalize(incoming.update(_ - peer.pk) >> F.delay(log.debug(s"${peer.id} disconnected")))
           } yield ()
@@ -84,14 +86,14 @@ abstract class PeerManager[F[_]](
     def connect0: Stream[F, Unit] = {
       val res = io.tcp.Socket.client[F](to.tcpAddress, keepAlive = true, noDelay = true)
       val stream = for {
-        conn <- eval(TcpUtil.socketToConnection[F, Message](res, false))
+        conn <- eval(TcpUtil.socketToConnection[F](res, false))
         _    <- eval(conn.start)
         peer <- eval(handshakeOutgoing(conn, to.pk).timeoutTo(config.timeout, F.raiseError(PeerErr.HandshakeTimeout)))
         _ = log.debug(s"${peer.id} handshaked")
         _ <- eval(outgoing.update(_ + (peer.pk -> peer)))
         _ <- peer.conn.reads
           .evalMap { msg =>
-            val request = Request(peer, msg)
+            val request = PeerRequest(peer, msg)
             F.delay(log.trace(s"peer manager receive request: ${request}")) >>
               messageQueue.enqueue1(request).timeout(5.seconds)
           }
@@ -142,7 +144,7 @@ abstract class PeerManager[F[_]](
       out <- outgoing.get
     } yield (in ++ out).values.toList
 
-  def distribute(strategy: PeerSelectStrategy[F], message: Message): F[Unit] =
+  def distribute(strategy: PeerSelectStrategy[F], message: Message[F]): F[Unit] =
     for {
       peers    <- connected
       selected <- strategy.run(peers)
@@ -155,9 +157,9 @@ abstract class PeerManager[F[_]](
       number  <- history.getBestBlockNumber
     } yield Status(history.chainId, genesis.hash, number)
 
-  private[jbok] def handshakeIncoming(conn: Connection[F, Message]): F[Peer[F]]
+  private[jbok] def handshakeIncoming(conn: Connection[F]): F[Peer[F]]
 
-  private[jbok] def handshakeOutgoing(conn: Connection[F, Message], remotePk: KeyPair.Public): F[Peer[F]]
+  private[jbok] def handshakeOutgoing(conn: Connection[F], remotePk: KeyPair.Public): F[Peer[F]]
 
   private[jbok] def getPeer(pk: KeyPair.Public): OptionT[F, Peer[F]] =
     OptionT(incoming.get.map(_.get(pk))).orElseF(outgoing.get.map(_.get(pk)))

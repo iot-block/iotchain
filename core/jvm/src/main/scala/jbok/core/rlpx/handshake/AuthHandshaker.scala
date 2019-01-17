@@ -6,15 +6,13 @@ import java.security.SecureRandom
 
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
-
 import jbok.codec.rlp.implicits._
-import jbok.core.messages.{AuthPacket, Message}
+import jbok.core.messages.AuthPacket
 import jbok.crypto.signature._
 import jbok.crypto.{ECIES, _}
-import jbok.network.Connection
+import jbok.network.{Connection, Request, Response}
 import org.bouncycastle.crypto.agreement.ECDHBasicAgreement
 import org.bouncycastle.crypto.digests.KeccakDigest
-import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 
 import scala.util.Random
@@ -43,12 +41,10 @@ final case class AuthHandshaker[F[_]](
 
   private[this] val log = jbok.common.log.getLogger(s"AuthHandshaker")
 
-//  implicit val codec: Codec[ByteVector] = pure.codec
-
   def initiate(remotePk: KeyPair.Public): F[(ByteVector, AuthHandshaker[F])] =
     for {
       message <- createAuthInitiateMessageV4(remotePk)
-      encoded       = Codec.encode(message).require.bytes.toArray
+      encoded       = RlpCodec.encode(message).require.bytes.toArray
       padded        = encoded ++ randomBytes(Random.nextInt(MaxPadding - MinPadding) + MinPadding)
       encryptedSize = padded.length + ECIES.OverheadSize
       sizePrefix    = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array
@@ -64,29 +60,30 @@ final case class AuthHandshaker[F[_]](
     }
 
   def connect(
-      conn: Connection[F, Message],
+      conn: Connection[F],
       remotePk: KeyPair.Public
   ): F[AuthHandshakeResult] =
     for {
       (initPacket, initHandshaker) <- initiate(remotePk)
-      _                            <- conn.write(AuthPacket(initPacket))
+      message                      <- Request[F, AuthPacket]("AuthPacket", AuthPacket(initPacket))
+      resp                         <- conn.expect[AuthPacket](message)
       _                            <- F.delay(log.trace(s"write init packet ${initPacket.length}, wait for remote response"))
-      data                         <- conn.read.map(_.asInstanceOf[AuthPacket].bytes)
-      _                            <- F.delay(log.trace(s"got remote response"))
-      result                       <- initHandshaker.handleResponseMessageAll(data)
+      result                       <- initHandshaker.handleResponseMessageAll(resp.bytes)
       _                            <- F.delay(log.trace(s"handshake connect ${result}"))
     } yield result
 
   def accept(
-      conn: Connection[F, Message]
+      conn: Connection[F]
   ): F[AuthHandshakeResult] =
     for {
       _                  <- F.delay(log.trace(s"wait for remote init packet"))
-      data               <- conn.read.map(_.asInstanceOf[AuthPacket].bytes)
-      _                  <- F.delay(log.trace(s"got remote init packet ${data.length}"))
-      (response, result) <- handleInitialMessageAll(data)
+      req                <- conn.read
+      data               <- req.bodyAs[AuthPacket]
+      _                  <- F.delay(log.trace(s"got remote init packet ${data.bytes.length}"))
+      (response, result) <- handleInitialMessageAll(data.bytes)
       _                  <- F.delay(log.trace(s"handshake accept ${result}"))
-      _                  <- conn.write(AuthPacket(response))
+      resp               <- Response.ok[F, AuthPacket](req.id, AuthPacket(response))
+      _                  <- conn.write(resp)
     } yield result
 
   private def handleResponseMessage(data: ByteVector): F[AuthHandshakeResult] =
@@ -108,7 +105,7 @@ final case class AuthHandshaker[F[_]](
         ciphertext = encryptedPayload.toArray,
         macData = Some(sizeBytes.toArray)
       )
-      message = Codec.decode[AuthResponseMessageV4](BitVector(plaintext)).require.value
+      message = RlpCodec.decode[AuthResponseMessageV4](BitVector(plaintext)).require.value
       result <- copy(responsePacketOpt = Some(initData)).finalizeHandshake(message.ephemeralPublicKey, message.nonce)
     } yield result
   }
@@ -166,13 +163,13 @@ final case class AuthHandshaker[F[_]](
         ciphertext = encryptedPayload.toArray,
         macData = Some(sizeBytes.toArray)
       )
-      message = Codec.decode[AuthInitiateMessageV4](BitVector(plaintext)).require.value
+      message = RlpCodec.decode[AuthInitiateMessageV4](BitVector(plaintext)).require.value
       response = AuthResponseMessageV4(
         ephemeralPublicKey = ephemeralKey.public,
         nonce = nonce,
         version = ProtocolVersion
       )
-      encodedResponse = Codec.encode(response).require.toByteArray
+      encodedResponse = RlpCodec.encode(response).require.toByteArray
 
       encryptedSize = encodedResponse.length + ECIES.OverheadSize
       sizePrefix    = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array
@@ -182,7 +179,7 @@ final case class AuthHandshaker[F[_]](
         encodedResponse,
         Some(sizePrefix)
       )
-      packet             = ByteVector(sizePrefix) ++ encryptedResponsePayload
+      packet = ByteVector(sizePrefix) ++ encryptedResponsePayload
       remoteEphemeralKey <- extractEphemeralKey(message.signature, message.nonce, message.publicKey)
       responseHandshaker = copy(initiatePacketOpt = Some(initData),
                                 responsePacketOpt = Some(packet),

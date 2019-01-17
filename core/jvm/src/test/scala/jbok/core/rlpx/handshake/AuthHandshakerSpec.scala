@@ -5,12 +5,9 @@ import java.net.InetSocketAddress
 import cats.effect.IO
 import fs2._
 import jbok.JbokSpec
-import jbok.codec.rlp.implicits._
 import jbok.common.execution._
-import jbok.core.messages.Message
 import jbok.crypto.signature.{ECDSA, Signature}
-import jbok.network.common.{RequestId, TcpUtil}
-import scodec.bits._
+import jbok.network.common.TcpUtil
 
 import scala.concurrent.duration._
 
@@ -19,15 +16,13 @@ class AuthHandshakerSpec extends JbokSpec {
   val clientKey = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
   val addr      = new InetSocketAddress("localhost", 9003)
 
-  implicit val I: RequestId[ByteVector] = RequestId.empty
-
   "AuthHandshakerSpec" should {
     "build auth connection" in {
       val server = fs2.io.tcp.Socket
         .server[IO](addr)
         .evalMap[IO, AuthHandshakeResult] { res =>
           for {
-            conn       <- TcpUtil.socketToConnection[IO, Message](res, true)
+            conn       <- TcpUtil.socketToConnection[IO](res, true)
             fiber      <- conn.start
             handshaker <- AuthHandshaker[IO](serverKey)
             result     <- handshaker.accept(conn)
@@ -37,7 +32,7 @@ class AuthHandshakerSpec extends JbokSpec {
 
       val client =
         for {
-          conn       <- TcpUtil.socketToConnection[IO, Message](fs2.io.tcp.Socket.client[IO](addr), false)
+          conn       <- TcpUtil.socketToConnection[IO](fs2.io.tcp.Socket.client[IO](addr), false)
           _          <- conn.start
           handshaker <- AuthHandshaker[IO](clientKey)
           result     <- handshaker.connect(conn, serverKey.public)
@@ -57,7 +52,7 @@ class AuthHandshakerSpec extends JbokSpec {
         .server[IO](addr)
         .evalMap[IO, Unit] { res =>
           for {
-            conn       <- TcpUtil.socketToConnection[IO, Message](res, true)
+            conn       <- TcpUtil.socketToConnection[IO](res, true)
             fiber      <- conn.start
             handshaker <- AuthHandshaker[IO](serverKey)
             result     <- handshaker.accept(conn)
@@ -67,7 +62,7 @@ class AuthHandshakerSpec extends JbokSpec {
 
       val client =
         for {
-          conn       <- TcpUtil.socketToConnection[IO, Message](fs2.io.tcp.Socket.client[IO](addr), false)
+          conn       <- TcpUtil.socketToConnection[IO](fs2.io.tcp.Socket.client[IO](addr), false)
           _          <- conn.start
           handshaker <- AuthHandshaker[IO](clientKey)
           result     <- handshaker.connect(conn, clientKey.public)

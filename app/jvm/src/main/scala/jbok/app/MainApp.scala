@@ -19,7 +19,7 @@ import jbok.core.consensus.poa.clique.Clique
 import jbok.core.keystore.KeyStorePlatform
 import jbok.core.models.Address
 import jbok.network.rpc.RpcService
-import jbok.network.server.Server
+import jbok.network.server.{Server, WsServer}
 import scodec.bits.ByteVector
 
 import scala.collection.immutable.ListMap
@@ -80,11 +80,11 @@ object MainApp extends StreamApp {
       case "simulation" :: tail =>
         val bind = new InetSocketAddress("localhost", 8888)
         for {
-          impl      <- SimulationImpl()
-          rpcServer <- RpcService().map(_.mountAPI[SimulationAPI](impl))
-          metrics   <- Metrics.default[IO]
-          server = Server.http(bind, rpcServer.pipe, metrics)
-          _      = timer.sleep(5000.millis)
+          impl    <- SimulationImpl()
+          metrics <- Metrics.default[IO]
+          service = RpcService().mountAPI[SimulationAPI](impl)
+          server  = WsServer.bind(bind, service.pipe, metrics)
+          _       = timer.sleep(5000.millis)
           ec <- runStream(server.stream)
         } yield ec
 

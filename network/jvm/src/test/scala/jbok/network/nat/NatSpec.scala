@@ -1,9 +1,12 @@
 package jbok.network.nat
 
+import java.util.UUID
+
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.common.testkit._
+import jbok.network.Request
 import jbok.network.client.Client
 import jbok.network.server.Server
 import jbok.network.testkit._
@@ -15,7 +18,7 @@ class NatSpec extends JbokSpec {
   val internalPort       = 12345
   val externalPort       = 12346
   val server             = random[Server[IO]](genTcpServer(internalPort))
-  val client             = random[Client[IO, Data]](genTcpClient(externalPort))
+  val client             = random[Client[IO]](genTcpClient(externalPort))
 
   def checkNat(natType: NatType) =
     s"NAT $natType" should {
@@ -28,9 +31,9 @@ class NatSpec extends JbokSpec {
           fiber <- server.stream.compile.drain.start
           _     <- T.sleep(1.second)
           _     <- client.start
-          _     <- client.write(Data("hello"))
+          _     <- client.write(Request.withTextBody[IO](UUID.randomUUID(), "", "hello"))
           res   <- client.read
-          _ = res.data shouldBe "hello"
+          _ = res.bodyAsText.unsafeRunSync() shouldBe "hello"
           _ <- fiber.cancel
         } yield ()
 

@@ -55,9 +55,9 @@ final case class BlockMiner[F[_]](
 
   def submit(mined: MinedBlock): F[Unit] =
     for {
-      blocks <- executor.handleMinedBlock(mined)
-      messages = blocks.flatMap(syncManager.broadcastBlock)
-      _ <- syncManager.sendMessages(messages)
+      blocks   <- executor.handleMinedBlock(mined)
+      messages <- blocks.traverse(syncManager.broadcastBlock)
+      _        <- syncManager.sendMessages(messages.flatten)
     } yield ()
 
   def mine1(
