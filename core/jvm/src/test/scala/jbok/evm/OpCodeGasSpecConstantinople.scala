@@ -24,12 +24,11 @@ class OpCodeGasSpecConstantinople extends FunSuite with OpCodeTesting with Match
       (200, -15000, 1, 0, 2),
       (200, 15000, 1, 2, 0),
       (200, 0, 1, 2, 3),
-      (200, 0, 1, 2, 1),
+      (200, 4800, 1, 2, 1),
       (200, 0, 1, 2, 2),
       (5000, 15000, 1, 1, 0),
       (5000, 0, 1, 1, 2),
-      (200, 0, 1, 1, 1),
-      (200, -15000, 1, 0, 1)
+      (200, 0, 1, 1, 1)
     )
     val offset = UInt256.Zero
 

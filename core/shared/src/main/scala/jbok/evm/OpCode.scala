@@ -602,20 +602,20 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
     val (Seq(offset, value), _) = state.stack.pop(2)
     for {
       storage         <- state.storage
-      oldValue        <- storage.load(offset)
+      current         <- storage.load(offset)
       originalStorage <- state.world.getOriginalStorage(state.ownAddress)
       original        <- originalStorage.load(offset)
     } yield {
       if (!state.config.sstoreGasMetering) {
-        if (oldValue.isZero && !value.isZero) state.config.feeSchedule.G_sset -> 0.toBigInt
-        else if (!oldValue.isZero && value.isZero)
+        if (current.isZero && !value.isZero) state.config.feeSchedule.G_sset -> 0.toBigInt
+        else if (!current.isZero && value.isZero)
           state.config.feeSchedule.G_sreset    -> state.config.feeSchedule.R_sclear
         else state.config.feeSchedule.G_sreset -> 0.toBigInt
       } else {
-        if (oldValue == value) {
+        if (current == value) {
           state.config.feeSchedule.G_snoop -> 0.toBigInt
         } else {
-          if (oldValue == original) {
+          if (current == original) {
             if (original.isZero) {
               state.config.feeSchedule.G_sset -> 0.toBigInt
             } else {
@@ -623,23 +623,18 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
               state.config.feeSchedule.G_sfresh -> refund
             }
           } else {
-            val refund = if (!original.isZero) {
-              if (oldValue.isZero) {
-                -state.config.feeSchedule.R_sclear
-              } else if (value.isZero) {
-                state.config.feeSchedule.R_sclear
-              } else {
-                0.toBigInt
-              }
-            } else if (original == value) {
-              if (original.isZero) {
-                state.config.feeSchedule.R_sresetclear
-              } else {
-                state.config.feeSchedule.R_sreset
-              }
+            val refund = if (!original.isZero && current.isZero) {
+              -state.config.feeSchedule.R_sclear
+            } else if (!original.isZero && value.isZero) {
+              state.config.feeSchedule.R_sclear
+            } else if (original.isZero && original == value) {
+              state.config.feeSchedule.R_sresetclear
+            } else if (!original.isZero && original == value) {
+              state.config.feeSchedule.R_sreset
             } else {
               0.toBigInt
             }
+            println(s"${original}, ${current}, ${value}: ${refund}")
             state.config.feeSchedule.G_sdirty -> refund
           }
         }
