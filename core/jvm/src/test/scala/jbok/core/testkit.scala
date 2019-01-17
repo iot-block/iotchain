@@ -158,6 +158,12 @@ object testkit {
     consensus.history
   }
 
+  def uint256Gen(min: UInt256 = UInt256.Zero, max: UInt256 = UInt256.MaxValue): Gen[UInt256] =
+    for {
+      value <- arbUint256.arbitrary
+      mod = max - min
+    } yield value.mod(mod) + min
+
   implicit def arbUint256 = Arbitrary {
     for {
       bytes <- genBoundedByteVector(32, 32)

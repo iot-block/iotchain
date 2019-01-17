@@ -84,7 +84,6 @@ class SignatureSpec extends JbokAsyncSpec {
           .pure[IO]
         public <- ecdsa.generatePublicKey[IO](secret)
         keyPair = KeyPair(public, secret)
-        _       = println(keyPair)
         sig <- ecdsa.sign[IO]("Actions speak louder than words.".getBytes, keyPair, 0)
 
         _ = sig.bytes shouldBe ByteVector

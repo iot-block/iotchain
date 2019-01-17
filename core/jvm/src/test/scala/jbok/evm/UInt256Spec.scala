@@ -1,9 +1,9 @@
 package jbok.evm
 
+import jbok.common.testkit._
 import jbok.core.models.UInt256
 import jbok.core.models.UInt256._
-import jbok.common.testkit._
-import jbok.evm.testkit._
+import jbok.core.testkit._
 import org.scalatest.FunSuite
 import org.scalatest.prop.PropertyChecks
 import scodec.bits.ByteVector
@@ -339,10 +339,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     val cmpFuncBigInt  = Seq[CFBI](_ > _, _ >= _, _ < _, _ <= _)
     val comparators    = cmpFuncUInt256.zip(cmpFuncBigInt).map(Cmp.tupled)
 
-    val uint256Gen = getUInt256Gen()
-
     forAll(Table("comparators", comparators: _*)) { cmp =>
-      forAll(uint256Gen, uint256Gen) { (a, b) =>
+      forAll(uint256Gen(), uint256Gen()) { (a, b) =>
         assert(cmp.uint(a, b) == cmp.bi(a.toBigInt, b.toBigInt))
       }
 
@@ -369,12 +367,12 @@ class UInt256Spec extends FunSuite with PropertyChecks {
   }
 
   test("2-way bytes conversion") {
-    forAll(getUInt256Gen()) { x =>
+    forAll(uint256Gen()) { x =>
       val y = UInt256(x.bytes)
       assert(x === y)
     }
 
-    forAll(getByteVectorGen(0, 32)) { xs =>
+    forAll(genBoundedByteVector(0, 32)) { xs =>
       val ys = UInt256(xs).bytes
       assert(xs.dropWhile(_ == 0) === ys.dropWhile(_ == 0))
     }
@@ -394,7 +392,7 @@ class UInt256Spec extends FunSuite with PropertyChecks {
       assert(UInt256(x).byteSize === expected)
     }
 
-    forAll(getUInt256Gen(min = UInt256(1))) { x =>
+    forAll(uint256Gen(min = UInt256(1))) { x =>
       import math._
       val byteSize = 1 + floor(log(x.doubleValue) / log(256)).toInt
       assert(x.byteSize === byteSize)

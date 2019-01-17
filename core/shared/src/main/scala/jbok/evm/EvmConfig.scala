@@ -66,7 +66,8 @@ object EvmConfig {
       .copy(opCodes = OpCodes.ByzantiumOpCodes, preCompiledContracts = PrecompiledContracts.ByzantiumContracts)
 
   val ConstantinopleConfigBuilder: EvmConfigBuilder = maxCodeSize =>
-    ByzantiumConfigBuilder(maxCodeSize).copy(opCodes = OpCodes.ConstantinopleOpCodes)
+    ByzantiumConfigBuilder(maxCodeSize)
+      .copy(opCodes = OpCodes.ConstantinopleOpCodes, feeSchedule = FeeSchedule.Constantinople, sstoreGasMetering = true)
 
 }
 
@@ -79,7 +80,8 @@ final case class EvmConfig(
     maxCodeSize: Option[BigInt],
     traceInternalTransactions: Boolean,
     exceptionalFailedCodeDeposit: Boolean,
-    noEmptyAccounts: Boolean = false
+    noEmptyAccounts: Boolean = false,
+    sstoreGasMetering: Boolean = false
 ) {
 
   import feeSchedule._
@@ -158,6 +160,11 @@ object FeeSchedule {
     override val G_sset: BigInt          = 20000
     override val G_sreset: BigInt        = 5000
     override val R_sclear: BigInt        = 15000
+    override val G_snoop: BigInt         = 0
+    override val G_sfresh: BigInt        = 0
+    override val G_sdirty: BigInt        = 0
+    override val R_sresetclear: BigInt   = 0
+    override val R_sreset: BigInt        = 0
     override val R_selfdestruct: BigInt  = 24000
     override val G_selfdestruct: BigInt  = 0
     override val G_create: BigInt        = 32000
@@ -180,7 +187,9 @@ object FeeSchedule {
     override val G_sha3word: BigInt      = 6
     override val G_copy: BigInt          = 3
     override val G_blockhash: BigInt     = 20
-    override val G_extcode: BigInt       = 20
+    override val G_extcodesize: BigInt   = 20
+    override val G_extcodecopy: BigInt   = 20
+    override val G_extcodehash: BigInt   = 0
   }
 
   object Frontier extends FrontierFeeSchedule
@@ -196,7 +205,8 @@ object FeeSchedule {
     override val G_call: BigInt         = 700
     override val G_balance: BigInt      = 400
     override val G_selfdestruct: BigInt = 5000
-    override val G_extcode: BigInt      = 700
+    override val G_extcodesize: BigInt  = 700
+    override val G_extcodecopy: BigInt  = 700
   }
 
   object TangerineWhistle extends TangerineWhistleFeeSchedule
@@ -206,6 +216,17 @@ object FeeSchedule {
   }
 
   object SpuriousDragon extends SpuriousDragonFeeSchedule
+
+  trait ConstantinopleFeeSchedule extends SpuriousDragonFeeSchedule {
+    override val G_extcodehash: BigInt = 400
+    override val G_snoop: BigInt       = 200
+    override val G_sfresh: BigInt      = 5000
+    override val G_sdirty: BigInt      = 200
+    override val R_sresetclear: BigInt = 19800
+    override val R_sreset: BigInt      = 4800
+  }
+
+  object Constantinople extends ConstantinopleFeeSchedule
 }
 
 trait FeeSchedule {
@@ -221,6 +242,11 @@ trait FeeSchedule {
   val G_sset: BigInt
   val G_sreset: BigInt
   val R_sclear: BigInt
+  val G_snoop: BigInt
+  val G_sfresh: BigInt
+  val G_sdirty: BigInt
+  val R_sresetclear: BigInt
+  val R_sreset: BigInt
   val R_selfdestruct: BigInt
   val G_selfdestruct: BigInt
   val G_create: BigInt
@@ -243,5 +269,7 @@ trait FeeSchedule {
   val G_sha3word: BigInt
   val G_copy: BigInt
   val G_blockhash: BigInt
-  val G_extcode: BigInt
+  val G_extcodesize: BigInt
+  val G_extcodecopy: BigInt
+  val G_extcodehash: BigInt
 }

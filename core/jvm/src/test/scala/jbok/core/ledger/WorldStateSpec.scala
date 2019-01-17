@@ -5,8 +5,8 @@ import jbok.JbokSpec
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.models.{Account, Address, UInt256}
+import jbok.core.testkit._
 import jbok.evm.WorldState
-import jbok.evm.testkit._
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 
@@ -40,8 +40,8 @@ class WorldStateSpec extends JbokSpec {
     }
 
     "put then get storage" in new Fixture {
-      val addr  = getUInt256Gen().sample.getOrElse(UInt256.MaxValue)
-      val value = getUInt256Gen().sample.getOrElse(UInt256.MaxValue)
+      val addr  = uint256Gen().sample.getOrElse(UInt256.MaxValue)
+      val value = uint256Gen().sample.getOrElse(UInt256.MaxValue)
 
       val storage = world
         .getStorage(address1)
@@ -54,6 +54,37 @@ class WorldStateSpec extends JbokSpec {
         .unsafeRunSync()
         .load(addr)
         .unsafeRunSync() shouldEqual value
+    }
+
+    "put then get original storage" in new Fixture {
+      val addr     = UInt256.Zero
+      val original = uint256Gen().sample.getOrElse(UInt256.MaxValue)
+      val current  = uint256Gen().sample.getOrElse(UInt256.MaxValue)
+      val account  = Account(0, 100)
+      val world1   = world.putAccount(address1, account).persisted.unsafeRunSync()
+
+      val originalStorage = world1
+        .getStorage(address1)
+        .unsafeRunSync()
+        .store(addr, original)
+
+      val world2 = world1.putStorage(address1, originalStorage).persisted.unsafeRunSync()
+
+      val currentStorage = world1.getStorage(address1).unsafeRunSync().store(addr, current)
+
+      world2
+        .putStorage(address1, currentStorage)
+        .getStorage(address1)
+        .unsafeRunSync()
+        .load(addr)
+        .unsafeRunSync() shouldEqual current
+
+      world2
+        .putStorage(address1, currentStorage)
+        .getOriginalStorage(address1)
+        .unsafeRunSync()
+        .load(addr)
+        .unsafeRunSync() shouldEqual original
     }
 
     "transfer value to other address" in new Fixture {
@@ -261,6 +292,46 @@ class WorldStateSpec extends JbokSpec {
           .stateRootHash
 
       val w3 = history.getWorldState(stateRootHash = Some(root2)).unsafeRunSync()
+    }
+
+    "create contract address" in new Fixture {
+      val testcases: List[(Address, ByteVector, ByteVector, Address)] = List(
+        (Address(hex"0x0000000000000000000000000000000000000000"),
+         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+         hex"0x00",
+         Address(hex"0x4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38")),
+        (Address(hex"0xdeadbeef00000000000000000000000000000000"),
+         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+         hex"0x00",
+         Address(hex"0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3")),
+        (Address(hex"0xdeadbeef00000000000000000000000000000000"),
+         hex"0x000000000000000000000000feed000000000000000000000000000000000000",
+         hex"0x00",
+         Address(hex"0xD04116cDd17beBE565EB2422F2497E06cC1C9833")),
+        (Address(hex"0x0000000000000000000000000000000000000000"),
+         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+         hex"0xdeadbeef",
+         Address(hex"0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e")),
+        (Address(hex"0x00000000000000000000000000000000deadbeef"),
+         hex"0x00000000000000000000000000000000000000000000000000000000cafebabe",
+         hex"0xdeadbeef",
+         Address(hex"0x60f3f640a8508fC6a86d45DF051962668E1e8AC7")),
+        (Address(hex"0x00000000000000000000000000000000deadbeef"),
+         hex"0x00000000000000000000000000000000000000000000000000000000cafebabe",
+         hex"0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+         Address(hex"0x1d8bfDC5D46DC4f61D6b6115972536eBE6A8854C")),
+        (Address(hex"0x0000000000000000000000000000000000000000"),
+         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+         hex"0x",
+         Address(hex"0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0"))
+      )
+      val w1 = history.getWorldState().unsafeRunSync()
+
+      testcases.foreach {
+        case (address, salt, initCode, expected) =>
+          w1.createContractAddressWithSalt(address, salt, initCode)
+            .unsafeRunSync() shouldBe expected
+      }
     }
   }
 }

@@ -143,8 +143,8 @@ object OpCodes {
       REVERT +: HomesteadOpCodes
 
   val ConstantinopleOpCodes: List[OpCode] =
-//    CREATE2 +: EXTCODEHASH +: // eip status draft on 2018.12
-    SHL +: SHR +: SAR +: ByzantiumOpCodes
+    CREATE2 +: EXTCODEHASH +:
+      SHL +: SHR +: SAR +: ByzantiumOpCodes
 }
 
 object OpCode {
@@ -414,7 +414,7 @@ case object GASPRICE extends ConstOp(0x3a.toByte) {
   override def f[F[_]: Sync](state: ProgramState[F]): UInt256 = state.env.gasPrice
 }
 
-case object EXTCODESIZE extends OpCode(0x3b.toByte, 1, 1, _.G_extcode) with ConstGas {
+case object EXTCODESIZE extends OpCode(0x3b.toByte, 1, 1, _.G_extcodesize) with ConstGas {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (addr, stack1) = state.stack.pop
     state.world.getCode(Address(addr)).map { code =>
@@ -425,7 +425,7 @@ case object EXTCODESIZE extends OpCode(0x3b.toByte, 1, 1, _.G_extcode) with Cons
   }
 }
 
-case object EXTCODECOPY extends OpCode(0x3c.toByte, 4, 0, _.G_extcode) {
+case object EXTCODECOPY extends OpCode(0x3c.toByte, 4, 0, _.G_extcodecopy) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (Seq(address, memOffset, codeOffset, size), stack1) = state.stack.pop(4)
     state.world.getCode(Address(address)).map { code =>
@@ -465,6 +465,18 @@ case object RETURNDATACOPY extends OpCode(0x3e.toByte, 3, 0, _.G_verylow) {
     val memCost                   = state.config.calcMemCost(state.memory.size, offset, size)
     val copyCost                  = state.config.feeSchedule.G_copy * wordsForBytes(size)
     (memCost + copyCost).pure[F]
+  }
+}
+
+case object EXTCODEHASH extends OpCode(0x3f.toByte, 1, 1, _.G_extcodehash) with ConstGas {
+  def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
+    val (address, stack1) = state.stack.pop
+
+    for {
+      accountOpt <- state.world.getAccountOpt(Address(address)).value
+      codeHash = accountOpt.map(a => UInt256(a.codeHash)).getOrElse(UInt256.Zero)
+      stack2   = stack1.push(codeHash)
+    } yield state.withStack(stack2).step()
   }
 }
 
@@ -575,22 +587,57 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
     } else {
       val (Seq(offset, value), stack1) = state.stack.pop(2)
       for {
-        storage  <- state.storage
-        oldValue <- storage.load(offset)
-        refund: BigInt = if (value.isZero && !oldValue.isZero) state.config.feeSchedule.R_sclear else 0
+        refund  <- gasMetering(state).map(_._2)
+        storage <- state.storage
         updatedStorage = storage.store(offset, value)
       } yield {
         state.withStack(stack1).withStorage(updatedStorage).refundGas(refund).step()
       }
     }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] =
+    gasMetering(state).map(_._1)
+
+  private def gasMetering[F[_]: Sync](state: ProgramState[F]): F[(BigInt, BigInt)] = {
     val (Seq(offset, value), _) = state.stack.pop(2)
     for {
-      storage  <- state.storage
-      oldValue <- storage.load(offset)
+      storage         <- state.storage
+      current         <- storage.load(offset)
+      originalStorage <- state.world.getOriginalStorage(state.ownAddress)
+      original        <- originalStorage.load(offset)
     } yield {
-      if (oldValue.isZero && !value.isZero) state.config.feeSchedule.G_sset else state.config.feeSchedule.G_sreset
+      if (!state.config.sstoreGasMetering) {
+        if (current.isZero && !value.isZero) state.config.feeSchedule.G_sset -> 0.toBigInt
+        else if (!current.isZero && value.isZero)
+          state.config.feeSchedule.G_sreset    -> state.config.feeSchedule.R_sclear
+        else state.config.feeSchedule.G_sreset -> 0.toBigInt
+      } else {
+        if (current == value) {
+          state.config.feeSchedule.G_snoop -> 0.toBigInt
+        } else {
+          if (current == original) {
+            if (original.isZero) {
+              state.config.feeSchedule.G_sset -> 0.toBigInt
+            } else {
+              val refund = if (value.isZero) state.config.feeSchedule.R_sclear else 0.toBigInt
+              state.config.feeSchedule.G_sfresh -> refund
+            }
+          } else {
+            val refund = if (!original.isZero && current.isZero) {
+              -state.config.feeSchedule.R_sclear
+            } else if (!original.isZero && value.isZero) {
+              state.config.feeSchedule.R_sclear
+            } else if (original.isZero && original == value) {
+              state.config.feeSchedule.R_sresetclear
+            } else if (!original.isZero && original == value) {
+              state.config.feeSchedule.R_sreset
+            } else {
+              0.toBigInt
+            }
+            state.config.feeSchedule.G_sdirty -> refund
+          }
+        }
+      }
     }
   }
 }
@@ -851,12 +898,19 @@ case object LOG4 extends LogOp(0xa4)
 ///////////////////////////
 // System
 ///////////////////////////
-sealed abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
+sealed abstract class CreateOp(code: Int, delta: Int, alpha: Int)
+    extends OpCode(code.toByte, delta, alpha, _.G_create) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] =
     if (state.context.readOnly) {
       Sync[F].pure(state.withError(WriteProtectionError))
     } else {
-      val (Seq(endowment, inOffset, inSize), stack1) = state.stack.pop(3)
+      val (Seq(endowment, inOffset, inSize), stack) = state.stack.pop(3)
+      val (salt, stack1) = this match {
+        case CREATE => ByteVector.empty -> stack
+        case CREATE2 =>
+          val (Seq(salt), newStack) = stack.pop(1)
+          salt.bytes -> newStack
+      }
 
       val validCall =
         (state.env.callDepth < EvmConfig.MaxCallDepth).pure[F] && state.ownBalance.map(_ >= endowment)
@@ -866,7 +920,10 @@ sealed abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
           val (initCode, memory1) = state.memory.load(inOffset, inSize)
 
           for {
-            (newAddress, world1) <- state.world.createAddressWithOpCode(state.env.ownerAddr)
+            (newAddress, world1) <- this match {
+              case CREATE  => state.world.createAddressWithOpCode(state.env.ownerAddr)
+              case CREATE2 => state.world.create2AddressWithOpCode(state.env.ownerAddr, salt, initCode)
+            }
             world2 <- world1
               .initialiseAccount(newAddress)
               .flatMap(_.transfer(state.env.ownerAddr, newAddress, endowment))
@@ -954,11 +1011,18 @@ sealed abstract class CreateOp extends OpCode(0xf0.toByte, 3, 1, _.G_create) {
 
   def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
     val (Seq(_, inOffset, inSize), _) = state.stack.pop(3)
-    state.config.calcMemCost(state.memory.size, inOffset, inSize)
+    val gas                           = state.config.calcMemCost(state.memory.size, inOffset, inSize)
+    if (this == CREATE) {
+      gas
+    } else {
+      gas + wordsForBytes(inSize) * state.config.feeSchedule.G_sha3word
+    }
   }
 }
 
-case object CREATE extends CreateOp
+case object CREATE extends CreateOp(0xf0, 3, 1)
+
+case object CREATE2 extends CreateOp(0xf5, 4, 1)
 
 sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toByte, delta, alpha, _.G_zero) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {

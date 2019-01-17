@@ -8,10 +8,10 @@ import scodec.bits.ByteVector
 
 class ProgramSpec extends JbokSpec {
 
-  val CodeSize = Byte.MaxValue
+  val CodeSize      = Byte.MaxValue
   val PositionsSize = 10
 
-  val nonPushOp: Byte = JUMP.code
+  val nonPushOp: Byte     = JUMP.code
   val invalidOpCode: Byte = 0xef.toByte
 
   def positionsSetGen: Gen[Set[Int]] =
@@ -67,7 +67,7 @@ class ProgramSpec extends JbokSpec {
     }
 
     "detect all instructions as jump destinations if they are" in {
-      val code = ByteVector((0 to CodeSize).map(_ => JUMPDEST.code).toArray)
+      val code    = ByteVector((0 to CodeSize).map(_ => JUMPDEST.code).toArray)
       val program = Program(code)
       program.validJumpDestinations shouldBe (0 to CodeSize).toSet
     }

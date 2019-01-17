@@ -2,15 +2,15 @@ package jbok.evm
 
 import jbok.JbokSpec
 import jbok.core.models.UInt256
-import org.scalacheck.Gen
+import jbok.core.testkit._
 import jbok.evm.testkit._
+import org.scalacheck.Gen
 
 class StackSpec extends JbokSpec {
   val maxStackSize   = 32
-  val stackGen       = getStackGen(maxSize = maxStackSize)
+  val stackGen       = arbStack(maxStackSize, uint256Gen()).arbitrary
   val intGen         = Gen.choose(0, maxStackSize).filter(_ >= 0)
-  val uint256Gen     = getUInt256Gen()
-  val uint256ListGen = getListGen(0, 16, uint256Gen)
+  val uint256ListGen = getListGen(0, 16, uint256Gen())
 
   "Stack" should {
     "pop single element" in {
@@ -40,7 +40,7 @@ class StackSpec extends JbokSpec {
     }
 
     "push single element" in {
-      forAll(stackGen, uint256Gen) { (stack, v) =>
+      forAll(stackGen, uint256Gen()) { (stack, v) =>
         val stack1 = stack.push(v)
 
         if (stack.size < stack.maxSize) {
