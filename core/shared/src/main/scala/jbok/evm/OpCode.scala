@@ -634,7 +634,6 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
             } else {
               0.toBigInt
             }
-            println(s"${original}, ${current}, ${value}: ${refund}")
             state.config.feeSchedule.G_sdirty -> refund
           }
         }
