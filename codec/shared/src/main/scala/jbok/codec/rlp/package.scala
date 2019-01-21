@@ -1,10 +1,13 @@
 package jbok.codec
 
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 import cats.effect.Sync
 import scodec._
 import scodec.bits._
+
+import scala.concurrent.duration.Duration
 
 package object rlp {
   trait codecs {
@@ -54,6 +57,9 @@ package object rlp {
       override def sizeBound: SizeBound                                    = SizeBound.exact(1L)
       override def toString: String                                        = "Boolean"
     }
+
+    val duration: Codec[Duration] =
+      ulong.xmap[Duration](l => Duration.apply(l, TimeUnit.NANOSECONDS), d => d.toNanos)
 
     def nop[A](implicit codec: Codec[A]): RlpCodec[A] =
       RlpCodec[A](PrefixType.NoPrefix, codec)
@@ -106,6 +112,8 @@ package object rlp {
     implicit val rlpBytesCodec: RlpCodec[ByteVector] = rlp(codecs.bytes)
 
     implicit val rlpUuidCodec: RlpCodec[UUID] = rlp(codecs.uuid)
+
+    implicit val rlpDurationCodec: RlpCodec[Duration] = rlp(duration)
 
     implicit def rlpOptionalCodec[A](implicit codec: RlpCodec[A]): RlpCodec[Option[A]] =
       rlp[Option[A]](codecs.optional(bool, codec.valueCodec))
