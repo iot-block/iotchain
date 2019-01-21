@@ -72,7 +72,7 @@ final class TxPool[F[_]] private (
     } yield alive
 
   def broadcast(stxs: SignedTransactions): F[Unit] =
-    Request[F, SignedTransactions]("SignedTransactions", stxs).flatMap { message =>
+    Request.binary[F, SignedTransactions]("SignedTransactions", stxs).flatMap { message =>
       peerManager.distribute(PeerSelectStrategy.withoutTxs(stxs), message)
     }
 }

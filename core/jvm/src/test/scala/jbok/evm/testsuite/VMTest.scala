@@ -186,7 +186,7 @@ class VMTest extends JbokSpec {
       }
 
       result.returnData shouldEqual vmJson.out
-      result.logs.asBytes.kec256 shouldBe vmJson.logs
+      result.logs.asValidBytes.kec256 shouldBe vmJson.logs
     }
 
   "load and run official json test files" should {

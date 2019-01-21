@@ -38,9 +38,9 @@ object PeerManagerPlatform {
             handshaker   <- AuthHandshaker[F](keyPair)
             result       <- handshaker.accept(conn)
             localStatus  <- localStatus
-            request      <- Request[F, Status]("Status", localStatus)
+            request      <- Request.binary[F, Status]("Status", localStatus)
             _            <- conn.write(request)
-            remoteStatus <- conn.read.flatMap(_.bodyAs[Status])
+            remoteStatus <- conn.read.flatMap(_.binaryBodyAs[Status])
             _ <- if (!localStatus.isCompatible(remoteStatus)) {
               F.raiseError(PeerErr.Incompatible(localStatus, remoteStatus))
             } else {
@@ -54,9 +54,9 @@ object PeerManagerPlatform {
             handshaker   <- AuthHandshaker[F](keyPair)
             result       <- handshaker.connect(conn, remotePk)
             localStatus  <- localStatus
-            request      <- Request[F, Status]("Status", localStatus)
+            request      <- Request.binary[F, Status]("Status", localStatus)
             _            <- conn.write(request)
-            remoteStatus <- conn.read.flatMap(_.bodyAs[Status])
+            remoteStatus <- conn.read.flatMap(_.binaryBodyAs[Status])
             _ <- if (!localStatus.isCompatible(remoteStatus)) {
               F.raiseError(PeerErr.Incompatible(localStatus, remoteStatus))
             } else {

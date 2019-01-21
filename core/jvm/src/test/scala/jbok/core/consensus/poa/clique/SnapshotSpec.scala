@@ -48,7 +48,7 @@ trait SnapshotFixture {
     }
     val sig       = Signature[ECDSA].sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(signer), chainId).unsafeRunSync()
     val extra = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value.copy(signature = sig)
-    val extraBytes = extra.asBytes
+    val extraBytes = extra.asValidBytes
 //    val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val signed    = header.copy(extra = extraBytes)
     val recovered = Clique.ecrecover[IO](signed, testGenesis.chainId).unsafeRunSync().get
@@ -79,7 +79,7 @@ class SnapshotSpec extends JbokSpec {
           CryptoSignature(ByteVector.fill(65)(0).toArray),
           v.auth
         )
-        val extraBytes    = extra.asBytes
+        val extraBytes    = extra.asValidBytes
         val header = random[BlockHeader]
           .copy(
             number = number,
@@ -110,7 +110,7 @@ class SnapshotSpec extends JbokSpec {
         Nil,
         CryptoSignature(ByteVector.fill(65)(0).toArray)
       )
-      val extraBytes    = extra.asBytes
+      val extraBytes    = extra.asValidBytes
       val header = random[BlockHeader]
         .copy(
           beneficiary = coinbase.bytes,

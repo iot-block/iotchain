@@ -1,4 +1,6 @@
 package jbok.network.transport
+
+import _root_.io.circe.syntax._
 import java.net.InetSocketAddress
 import java.util.UUID
 
@@ -22,7 +24,7 @@ class UdpTransportSpec extends JbokSpec {
         fiber1 <- transport1.serve(echoUdpPipe).compile.drain.start
         fiber2 <- transport2.serve(echoUdpPipe).compile.drain.start
         _      <- T.sleep(1.seconds)
-        _      <- transport1.send(bind2, Request.withTextBody[IO](UUID.randomUUID(), "", "oho"))
+        _      <- transport1.send(bind2, Request.json[IO](UUID.randomUUID(), "", "oho".asJson))
         _      <- T.sleep(1.seconds)
         _      <- fiber1.cancel
         _      <- fiber2.cancel

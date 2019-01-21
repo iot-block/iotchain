@@ -102,7 +102,7 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
                 signed <- clique.sign(bytes)
                 _     = log.trace(s"${clique.signer} mined block(${executed.block.header.number})")
                 extra = CliqueExtra(Nil, signed)
-                extraBytes <- extra.asBytesF[F]
+                extraBytes <- extra.asBytes[F]
                 header = executed.block.header.copy(extra = extraBytes)
               } yield MinedBlock(executed.block.copy(header = header), executed.receipts)
           }

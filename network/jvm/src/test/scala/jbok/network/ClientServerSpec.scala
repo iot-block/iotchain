@@ -2,6 +2,7 @@ package jbok.network
 
 import java.util.UUID
 
+import _root_.io.circe.syntax._
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.common.execution._
@@ -19,13 +20,14 @@ class ClientServerSpec extends JbokSpec {
       val p = for {
         fiber <- Stream(server.stream, Stream.sleep[IO](1.second) ++ client.stream).parJoinUnbounded.compile.drain.start
         _ = forAll(genHex(0, 2048)) { str =>
-          val req = Request.withTextBody[IO](UUID.randomUUID(), "", str)
+          val req = Request.json[IO](UUID.randomUUID(), "", str.asJson)
           client.write(req).unsafeRunSync()
-          client.read.unsafeRunSync().bodyAsText.unsafeRunSync() shouldBe str
+          val res = client.read.unsafeRunSync()
+          res.bodyAsJson.unsafeRunSync() shouldBe str.asJson
         }
         _ = forAll(genHex(0, 2048)) { str =>
-          val req = Request.withTextBody[IO](UUID.randomUUID(), "", str)
-          client.request(req).unsafeRunSync().bodyAsText.unsafeRunSync() shouldBe str
+          val req = Request.json[IO](UUID.randomUUID(), "", str.asJson)
+          client.request(req).unsafeRunSync().bodyAsJson.unsafeRunSync() shouldBe str.asJson
         }
         _ <- fiber.cancel
       } yield ()

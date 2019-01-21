@@ -57,7 +57,7 @@ class EthashHeaderValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: E
     val powCacheData = getPowCacheData(Ethash.epoch(header.number.toLong))
 
     val extra            = RlpCodec.decode[EthashExtra](header.extra.bits).require.value
-    val hashWithoutNonce = header.copy(extra = ByteVector.empty).asBytes.kec256
+    val hashWithoutNonce = header.copy(extra = ByteVector.empty).asValidBytes.kec256
 
     val proofOfWork = {
       Ethash.hashimotoLight(

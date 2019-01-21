@@ -105,9 +105,9 @@ object FullNode {
 
       // mount rpc
       publicAPI = PublicApiImpl(config.history, miner)
-      privateAPI <- PersonalApiImpl(keystore, history, config.history, executor.txPool)
+      personalAPI <- PersonalApiImpl(keystore, history, config.history, executor.txPool)
       adminAPI = AdminApiImpl(peerManager)
-      rpc = RpcService().mountAPI(publicAPI).mountAPI(privateAPI).mountAPI(adminAPI)
+      rpc = RpcService().mountAPI(publicAPI).mountAPI(personalAPI).mountAPI(adminAPI)
       server = WsServer.bind(config.rpc.addr, rpc.pipe, metrics, Some(rpc.handle _))
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
     } yield FullNode[IO](config, syncManager, miner, keystore, rpc, server, haltWhenTrue)

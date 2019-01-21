@@ -42,14 +42,14 @@ object RpcServiceMacro {
 
           q"""
             (req: Request[IO]) => {
-              req.bodyAsJson.unsafeRunSync().as[$parameterType] match {
+              req.bodyAs[$parameterType].attempt.flatMap {
                 case Left(e) =>
                   IO.pure(Response.badRequest[IO](req.id))
 
                 case Right(body) =>
                   $run.attempt.map {
                     case Left(e)  => Response.internalError[IO](req.id)
-                    case Right(x) => Response.withJsonBody[IO](req.id, 200, "", x.asJson)
+                    case Right(x) => Response.json[IO](req.id, 200, "", x.asJson)
                   }
               }
             }
@@ -63,6 +63,7 @@ object RpcServiceMacro {
       q"""
         import jbok.network.{Request, Response}
         import jbok.codec.json.implicits._
+        import jbok.codec.rlp.implicits._
         import _root_.io.circe.syntax._
 
         ${c.prefix.tree}.addHandlers($handlers)

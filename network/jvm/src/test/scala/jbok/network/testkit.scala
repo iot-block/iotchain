@@ -15,16 +15,15 @@ object testkit {
   val echoPipe: Pipe[IO, Message[IO], Message[IO]] =
     _.evalMap[IO, Option[Message[IO]]] {
       case req: Request[IO] =>
-        log.debug(s"received req: ${req}")
-        IO.pure(Some(Response(req.id, body = req.body)))
+        IO.pure(Some(Response(req.id, contentType = req.contentType, body = req.body)))
       case res: Response[IO] =>
-        log.debug(s"received res: ${res}")
         IO.pure(None)
     }.unNone
 
   val echoUdpPipe: Pipe[IO, (InetSocketAddress, Message[IO]), (InetSocketAddress, Message[IO])] =
     _.evalMap[IO, Option[(InetSocketAddress, Message[IO])]] {
-      case (remote, req: Request[IO])  => IO.pure(Some(remote -> Response(req.id, body = req.body)))
+      case (remote, req: Request[IO]) =>
+        IO.pure(Some(remote -> Response(req.id, contentType = req.contentType, body = req.body)))
       case (remote, res: Response[IO]) => IO.pure(None)
     }.unNone
 

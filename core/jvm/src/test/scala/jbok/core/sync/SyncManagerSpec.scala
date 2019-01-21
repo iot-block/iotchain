@@ -30,10 +30,10 @@ class SyncManagerSpec extends JbokSpec {
       val handler = random[SyncManager[IO]]
       forAll { (peer: Peer[IO], receipts: List[Receipt], hash: ByteVector) =>
         handler.history.putReceipts(hash, receipts).unsafeRunSync()
-        val msg       = Request[IO, GetReceipts]("GetReceipts", GetReceipts(hash :: Nil)).unsafeRunSync()
+        val msg       = Request.binary[IO, GetReceipts]("GetReceipts", GetReceipts(hash :: Nil)).unsafeRunSync()
         val req       = PeerRequest(peer, msg)
         val List(res) = handler.service.run(req).unsafeRunSync()
-        res._2.bodyAs[Receipts].unsafeRunSync() shouldBe Receipts(receipts :: Nil)
+        res._2.binaryBodyAs[Receipts].unsafeRunSync() shouldBe Receipts(receipts :: Nil)
       }
     }
 
@@ -42,10 +42,10 @@ class SyncManagerSpec extends JbokSpec {
       forAll { (peer: Peer[IO], block: Block) =>
         handler.history.putBlockBody(block.header.hash, block.body).unsafeRunSync()
         val msg =
-          Request[IO, GetBlockBodies]("GetBlockBodies", GetBlockBodies(block.header.hash :: Nil)).unsafeRunSync()
+          Request.binary[IO, GetBlockBodies]("GetBlockBodies", GetBlockBodies(block.header.hash :: Nil)).unsafeRunSync()
         val request   = PeerRequest(peer, msg)
         val List(res) = handler.service.run(request).unsafeRunSync()
-        res._2.bodyAs[BlockBodies].unsafeRunSync() shouldBe BlockBodies(block.body :: Nil)
+        res._2.binaryBodyAs[BlockBodies].unsafeRunSync() shouldBe BlockBodies(block.body :: Nil)
       }
     }
 
@@ -61,29 +61,33 @@ class SyncManagerSpec extends JbokSpec {
       handler.history.putBlockHeader(baseHeader.copy(number = 5)).unsafeRunSync()
       handler.history.putBlockHeader(baseHeader.copy(number = 6)).unsafeRunSync()
       forAll { peer: Peer[IO] =>
-        val msg1 = Request[IO, GetBlockHeaders]("GetBlockHeaders", GetBlockHeaders(Left(3), 2, 0, reverse = false))
+        val msg1 = Request
+          .binary[IO, GetBlockHeaders]("GetBlockHeaders", GetBlockHeaders(Left(3), 2, 0, reverse = false))
           .unsafeRunSync()
         val request   = PeerRequest(peer, msg1)
         val List(res) = handler.service.run(request).unsafeRunSync()
-        res._2.bodyAs[BlockHeaders].unsafeRunSync() shouldBe BlockHeaders(firstHeader :: secondHeader :: Nil)
+        res._2.binaryBodyAs[BlockHeaders].unsafeRunSync() shouldBe BlockHeaders(firstHeader :: secondHeader :: Nil)
         val msg2 =
-          Request[IO, GetBlockHeaders]("GetBlockHeaders",
-                                       GetBlockHeaders(Right(firstHeader.hash), 2, 0, reverse = false)).unsafeRunSync()
+          Request
+            .binary[IO, GetBlockHeaders]("GetBlockHeaders",
+                                         GetBlockHeaders(Right(firstHeader.hash), 2, 0, reverse = false))
+            .unsafeRunSync()
         val request2   = PeerRequest(peer, msg2)
         val List(res2) = handler.service.run(request2).unsafeRunSync()
-        res2._2.bodyAs[BlockHeaders].unsafeRunSync() shouldBe BlockHeaders(firstHeader :: secondHeader :: Nil)
+        res2._2.binaryBodyAs[BlockHeaders].unsafeRunSync() shouldBe BlockHeaders(firstHeader :: secondHeader :: Nil)
       }
     }
 
     "return NodeData by node hashes" in {
       val handler = random[SyncManager[IO]]
       forAll { (peer: Peer[IO], node: MptNode) =>
-        val msg = Request[IO, GetNodeData]("GetNodeData", GetNodeData(NodeHash.StateMptNodeHash(node.hash) :: Nil))
+        val msg = Request
+          .binary[IO, GetNodeData]("GetNodeData", GetNodeData(NodeHash.StateMptNodeHash(node.hash) :: Nil))
           .unsafeRunSync()
         handler.history.putMptNode(node.hash, node.bytes).unsafeRunSync()
         val request   = PeerRequest(peer, msg)
         val List(res) = handler.service.run(request).unsafeRunSync()
-        res._2.bodyAs[NodeData].unsafeRunSync() shouldBe NodeData(node.bytes :: Nil)
+        res._2.binaryBodyAs[NodeData].unsafeRunSync() shouldBe NodeData(node.bytes :: Nil)
       }
     }
   }
@@ -94,7 +98,7 @@ class SyncManagerSpec extends JbokSpec {
       val blocks                  = random[List[Block]](genBlocks(1, 1))
       val peer                    = random[Peer[IO]]
       val peers                   = random[List[Peer[IO]]](genPeers(1, 10))
-      val msg                     = Request[IO, NewBlock]("NewBlock", NewBlock(blocks.head)).unsafeRunSync()
+      val msg                     = Request.binary[IO, NewBlock]("NewBlock", NewBlock(blocks.head)).unsafeRunSync()
       val request                 = PeerRequest(peer, msg)
       val List(newHash, newBlock) = sm.service.run(request).unsafeRunSync()
       newHash._1.run(peers).unsafeRunSync().length shouldBe peers.length
@@ -108,7 +112,7 @@ class SyncManagerSpec extends JbokSpec {
       val peer   = random[Peer[IO]]
       val peers  = random[List[Peer[IO]]](genPeers(1, 10))
       peers.traverse(_.markBlock(blocks.head.header.hash, blocks.head.header.number)).unsafeRunSync()
-      val msg                     = Request[IO, NewBlock]("NewBlock", NewBlock(blocks.head)).unsafeRunSync()
+      val msg                     = Request.binary[IO, NewBlock]("NewBlock", NewBlock(blocks.head)).unsafeRunSync()
       val request                 = PeerRequest(peer, msg)
       val List(newHash, newBlock) = sm.service.run(request).unsafeRunSync()
       newHash._1.run(peers).unsafeRunSync().length shouldBe 0
@@ -122,7 +126,7 @@ class SyncManagerSpec extends JbokSpec {
       val txs          = random[List[SignedTransaction]](genTxs(1, 10))
       val peer         = random[Peer[IO]]
       val peers        = random[List[Peer[IO]]](genPeers(1, 10))
-      val msg          = Request[IO, SignedTransactions]("SignedTransactions", SignedTransactions(txs)).unsafeRunSync()
+      val msg          = Request.binary[IO, SignedTransactions]("SignedTransactions", SignedTransactions(txs)).unsafeRunSync()
       val request      = PeerRequest(peer, msg)
       val List(result) = sm.service.run(request).unsafeRunSync()
       result._1.run(peer :: peers).unsafeRunSync() shouldBe peers

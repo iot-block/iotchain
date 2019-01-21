@@ -25,7 +25,7 @@ final case class SignedTransaction(
     r: BigInt,
     s: BigInt
 ) {
-  lazy val bytes: ByteVector = this.asBytes
+  lazy val bytes: ByteVector = this.asValidBytes
 
   lazy val hash: ByteVector = bytes.kec256
 
@@ -88,7 +88,7 @@ object SignedTransaction {
   }
 
   private def bytesToSign(stx: SignedTransaction, chainId: BigInt): ByteVector =
-    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId, BigInt(0), BigInt(0)).asBytes.kec256
+    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId, BigInt(0), BigInt(0)).asValidBytes.kec256
 
   private def recoverPublicKey(stx: SignedTransaction, chainId: BigInt): Option[KeyPair.Public] = {
     val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)

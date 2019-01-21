@@ -44,7 +44,7 @@ final case class AuthHandshaker[F[_]](
   def initiate(remotePk: KeyPair.Public): F[(ByteVector, AuthHandshaker[F])] =
     for {
       message <- createAuthInitiateMessageV4(remotePk)
-      encoded       = RlpCodec.encode(message).require.bytes.toArray
+      encoded       = message.asValidBytes.toArray
       padded        = encoded ++ randomBytes(Random.nextInt(MaxPadding - MinPadding) + MinPadding)
       encryptedSize = padded.length + ECIES.OverheadSize
       sizePrefix    = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array
@@ -65,7 +65,7 @@ final case class AuthHandshaker[F[_]](
   ): F[AuthHandshakeResult] =
     for {
       (initPacket, initHandshaker) <- initiate(remotePk)
-      message                      <- Request[F, AuthPacket]("AuthPacket", AuthPacket(initPacket))
+      message                      <- Request.binary[F, AuthPacket]("AuthPacket", AuthPacket(initPacket))
       resp                         <- conn.expect[AuthPacket](message)
       _                            <- F.delay(log.trace(s"write init packet ${initPacket.length}, wait for remote response"))
       result                       <- initHandshaker.handleResponseMessageAll(resp.bytes)
@@ -78,7 +78,7 @@ final case class AuthHandshaker[F[_]](
     for {
       _                  <- F.delay(log.trace(s"wait for remote init packet"))
       req                <- conn.read
-      data               <- req.bodyAs[AuthPacket]
+      data               <- req.binaryBodyAs[AuthPacket]
       _                  <- F.delay(log.trace(s"got remote init packet ${data.bytes.length}"))
       (response, result) <- handleInitialMessageAll(data.bytes)
       _                  <- F.delay(log.trace(s"handshake accept ${result}"))
@@ -169,7 +169,7 @@ final case class AuthHandshaker[F[_]](
         nonce = nonce,
         version = ProtocolVersion
       )
-      encodedResponse = RlpCodec.encode(response).require.toByteArray
+      encodedResponse = response.asValidBytes.toArray
 
       encryptedSize = encodedResponse.length + ECIES.OverheadSize
       sizePrefix    = ByteBuffer.allocate(2).putShort(encryptedSize.toShort).array

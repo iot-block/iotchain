@@ -18,7 +18,7 @@ class HistorySpec extends JbokSpec {
     "put and get account node" in {
       val history = random[History[IO]]
       forAll { (addr: Address, acc: Account) =>
-        val bytes = acc.asBytes
+        val bytes = acc.asValidBytes
         history.putMptNode(bytes.kec256, bytes).unsafeRunSync()
         history.getMptNode(bytes.kec256).unsafeRunSync() shouldBe bytes.some
       }
@@ -27,7 +27,7 @@ class HistorySpec extends JbokSpec {
     "put and get storage node" in {
       val history = random[History[IO]]
       forAll { (k: UInt256, v: UInt256) =>
-        val bytes = v.asBytes
+        val bytes = v.asValidBytes
         history.putMptNode(bytes.kec256, bytes).unsafeRunSync()
         history.getMptNode(bytes.kec256).unsafeRunSync() shouldBe bytes.some
       }

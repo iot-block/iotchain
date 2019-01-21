@@ -100,7 +100,7 @@ class BlockExecutorSpec extends JbokSpec {
 
       executor.executeBlock(block).unsafeRunSync()
 
-      val hash            = (testMiner.address, UInt256(0)).asBytes.kec256
+      val hash            = (testMiner.address, UInt256(0)).asValidBytes.kec256
       val contractAddress = Address.apply(hash)
       val contract        = executor.history.getAccount(contractAddress, BigInt(1)).unsafeRunSync().get
       val code            = executor.history.getCode(contract.codeHash).unsafeRunSync().get

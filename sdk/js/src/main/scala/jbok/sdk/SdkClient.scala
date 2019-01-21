@@ -7,6 +7,8 @@ import jbok.common.execution._
 import jbok.network.Request
 import jbok.network.client.{Client, HttpClient, WsClient}
 import jbok.network.rpc.RpcClient
+import _root_.io.circe.parser._
+import io.circe.Json
 
 import scala.concurrent.duration._
 import scala.scalajs.js
@@ -18,7 +20,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 class SdkClient(client: RpcClient[IO]) {
   def jsonrpc(json: String): js.Promise[String] =
     (for {
-      req  <- Request.fromText[IO](json)
+      req  <- Request.fromJson[IO](parse(json).getOrElse(Json.Null))
       resp <- client.request(req)
       text <- resp.asJson
     } yield text.noSpaces).timeout(10.seconds).unsafeToFuture().toJSPromise

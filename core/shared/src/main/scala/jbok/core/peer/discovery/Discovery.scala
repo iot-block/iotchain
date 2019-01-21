@@ -60,7 +60,7 @@ final class Discovery[F[_]](
       .use {
         case (_, promise) =>
           transport.send(remote, request) >>
-            promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout)).flatMap(_.bodyAs[A])
+            promise.get.timeoutTo(timeout, F.raiseError(ErrTimeout)).flatMap(_.binaryBodyAs[A])
       }
 
   /** send a [[Ping]] message to the remote node and wait for the [[Pong]]. */
@@ -68,7 +68,7 @@ final class Discovery[F[_]](
     for {
       current <- T.clock.realTime(MILLISECONDS)
       ping = Ping(peerNode, current + ttl.toMillis)
-      request <- Request[F, Ping]("Ping", ping)
+      request <- Request.binary[F, Ping]("Ping", ping)
       _ = log.debug(s"Ping ${remote.udpAddress}")
       pong     <- sendAndWaitPacket[Pong](remote.udpAddress, request)
       received <- T.clock.realTime(MILLISECONDS)
@@ -82,7 +82,7 @@ final class Discovery[F[_]](
     for {
       current <- T.clock.realTime(MILLISECONDS)
       ping = Ping(peerNode, current + ttl.toMillis)
-      request  <- Request[F, Ping]("Ping", ping, id)
+      request  <- Request.binary[F, Ping]("Ping", ping, id)
       pong     <- sendAndWaitPacket[Pong](remote.udpAddress, request)
       received <- T.clock.realTime(MILLISECONDS)
       _        <- checkExpiration(received, pong.expiration)
@@ -104,7 +104,7 @@ final class Discovery[F[_]](
           F.unit
         }
         findNode = FindNode(peerNode, targetPK, current + ttl.toMillis)
-        request    <- Request[F, FindNode]("FindNode", findNode)
+        request    <- Request.binary[F, FindNode]("FindNode", findNode)
         neighbours <- sendAndWaitPacket[Neighbours](remote.udpAddress, request)
       } yield neighbours
 
@@ -204,9 +204,9 @@ final class Discovery[F[_]](
   private val pipe: Pipe[F, (InetSocketAddress, Message[F]), (InetSocketAddress, Message[F])] = { input =>
     val output = input
       .evalMap[F, Option[(InetSocketAddress, Message[F])]] {
-        case (remote, req @ Request(id, "Ping", _)) =>
+        case (remote, req @ Request(id, "Ping", _, _)) =>
           for {
-            Ping(from, expiration) <- req.bodyAs[Ping]
+            Ping(from, expiration) <- req.binaryBodyAs[Ping]
             current                <- T.clock.realTime(MILLISECONDS)
             _                      <- checkExpiration(current, expiration)
             _ = log.debug(s"receive a ping from ${remote}")
@@ -220,9 +220,9 @@ final class Discovery[F[_]](
             resp <- Response.ok[F, Pong](id, pong)
           } yield Some(remote -> resp)
 
-        case (remote, req @ Request(id, "FindNode", _)) =>
+        case (remote, req @ Request(id, "FindNode", _, _)) =>
           for {
-            FindNode(from, pk, expiration) <- req.bodyAs[FindNode]
+            FindNode(from, pk, expiration) <- req.binaryBodyAs[FindNode]
             current                        <- T.clock.realTime(MILLISECONDS)
             _                              <- checkExpiration(current, expiration)
             lastPong                       <- store.getLastPong(from.id)
@@ -238,7 +238,7 @@ final class Discovery[F[_]](
             resp <- Response.ok[F, Neighbours](id, neighbors)
           } yield Some(remote -> resp)
 
-        case (_, resp @ Response(id, _, _, _)) =>
+        case (_, resp @ Response(id, _, _, _, _)) =>
           for {
             _ <- promises.get.flatMap(_.get(id) match {
               case Some(p) => p.complete(resp)

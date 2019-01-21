@@ -22,7 +22,7 @@ object Proxy {
           } yield IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, Some(sig))
         case _ => F.pure(IstanbulMessage(msgCode, payload, context.address, ByteVector.empty, None))
       }
-      rlp  <- F.delay(RlpCodec.encode(msgForSign).require.bytes)
+      rlp  <- msgForSign.asBytes[F]
       sign <- context.signFunc(rlp)
     } yield msgForSign.copy(signature = ByteVector(sign.bytes))
 
@@ -57,7 +57,7 @@ object Proxy {
         context.updateCurrentRound(round) >>
           // broadcast ROUND CHANGE message
           broadcast(IstanbulMessage.msgRoundChange,
-                    RlpCodec.encode(Subject(View(round, rs.blockNumber), ByteVector.empty)).require.bytes,
+                    Subject(View(round, rs.blockNumber), ByteVector.empty).asValidBytes,
                     context)
       }
     } yield ()
@@ -72,7 +72,7 @@ object Proxy {
     for {
       cs <- context.currentSubject()
       _ <- cs match {
-        case Some(subject) => broadcast(msgCode, RlpCodec.encode(subject).require.bytes, context)
+        case Some(subject) => broadcast(msgCode, subject.asValidBytes, context)
         case None          => F.unit
       }
     } yield ()

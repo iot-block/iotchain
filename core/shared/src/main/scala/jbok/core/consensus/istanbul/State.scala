@@ -187,7 +187,7 @@ case object StateNewRound extends State {
           _ <- if (block.header.number == view.blockNumber && isProposer) {
             for {
               msg     <- F.pure(Preprepare(view, block))
-              payload <- F.delay(RlpCodec.encode(msg).require.bytes)
+              payload <- msg.asBytes[F]
               _       <- Proxy.broadcast(IstanbulMessage.msgPreprepareCode, payload, context)
             } yield ()
           } else F.unit

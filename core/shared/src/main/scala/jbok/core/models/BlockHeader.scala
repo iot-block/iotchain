@@ -25,7 +25,7 @@ final case class BlockHeader(
     unixTimestamp: Long, // pre
     extra: ByteVector
 ) {
-  lazy val bytes: ByteVector = this.asBytes
+  lazy val bytes: ByteVector = this.asValidBytes
 
   lazy val hash: ByteVector = bytes.kec256
 

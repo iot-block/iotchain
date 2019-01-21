@@ -98,7 +98,7 @@ object Clique {
 
   val extraVanity   = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
   val extraSeal     = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
-  val ommersHash    = List.empty[BlockHeader].asBytes.kec256 // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
+  val ommersHash    = List.empty[BlockHeader].asValidBytes.kec256 // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
   val diffInTurn    = BigInt(11) // Block difficulty for in-turn signatures
   val diffNoTurn    = BigInt(10) // Block difficulty for out-of-turn signatures
   val nonceAuthVote = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
@@ -125,12 +125,12 @@ object Clique {
     } yield new Clique[F](config, history, Map.empty, keyPair)(F, cache)
 
   private[clique] def fillExtraData(signers: List[Address]): ByteVector =
-    CliqueExtra(signers, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asBytes
+    CliqueExtra(signers, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asValidBytes
 //    ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
 //      extraSeal)(0.toByte)
 
   def sigHash[F[_]](header: BlockHeader)(implicit F: Sync[F]): F[ByteVector] = F.delay {
-    val bytes = header.copy(extra = ByteVector.empty).asBytes
+    val bytes = header.copy(extra = ByteVector.empty).asValidBytes
 //    val bytes = RlpCodec.encode(header.copy(extraData = header.extraData.dropRight(extraSeal))).require.bytes
     bytes.kec256
   }

@@ -59,14 +59,14 @@ class EthashMinerPlatform[F[_]](
           } yield (dag, dagSize)
       }
     } yield {
-      val headerHash = block.header.copy(extra = ByteVector.empty).asBytes.kec256
+      val headerHash = block.header.copy(extra = ByteVector.empty).asValidBytes.kec256
       val startTime  = System.currentTimeMillis()
       val mineResult = mine(headerHash, block.header.difficulty.toLong, dagSize, dag, miningConfig.mineRounds)
       val time       = System.currentTimeMillis() - startTime
       val hashRate   = (mineResult.triedHashes * 1000) / time
       mineResult match {
         case MiningSuccessful(_, pow, nonce) =>
-          val extraBytes = EthashExtra(pow.mixHash, nonce).asBytes
+          val extraBytes = EthashExtra(pow.mixHash, nonce).asValidBytes
           block.copy(header = block.header.copy(extra = extraBytes))
         case MiningUnsuccessful(tried) =>
           throw new Exception(s"mining unsuccessful, tried ${tried}")

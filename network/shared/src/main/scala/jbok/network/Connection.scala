@@ -47,7 +47,7 @@ final case class Connection[F[_]](
       }
 
   def expect[A](req: Request[F])(implicit C: RlpCodec[A]): F[A] =
-    request(req).flatMap(_.bodyAs[A])
+    request(req).flatMap(_.binaryBodyAs[A])
 
   def start: F[Fiber[F, Unit]] =
     stream.compile.drain.start

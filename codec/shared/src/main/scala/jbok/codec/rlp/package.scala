@@ -78,10 +78,8 @@ package object rlp {
   }
 
   final class CodecOps[A](val a: A) extends AnyVal {
-    def asBits(implicit codec: RlpCodec[A]): BitVector                   = codec.encode(a).require
-    def asBytes(implicit codec: RlpCodec[A]): ByteVector                 = asBits.bytes
-    def asBitsF[F[_]: Sync](implicit codec: RlpCodec[A]): F[BitVector]   = Sync[F].delay(asBits)
-    def asBytesF[F[_]: Sync](implicit codec: RlpCodec[A]): F[ByteVector] = Sync[F].delay(asBytes)
+    def asValidBytes(implicit codec: RlpCodec[A]): ByteVector           = codec.encode(a).require.bytes
+    def asBytes[F[_]: Sync](implicit codec: RlpCodec[A]): F[ByteVector] = Sync[F].delay(asValidBytes)
   }
 
   final class BitsDecodeOps(val bits: BitVector) extends AnyVal {

@@ -72,7 +72,7 @@ final case class FullSync[F[_]](
     for {
       _       <- log.debug(s"request BlockHeader [${status.start}, ${status.start + limit})").pure[F]
       start   <- T.clock.monotonic(MILLISECONDS)
-      request <- Request[F, GetBlockHeaders]("GetBlockHeaders", GetBlockHeaders(Left(status.start), limit, 0, false))
+      request <- Request.binary[F, GetBlockHeaders]("GetBlockHeaders", GetBlockHeaders(Left(status.start), limit, 0, false))
       synced <- status.peer.conn
         .expect[BlockHeaders](request)
         .timeout(config.requestTimeout)
@@ -117,7 +117,7 @@ final case class FullSync[F[_]](
     }
     for {
       start   <- T.clock.monotonic(MILLISECONDS)
-      request <- Request[F, GetBlockBodies]("GetBlockBodies", GetBlockBodies(hashes))
+      request <- Request.binary[F, GetBlockBodies]("GetBlockBodies", GetBlockBodies(hashes))
       imported <- peer.conn.expect[BlockBodies](request).timeout(config.requestTimeout).attempt.flatMap {
         case Right(BlockBodies(bodies)) =>
           if (bodies.isEmpty) {

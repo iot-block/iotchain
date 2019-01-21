@@ -7,6 +7,7 @@ import cats.effect.IO
 import jbok.JbokAsyncSpec
 import jbok.common.execution._
 import jbok.network.Request
+import _root_.io.circe.syntax._
 
 import scala.concurrent.ExecutionContext
 
@@ -19,7 +20,7 @@ class WsClientSpec extends JbokAsyncSpec {
       for {
         client <- WsClient[IO](uri)
         _      <- client.start
-        _      <- client.write(Request.withTextBody[IO](UUID.randomUUID(), "", "ohoho"))
+        _      <- client.write(Request.json[IO](UUID.randomUUID(), "", "ohoho".asJson))
         resp   <- client.read
         _ = println(resp)
       } yield ()

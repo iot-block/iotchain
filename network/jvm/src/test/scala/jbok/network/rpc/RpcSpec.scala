@@ -52,8 +52,8 @@ class RpcSpec extends JbokSpec {
         client = RpcClient[IO](ws)
         fiber <- Stream(server.stream, Stream.sleep(1.second) ++ ws.stream).parJoinUnbounded.compile.drain.start
         _ = service.handlers.size shouldBe 5
-        _ <- client.request(Request.withJsonBody[IO](UUID.randomUUID(), "qux", ("name", 18).asJson))
-        _ <- client.request(Request.withJsonBody[IO](UUID.randomUUID(), "error", ().asJson))
+        _ <- client.request(Request.json[IO](UUID.randomUUID(), "qux", ("name", 18).asJson))
+        _ <- client.request(Request.json[IO](UUID.randomUUID(), "error", ().asJson))
         _ <- fiber.cancel
       } yield ()
 

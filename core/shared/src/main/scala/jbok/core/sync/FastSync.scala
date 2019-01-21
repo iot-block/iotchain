@@ -72,7 +72,7 @@ final class FastSync[F[_]](
     val start = current + 1
     val limit = (BigInt(maxBlockHeadersPerRequest) min (target - start + 1)).toInt
     for {
-      request               <- Request[F, GetBlockHeaders]("GetBlockHeaders", GetBlockHeaders(Left(start), limit, 0, false))
+      request               <- Request.binary[F, GetBlockHeaders]("GetBlockHeaders", GetBlockHeaders(Left(start), limit, 0, false))
       BlockHeaders(headers) <- peer.conn.expect[BlockHeaders](request)
     } yield headers
   }
@@ -81,8 +81,8 @@ final class FastSync[F[_]](
     for {
       headers <- downloadHeaders(peer, current, target)
       hashes = headers.map(_.hash)
-      bodyReq             <- Request[F, GetBlockBodies]("GetBlockBodies", GetBlockBodies(hashes))
-      receiptReq          <- Request[F, GetReceipts]("GetReceipts", GetReceipts(hashes))
+      bodyReq             <- Request.binary[F, GetBlockBodies]("GetBlockBodies", GetBlockBodies(hashes))
+      receiptReq          <- Request.binary[F, GetReceipts]("GetReceipts", GetReceipts(hashes))
       BlockBodies(bodies) <- peer.conn.expect[BlockBodies](bodyReq)
       Receipts(receipts)  <- peer.conn.expect[Receipts](receiptReq)
       _                   <- headers.traverse(header => history.putBlockHeader(header, updateTD = true))
@@ -116,7 +116,7 @@ final class FastSync[F[_]](
         queue.dequeue.evalMap { getNodeData =>
           for {
             peer    <- randomPeer(state.goodPeers)
-            request <- Request[F, GetNodeData]("GetNodeData", getNodeData)
+            request <- Request.binary[F, GetNodeData]("GetNodeData", getNodeData)
             resp    <- peer.conn.expect[NodeData](request)
             requested = getNodeData.nodeHashes.map(x => x.v -> x).toMap
             hashes <- resp.values.traverse(value => handleNode(requested(value.kec256), value)).map(_.flatten)

@@ -55,7 +55,7 @@ object RpcClientMacro {
       q"""
         override def $methodName(...$parameterLists): IO[${resultType}] = {
           val request: Request[IO] =
-            Request.withJsonBody[IO](
+            Request.json[IO](
               id = java.util.UUID.randomUUID(),
               method = ${methodName.toString},
               body = $parametersAsTuple.asJson
@@ -63,8 +63,7 @@ object RpcClientMacro {
 
           val p = for {
             resp   <- ${c.prefix.tree}.request(request)
-            json   <- resp.bodyAsJson
-            result <- IO.fromEither(json.as[$resultType])
+            result <- resp.bodyAs[$resultType]
           } yield result
 
           p.attempt.flatMap {

@@ -10,7 +10,7 @@ import scala.language.experimental.macros
 
 sealed trait PrefixType
 object PrefixType {
-  case object NoPrefix      extends PrefixType
+  case object NoPrefix     extends PrefixType
   case object ItemLenPrefix extends PrefixType
   case object ListLenPrefix extends PrefixType
 }

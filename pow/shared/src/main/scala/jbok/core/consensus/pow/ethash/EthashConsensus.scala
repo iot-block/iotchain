@@ -42,7 +42,7 @@ class EthashConsensus[F[_]](
     } yield
       BlockHeader(
         parentHash = parent.header.hash,
-        ommersHash = ommers.asBytes.kec256,
+        ommersHash = ommers.asValidBytes.kec256,
         beneficiary = miningConfig.coinbase.bytes,
         stateRoot = ByteVector.empty,
         //we are not able to calculate transactionsRoot here because we do not know if they will fail

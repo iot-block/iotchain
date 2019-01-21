@@ -371,7 +371,7 @@ object Istanbul {
 
   val extraVanity: Int          = 32 // Fixed number of extra-data bytes reserved for validator vanity
   val extraSeal: Int            = 65 // Fixed number of extra-data bytes reserved for validator seal
-  val uncleHash: ByteVector     = RlpCodec.encode(()).require.bytes.kec256 // Always Keccak256(RLP([]))
+  val uncleHash: ByteVector     = ().asValidBytes.kec256 // Always Keccak256(RLP([]))
   val nonceAuthVote: ByteVector = hex"0xffffffffffffffff" // Magic nonce number to vote on adding a new signer
   val nonceDropVote: ByteVector = hex"0x0000000000000000" // Magic nonce number to vote on removing a signer.
   val mixDigest: ByteVector     = hex"0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365"
@@ -436,7 +436,7 @@ object Istanbul {
     */
   def sigHash(header: BlockHeader): ByteVector = {
     val newHeader = filteredHeader(header, false)
-    RlpCodec.encode(newHeader).require.bytes
+    newHeader.asValidBytes
   }
   def ecrecover(header: BlockHeader): Address =
     // Retrieve the signature from the header extra-data

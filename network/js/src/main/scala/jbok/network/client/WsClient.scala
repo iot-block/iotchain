@@ -74,7 +74,7 @@ object WsClient {
               .unsafeRunSync()
           }
           a   <- queue.dequeue.through(pipe)
-          str <- Stream.eval(a.encodeBytes.map(_.toBase64))
+          str <- Stream.eval(a.asBytes.map(_.toBase64))
           _   <- Stream.eval(Sync[F].delay(ws.send(str)))
         } yield ()
       }

@@ -19,13 +19,13 @@ object BinaryCodec {
     ByteVector(int8Array2ByteArray(bytes))
 
   def encodeBlockHeader(header: BlockHeader): Int8Array =
-    header.asBytes
+    header.asValidBytes
 
   def decodeBlockHeader(bytes: Int8Array): js.UndefOr[BlockHeader] =
     Int8Array8Bytes(bytes).asOpt[BlockHeader].orUndefined
 
   def encodeTx(tx: SignedTransaction): Int8Array =
-    tx.asBytes
+    tx.asValidBytes
 
   def decodeTx(bytes: Int8Array): js.UndefOr[SignedTransaction] =
     Int8Array8Bytes(bytes).asOpt[SignedTransaction].orUndefined

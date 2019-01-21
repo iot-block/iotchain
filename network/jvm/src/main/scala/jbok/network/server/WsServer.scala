@@ -3,6 +3,8 @@ package jbok.network.server
 import java.net.InetSocketAddress
 
 import _root_.io.prometheus.client.CollectorRegistry
+import _root_.io.circe.parser._
+import _root_.io.circe._
 import cats.effect._
 import cats.implicits._
 import fs2._
@@ -52,7 +54,7 @@ object WsServer {
         case GET -> Root =>
           Queue.unbounded[F, Message[F]].flatMap { queue =>
             val toClient = queue.dequeue.evalMap { x =>
-              x.encodeBytes.map(bytes => WebSocketFrame.Binary(bytes, true))
+              x.asBytes.map(bytes => WebSocketFrame.Binary(bytes, true))
             }
 
             val fromClient: Sink[F, WebSocketFrame] = { s: Stream[F, WebSocketFrame] =>
@@ -77,8 +79,8 @@ object WsServer {
             case Some(h) =>
               for {
                 text    <- req.as[String]
-                request <- Request.fromText[F](text)
-                result  <- h(request).flatMap(_.asText)
+                request <- Request.fromJson[F](parse(text).getOrElse(Json.Null))
+                result  <- h(request).flatMap(_.asJson.map(_.noSpaces))
                 resp    <- Ok(result)
               } yield resp
 

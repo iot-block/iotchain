@@ -153,7 +153,7 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
       proposerSig = ByteVector.empty,
       committedSigs = List.empty
     )
-    ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes
+    ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ extra.asValidBytes
   }
 
   override def postProcess(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.ExecutedBlock[F]] = F.pure(executed)

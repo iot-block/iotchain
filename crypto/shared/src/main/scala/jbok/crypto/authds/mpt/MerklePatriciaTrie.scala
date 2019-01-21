@@ -578,7 +578,7 @@ object MerklePatriciaTrie {
       root <- mpt.getRootHash
     } yield root
 
-  val emptyRootHash: ByteVector = ().asBytes.kec256
+  val emptyRootHash: ByteVector = ().asValidBytes.kec256
 
   val alphabet: Vector[String] = "0123456789abcdef".map(_.toString).toVector
 

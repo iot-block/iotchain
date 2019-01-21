@@ -31,7 +31,7 @@ final class UdpTransport[F[_]](socket: Socket[F])(implicit F: ConcurrentEffect[F
           .through(pipe)
           .evalMap {
             case (remote, a) =>
-              a.encodeChunk.map(chunk => Packet(remote, chunk))
+              a.asChunk.map(chunk => Packet(remote, chunk))
           }
           .to(socket.writes())
       }
@@ -39,7 +39,7 @@ final class UdpTransport[F[_]](socket: Socket[F])(implicit F: ConcurrentEffect[F
       .onFinalize(F.delay(log.trace(s"serving terminated")))
 
   def send(remote: InetSocketAddress, message: Message[F]): F[Unit] =
-    message.encodeChunk.flatMap(chunk => socket.write(Packet(remote, chunk)))
+    message.asChunk.flatMap(chunk => socket.write(Packet(remote, chunk)))
 }
 
 object UdpTransport {

@@ -11,49 +11,58 @@ import io.circe.parser._
 import io.circe.syntax._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
+import jbok.codec.json.implicits._
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
 
-sealed trait Message[F[_]] { self =>
-  type Self <: Message[F] { type Self = self.Self }
+sealed trait ContentType
+object ContentType {
+  case object Binary extends ContentType
+  case object Json   extends ContentType
+}
 
+sealed trait Message[F[_]] {
   def id: UUID
 
   def body: ByteVector
 
+  def contentType: ContentType
+
   def contentLength: Long =
     body.length
 
-  def bodyAs[A](implicit F: Sync[F], c: RlpCodec[A]): F[A] =
-    F.delay(c.decode(body.bits).require.value)
+  def bodyAs[A](implicit F: Sync[F], b: RlpCodec[A], j: Decoder[A]): F[A] = contentType match {
+    case ContentType.Binary => binaryBodyAs[A]
+    case ContentType.Json   => jsonBodyAs[A]
+  }
 
-  def bodyAsText(implicit F: Sync[F]): F[String] =
+  def binaryBodyAs[A](implicit F: Sync[F], C: RlpCodec[A]): F[A] =
+    F.delay(C.decode(body.bits).require.value)
+
+  def jsonBodyAs[A](implicit F: Sync[F], C: Decoder[A]): F[A] =
     F.delay(RlpCodec.decode[String](body.bits).require.value)
+      .flatMap(s => F.fromEither(C.decodeJson(parse(s).getOrElse(Json.Null))))
 
-  def bodyAsJson(implicit F: Sync[F]): F[Json] =
-    bodyAsText.map(str => parse(str).getOrElse(Json.Null))
+  def bodyAsJson(implicit F: Sync[F]): F[Json] = contentType match {
+    case ContentType.Binary =>
+      Json.fromString(body.toBase64).pure[F]
+    case ContentType.Json =>
+      F.delay(RlpCodec.decode[String](body.bits).require.value).map(str => parse(str).getOrElse(Json.Null))
+  }
 
   def asJson(implicit F: Sync[F]): F[Json]
 
-  def asText(implicit F: Sync[F]): F[String] =
-    asJson.map(_.spaces2)
-
-  def encodeBytes(implicit F: Sync[F]): F[ByteVector] =
+  def asBytes(implicit F: Sync[F]): F[ByteVector] =
     Message.encodeBytes[F](this)
 
-  def encodeChunk(implicit F: Sync[F]): F[Chunk[Byte]] =
-    encodeBytes.map(ByteVectorChunk.apply)
-
-  protected def changed(
-      id: UUID,
-      body: ByteVector
-  ): Self
+  def asChunk(implicit F: Sync[F]): F[Chunk[Byte]] =
+    asBytes.map(ByteVectorChunk.apply)
 }
 
 object Message {
   implicit def codec[F[_]]: Codec[Message[F]] = RlpCodec[Message[F]]
 
-  val emptyBody: ByteVector = RlpCodec.encode("").require.bytes
+  val emptyBody: ByteVector = ().asValidBytes
 
   def encodeBytes[F[_]: Sync](message: Message[F]): F[ByteVector] =
     Sync[F].delay(RlpCodec.encode(message).require.bytes)
@@ -65,7 +74,7 @@ object Message {
     Sync[F].delay(RlpCodec.decode[Message[F]](BitVector(chunk.toArray)).require.value)
 
   def encodePipe[F[_]: Effect]: Pipe[F, Message[F], Byte] =
-    _.evalMap(_.encodeChunk).flatMap(chunk => Stream.chunk(chunk))
+    _.evalMap(_.asChunk).flatMap(chunk => Stream.chunk(chunk))
 
   def decodePipe[F[_]: Effect]: Pipe[F, Byte, Message[F]] = _.chunks.flatMap { chunk =>
     val bits = BitVector(chunk.toArray)
@@ -76,12 +85,9 @@ object Message {
 final case class Request[F[_]](
     id: UUID,
     method: String,
+    contentType: ContentType = ContentType.Binary,
     body: ByteVector
 ) extends Message[F] {
-  type Self = Request[F]
-
-  override protected def changed(id: UUID, body: ByteVector): Self =
-    copy(id = id, body = body)
 
   override def asJson(implicit F: Sync[F]): F[Json] =
     bodyAsJson.map(
@@ -89,6 +95,7 @@ final case class Request[F[_]](
         Json.obj(
           ("id", id.asJson),
           ("method", method.asJson),
+          ("contentType", contentType.asJson),
           ("body", bodyJson)
       ))
 
@@ -97,40 +104,35 @@ final case class Request[F[_]](
 }
 
 object Request {
-  def apply[F[_], A](method: String, body: A, id: UUID = UUID.randomUUID())(implicit F: Sync[F],
-                                                                            C: RlpCodec[A]): F[Request[F]] =
-    body.asBytesF[F].map(bytes => Request(id, method, bytes))
+  def binary[F[_], A](method: String, body: A, id: UUID = UUID.randomUUID())(implicit F: Sync[F],
+                                                                             C: RlpCodec[A]): F[Request[F]] =
+    body.asBytes[F].map(bytes => Request(id, method, ContentType.Binary, bytes))
 
-  def withTextBody[F[_]](id: UUID, method: String, body: String): Request[F] =
-    Request[F](id, method, RlpCodec.encode(body).require.bytes)
-
-  def withJsonBody[F[_]](id: UUID, method: String, body: Json): Request[F] =
-    withTextBody[F](id, method, body.noSpaces)
+  def json[F[_]](id: UUID, method: String, body: Json): Request[F] =
+    Request[F](id, method, ContentType.Json, body.noSpaces.asValidBytes)
 
   def fromJson[F[_]](json: Json)(implicit F: Sync[F]): F[Request[F]] = Sync[F].fromEither {
     for {
-      id     <- json.hcursor.downField("id").as[UUID]
-      method <- json.hcursor.downField("method").as[String]
-      body   <- json.hcursor.getOrElse[Json]("body")(Json.Null)
+      id          <- json.hcursor.downField("id").as[UUID]
+      method      <- json.hcursor.downField("method").as[String]
+      contentType <- json.hcursor.downField("contentType").as[ContentType]
+      body <- contentType match {
+        case ContentType.Binary => json.hcursor.downField("body").as[String].map(s => ByteVector.fromValidBase64(s))
+        case ContentType.Json   => json.hcursor.get[Json]("body").map(s => s.noSpaces.asValidBytes)
+      }
     } yield {
-      Request.withJsonBody[F](id, method, body)
+      Request[F](id, method, contentType, body)
     }
   }
-
-  def fromText[F[_]](text: String)(implicit F: Sync[F]): F[Request[F]] =
-    F.fromEither(parse(text)).flatMap(json => fromJson[F](json))
 }
 
 final case class Response[F[_]](
     id: UUID,
     code: Int = 200,
     message: String = "",
+    contentType: ContentType = ContentType.Binary,
     body: ByteVector = Message.emptyBody
 ) extends Message[F] {
-  override type Self = Response[F]
-
-  override protected def changed(id: UUID, body: ByteVector): Self =
-    copy(id = id, body = body)
 
   override def asJson(implicit F: Sync[F]): F[Json] =
     bodyAsJson.map(
@@ -139,6 +141,7 @@ final case class Response[F[_]](
           ("id", id.asJson),
           ("code", code.asJson),
           ("message", message.asJson),
+          ("contentType", contentType.asJson),
           ("body", bodyJson)
       ))
 
@@ -151,13 +154,10 @@ final case class Response[F[_]](
 
 object Response {
   def ok[F[_], A](id: UUID, a: A)(implicit F: Sync[F], C: RlpCodec[A]): F[Response[F]] =
-    a.asBytesF[F].map(body => Response(id, body = body))
+    a.asBytes[F].map(body => Response(id, contentType = ContentType.Binary, body = body))
 
-  def withTextBody[F[_]](id: UUID, code: Int, message: String, body: String): Response[F] =
-    Response[F](id, body = RlpCodec.encode(body).require.bytes)
-
-  def withJsonBody[F[_]](id: UUID, code: Int, message: String, body: Json): Response[F] =
-    withTextBody[F](id, code, message, body.noSpaces)
+  def json[F[_]](id: UUID, code: Int, message: String, body: Json): Response[F] =
+    Response[F](id, contentType = ContentType.Json, body = body.noSpaces.asValidBytes)
 
   def badRequest[F[_]](id: UUID)(implicit F: Sync[F]): Response[F] =
     Response[F](id, 400, "Bad Request")
@@ -170,15 +170,16 @@ object Response {
 
   def fromJson[F[_]](json: Json)(implicit F: Sync[F]): F[Response[F]] = Sync[F].fromEither {
     for {
-      id      <- json.hcursor.downField("id").as[UUID]
-      code    <- json.hcursor.downField("code").as[Int]
-      message <- json.hcursor.downField("message").as[String]
-      body    <- json.hcursor.getOrElse[Json]("body")(Json.Null)
+      id          <- json.hcursor.downField("id").as[UUID]
+      code        <- json.hcursor.downField("code").as[Int]
+      message     <- json.hcursor.downField("message").as[String]
+      contentType <- json.hcursor.downField("contentType").as[ContentType]
+      body <- contentType match {
+        case ContentType.Binary => json.hcursor.downField("body").as[String].map(s => ByteVector.fromValidBase64(s))
+        case ContentType.Json   => json.hcursor.get[Json]("body").map(s => s.noSpaces.asValidBytes)
+      }
     } yield {
-      Response.withJsonBody[F](id, code, message, body)
+      Response[F](id, code, message, contentType, body)
     }
   }
-
-  def fromText[F[_]](text: String)(implicit F: Sync[F]): F[Response[F]] =
-    F.fromEither(parse(text)).flatMap(json => fromJson[F](json))
 }

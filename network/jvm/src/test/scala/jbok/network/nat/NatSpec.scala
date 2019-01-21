@@ -2,6 +2,7 @@ package jbok.network.nat
 
 import java.util.UUID
 
+import _root_.io.circe.syntax._
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.common.execution._
@@ -31,9 +32,9 @@ class NatSpec extends JbokSpec {
           fiber <- server.stream.compile.drain.start
           _     <- T.sleep(1.second)
           _     <- client.start
-          _     <- client.write(Request.withTextBody[IO](UUID.randomUUID(), "", "hello"))
+          _     <- client.write(Request.json[IO](UUID.randomUUID(), "", "hello".asJson))
           res   <- client.read
-          _ = res.bodyAsText.unsafeRunSync() shouldBe "hello"
+          _ = res.bodyAsJson.unsafeRunSync() shouldBe "hello".asJson
           _ <- fiber.cancel
         } yield ()
 

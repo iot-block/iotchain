@@ -51,23 +51,23 @@ final case class SyncManager[F[_]] private (
   val history = executor.history
 
   val requestService: PeerRoutes[F] = PeerRoutes.of[F] {
-    case PeerRequest(peer, req @ Request(id, "GetReceipts", _)) =>
+    case PeerRequest(peer, req @ Request(id, "GetReceipts", _, _)) =>
       for {
-        request  <- req.bodyAs[GetReceipts]
+        request  <- req.binaryBodyAs[GetReceipts]
         receipts <- request.blockHashes.traverse(history.getReceiptsByHash).map(_.flatten)
         resp     <- Response.ok[F, Receipts](id, Receipts(receipts))
       } yield PeerSelectStrategy.one(peer) -> resp :: Nil
 
-    case PeerRequest(peer, req @ Request(id, "GetBlockBodies", _)) =>
+    case PeerRequest(peer, req @ Request(id, "GetBlockBodies", _, _)) =>
       for {
-        request <- req.bodyAs[GetBlockBodies]
+        request <- req.binaryBodyAs[GetBlockBodies]
         bodies  <- request.hashes.traverse(hash => history.getBlockBodyByHash(hash)).map(_.flatten)
         resp    <- Response.ok[F, BlockBodies](id, BlockBodies(bodies))
       } yield PeerSelectStrategy.one(peer) -> resp :: Nil
 
-    case PeerRequest(peer, req @ Request(id, "GetBlockHeaders", _)) =>
+    case PeerRequest(peer, req @ Request(id, "GetBlockHeaders", _, _)) =>
       for {
-        GetBlockHeaders(block, maxHeaders, skip, reverse) <- req.bodyAs[GetBlockHeaders]
+        GetBlockHeaders(block, maxHeaders, skip, reverse) <- req.binaryBodyAs[GetBlockHeaders]
         blockNumber <- block match {
           case Left(v)   => v.some.pure[F]
           case Right(bv) => history.getBlockHeaderByHash(bv).map(_.map(_.number))
@@ -94,9 +94,9 @@ final case class SyncManager[F[_]] private (
         }
       } yield res
 
-    case PeerRequest(peer, req @ Request(id, "GetNodeData", _)) =>
+    case PeerRequest(peer, req @ Request(id, "GetNodeData", _, _)) =>
       for {
-        request <- req.bodyAs[GetNodeData]
+        request <- req.binaryBodyAs[GetNodeData]
         nodeData <- request.nodeHashes
           .traverse[F, Option[ByteVector]] {
             case NodeHash.StateMptNodeHash(v)   => history.getMptNode(v)
@@ -109,15 +109,15 @@ final case class SyncManager[F[_]] private (
   }
 
   val messageService: PeerRoutes[F] = PeerRoutes.of[F] {
-    case PeerRequest(peer, req @ Request(_, "NewBlockHashes", _)) =>
+    case PeerRequest(peer, req @ Request(_, "NewBlockHashes",_, _)) =>
       for {
-        request <- req.bodyAs[NewBlockHashes]
+        request <- req.binaryBodyAs[NewBlockHashes]
         _       <- request.hashes.traverse(hash => peer.markBlock(hash.hash, hash.number))
       } yield Nil
 
-    case PeerRequest(peer, req @ Request(_, "NewBlock", _)) =>
+    case PeerRequest(peer, req @ Request(_, "NewBlock",_,  _)) =>
       for {
-        NewBlock(block) <- req.bodyAs[NewBlock]
+        NewBlock(block) <- req.binaryBodyAs[NewBlock]
         _               <- peer.markBlock(block.header.hash, block.header.number)
         resp <- syncStatus.get.flatMap[List[(PeerSelectStrategy[F], Message[F])]] {
           case SyncStatus.SyncDone =>
@@ -131,9 +131,9 @@ final case class SyncManager[F[_]] private (
         }
       } yield resp
 
-    case PeerRequest(peer, req @ Request(id, "SignedTransactions", _)) =>
+    case PeerRequest(peer, req @ Request(id, "SignedTransactions", _, _)) =>
       for {
-        stxs <- req.bodyAs[SignedTransactions]
+        stxs <- req.binaryBodyAs[SignedTransactions]
         _ = log.debug(s"received ${stxs.txs.length} stxs from ${peer.id}")
         _    <- peer.markTxs(stxs)
         _    <- executor.txPool.addTransactions(stxs)
@@ -152,10 +152,10 @@ final case class SyncManager[F[_]] private (
 
   def broadcastBlock(block: Block): F[List[(PeerSelectStrategy[F], Message[F])]] =
     for {
-      newBlockHash <- Request[F, NewBlockHashes](
+      newBlockHash <- Request.binary[F, NewBlockHashes](
         "NewBlockHashes",
         NewBlockHashes(BlockHash(block.header.hash, block.header.number) :: Nil))
-      newBlock <- Request[F, NewBlock]("NewBlock", NewBlock(block))
+      newBlock <- Request.binary[F, NewBlock]("NewBlock", NewBlock(block))
     } yield
       List(
         PeerSelectStrategy.withoutBlock(block) -> newBlockHash,

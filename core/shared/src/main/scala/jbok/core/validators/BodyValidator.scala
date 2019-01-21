@@ -30,6 +30,6 @@ private[validators] object BodyValidator {
     }
 
   private def validateOmmersHash[F[_]](block: Block)(implicit F: Sync[F]): F[Unit] =
-    if (RlpCodec.encode(block.body.ommerList).require.toByteVector.kec256 equals block.header.ommersHash) F.unit
+    if (block.body.ommerList.asValidBytes.kec256 equals block.header.ommersHash) F.unit
     else F.raiseError(BodyOmmersHashInvalid)
 }
