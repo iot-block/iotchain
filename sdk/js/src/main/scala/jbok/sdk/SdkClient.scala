@@ -1,6 +1,7 @@
 package jbok.sdk
 
 import java.net.URI
+import java.util.UUID
 
 import cats.effect.IO
 import jbok.common.execution._
@@ -14,15 +15,16 @@ import scala.concurrent.duration._
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
+import cats.implicits._
 
 @JSExportTopLevel("SdkClient")
 @JSExportAll
 class SdkClient(client: RpcClient[IO]) {
-  def jsonrpc(json: String): js.Promise[String] =
+  def jsonrpc(method: String, body: String, id: UUID = UUID.randomUUID()): js.Promise[String] =
     (for {
-      req  <- Request.fromJson[IO](parse(json).getOrElse(Json.Null))
+      req  <- Request.json[IO](id, method, parse(body).getOrElse(Json.Null)).pure[IO]
       resp <- client.request(req)
-      text <- resp.asJson
+      text <- resp.bodyAsJson
     } yield text.noSpaces).timeout(10.seconds).unsafeToFuture().toJSPromise
 }
 

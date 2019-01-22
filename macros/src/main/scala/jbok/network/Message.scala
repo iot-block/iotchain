@@ -100,7 +100,7 @@ final case class Request[F[_]](
       ))
 
   override def toString: String =
-    s"Request(method=${method}, body=${body}, id=${id})"
+    s"Request(id=${id}, method=${method}, contentType=${contentType}, body=${body})"
 }
 
 object Request {
@@ -149,7 +149,7 @@ final case class Response[F[_]](
     code < 300
 
   override def toString: String =
-    s"Response(code=${code}, message=${message}, body=${body}, id=${id})"
+    s"Response(id=${id}, code=${code}, message=${message}, contentType=${contentType}, body=${body})"
 }
 
 object Response {
