@@ -24,7 +24,7 @@ class SdkClient(client: RpcClient[IO]) {
     (for {
       req  <- Request.json[IO](id, method, parse(body).getOrElse(Json.Null)).pure[IO]
       resp <- client.request(req)
-      text <- resp.bodyAsJson
+      text <- resp.asJson
     } yield text.noSpaces).timeout(10.seconds).unsafeToFuture().toJSPromise
 }
 
