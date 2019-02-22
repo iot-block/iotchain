@@ -43,9 +43,9 @@ class TestNetTxGen(clients: Ref[IO, Map[String, JbokClient]],
       for {
         cs <- clients.get
         client = cs.values.toList.head
-        accounts <- getAccounts(keyPairs.map(Address.apply), client)
-        stxs     <- TxGen.genTxs(nTx, keyPairs.zip(accounts).toMap)
-        _        <- stxs.traverse[IO, ByteVector](stx => client.public.sendSignedTransaction(stx))
+        accounts  <- getAccounts(keyPairs.map(Address.apply), client)
+        (_, stxs) <- TxGen.genTxs(nTx, keyPairs.zip(accounts).toMap)
+        _         <- stxs.traverse[IO, ByteVector](stx => client.public.sendSignedTransaction(stx))
         _ = log.info(s"send ${nTx} stxs to network.")
       } yield ()
 

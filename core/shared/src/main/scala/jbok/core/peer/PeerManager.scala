@@ -61,8 +61,11 @@ abstract class PeerManager[F[_]](
             _ = log.debug(s"${peer.id} handshaked")
             _ <- eval(incoming.update(_ + (peer.pk -> peer)))
             _ <- peer.conn.reads
-              .map(msg => PeerRequest(peer, msg))
-              .to(messageQueue.enqueue)
+              .evalMap { msg =>
+                val request = PeerRequest(peer, msg)
+                F.delay(log.trace(s"peer manager receive request: ${request}")) >>
+                  messageQueue.enqueue1(request).timeout(5.seconds)
+              }
               .onFinalize(incoming.update(_ - peer.pk) >> F.delay(log.debug(s"${peer.id} disconnected")))
           } yield ()
 

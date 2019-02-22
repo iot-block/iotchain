@@ -109,13 +109,13 @@ final case class SyncManager[F[_]] private (
   }
 
   val messageService: PeerRoutes[F] = PeerRoutes.of[F] {
-    case PeerRequest(peer, req @ Request(_, "NewBlockHashes",_, _)) =>
+    case PeerRequest(peer, req @ Request(_, "NewBlockHashes", _, _)) =>
       for {
         request <- req.binaryBodyAs[NewBlockHashes]
         _       <- request.hashes.traverse(hash => peer.markBlock(hash.hash, hash.number))
       } yield Nil
 
-    case PeerRequest(peer, req @ Request(_, "NewBlock",_,  _)) =>
+    case PeerRequest(peer, req @ Request(_, "NewBlock", _, _)) =>
       for {
         NewBlock(block) <- req.binaryBodyAs[NewBlock]
         _               <- peer.markBlock(block.header.hash, block.header.number)
