@@ -124,10 +124,8 @@ object LevelDB {
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
   )(implicit F: Sync[F], T: Timer[F], M: Metrics[F]): F[KeyValueDB[F]] =
-    jni[F](path, options, readOptions, writeOptions).attemptT
-      .getOrElseF(
-        iq80[F](path, options, readOptions, writeOptions)
-      )
+    iq80[F](path, options, readOptions, writeOptions).attemptT
+      .getOrElseF(jni[F](path, options, readOptions, writeOptions))
       .map(_.asInstanceOf[KeyValueDB[F]])
 
   private[jbok] def iq80[F[_]](

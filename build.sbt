@@ -221,7 +221,8 @@ lazy val appJVM = app.jvm.settings(
   isDevMode in scalaJSPipeline := true,
   javaOptions in Universal ++= Seq(
     "-J-Xms2g",
-    "-J-Xmx4g"
+    "-J-Xmx4g",
+    "-J-XX:+HeapDumpOnOutOfMemoryError"
   )
 )
 
