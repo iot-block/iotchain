@@ -10,8 +10,8 @@ import jbok.app.api.NodeInfo
 import jbok.app.client.JbokClient
 import jbok.common.execution._
 import jbok.core.models._
-import jbok.evm.abi.Description
 import jbok.sdk.api.BlockParam
+import jbok.solidity.ABIDescription.FunctionDescription
 import org.scalajs.dom.Event
 import scodec.bits.ByteVector
 
@@ -24,7 +24,7 @@ final case class ClientStatus(number: Var[BigInt] = Var(0),
 
 final case class BlockHistory(bestBlockNumber: Var[BigInt] = Var(-1), history: Vars[Block] = Vars.empty)
 
-final case class Contract(address: Address, abi: List[Description])
+final case class Contract(address: Address, abi: List[FunctionDescription])
 
 final case class AppState(
     config: Var[AppConfig],

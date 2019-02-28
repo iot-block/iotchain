@@ -8,13 +8,11 @@ import jbok.app.{AppState, Contract}
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom._
 import scodec.bits.ByteVector
-import jbok.evm.abi.parseContract
 
-@SuppressWarnings(Array(
-  "org.wartremover.warts.OptionPartial",
-  "org.wartremover.warts.EitherProjectionPartial",
-  "org.wartremover.warts.TryPartial",
-))
+@SuppressWarnings(
+  Array("org.wartremover.warts.OptionPartial",
+        "org.wartremover.warts.EitherProjectionPartial",
+        "org.wartremover.warts.TryPartial"))
 final case class ContractView(state: AppState) {
   val watchForm = Form2(
     Constants(
@@ -38,10 +36,10 @@ final case class ContractView(state: AppState) {
     ), { data =>
       if (data.values.forall(_.isValid)) {
         state.currentId.value.map { id =>
-          val abi     = parseContract(data("Abi").value)
+          val abi     = state.clients.value(id).public.parseContractCode(data("Abi").value).unsafeRunSync().contract.get
           val address = Address(ByteVector.fromValidHex(data("Address").value))
           if (!state.contractInfo.value.map(_.address).toSet.contains(address))
-            state.contractInfo.value += Contract(address, abi.toTry.get)
+            state.contractInfo.value += Contract(address, abi.methods)
         }
       }
     }

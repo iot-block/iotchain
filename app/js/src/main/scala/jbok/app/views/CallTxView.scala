@@ -7,33 +7,32 @@ import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
 import jbok.app.AppState
 import jbok.sdk.api.{BlockParam, CallTx}
 import jbok.core.models.{Account, Address}
-import jbok.evm.abi.Description
 import org.scalajs.dom.raw._
 import org.scalajs.dom.{Element, _}
 import org.scalajs.dom
 import scodec.bits.ByteVector
 import io.circe.parser._
-import jbok.evm.abi
 import jbok.sdk.api.{BlockParam, CallTx, TransactionRequest}
+import jbok.solidity.ABIDescription.FunctionDescription
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final case class CallTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]
   val contracts    = Vars.empty[Address]
 
-  val currentId                                            = state.currentId.value
-  val client                                               = currentId.flatMap(state.clients.value.get(_))
-  val account: Var[Option[Account]]                        = Var(None)
-  val to: Var[String]                                      = Var("")
-  val toSyntax: Var[Boolean]                               = Var(true)
-  val passphase: Var[String]                               = Var("")
-  val rawResult: Var[ByteVector]                           = Var(ByteVector.empty)
-  val result: Var[String]                                  = Var("")
-  val contractAbi: Var[Option[List[Description.Function]]] = Var(None)
-  val contractSelected: Var[Boolean]                       = Var(false)
-  val function: Var[Option[Description.Function]]          = Var(None)
-  val txType: Var[String]                                  = Var("Send")
-  val txStatus: Var[String]                                = Var("")
+  val currentId                                           = state.currentId.value
+  val client                                              = currentId.flatMap(state.clients.value.get(_))
+  val account: Var[Option[Account]]                       = Var(None)
+  val to: Var[String]                                     = Var("")
+  val toSyntax: Var[Boolean]                              = Var(true)
+  val passphase: Var[String]                              = Var("")
+  val rawResult: Var[ByteVector]                          = Var(ByteVector.empty)
+  val result: Var[String]                                 = Var("")
+  val contractAbi: Var[Option[List[FunctionDescription]]] = Var(None)
+  val contractSelected: Var[Boolean]                      = Var(false)
+  val function: Var[Option[FunctionDescription]]          = Var(None)
+  val txType: Var[String]                                 = Var("Send")
+  val txStatus: Var[String]                               = Var("")
 
   val paramInputs: Vars[CustomInput] = Vars.empty[CustomInput]
 
@@ -73,9 +72,6 @@ final case class CallTxView(state: AppState) {
           contractSelected.value = true
           contractAbi.value = state.contractInfo.value.find(_.address.toString == v).map {
             _.abi
-              .filter(_.isInstanceOf[Description.Function])
-              .map(_.asInstanceOf[Description.Function])
-              .filter(f => f.`type`.isEmpty || f.`type`.contains("function"))
           }
           function.value = None
         }
@@ -101,9 +97,9 @@ final case class CallTxView(state: AppState) {
             val t = f.inputs.map { p =>
               val validator = (value: String) => {
                 val json = parse(s"[${value}]")
-                json.isRight && abi.encodeInputs(List(p), json.right.get).isRight
+                json.isRight
               }
-              CustomInput(p.name, p.`type`, None, validator)
+              CustomInput(p.name.getOrElse(""), p.parameterType.typeString, None, validator)
             }
             paramInputs.value.clear()
             paramInputs.value ++= t
@@ -123,7 +119,7 @@ final case class CallTxView(state: AppState) {
 
   private def decodeByteVector(d: String): String = d match {
     case "decode" => {
-      val result = function.value.get.deocodeOutputs(rawResult.value)
+      val result = function.value.get.decode(rawResult.value)
       if (result.isRight) {
         result.right.get.toString
       } else {
@@ -156,7 +152,7 @@ final case class CallTxView(state: AppState) {
       val data =
         if (f.inputs.isEmpty) f.methodID
         else {
-          f.getByteCode(paramInputs.value.toList.map(_.value).mkString("[", ",", "]")).right.get
+          f.encode(paramInputs.value.toList.map(_.value).mkString("[", ",", "]")).right.get
         }
       val callTx = CallTx(fromSubmit, toSubmit, None, 1, 0, data)
       if (txType.value == "Call") {
@@ -240,7 +236,7 @@ final case class CallTxView(state: AppState) {
                     <select name="functionSelect" class="autocomplete" onchange={functionOnChange}>
                       {
                         for (vf <- Constants(functions: _*)) yield {
-                          val fn = vf.name.getOrElse("undefined")
+                          val fn = vf.name
                           <option value={fn}>{fn}</option>
                         }
                       }
