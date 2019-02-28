@@ -8,6 +8,7 @@ import scala.scalajs.js.JSConverters._
 import _root_.io.circe.parser._
 import _root_.io.circe.syntax._
 import jbok.codec.json.implicits._
+import jbok.solidity.ABIDescription.ContractDescription
 
 @JSExportTopLevel("JsonCodec")
 @JSExportAll
@@ -32,4 +33,7 @@ object JsonCodec {
 
   def decodeSignedTransaction(json: String): js.UndefOr[SignedTransaction] =
     decode[SignedTransaction](json).toOption.orUndefined
+
+  def decodeContract(json: String): js.UndefOr[Contract] =
+    decode[ContractDescription](json).toOption.map(Contract).orUndefined
 }

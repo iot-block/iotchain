@@ -78,11 +78,12 @@ final case class BlockExecutor[F[_]](
       block2  = executed.block.copy(header = header2)
     } yield executed.copy(block = block2, world = persisted)
 
-  def simulateTransaction(stx: SignedTransaction, blockHeader: BlockHeader): F[TxExecResult[F]] = {
-    val senderAddress = Address.empty
-    val stateRoot     = blockHeader.stateRoot
-    val gasLimit      = stx.gasLimit
-    val vmConfig      = EvmConfig.forBlock(blockHeader.number, config)
+  def simulateTransaction(stx: SignedTransaction,
+                          senderAddress: Address,
+                          blockHeader: BlockHeader): F[TxExecResult[F]] = {
+    val stateRoot = blockHeader.stateRoot
+    val gasLimit  = stx.gasLimit
+    val vmConfig  = EvmConfig.forBlock(blockHeader.number, config)
     for {
       world1 <- history.getWorldState(config.accountStartNonce, Some(stateRoot))
       (senderAccount, world2) <- world1
@@ -109,7 +110,7 @@ final case class BlockExecutor[F[_]](
     }
   }
 
-  def binarySearchGasEstimation(stx: SignedTransaction, blockHeader: BlockHeader): F[BigInt] = {
+  def binarySearchGasEstimation(stx: SignedTransaction, senderAddress: Address, blockHeader: BlockHeader): F[BigInt] = {
     val lowLimit  = EvmConfig.forBlock(blockHeader.number, config).feeSchedule.G_transaction
     val highLimit = stx.gasLimit
 
@@ -117,7 +118,7 @@ final case class BlockExecutor[F[_]](
       F.pure(highLimit)
     else {
       binaryChop(lowLimit, highLimit)(gasLimit =>
-        simulateTransaction(stx.copy(gasLimit = gasLimit), blockHeader).map(_.vmError))
+        simulateTransaction(stx.copy(gasLimit = gasLimit), senderAddress, blockHeader).map(_.vmError))
     }
   }
 
@@ -199,15 +200,15 @@ final case class BlockExecutor[F[_]](
               F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
             } else {
               txPool.removeTransactions(stx :: Nil) >>
-              executeTransactions(
-                tail,
-                header,
-                world,
-                shortCircuit,
-                accGas,
-                accReceipts,
-                accExecuted
-              )
+                executeTransactions(
+                  tail,
+                  header,
+                  world,
+                  shortCircuit,
+                  accGas,
+                  accReceipts,
+                  accExecuted
+                )
             }
 
           case Right(txResult) =>

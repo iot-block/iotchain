@@ -2,6 +2,7 @@ package jbok.app.api
 
 import cats.effect.IO
 import cats.implicits._
+import io.circe.Json
 import jbok.JbokSpec
 import jbok.app.api.impl.PublicApiImpl
 import jbok.common.testkit.random
@@ -10,6 +11,9 @@ import jbok.core.models.{Address, SignedTransaction, Transaction}
 import jbok.core.testkit._
 import jbok.sdk.api.{BlockParam, CallTx}
 import scodec.bits.ByteVector
+import io.circe.syntax._
+import jbok.solidity.visitors.ContractParser
+import scodec.bits._
 
 class PublicApiSpec extends JbokSpec {
   implicit val config = testConfig
@@ -234,6 +238,365 @@ class PublicApiSpec extends JbokSpec {
       publicApi.sendSignedTransaction(stx).unsafeRunSync() shouldBe stx.hash
       miner.stream.take(1).compile.toList.unsafeRunSync().head
       publicApi.getBalance(stx.receivingAddress, BlockParam.Latest).unsafeRunSync() shouldBe stx.value
+    }
+
+    "parse code" in {
+      val miner     = random[BlockMiner[IO]]
+      val publicApi = PublicApiImpl(config.history, miner)
+      val code =
+        """
+          |pragma solidity >=0.4.0 <0.6.0;
+          |pragma experimental ABIEncoderV2;
+          |
+          |contract Vaccine {
+          |    address public minter;
+          |
+          |    mapping (string => string) private values;
+          |
+          |    constructor() public {
+          |        minter = msg.sender;
+          |    }
+          |
+          |    function setValue(string memory key, string memory newValue) public {
+          |        require(msg.sender == minter,"没有权限");
+          |        values[key] = newValue;
+          |    }
+          |
+          |    function batchSetValues(string[] memory keys,string[] memory newValues) public {
+          |        require(msg.sender == minter,"没有权限");
+          |        require(keys.length == newValues.length,"参数不匹配");
+          |        for (uint i = 0;i<keys.length;i++) {
+          |            values[keys[i]] = newValues[i];
+          |        }
+          |    }
+          |
+          |    function getValue(string memory key) public view returns (string memory){
+          |        require(msg.sender == minter,"没有权限");
+          |        return values[key];
+          |    }
+          |
+          |    function batchGetValues(string[] memory keys) public view returns (string[] memory){
+          |        require(msg.sender == minter,"没有权限");
+          |        string[] memory list = new string[](keys.length);
+          |        for (uint i = 0;i<keys.length;i++) {
+          |            list[i] = values[keys[i]];
+          |        }
+          |        return list;
+          |    }
+          |}
+        """.stripMargin
+
+      println(publicApi.parseContractCode(code).unsafeRunSync())
+    }
+
+    "call contract transaction erc20" in {
+      val miner     = random[BlockMiner[IO]]
+      val publicApi = PublicApiImpl(config.history, miner)
+      val tx = Transaction(
+        nonce = 0,
+        receivingAddress = None,
+        gasPrice = 1,
+        value = 0,
+        gasLimit = 1500000,
+        payload = ByteVector.fromValidHex(
+          "60606040526040805190810160405280600c81526020017f494f54206f6e20436861696e000000000000000000000000000000000000000081525060009080519060200190620000519291906200010e565b506040805190810160405280600381526020017f4954430000000000000000000000000000000000000000000000000000000000815250600190805190602001906200009f9291906200010e565b506012600255600254600a0a6305f5e100026003553415620000c057600080fd5b5b600354600460003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020819055505b620001bd565b828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f106200015157805160ff191683800117855562000182565b8280016001018555821562000182579182015b828111156200018157825182559160200191906001019062000164565b5b50905062000191919062000195565b5090565b620001ba91905b80821115620001b65760008160009055506001016200019c565b5090565b90565b61106080620001cd6000396000f300606060405236156100b8576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806306fdde03146100bd578063095ea7b31461014c57806318160ddd146101a657806323b872dd146101cf578063313ce5671461024857806342966c681461027157806370a08231146102ac57806379cc6790146102f957806395d89b4114610353578063a9059cbb146103e2578063cae9ca5114610424578063dd62ed3e146104c1575b600080fd5b34156100c857600080fd5b6100d061052d565b6040518080602001828103825283818151815260200191508051906020019080838360005b838110156101115780820151818401525b6020810190506100f5565b50505050905090810190601f16801561013e5780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b341561015757600080fd5b61018c600480803573ffffffffffffffffffffffffffffffffffffffff169060200190919080359060200190919050506105cb565b604051808215151515815260200191505060405180910390f35b34156101b157600080fd5b6101b9610659565b6040518082815260200191505060405180910390f35b34156101da57600080fd5b61022e600480803573ffffffffffffffffffffffffffffffffffffffff1690602001909190803573ffffffffffffffffffffffffffffffffffffffff1690602001909190803590602001909190505061065f565b604051808215151515815260200191505060405180910390f35b341561025357600080fd5b61025b61078d565b6040518082815260200191505060405180910390f35b341561027c57600080fd5b6102926004808035906020019091905050610793565b604051808215151515815260200191505060405180910390f35b34156102b757600080fd5b6102e3600480803573ffffffffffffffffffffffffffffffffffffffff16906020019091905050610898565b6040518082815260200191505060405180910390f35b341561030457600080fd5b610339600480803573ffffffffffffffffffffffffffffffffffffffff169060200190919080359060200190919050506108b0565b604051808215151515815260200191505060405180910390f35b341561035e57600080fd5b610366610acb565b6040518080602001828103825283818151815260200191508051906020019080838360005b838110156103a75780820151818401525b60208101905061038b565b50505050905090810190601f1680156103d45780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b34156103ed57600080fd5b610422600480803573ffffffffffffffffffffffffffffffffffffffff16906020019091908035906020019091905050610b69565b005b341561042f57600080fd5b6104a7600480803573ffffffffffffffffffffffffffffffffffffffff1690602001909190803590602001909190803590602001908201803590602001908080601f01602080910402602001604051908101604052809392919081815260200183838082843782019150505050505091905050610b79565b604051808215151515815260200191505060405180910390f35b34156104cc57600080fd5b610517600480803573ffffffffffffffffffffffffffffffffffffffff1690602001909190803573ffffffffffffffffffffffffffffffffffffffff16906020019091905050610cf8565b6040518082815260200191505060405180910390f35b60008054600181600116156101000203166002900480601f0160208091040260200160405190810160405280929190818152602001828054600181600116156101000203166002900480156105c35780601f10610598576101008083540402835291602001916105c3565b820191906000526020600020905b8154815290600101906020018083116105a657829003601f168201915b505050505081565b600081600560003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002081905550600190505b92915050565b60035481565b6000600560008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205482111515156106ec57600080fd5b81600560008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282540392505081905550610781848484610d1d565b600190505b9392505050565b60025481565b600081600460003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002054101515156107e357600080fd5b81600460003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282540392505081905550816003600082825403925050819055503373ffffffffffffffffffffffffffffffffffffffff167fcc16f5dbb4873280815c1ee09dbd06736cffcc184412cf7a71a0fdb75d397ca5836040518082815260200191505060405180910390a2600190505b919050565b60046020528060005260406000206000915090505481565b600081600460008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020541015151561090057600080fd5b600560008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002054821115151561098b57600080fd5b81600460008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000206000828254039250508190555081600560008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060003373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060008282540392505081905550816003600082825403925050819055508273ffffffffffffffffffffffffffffffffffffffff167fcc16f5dbb4873280815c1ee09dbd06736cffcc184412cf7a71a0fdb75d397ca5836040518082815260200191505060405180910390a2600190505b92915050565b60018054600181600116156101000203166002900480601f016020809104026020016040519081016040528092919081815260200182805460018160011615610100020316600290048015610b615780601f10610b3657610100808354040283529160200191610b61565b820191906000526020600020905b815481529060010190602001808311610b4457829003601f168201915b505050505081565b610b74338383610d1d565b5b5050565b600080849050610b8985856105cb565b15610cef578073ffffffffffffffffffffffffffffffffffffffff16638f4ffcb1338630876040518563ffffffff167c0100000000000000000000000000000000000000000000000000000000028152600401808573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018481526020018373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200180602001828103825283818151815260200191508051906020019080838360005b83811015610c845780820151818401525b602081019050610c68565b50505050905090810190601f168015610cb15780820380516001836020036101000a031916815260200191505b5095505050505050600060405180830381600087803b1515610cd257600080fd5b6102c65a03f11515610ce357600080fd5b50505060019150610cf0565b5b509392505050565b6005602052816000526040600020602052806000526040600020600091509150505481565b6000808373ffffffffffffffffffffffffffffffffffffffff1614151515610d4457600080fd5b81600460008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205410151515610d9257600080fd5b600460008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205482600460008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205401111515610e2057600080fd5b600460008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002054600460008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205401905081600460008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000206000828254039250508190555081600460008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020600082825401925050819055508273ffffffffffffffffffffffffffffffffffffffff168473ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040518082815260200191505060405180910390a380600460008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002054600460008773ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020540114151561102d57fe5b5b505050505600a165627a7a72305820a4931a04537a228d66270fec06075ef7959bdc88455ab7d236d3956cf18987280029")
+      )
+      implicit val chainId = config.genesis.chainId
+      val stx              = SignedTransaction.sign[IO](tx, testMiner.keyPair).unsafeRunSync()
+      publicApi.sendSignedTransaction(stx).unsafeRunSync() shouldBe stx.hash
+      miner.stream.take(1).compile.toList.unsafeRunSync().head
+      val contractAddress = publicApi.getTransactionReceipt(stx.hash).unsafeRunSync().get.contractAddress.get
+
+      val code =
+        """
+          |pragma solidity ^0.4.16;
+          |
+          |
+          |interface tokenRecipient { function receiveApproval(address _from, uint256 _value, address _token, bytes _extraData) public; }
+          |
+          |contract TokenERC20 {
+          |    // Public variables of the token
+          |    string public name = "IOT on Chain";
+          |    string public symbol = "ITC";
+          |    uint256 public decimals = 18;
+          |    // 18 decimals is the strongly suggested default, avoid changing it
+          |    uint256 public totalSupply = 100*1000*1000*10**decimals;
+          |
+          |    // This creates an array with all balances
+          |    mapping (address => uint256) public balanceOf;
+          |    mapping (address => mapping (address => uint256)) public allowance;
+          |
+          |    // This generates a public event on the blockchain that will notify clients
+          |    event Transfer(address indexed from, address indexed to, uint256 value);
+          |
+          |    // This notifies clients about the amount burnt
+          |    event Burn(address indexed from, uint256 value);
+          |
+          |    /**
+          |     * Constrctor function
+          |     *
+          |     * Initializes contract with initial supply tokens to the creator of the contract
+          |     */
+          |    function TokenERC20(
+          |    ) public {
+          |        balanceOf[msg.sender] = totalSupply;                // Give the creator all initial tokens
+          |    }
+          |
+          |    /**
+          |     * Internal transfer, only can be called by this contract
+          |     */
+          |    function _transfer(address _from, address _to, uint _value) internal {
+          |        // Prevent transfer to 0x0 address. Use burn() instead
+          |        require(_to != 0x0);
+          |        // Check if the sender has enough
+          |        require(balanceOf[_from] >= _value);
+          |        // Check for overflows
+          |        require(balanceOf[_to] + _value > balanceOf[_to]);
+          |        // Save this for an assertion in the future
+          |        uint previousBalances = balanceOf[_from] + balanceOf[_to];
+          |        // Subtract from the sender
+          |        balanceOf[_from] -= _value;
+          |        // Add the same to the recipient
+          |        balanceOf[_to] += _value;
+          |        Transfer(_from, _to, _value);
+          |        // Asserts are used to use static analysis to find bugs in your code. They should never fail
+          |        assert(balanceOf[_from] + balanceOf[_to] == previousBalances);
+          |    }
+          |
+          |    /**
+          |     * Transfer tokens
+          |     *
+          |     * Send `_value` tokens to `_to` from your account
+          |     *
+          |     * @param _to The address of the recipient
+          |     * @param _value the amount to send
+          |     */
+          |    function transfer(address _to, uint256 _value) public {
+          |        _transfer(msg.sender, _to, _value);
+          |    }
+          |
+          |    /**
+          |     * Transfer tokens from other address
+          |     *
+          |     * Send `_value` tokens to `_to` in behalf of `_from`
+          |     *
+          |     * @param _from The address of the sender
+          |     * @param _to The address of the recipient
+          |     * @param _value the amount to send
+          |     */
+          |    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+          |        require(_value <= allowance[_from][msg.sender]);     // Check allowance
+          |        allowance[_from][msg.sender] -= _value;
+          |        _transfer(_from, _to, _value);
+          |        return true;
+          |    }
+          |
+          |    /**
+          |     * Set allowance for other address
+          |     *
+          |     * Allows `_spender` to spend no more than `_value` tokens in your behalf
+          |     *
+          |     * @param _spender The address authorized to spend
+          |     * @param _value the max amount they can spend
+          |     */
+          |    function approve(address _spender, uint256 _value) public
+          |        returns (bool success) {
+          |        allowance[msg.sender][_spender] = _value;
+          |        return true;
+          |    }
+          |
+          |    /**
+          |     * Set allowance for other address and notify
+          |     *
+          |     * Allows `_spender` to spend no more than `_value` tokens in your behalf, and then ping the contract about it
+          |     *
+          |     * @param _spender The address authorized to spend
+          |     * @param _value the max amount they can spend
+          |     * @param _extraData some extra information to send to the approved contract
+          |     */
+          |    function approveAndCall(address _spender, uint256 _value, bytes _extraData)
+          |        public
+          |        returns (bool success) {
+          |        tokenRecipient spender = tokenRecipient(_spender);
+          |        if (approve(_spender, _value)) {
+          |            spender.receiveApproval(msg.sender, _value, this, _extraData);
+          |            return true;
+          |        }
+          |    }
+          |
+          |    /**
+          |     * Destroy tokens
+          |     *
+          |     * Remove `_value` tokens from the system irreversibly
+          |     *
+          |     * @param _value the amount of money to burn
+          |     */
+          |    function burn(uint256 _value) public returns (bool success) {
+          |        require(balanceOf[msg.sender] >= _value);   // Check if the sender has enough
+          |        balanceOf[msg.sender] -= _value;            // Subtract from the sender
+          |        totalSupply -= _value;                      // Updates totalSupply
+          |        Burn(msg.sender, _value);
+          |        return true;
+          |    }
+          |
+          |    /**
+          |     * Destroy tokens from other account
+          |     *
+          |     * Remove `_value` tokens from the system irreversibly on behalf of `_from`.
+          |     *
+          |     * @param _from the address of the sender
+          |     * @param _value the amount of money to burn
+          |     */
+          |    function burnFrom(address _from, uint256 _value) public returns (bool success) {
+          |        require(balanceOf[_from] >= _value);                // Check if the targeted balance is enough
+          |        require(_value <= allowance[_from][msg.sender]);    // Check allowance
+          |        balanceOf[_from] -= _value;                         // Subtract from the targeted balance
+          |        allowance[_from][msg.sender] -= _value;             // Subtract from the sender's allowance
+          |        totalSupply -= _value;                              // Update totalSupply
+          |        Burn(_from, _value);
+          |        return true;
+          |    }
+          |}
+        """.stripMargin
+
+      publicApi
+        .callContractTransaction(code, "name", "[]", testMiner.address, contractAddress, BlockParam.Latest)
+        .unsafeRunSync() shouldBe List(Json.fromString(s"IOT on Chain")).asJson.noSpaces
+
+      val toAddress = Address(hex"0x1234567890123456789012345678901234567890")
+      val transferF = ContractParser.parse(code).right.get.head.toABI.methods.find(_.name == "transfer").get
+      val transferTx = Transaction(
+        nonce = 1,
+        receivingAddress = contractAddress,
+        gasPrice = 1,
+        value = 0,
+        gasLimit = 150000,
+        payload = transferF.encode("[\"0x1234567890123456789012345678901234567890\", 1234]").right.get
+      )
+
+      val transferStx = SignedTransaction.sign[IO](transferTx, testMiner.keyPair).unsafeRunSync()
+      publicApi.sendSignedTransaction(transferStx).unsafeRunSync() shouldBe transferStx.hash
+      miner.stream.take(1).compile.toList.unsafeRunSync().head
+
+      publicApi
+        .callContractTransaction(code,
+                                 "balanceOf",
+                                 "[\"0x1234567890123456789012345678901234567890\"]",
+                                 testMiner.address,
+                                 contractAddress,
+                                 BlockParam.Latest)
+        .unsafeRunSync() shouldBe
+        List(Json.fromBigInt(BigInt("1234"))).asJson.noSpaces
+
+    }
+
+    "call contract transaction test" in {
+      val miner     = random[BlockMiner[IO]]
+      val publicApi = PublicApiImpl(config.history, miner)
+      val tx = Transaction(
+        nonce = 0,
+        receivingAddress = None,
+        gasPrice = 1,
+        value = 0,
+        gasLimit = 1500000,
+        payload = ByteVector.fromValidHex(
+          "608060405234801561001057600080fd5b50336000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550610dab806100606000396000f3fe60806040526004361061006d576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680630754617214610072578063960384a01461009d578063bd7166a8146100da578063d885851e14610117578063ec86cfad14610140575b600080fd5b34801561007e57600080fd5b50610087610169565b6040516100949190610b65565b60405180910390f35b3480156100a957600080fd5b506100c460048036036100bf9190810190610961565b61018e565b6040516100d19190610ba2565b60405180910390f35b3480156100e657600080fd5b5061010160048036036100fc91908101906108b4565b61029b565b60405161010e9190610b80565b60405180910390f35b34801561012357600080fd5b5061013e600480360361013991908101906108f5565b610432565b005b34801561014c57600080fd5b50610167600480360361016291908101906109a2565b6105d8565b005b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b60606001826040518082805190602001908083835b6020831015156101c857805182526020820191506020810190506020830392506101a3565b6001836020036101000a03801982511681845116808217855250505050505090500191505090815260200160405180910390208054600181600116156101000203166002900480601f01602080910402602001604051908101604052809291908181526020018280546001816001161561010002031660029004801561028f5780601f106102645761010080835404028352916020019161028f565b820191906000526020600020905b81548152906001019060200180831161027257829003601f168201915b50505050509050919050565b60608082516040519080825280602002602001820160405280156102d357816020015b60608152602001906001900390816102be5790505b50905060008090505b835181101561042857600184828151811015156102f557fe5b906020019060200201516040518082805190602001908083835b602083101515610334578051825260208201915060208101905060208303925061030f565b6001836020036101000a03801982511681845116808217855250505050505090500191505090815260200160405180910390208054600181600116156101000203166002900480601f0160208091040260200160405190810160405280929190818152602001828054600181600116156101000203166002900480156103fb5780601f106103d0576101008083540402835291602001916103fb565b820191906000526020600020905b8154815290600101906020018083116103de57829003601f168201915b5050505050828281518110151561040e57fe5b9060200190602002018190525080806001019150506102dc565b5080915050919050565b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff161415156104c3576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016104ba90610be4565b60405180910390fd5b80518251141515610509576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161050090610bc4565b60405180910390fd5b60008090505b82518110156105d357818181518110151561052657fe5b906020019060200201516001848381518110151561054057fe5b906020019060200201516040518082805190602001908083835b60208310151561057f578051825260208201915060208101905060208303925061055a565b6001836020036101000a038019825116818451168082178552505050505050905001915050908152602001604051809103902090805190602001906105c59291906106ed565b50808060010191505061050f565b505050565b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16141515610669576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161066090610be4565b60405180910390fd5b806001836040518082805190602001908083835b6020831015156106a2578051825260208201915060208101905060208303925061067d565b6001836020036101000a038019825116818451168082178552505050505050905001915050908152602001604051809103902090805190602001906106e89291906106ed565b505050565b828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f1061072e57805160ff191683800117855561075c565b8280016001018555821561075c579182015b8281111561075b578251825591602001919060010190610740565b5b509050610769919061076d565b5090565b61078f91905b8082111561078b576000816000905550600101610773565b5090565b90565b600082601f83011215156107a557600080fd5b81356107b86107b382610c31565b610c04565b9150818183526020840193506020810190508360005b838110156107fe57813586016107e48882610808565b8452602084019350602083019250506001810190506107ce565b5050505092915050565b600082601f830112151561081b57600080fd5b813561082e61082982610c59565b610c04565b9150808252602083016020830185838301111561084a57600080fd5b610855838284610d1e565b50505092915050565b600082601f830112151561087157600080fd5b813561088461087f82610c85565b610c04565b915080825260208301602083018583830111156108a057600080fd5b6108ab838284610d1e565b50505092915050565b6000602082840312156108c657600080fd5b600082013567ffffffffffffffff8111156108e057600080fd5b6108ec84828501610792565b91505092915050565b6000806040838503121561090857600080fd5b600083013567ffffffffffffffff81111561092257600080fd5b61092e85828601610792565b925050602083013567ffffffffffffffff81111561094b57600080fd5b61095785828601610792565b9150509250929050565b60006020828403121561097357600080fd5b600082013567ffffffffffffffff81111561098d57600080fd5b6109998482850161085e565b91505092915050565b600080604083850312156109b557600080fd5b600083013567ffffffffffffffff8111156109cf57600080fd5b6109db8582860161085e565b925050602083013567ffffffffffffffff8111156109f857600080fd5b610a048582860161085e565b9150509250929050565b610a1781610cec565b82525050565b6000610a2882610cbe565b80845260208401935083602082028501610a4185610cb1565b60005b84811015610a7a578383038852610a5c838351610ac1565b9250610a6782610cdf565b9150602088019750600181019050610a44565b508196508694505050505092915050565b6000610a9682610cd4565b808452610aaa816020860160208601610d2d565b610ab381610d60565b602085010191505092915050565b6000610acc82610cc9565b808452610ae0816020860160208601610d2d565b610ae981610d60565b602085010191505092915050565b6000600f82527fe58f82e695b0e4b88de58cb9e9858d00000000000000000000000000000000006020830152604082019050919050565b6000600c82527fe6b2a1e69c89e69d83e9999000000000000000000000000000000000000000006020830152604082019050919050565b6000602082019050610b7a6000830184610a0e565b92915050565b60006020820190508181036000830152610b9a8184610a1d565b905092915050565b60006020820190508181036000830152610bbc8184610a8b565b905092915050565b60006020820190508181036000830152610bdd81610af7565b9050919050565b60006020820190508181036000830152610bfd81610b2e565b9050919050565b6000604051905081810181811067ffffffffffffffff82111715610c2757600080fd5b8060405250919050565b600067ffffffffffffffff821115610c4857600080fd5b602082029050602081019050919050565b600067ffffffffffffffff821115610c7057600080fd5b601f19601f8301169050602081019050919050565b600067ffffffffffffffff821115610c9c57600080fd5b601f19601f8301169050602081019050919050565b6000602082019050919050565b600081519050919050565b600081519050919050565b600081519050919050565b6000602082019050919050565b6000610cf782610cfe565b9050919050565b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b82818337600083830152505050565b60005b83811015610d4b578082015181840152602081019050610d30565b83811115610d5a576000848401525b50505050565b6000601f19601f830116905091905056fea265627a7a72305820cd995ddc9555dcff4448854ee4728caa8bca5b265967a301ae4ddd0b86dd5db36c6578706572696d656e74616cf50037")
+      )
+      implicit val chainId = config.genesis.chainId
+      val stx              = SignedTransaction.sign[IO](tx, testMiner.keyPair).unsafeRunSync()
+      publicApi.sendSignedTransaction(stx).unsafeRunSync() shouldBe stx.hash
+      miner.stream.take(1).compile.toList.unsafeRunSync().head
+      val contractAddress = publicApi.getTransactionReceipt(stx.hash).unsafeRunSync().get.contractAddress.get
+
+      val code =
+        """
+          |pragma solidity >=0.4.0 <0.6.0;
+          |pragma experimental ABIEncoderV2;
+          |
+          |contract Vaccine {
+          |    address public minter;
+          |
+          |    mapping (string => string) private values;
+          |
+          |    function Vaccine() public {
+          |        minter = msg.sender;
+          |    }
+          |
+          |    function setValue(string memory key, string memory newValue) public {
+          |        // require(msg.sender == minter,"没有权限");
+          |        values[key] = newValue;
+          |    }
+          |
+          |    function batchSetValues(string[] memory keys,string[] memory newValues) public {
+          |        // require(msg.sender == minter,"没有权限");
+          |        // require(keys.length == newValues.length,"参数不匹配");
+          |        for (uint i = 0;i<keys.length;i++) {
+          |            values[keys[i]] = newValues[i];
+          |        }
+          |    }
+          |
+          |    function getValue(string memory key) public view returns (string memory){
+          |        // require(msg.sender == minter,"没有权限");
+          |        return values[key];
+          |    }
+          |
+          |    function batchGetValues(string[] memory keys) public view returns (string[] memory){
+          |        // require(msg.sender == minter,"没有权限");
+          |        string[] memory list = new string[](keys.length);
+          |        for (uint i = 0;i<keys.length;i++) {
+          |            list[i] = values[keys[i]];
+          |        }
+          |        return list;
+          |    }
+          |}
+        """.stripMargin
+
+      publicApi
+        .callContractTransaction(code, "minter", "[]", testMiner.address, contractAddress, BlockParam.Latest)
+        .unsafeRunSync() shouldBe List(Json.fromString(s"${testMiner.address.toString}")).asJson.noSpaces
+
+      val setValueF = ContractParser.parse(code).right.get.head.toABI.methods.find(_.name == "setValue").get
+      val setValueTx = Transaction(
+        nonce = 1,
+        receivingAddress = contractAddress,
+        gasPrice = 1,
+        value = 0,
+        gasLimit = 150000,
+        payload = setValueF.encode("[\"key1\", \"value1\"]").right.get
+      )
+
+      val setValueStx = SignedTransaction.sign[IO](setValueTx, testMiner.keyPair).unsafeRunSync()
+      publicApi.sendSignedTransaction(setValueStx).unsafeRunSync() shouldBe setValueStx.hash
+      miner.stream.take(1).compile.toList.unsafeRunSync().head
+
+      publicApi
+        .callContractTransaction(code, "getValue", "[\"key1\"]", testMiner.address, contractAddress, BlockParam.Latest)
+        .unsafeRunSync() shouldBe
+        List(Json.fromString("value1")).asJson.noSpaces
+
+      val batchSetValuesF = ContractParser.parse(code).right.get.head.toABI.methods.find(_.name == "batchSetValues").get
+      val batchSetValuesTx = Transaction(
+        nonce = 2,
+        receivingAddress = contractAddress,
+        gasPrice = 1,
+        value = 0,
+        gasLimit = 150000,
+        payload = batchSetValuesF.encode("[[\"key2\", \"key3\"], [\"value2\", \"value3\"]]").right.get
+      )
+
+      val batchSetValueStx = SignedTransaction.sign[IO](batchSetValuesTx, testMiner.keyPair).unsafeRunSync()
+      publicApi.sendSignedTransaction(batchSetValueStx).unsafeRunSync() shouldBe batchSetValueStx.hash
+      miner.stream.take(1).compile.toList.unsafeRunSync().head
+
+      publicApi
+        .callContractTransaction(code,
+                                 "batchGetValues",
+                                 "[[\"key1\", \"key2\", \"key3\"]]",
+                                 testMiner.address,
+                                 contractAddress,
+                                 BlockParam.Latest)
+        .unsafeRunSync() shouldBe
+        List(List(Json.fromString("value1"), Json.fromString("value2"), Json.fromString("value3"))).asJson.noSpaces
     }
   }
 }
