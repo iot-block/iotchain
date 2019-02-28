@@ -37,6 +37,8 @@ lazy val jbok = project
     codec.jvm,
     persistent.js,
     persistent.jvm,
+    parser.js,
+    parser.jvm,
     crypto.js,
     crypto.jvm,
     network.js,
@@ -262,7 +264,7 @@ lazy val sdk = crossProject(JSPlatform, JVMPlatform)
     webpackConfigFile := Some((resourceDirectory in Compile).value / "webpack.config.js"),
     jsEnv in Test := new org.scalajs.jsenv.nodejs.NodeJSEnv()
   )
-  .dependsOn(core % CompileAndTest, common % CompileAndTest)
+  .dependsOn(core % CompileAndTest, parser % CompileAndTest, common % CompileAndTest)
 
 lazy val macros = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
@@ -329,6 +331,19 @@ lazy val benchmark = project
     run in Jmh := (run in Jmh).dependsOn(Keys.compile in Jmh).evaluated,
   )
   .dependsOn(core.jvm % CompileAndTest, persistent.jvm)
+
+lazy val parser = crossProject(JSPlatform, JVMPlatform)
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
+  .jsSettings(commonJsSettings)
+  .settings(
+    name := "jbok-parser",
+    libraryDependencies ++= Seq(
+      "org.antlr" % "antlr4-runtime" % "4.7.1",
+      "org.antlr" % "ST4"            % "4.1"
+    )
+  )
+  .dependsOn(common % CompileAndTest, core % CompileAndTest, crypto % CompileAndTest)
 
 lazy val docs = project
   .settings(commonSettings, noPublishSettings, micrositeSettings)

@@ -3,4 +3,4 @@
 set -e
 
 echo "building jbok app"
-sbt "project appJVM" stage
+sbt ";clean;project appJVM" stage
