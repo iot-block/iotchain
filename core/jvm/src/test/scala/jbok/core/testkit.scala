@@ -333,7 +333,7 @@ object testkit {
     implicit val chainId = config.genesis.chainId
     for {
       size <- Gen.chooseNum(min, max)
-      txs = TxGen.genTxs(size, List(testMiner.keyPair -> Account.empty()).toMap).unsafeRunSync()
+      (_, txs) = TxGen.genTxs(size, List(testMiner.keyPair -> Account.empty()).toMap).unsafeRunSync()
     } yield txs
   }
 
