@@ -8,8 +8,8 @@ import jbok.crypto._
 import io.circe.parser._
 import io.circe.syntax._
 import jbok.core.models.UInt256
-import jbok.solidity.visitors.{ParameterType, StateMutability}
 import jbok.codec.json.implicits._
+import jbok.solidity.visitors.TypeNameParameter.ParameterType
 
 import scala.scalajs.js.annotation.JSExportAll
 

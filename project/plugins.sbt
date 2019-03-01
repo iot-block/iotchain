@@ -36,3 +36,6 @@ addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.3.7")
 
 // test coverage
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.1")
+
+// antlr4
+addSbtPlugin("com.simplytyped" % "sbt-antlr4" % "0.8.1")

@@ -334,6 +334,7 @@ lazy val benchmark = project
 
 lazy val parser = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
+  .enablePlugins(Antlr4Plugin)
   .settings(commonSettings)
   .jsSettings(commonJsSettings)
   .settings(
@@ -341,7 +342,11 @@ lazy val parser = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq(
       "org.antlr" % "antlr4-runtime" % "4.7.1",
       "org.antlr" % "ST4"            % "4.1"
-    )
+    ),
+    antlr4Version in Antlr4 := "4.7.1",
+    antlr4GenVisitor in Antlr4 := true,
+    antlr4GenListener in Antlr4 := false,
+    antlr4PackageName in Antlr4 := Some("jbok.solidity.grammar"),
   )
   .dependsOn(common % CompileAndTest, core % CompileAndTest, crypto % CompileAndTest)
 

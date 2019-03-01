@@ -4,7 +4,7 @@ import io.circe.parser._
 import io.circe.Json
 import jbok.JbokSpec
 import jbok.solidity.ABIDescription.FunctionDescription
-import jbok.solidity.visitors.ParameterType
+import jbok.solidity.visitors.TypeNameParameter._
 import scodec.bits._
 
 class AbiSpec extends JbokSpec {

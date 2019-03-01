@@ -2,6 +2,9 @@ package jbok.solidity.visitors
 
 import jbok.solidity.grammar.{SolidityBaseVisitor, SolidityParser}
 import cats.implicits._
+import jbok.solidity.visitors.ContractPart._
+import jbok.solidity.visitors.ModifierList._
+import jbok.solidity.visitors.TypeNameParameter._
 
 import scala.collection.JavaConverters._
 

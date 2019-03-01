@@ -1,6 +1,9 @@
 package jbok.solidity.visitors
 
 import jbok.solidity.ABIDescription.{ContractDescription, FunctionDescription, ParameterDescription}
+import jbok.solidity.visitors.ContractPart._
+import jbok.solidity.visitors.ModifierList._
+import jbok.solidity.visitors.TypeNameParameter._
 
 final case class ContractDefinition(`type`: String,
                                     id: String,
@@ -43,32 +46,4 @@ final case class ContractDefinition(`type`: String,
 
 object ContractDefinition {
   def empty = ContractDefinition("", "", Map.empty, Map.empty, Map.empty, Map.empty)
-}
-
-sealed trait ContractPart
-
-final case class FunctionDefinition(name: String,
-                                    input: List[ParameterDefinition],
-                                    outputs: List[ParameterDefinition],
-                                    modifierList: ModifierList)
-    extends ContractPart
-
-final case class StructDefinition(id: String, params: List[ParameterDefinition]) extends ContractPart
-
-final case class EnumDefinition(id: String, ids: Set[String]) extends ContractPart
-
-final case class StateVariableDefinition(id: String,
-                                         inputs: List[ParameterType],
-                                         outputs: List[ParameterType],
-                                         visibility: Option[Visibility],
-                                         isConstant: Boolean)
-    extends ContractPart
-
-final case class NoImplementation() extends ContractPart
-
-final case class ParameterDefinition(name: Option[String], typeNameParameter: TypeNameParameter) {
-  lazy val canBuildABI: Boolean = typeNameParameter match {
-    case m @ MappingType(_, _)    => false
-    case pt @ ParameterType(_, _) => true
-  }
 }

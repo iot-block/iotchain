@@ -1,6 +1,7 @@
 package jbok.solidity.visitors
 
 import jbok.solidity.grammar.{SolidityBaseVisitor, SolidityParser}
+import jbok.solidity.visitors.ContractPart._
 import org.antlr.v4.runtime.Token
 
 import scala.collection.JavaConverters._

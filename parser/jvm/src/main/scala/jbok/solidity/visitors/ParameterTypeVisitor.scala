@@ -1,33 +1,12 @@
 package jbok.solidity.visitors
 
 import cats.implicits._
-import io.circe.generic.JsonCodec
 import jbok.solidity.{InvalidSolidityType, SolidityType}
 import jbok.solidity.grammar.{SolidityBaseVisitor, SolidityParser}
-import jbok.codec.json.implicits._
+import jbok.solidity.visitors.TypeNameParameter._
 
 import scala.collection.JavaConverters._
-import scala.scalajs.js.annotation.JSExportAll
 import scala.util.Try
-
-
-sealed trait TypeNameParameter
-
-case object Undone extends TypeNameParameter
-
-@JSExportAll
-@JsonCodec
-final case class ParameterType(solidityType: SolidityType, arrayList: List[Int]) extends TypeNameParameter {
-  def typeString: String =
-    solidityType.name + arrayList.map(size => if (size == 0) "[]" else s"[$size]").mkString
-
-  lazy val isDynamic: Boolean = size.isEmpty
-
-  lazy val size: Option[Int] =
-    if (solidityType.isDynamic || arrayList.contains(0)) None else Some(32 * arrayList.product)
-}
-
-final case class MappingType(inputs: List[ParameterType], outputs: List[ParameterType]) extends TypeNameParameter
 
 final case class ParameterTypeVisitor()(implicit reportHandler: ReportHandler)
     extends SolidityBaseVisitor[TypeNameParameter] {
