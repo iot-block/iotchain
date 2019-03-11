@@ -127,7 +127,10 @@ lazy val core = crossProject(JSPlatform, JVMPlatform)
   .settings(commonSettings)
   .jsSettings(commonJsSettings)
   .settings(
-    name := "jbok-core"
+    name := "jbok-core",
+    libraryDependencies ++= Seq(
+      "com.lihaoyi" %%% "fastparse" % "2.1.0"
+    )
   )
   .dependsOn(Seq(common, codec, crypto, network, persistent).map(_ % CompileAndTest): _*)
 
@@ -308,6 +311,7 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies ++= Seq(
       "org.iq80.leveldb"          % "leveldb"                 % "0.10",
       "org.fusesource.leveldbjni" % "leveldbjni-all"          % "1.8",
+      "org.rocksdb"               % "rocksdbjni"              % "5.17.2",
       "com.github.cb372"          %%% "scalacache-core"       % V.scalacache,
       "com.github.cb372"          %% "scalacache-cats-effect" % V.scalacache,
       "com.github.cb372"          %% "scalacache-caffeine"    % V.scalacache,

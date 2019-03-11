@@ -4,7 +4,7 @@
   "logHandler" : "console,file",
   "genesisConfig" : null,
   "history" : {
-    "dbBackend" : "leveldb",
+    "dbBackend" : "rocksdb",
     "frontierBlockNumber" : "0",
     "homesteadBlockNumber" : "0",
     "tangerineWhistleBlockNumber" : "0",

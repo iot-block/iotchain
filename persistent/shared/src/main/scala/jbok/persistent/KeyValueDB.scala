@@ -28,6 +28,8 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
 
   protected[jbok] def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit]
 
+  protected[jbok] def close: F[Unit]
+
   def keys[Key: RlpCodec](namespace: ByteVector): F[List[Key]]
 
   def toMap[Key: RlpCodec, Val: RlpCodec](namespace: ByteVector): F[Map[Key, Val]]

@@ -22,9 +22,6 @@ final class LevelDB[F[_]](
 )(implicit F: Sync[F], T: Timer[F], M: Metrics[F])
     extends KeyValueDB[F] {
 
-  def close: F[Unit] =
-    F.delay(db.close())
-
   override protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]] = M.timeF("leveldb_get") {
     F.delay(db.get(key.toArray, readOptions)).map(ByteVector.apply).attemptT.toOption.value
   }
@@ -48,6 +45,9 @@ final class LevelDB[F[_]](
 
   override protected[jbok] def toMapRaw: F[Map[ByteVector, ByteVector]] =
     stream(None).compile.toList.map(_.toMap)
+
+  override protected[jbok] def close: F[Unit] =
+    F.delay(db.close())
 
   override def keys[Key: RlpCodec](namespace: ByteVector): F[List[Key]] =
     stream(Some(namespace.toArray))

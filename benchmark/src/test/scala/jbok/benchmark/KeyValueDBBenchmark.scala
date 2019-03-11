@@ -7,6 +7,7 @@ import jbok.persistent.KeyValueDB
 import jbok.persistent.leveldb.LevelDB
 import jbok.common.testkit._
 import jbok.core.testkit._
+import jbok.persistent.rocksdb.Rocks
 import org.openjdk.jmh.annotations.{Benchmark, OperationsPerInvocation, TearDown}
 import org.scalacheck.Gen
 
@@ -24,12 +25,14 @@ class KeyValueDBBenchmark extends JbokBenchmark {
   val values = Gen.listOfN(size, valueGen).sample.get
   val kvs    = keys.zip(values).toArray
 
-  val dirIq80 = File.newTemporaryDirectory()
-  val dirJni  = File.newTemporaryDirectory()
+  val dirIq80  = File.newTemporaryDirectory()
+  val dirJni   = File.newTemporaryDirectory()
+  val dirRocks = File.newTemporaryDirectory()
 
-  val dbIq80 = LevelDB.iq80[IO](dirIq80.pathAsString).unsafeRunSync()
-  val dbJni  = LevelDB.jni[IO](dirJni.pathAsString).unsafeRunSync()
-  var dbMem  = KeyValueDB.inmem[IO].unsafeRunSync()
+  val dbIq80  = LevelDB.iq80[IO](dirIq80.pathAsString).unsafeRunSync()
+  val dbJni   = LevelDB.jni[IO](dirJni.pathAsString).unsafeRunSync()
+  val dbRocks = Rocks[IO](dirRocks.pathAsString).unsafeRunSync()
+  var dbMem   = KeyValueDB.inmem[IO].unsafeRunSync()
 
   @Benchmark
   def putIq80() = {
@@ -43,6 +46,13 @@ class KeyValueDBBenchmark extends JbokBenchmark {
     val (k, v) = kvs(i)
     i = (i + 1) % kvs.length
     dbJni.putRaw(k, v).unsafeRunSync()
+  }
+
+  @Benchmark
+  def putRocks() = {
+    val (k, v) = kvs(i)
+    i = (i + 1) % kvs.length
+    dbRocks.putRaw(k, v).unsafeRunSync()
   }
 
   @Benchmark
@@ -74,6 +84,16 @@ class KeyValueDBBenchmark extends JbokBenchmark {
 
   @Benchmark
   @OperationsPerInvocation(100)
+  def putBatchRocks() = {
+    i = (i + 1) % (kvs.length / 100)
+    val put = (i * 100 until (i + 1) * 100)
+      .map(i => kvs(i))
+      .toList
+    dbRocks.writeBatchRaw(put, Nil).unsafeRunSync()
+  }
+
+  @Benchmark
+  @OperationsPerInvocation(100)
   def putBatchMem() = {
     i = (i + 1) % (kvs.length / 100)
     val put = (i * 100 until (i + 1) * 100)
@@ -86,8 +106,10 @@ class KeyValueDBBenchmark extends JbokBenchmark {
   def tearDown(): Unit = {
     dbIq80.close.unsafeRunSync()
     dbJni.close.unsafeRunSync()
+    dbRocks.close.unsafeRunSync()
     dbMem = KeyValueDB.inmem[IO].unsafeRunSync()
     LevelDB.destroy[IO](dirIq80.pathAsString, useJni = false).unsafeRunSync()
     LevelDB.destroy[IO](dirJni.pathAsString, useJni = true).unsafeRunSync()
+    Rocks.destroy[IO](dirRocks.pathAsString).unsafeToFuture()
   }
 }

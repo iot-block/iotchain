@@ -3,6 +3,7 @@ package jbok.persistent
 import cats.effect.{Sync, Timer}
 import jbok.common.metrics.Metrics
 import jbok.persistent.leveldb.LevelDB
+import jbok.persistent.rocksdb.Rocks
 
 trait KeyValueDBPlatform {
 
@@ -11,6 +12,7 @@ trait KeyValueDBPlatform {
     backend match {
       case "inmem"   => KeyValueDB.inmem[F]
       case "leveldb" => LevelDB[F](path)
+      case "rocksdb" => Rocks[F](path)
       case x         => throw new Exception(s"backend ${x} is not supported")
     }
 }

@@ -23,6 +23,9 @@ final class MerklePatriciaTrie[F[_]](
 
   import MerklePatriciaTrie._
 
+  override protected[jbok] def close: F[Unit] =
+    db.close
+
   override protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]] =
     (for {
       root <- OptionT(getRootOpt)
