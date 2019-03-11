@@ -5,7 +5,6 @@ import jbok.JbokSpec
 import jbok.codec.rlp.implicits._
 import jbok.common.execution._
 import jbok.common.testkit._
-import jbok.core.consensus.poa.clique.Clique.CliqueExtra
 import jbok.core.ledger.History
 import jbok.core.models.{Address, BlockHeader}
 import jbok.core.testkit._
@@ -28,7 +27,7 @@ trait SnapshotFixture {
     val extra            = Clique.fillExtraData(signers)
     val config           = testGenesis.copy(extraData = extra)
     implicit val chainId = config.chainId
-    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val history          = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
     history.initGenesis(config).unsafeRunSync()
     history
   }
@@ -46,8 +45,10 @@ trait SnapshotFixture {
     if (!accounts.contains(signer)) {
       accounts += (signer -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
     }
-    val sig       = Signature[ECDSA].sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(signer), chainId).unsafeRunSync()
-    val extra = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value.copy(signature = sig)
+    val sig = Signature[ECDSA]
+      .sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(signer), chainId)
+      .unsafeRunSync()
+    val extra      = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value.copy(signature = sig)
     val extraBytes = extra.asValidBytes
 //    val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val signed    = header.copy(extra = extraBytes)
@@ -64,7 +65,7 @@ class SnapshotSpec extends JbokSpec {
     val extra            = Clique.fillExtraData(signers)
     val genesisConfig    = testGenesis.copy(extraData = extra)
     implicit val chainId = genesisConfig.chainId
-    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val history          = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
 
     history.initGenesis(genesisConfig).unsafeRunSync()
 
@@ -79,7 +80,7 @@ class SnapshotSpec extends JbokSpec {
           CryptoSignature(ByteVector.fill(65)(0).toArray),
           v.auth
         )
-        val extraBytes    = extra.asValidBytes
+        val extraBytes = extra.asValidBytes
         val header = random[BlockHeader]
           .copy(
             number = number,
@@ -110,7 +111,7 @@ class SnapshotSpec extends JbokSpec {
         Nil,
         CryptoSignature(ByteVector.fill(65)(0).toArray)
       )
-      val extraBytes    = extra.asValidBytes
+      val extraBytes = extra.asValidBytes
       val header = random[BlockHeader]
         .copy(
           beneficiary = coinbase.bytes,

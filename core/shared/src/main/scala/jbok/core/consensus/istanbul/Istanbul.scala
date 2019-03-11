@@ -8,7 +8,7 @@ import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.config.GenesisConfig
-import jbok.core.consensus.Extra
+import jbok.core.consensus.Snapshot
 import jbok.core.ledger.History
 import jbok.core.messages.IstanbulMessage
 import jbok.core.models.{Address, Block, BlockHeader}
@@ -18,6 +18,12 @@ import scalacache.Cache
 import scodec.bits.{ByteVector, _}
 
 import scala.concurrent.duration._
+
+final case class IstanbulExtra(
+    validators: List[Address],
+    proposerSig: ByteVector,
+    committedSigs: List[CryptoSignature]
+)
 
 final case class Istanbul[F[_]](
     config: IstanbulConfig,
@@ -68,7 +74,7 @@ final case class Istanbul[F[_]](
         // Previous snapshot found, apply any pending headers on top of it
         log.trace(s"applying ${headers.length} headers")
         for {
-          newSnap <- Snapshot.applyHeaders[F](s, headers)
+          newSnap <- Snapshot.applyHeaders[F](s, headers, chainId)
           _       <- Snapshot.storeSnapshot[F](newSnap, history.db, config.epoch)
         } yield newSnap
 
@@ -83,7 +89,7 @@ final case class Istanbul[F[_]](
               // No explicit parents (or no more left), reach out to the database
               history.getBlockHeaderByHash(hash).flatMap {
                 case Some(header) => F.pure(header -> parents)
-                case None => ???
+                case None         => ???
               }
           }
           snap <- applyHeaders(number - 1, h.parentHash, p, h :: headers)
@@ -92,7 +98,7 @@ final case class Istanbul[F[_]](
   }
 
   def getValidators(number: BigInt, hash: ByteVector): F[ValidatorSet] =
-    applyHeaders(number, hash, List.empty, List.empty).map(_.validatorSet)
+    applyHeaders(number, hash, List.empty, List.empty).map(s => ValidatorSet(s.signers.head, s.signers.toList))
 
   def checkMessage(message: IstanbulMessage): F[CheckResult] =
     message.msgCode match {
@@ -361,14 +367,6 @@ final case class Istanbul[F[_]](
 }
 
 object Istanbul {
-  sealed trait IstanbulAlgo
-  object IstanbulAlgo extends IstanbulAlgo
-  final case class IstanbulExtra(
-      validators: List[Address],
-      proposerSig: ByteVector,
-      committedSigs: List[CryptoSignature]
-  ) extends Extra[IstanbulAlgo]
-
   val extraVanity: Int          = 32 // Fixed number of extra-data bytes reserved for validator vanity
   val extraSeal: Int            = 65 // Fixed number of extra-data bytes reserved for validator seal
   val uncleHash: ByteVector     = ().asValidBytes.kec256 // Always Keccak256(RLP([]))

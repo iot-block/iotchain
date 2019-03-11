@@ -1,7 +1,6 @@
 package jbok.core.consensus.istanbul
 
 import cats.effect.Concurrent
-import jbok.codec.rlp.RlpCodec
 import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
 import cats.implicits._

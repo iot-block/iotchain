@@ -13,6 +13,7 @@ final case class IstanbulConfig(
     proposerPolicy: Int = IstanbulConfig.roundRobin,
     requestTimeout: Int = 3 * 1000
 )
+
 object IstanbulConfig {
   val roundRobin = 0
   val sticky     = 1

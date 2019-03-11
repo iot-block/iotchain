@@ -109,7 +109,7 @@ class EthashMinerPlatform[F[_]](
   }
 
   private[jbok] def dagFile(seed: ByteVector): File =
-    File(s"${miningConfig.ethashDir}/full-R${Ethash.Revision}-${seed.take(8).toHex}")
+    File(s"full-R${Ethash.Revision}-${seed.take(8).toHex}")
 
   private[jbok] def generateDagAndSaveToFile(epoch: Long, dagNumHashes: Int, seed: ByteVector): Array[Array[Int]] = {
     val file = dagFile(seed)

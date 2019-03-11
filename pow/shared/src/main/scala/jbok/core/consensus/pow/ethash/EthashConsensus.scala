@@ -7,7 +7,6 @@ import jbok.codec.rlp.implicits._
 import jbok.common._
 import jbok.core.config.Configs.{HistoryConfig, MiningConfig, MonetaryPolicyConfig}
 import jbok.core.consensus.Consensus
-import jbok.core.consensus.pow.ethash.Ethash.{EthashAlgo, EthashExtra}
 import jbok.core.ledger.TypedBlock.MinedBlock
 import jbok.core.ledger.{History, TypedBlock}
 import jbok.core.models.{Block, BlockHeader}
@@ -26,12 +25,6 @@ class EthashConsensus[F[_]](
     headerValidator: EthashHeaderValidator[F]
 )(implicit F: Sync[F])
     extends Consensus[F](history, blockPool) {
-
-  override type Protocol = EthashAlgo
-
-  override val protocol: Protocol = EthashAlgo
-
-  override type E = EthashExtra
 
   override def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader]): F[BlockHeader] =
     for {

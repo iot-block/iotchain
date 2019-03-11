@@ -6,7 +6,6 @@ import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common._
 import jbok.core.consensus.Consensus
-import jbok.core.consensus.poa.clique.Clique.{CliqueAlgo, CliqueExtra}
 import jbok.core.ledger.TypedBlock._
 import jbok.core.models.{Address, Block, BlockHeader, Receipt}
 import jbok.core.pool.BlockPool
@@ -24,12 +23,6 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
     T: Timer[F]
 ) extends Consensus[F](clique.history, pool) {
   private[this] val log = jbok.common.log.getLogger("CliqueConsensus")
-
-  override type Protocol = CliqueAlgo
-
-  override val protocol: Protocol = CliqueAlgo
-
-  override type E = CliqueExtra
 
   override def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader]): F[BlockHeader] =
     for {

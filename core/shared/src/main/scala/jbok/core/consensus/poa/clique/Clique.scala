@@ -6,17 +6,17 @@ import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.MiningConfig
 import jbok.core.config.GenesisConfig
-import jbok.core.consensus.Extra
-import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
 import jbok.crypto.signature._
-import jbok.persistent.{CacheBuilder, DBErr}
+import jbok.persistent.CacheBuilder
 import scalacache._
 import scodec.bits._
 
 import scala.concurrent.duration._
+
+final case class CliqueExtra(signer: List[Address], signature: CryptoSignature, auth: Boolean = false)
 
 final class Clique[F[_]](
     val config: MiningConfig,
@@ -91,10 +91,6 @@ final class Clique[F[_]](
 }
 
 object Clique {
-  sealed trait CliqueAlgo
-  object CliqueAlgo extends CliqueAlgo
-  final case class CliqueExtra(signer: List[Address], signature: CryptoSignature, auth: Boolean = false)
-      extends Extra[CliqueAlgo]
 
   val extraVanity   = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
   val extraSeal     = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
@@ -126,12 +122,9 @@ object Clique {
 
   private[clique] def fillExtraData(signers: List[Address]): ByteVector =
     CliqueExtra(signers, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asValidBytes
-//    ByteVector.fill(extraVanity)(0.toByte) ++ signers.foldLeft(ByteVector.empty)(_ ++ _.bytes) ++ ByteVector.fill(
-//      extraSeal)(0.toByte)
 
   def sigHash[F[_]](header: BlockHeader)(implicit F: Sync[F]): F[ByteVector] = F.delay {
     val bytes = header.copy(extra = ByteVector.empty).asValidBytes
-//    val bytes = RlpCodec.encode(header.copy(extraData = header.extraData.dropRight(extraSeal))).require.bytes
     bytes.kec256
   }
 

@@ -10,9 +10,6 @@ class EthashSpec extends JbokSpec {
 
   def seedForBlockReference(blockNumber: BigInt): ByteVector =
     if (blockNumber < EPOCH_LENGTH) {
-      //wrong version from YP:
-      //ByteString(kec256(Hex.decode("00" * 32)))
-      //working version:
       ByteVector.fromValidHex("00" * 32)
     } else {
       seedForBlockReference(blockNumber - EPOCH_LENGTH).kec256

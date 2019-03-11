@@ -7,8 +7,6 @@ import jbok.core.ledger.TypedBlock.{ExecutedBlock, MinedBlock}
 import jbok.core.models.{Block, BlockHeader}
 import jbok.core.pool.BlockPool
 
-trait Extra[A]
-
 /**
   * [[Consensus]] is mainly responsible for
   *   - prepareHeader: generate a [[BlockHeader]] with protocol-specific consensus fields
@@ -23,12 +21,6 @@ trait Extra[A]
   *   - resolveBranch: resolve a list of headers
   */
 abstract class Consensus[F[_]](val history: History[F], val pool: BlockPool[F]) {
-  type Protocol
-
-  val protocol: Protocol
-
-  type E <: Extra[Protocol]
-
   def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader] = Nil): F[BlockHeader]
 
   def postProcess(executed: ExecutedBlock[F]): F[ExecutedBlock[F]]

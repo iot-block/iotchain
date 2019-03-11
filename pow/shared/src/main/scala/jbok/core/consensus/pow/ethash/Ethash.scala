@@ -2,21 +2,16 @@ package jbok.core.consensus.pow.ethash
 
 import java.math.BigInteger
 
-import jbok.core.consensus.pow.ProofOfWork
 import jbok.common.ByteUtils._
-import jbok.core.consensus.Extra
-import jbok.core.models.Address
+import jbok.core.consensus.pow.ProofOfWork
 import jbok.crypto._
-import jbok.crypto.signature.CryptoSignature
 import org.bouncycastle.util.BigIntegers
 import scodec.bits._
 
 import scala.annotation.tailrec
 
 object Ethash {
-  sealed trait EthashAlgo
-  object EthashAlgo extends EthashAlgo
-  case class EthashExtra(mixHash: ByteVector, nonce: ByteVector) extends Extra[EthashAlgo]
+  final case class EthashExtra(mixHash: ByteVector, nonce: ByteVector)
 
   // Revision number of https://github.com/ethereum/wiki/wiki/Ethash
   val Revision: Int = 23

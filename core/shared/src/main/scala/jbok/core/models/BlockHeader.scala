@@ -1,5 +1,6 @@
 package jbok.core.models
 
+import cats.effect.Sync
 import io.circe._
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
@@ -30,6 +31,9 @@ final case class BlockHeader(
   lazy val hash: ByteVector = bytes.kec256
 
   lazy val tag: String = s"BlockHeader(${number})#${hash.toHex.take(7)}"
+
+  def extraAs[F[_], A](implicit F: Sync[F], C: RlpCodec[A]): F[A] =
+    F.delay(C.decode(extra.bits).require.value)
 }
 
 object BlockHeader {

@@ -1,21 +1,19 @@
 package jbok.core.consensus.istanbul
 
 import cats.effect.ConcurrentEffect
-import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
-import jbok.core.consensus.Consensus
-import jbok.core.models.{Address, Block, BlockHeader}
-import jbok.core.pool.BlockPool
-import scodec.bits.ByteVector
-import jbok.core.consensus.istanbul.IstanbulInvalid._
 import cats.implicits._
+import jbok.codec.rlp.implicits._
+import jbok.core.consensus.{Consensus, Snapshot}
 import jbok.core.consensus.Consensus.Result
-import jbok.core.consensus.istanbul.Istanbul.{IstanbulAlgo, IstanbulExtra}
+import jbok.core.consensus.istanbul.IstanbulInvalid._
 import jbok.core.ledger.TypedBlock
 import jbok.core.ledger.TypedBlock.MinedBlock
 import jbok.core.messages.IstanbulMessage
+import jbok.core.models.{Address, Block, BlockHeader}
+import jbok.core.pool.BlockPool
 import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
 import jbok.crypto._
+import scodec.bits.ByteVector
 
 import scala.util.Random
 
@@ -25,8 +23,6 @@ object IstanbulInvalid {
   case object BlockNumberInvalid        extends Exception("BlockNumberInvalid")
   case object BlockTimestampInvalid     extends Exception("BlockTimestampInvalid")
   case object HeaderExtraInvalid        extends Exception("HeaderExtraInvalid")
-  case object HeaderNonceInvalid        extends Exception("HeaderNonceInvalid")
-  case object HeaderMixhashInvalid      extends Exception("HeaderMixhashInvalid")
   case object DifficultyInvalid         extends Exception("DifficultyInvalid")
   case object SignerUnauthorizedInvalid extends Exception("SignerUnauthorizedInvalid")
   case object CommittedSealInvalid      extends Exception("CommittedSealInvalid")
@@ -35,18 +31,11 @@ object IstanbulInvalid {
 class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbul[F])(implicit F: ConcurrentEffect[F])
     extends Consensus[F](istanbul.history, blockPool) {
 
-  override type Protocol = IstanbulAlgo
-
-  override  val protocol: Protocol = IstanbulAlgo
-
-  override  type E = IstanbulExtra
-
-  private def validateExtra(header: BlockHeader, snapshot: Snapshot): F[IstanbulExtra] = ???
-//    for {
-//      _         <- if (header.extraData.length < Istanbul.extraVanity) F.raiseError(HeaderExtraInvalid) else F.unit
-//      extraData <- F.delay(Istanbul.extractIstanbulExtra(header))
-//      _         <- validateCommittedSeals(header, snapshot, extraData)
-//    } yield extraData
+  private def validateExtra(header: BlockHeader, snapshot: Snapshot): F[IstanbulExtra] =
+    for {
+      extra <- header.extraAs[F, IstanbulExtra]
+      _     <- validateCommittedSeals(header, snapshot, extra)
+    } yield extra
 
   private def validateHeader(parentHeader: BlockHeader, header: BlockHeader): F[Unit] =
     for {
@@ -54,10 +43,6 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
       _ <- if (parentHeader.unixTimestamp + istanbul.config.period.toMillis > header.unixTimestamp)
         F.raiseError(BlockTimestampInvalid)
       else F.unit
-//      _ <- if (header.nonce != ByteVector.empty && header.nonce != Istanbul.nonceDropVote && header.nonce != Istanbul.nonceAuthVote)
-//        F.raiseError(HeaderNonceInvalid)
-//      else F.unit
-//      _ <- if (header.mixHash != Istanbul.mixDigest) F.raiseError(HeaderMixhashInvalid) else F.unit
       _ <- if (header.ommersHash == ByteVector.empty) F.unit else F.raiseError(OmmersHashInvalid)
       _ <- if (header.difficulty == istanbul.config.defaultDifficulty) F.unit else F.raiseError(DifficultyInvalid)
       _ <- if (header.number == 0) { F.unit } else {
@@ -82,8 +67,10 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
       validSealAddrs <- extraData.committedSigs
         .map(seal => F.fromOption(istanbul.ecrecover(proposalSeal, seal), CommittedSealInvalid))
         .sequence
-      validSeals = validSealAddrs.filter(pk => snapshot.validatorSet.contains(Address(pk.bytes.kec256))).distinct
-      _ <- if (validSeals.size <= 2 * snapshot.f) F.raiseError(CommittedSealInvalid) else F.unit
+      validSeals = validSealAddrs.filter(pk => snapshot.signers.contains(Address(pk.bytes.kec256))).distinct
+      _ <- if (validSeals.size <= 2 * (Math.ceil(snapshot.signers.size / 3.0).toInt - 1))
+        F.raiseError(CommittedSealInvalid)
+      else F.unit
     } yield ()
 
   private def prepareCommittedSeal(hash: ByteVector): ByteVector =
@@ -93,7 +80,7 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
     for {
       _      <- if (header.number == 0) F.raiseError(BlockNumberInvalid) else F.unit
       signer <- F.delay(Istanbul.ecrecover(header))
-      _      <- if (snapshot.validatorSet.contains(signer)) F.unit else F.raiseError(SignerUnauthorizedInvalid)
+      _      <- if (snapshot.signers.contains(signer)) F.unit else F.raiseError(SignerUnauthorizedInvalid)
     } yield ()
 
   override def verify(block: Block): F[Unit] =
@@ -113,13 +100,13 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
       snap       <- istanbul.applyHeaders(blockNumber - 1, parent.header.hash, Nil, Nil)
       difficulty <- calcDifficulty(timestamp, parent.header)
       candidates <- istanbul.candidates.get
-      candicate = Random.shuffle(candidates.toSeq).headOption
+      candidate = Random.shuffle(candidates.toSeq).headOption
       extraData = prepareExtra(snap)
     } yield
       BlockHeader(
         parentHash = parent.header.hash,
         ommersHash = ByteVector.empty,
-        beneficiary = candicate match {
+        beneficiary = candidate match {
           case Some((address, _)) => address.bytes
           case None               => ByteVector.empty
         },
@@ -132,13 +119,7 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
         gasLimit = calcGasLimit(parent.header.gasLimit),
         gasUsed = 0,
         unixTimestamp = timestamp,
-        extra = ByteVector.empty
-//        extraData = extraData,
-//        mixHash = Istanbul.mixDigest,
-//        nonce = candicate match {
-//          case Some((_, auth)) => if (auth) Istanbul.nonceAuthVote else Istanbul.nonceDropVote
-//          case None            => ByteVector.empty
-//        }
+        extra = extraData.asValidBytes
       )
 
   private def calcGasLimit(parentGas: BigInt): BigInt = {
@@ -147,14 +128,12 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
     parentGas + gasLimitDifference - 1
   }
 
-  private def prepareExtra(snapshot: Snapshot): ByteVector = {
-    val extra = IstanbulExtra(
-      validators = snapshot.getValidators,
+  private def prepareExtra(snapshot: Snapshot): IstanbulExtra =
+    IstanbulExtra(
+      validators = snapshot.getSigners,
       proposerSig = ByteVector.empty,
       committedSigs = List.empty
     )
-    ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ extra.asValidBytes
-  }
 
   override def postProcess(executed: TypedBlock.ExecutedBlock[F]): F[TypedBlock.ExecutedBlock[F]] = F.pure(executed)
 
@@ -164,13 +143,13 @@ class IstanbulConsensus[F[_]](val blockPool: BlockPool[F], val istanbul: Istanbu
     } else {
       for {
         snap <- istanbul.applyHeaders(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
-        mined <- if (!snap.validatorSet.contains(istanbul.signer)) {
+        mined <- if (!snap.signers.contains(istanbul.signer)) {
           F.raiseError(new Exception("unauthorized"))
         } else {
           for {
             sigHash <- F.delay(Istanbul.sigHash(executed.block.header))
             seal    <- istanbul.sign(sigHash)
-            extra = IstanbulExtra(snap.getValidators, ByteVector(seal.bytes), List.empty)
+            extra = IstanbulExtra(snap.getSigners, ByteVector(seal.bytes), List.empty)
             header = Istanbul
               .filteredHeader(executed.block.header, false)
 //              .copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes)

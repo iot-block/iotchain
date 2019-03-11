@@ -3,7 +3,6 @@ package jbok.core.consensus.pow.ethash
 import cats.effect.IO
 import jbok.JbokSpec
 import jbok.common.testkit._
-import jbok.core.config.defaults.reference
 import jbok.core.consensus.pow.ethash.EthashHeaderInvalid._
 import jbok.core.ledger.History
 import jbok.core.models._
@@ -27,9 +26,9 @@ class EthashHeaderValidatorSpec extends JbokSpec {
       gasLimit = 131620495,
       gasUsed = 0,
       unixTimestamp = 1486752441,
-      extraData = hex"d783010507846765746887676f312e372e33856c696e7578",
-      mixHash = hex"6bc729364c9b682cfa923ba9480367ebdfa2a9bca2a652fe975e8d5958f696dd",
-      nonce = hex"797a8f3a494f937b"
+      extra = hex"d783010507846765746887676f312e372e33856c696e7578",
+//      mixHash = hex"6bc729364c9b682cfa923ba9480367ebdfa2a9bca2a652fe975e8d5958f696dd",
+//      nonce = hex"797a8f3a494f937b"
     )
     val validBlockParent = BlockHeader(
       parentHash = hex"677a5fb51d52321b03552e3c667f602cc489d15fc1d7824445aee6d94a9db2e7",
@@ -44,19 +43,18 @@ class EthashHeaderValidatorSpec extends JbokSpec {
       gasLimit = 131749155,
       gasUsed = 0,
       unixTimestamp = 1486752440,
-      extraData = hex"d783010507846765746887676f312e372e33856c696e7578",
-      mixHash = hex"7f9ac1ddeafff0f926ed9887b8cf7d50c3f919d902e618b957022c46c8b404a6",
-      nonce = hex"3fc7bc671f7cee70"
+      extra = hex"d783010507846765746887676f312e372e33856c696e7578",
+//      mixHash = hex"7f9ac1ddeafff0f926ed9887b8cf7d50c3f919d902e618b957022c46c8b404a6",
+//      nonce = hex"3fc7bc671f7cee70"
     )
-    val blockChainConfig = reference.history
     history.putBlockHeader(validBlockParent).unsafeRunSync()
-    val blockHeaderValidator = new EthashHeaderValidator[IO](blockChainConfig)
+    val blockHeaderValidator = new EthashHeaderValidator[IO](testConfig.history)
   }
 
   "EthashHeaderValidator" should {
     "return a failure if created based on invalid extra data" in new EthashHeaderValidatorFixture {
       forAll(genBoundedByteVector(33, 32 * 2)) { invalidExtraData =>
-        val invalidExtraDataHeader = validBlockHeader.copy(extraData = invalidExtraData)
+        val invalidExtraDataHeader = validBlockHeader.copy(extra = invalidExtraData)
         blockHeaderValidator.validate(validBlockParent, invalidExtraDataHeader).attempt.unsafeRunSync() shouldBe Left(
           HeaderExtraDataInvalid)
       }
@@ -73,10 +71,10 @@ class EthashHeaderValidatorSpec extends JbokSpec {
 
     "return a failure if created based on invalid nonce" ignore new EthashHeaderValidatorFixture {
       forAll(genBoundedByteVector(8, 8)) { nonce =>
-        val invalidNonce = validBlockHeader.copy(nonce = nonce)
-        val result       = blockHeaderValidator.validate(validBlockParent, invalidNonce).attempt.unsafeRunSync()
-        if (nonce.equals(validBlockHeader.nonce)) result shouldBe Right(invalidNonce)
-        else result shouldBe Left(HeaderPoWInvalid)
+//        val invalidNonce = validBlockHeader.copy(nonce = nonce)
+//        val result       = blockHeaderValidator.validate(validBlockParent, invalidNonce).attempt.unsafeRunSync()
+//        if (nonce.equals(validBlockHeader.nonce)) result shouldBe Right(invalidNonce)
+//        else result shouldBe Left(HeaderPoWInvalid)
       }
     }
   }
