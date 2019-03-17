@@ -36,10 +36,18 @@ class OpCodeGasSpecConstantinople extends FunSuite with OpCodeTesting with Match
       val state      = random[ProgramState[IO]]
       val ownAddress = state.ownAddress
 
-      val originalStorage = state.world.getStorage(ownAddress).unsafeRunSync().store(offset, original)
-      val originalWorld   = state.world.putStorage(ownAddress, originalStorage).persisted.unsafeRunSync()
-      val currentStorage  = originalWorld.getStorage(ownAddress).unsafeRunSync().store(offset, current)
-      val stackIn         = Stack.empty().push(value).push(offset)
+      val originalStorage = state.world
+        .getStorage(ownAddress)
+        .unsafeRunSync()
+        .store(offset, original)
+        .unsafeRunSync()
+      val originalWorld = state.world.putStorage(ownAddress, originalStorage).persisted.unsafeRunSync()
+      val currentStorage = originalWorld
+        .getStorage(ownAddress)
+        .unsafeRunSync()
+        .store(offset, current)
+        .unsafeRunSync()
+      val stackIn = Stack.empty().push(value).push(offset)
 
       val stateIn =
         state.withStack(stackIn).withWorld(originalWorld).withStorage(currentStorage).copy(gas = expectedGas)

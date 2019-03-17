@@ -398,7 +398,9 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(SSTORE) { op =>
-    val storage = Storage.empty[IO].unsafeRunSync().store(Zero, One)
+    val storage = Storage.empty[IO].unsafeRunSync()
+      .store(Zero, One)
+      .unsafeRunSync()
     val table = Table[UInt256, UInt256, BigInt, BigInt](("offset", "value", "expectedGas", "expectedRefund"),
                                                         (0, 1, G_sreset, 0),
                                                         (0, 0, G_sreset, R_sclear),

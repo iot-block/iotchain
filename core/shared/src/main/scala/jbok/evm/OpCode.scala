@@ -589,7 +589,7 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
       for {
         refund  <- gasMetering(state).map(_._2)
         storage <- state.storage
-        updatedStorage = storage.store(offset, value)
+        updatedStorage <- storage.store(offset, value)
       } yield {
         state.withStack(stack1).withStorage(updatedStorage).refundGas(refund).step()
       }

@@ -11,6 +11,7 @@ import UInt256._
 import jbok.crypto._
 import jbok.common.testkit._
 import jbok.core.testkit._
+import cats.implicits._
 
 class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
 
@@ -403,9 +404,10 @@ class OpCodeFunSpec extends FunSuite with OpCodeTesting with Matchers with Prope
         .map {
           case (w, i) => UInt256(i) -> w
         }
-        .foldLeft(storage) {
+        .foldLeftM(storage) {
           case (s, (k, v)) => s.store(k, v)
         }
+        .unsafeRunSync()
       val world    = state.world.putStorage(state.ownAddress, toStored)
       val stateIn  = state.withStack(stack).withWorld(world)
       val stateOut = executeOp(op, stateIn)
