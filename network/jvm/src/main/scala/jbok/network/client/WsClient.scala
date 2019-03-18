@@ -54,7 +54,11 @@ object WsClient {
         input.map(_.a).through(pipe).map(a => Frame.Binary(a))
       }
 
-      val stream = spinoco.fs2.http.websocket.WebSocket.client[F, Message[F], Message[F]](request, framePipe).drain
+      val stream = spinoco.fs2.http.websocket.WebSocket.client[F, Message[F], Message[F]](
+        request = request,
+        pipe = framePipe,
+        maxFrameSize = 4 * 1024 * 1024
+      ).drain
 
       Connection[F](stream, in, out, promises, false, haltWhenTrue)
     }

@@ -42,7 +42,7 @@ object ScribeLog {
       separator = '/',
       abbreviateName = true
     )
-    formatter"$date $levelColoredPaddedRight [$threadName] - $messageColored$mdc ($fileNameAbbreviated:$line)$newLine"
+    formatter"$date $levelColoredPaddedRight - $messageColored$mdc ($fileNameAbbreviated:$line)$newLine"
   }
 
   private[log] def fromJbokLevel(level: Level): SL = level match {

@@ -73,12 +73,19 @@ object Message {
   def decodeChunk[F[_]: Sync](chunk: Chunk[Byte]): F[Message[F]] =
     Sync[F].delay(RlpCodec.decode[Message[F]](BitVector(chunk.toArray)).require.value)
 
-  def encodePipe[F[_]: Effect]: Pipe[F, Message[F], Byte] =
-    _.evalMap(_.asChunk).flatMap(chunk => Stream.chunk(chunk))
+  def encodePipe[F[_]: Effect]: Pipe[F, Message[F], Byte] = { ms: Stream[F, Message[F]] =>
+    scodec.stream.encode
+      .many[Message[F]](RlpCodec[Message[F]])
+      .encode(ms)
+      .flatMap(bits => {
+        val bytes = bits.bytes
+        Stream.chunk(Chunk.byteVector(bytes))
+      })
+  }
 
-  def decodePipe[F[_]: Effect]: Pipe[F, Byte, Message[F]] = _.chunks.flatMap { chunk =>
-    val bits = BitVector(chunk.toArray)
-    scodec.stream.decode.many[Message[F]](RlpCodec[Message[F]]).decode[F](bits)
+  def decodePipe[F[_]: Effect]: Pipe[F, Byte, Message[F]] = { bytes: Stream[F, Byte] =>
+    val bits = bytes.mapChunks(chunk => Chunk(ByteVector(chunk.toByteBuffer).toBitVector))
+    bits through scodec.stream.decode.pipe[F, Message[F]]
   }
 }
 

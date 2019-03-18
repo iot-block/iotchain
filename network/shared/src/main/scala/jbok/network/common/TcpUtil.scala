@@ -9,12 +9,13 @@ import fs2._
 import fs2.concurrent.{Queue, SignallingRef}
 import fs2.io.tcp.Socket
 import jbok.network.{Connection, Message, Request, Response}
+import scala.concurrent.duration._
 
 private[jbok] object TcpUtil {
   def socketToConnection[F[_]](
       resource: Resource[F, Socket[F]],
       incoming: Boolean,
-      maxBytes: Int = 256 * 1024,
+      maxBytes: Int = 4 * 1024 * 1024,
       maxQueued: Int = 64
   )(implicit F: ConcurrentEffect[F], CS: ContextShift[F], T: Timer[F]): F[Connection[F]] =
     for {

@@ -18,7 +18,7 @@ object WsClient {
   def apply[F[_]](
       uri: URI,
       maxQueued: Int = 64,
-      maxBytes: Int = 256 * 1024
+      maxBytes: Int = 4 * 1024 * 1024
   )(implicit F: ConcurrentEffect[F], CS: ContextShift[F]): F[Client[F]] =
     for {
       in           <- Queue.bounded[F, Message[F]](maxQueued)

@@ -15,6 +15,13 @@ object TcpClient {
   ): F[Client[F]] = {
     val to = new InetSocketAddress(uri.getHost, uri.getPort)
     TcpUtil
-      .socketToConnection[F](fs2.io.tcp.Socket.client[F](to, keepAlive = true, noDelay = true), false)
+      .socketToConnection[F](fs2.io.tcp.Socket.client[F](
+                               to,
+                               keepAlive = true,
+                               noDelay = true,
+                               sendBufferSize = 4 * 1024 * 1024,
+                               receiveBufferSize = 4 * 1024 * 1024
+                             ),
+                             false)
   }
 }

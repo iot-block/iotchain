@@ -15,20 +15,17 @@ import scala.concurrent.duration._
 import fs2._
 
 class ClientServerSpec extends JbokSpec {
-  def check(client: Client[IO], server: Server[IO]) =
-    "write, read and request" ignore {
+  def check(client: Client[IO], server: Server[IO]): Unit =
+    "write, read and request" in {
       val p = for {
         fiber <- Stream(server.stream, Stream.sleep[IO](1.second) ++ client.stream).parJoinUnbounded.compile.drain.start
-        _ = forAll(genHex(1024 * 1500, 1024 * 1500)) { str =>
-          val req = Request.json[IO](UUID.randomUUID(), "", str.asJson)
-          client.write(req).unsafeRunSync()
-          val res = client.read.unsafeRunSync()
-          res.bodyAsJson.unsafeRunSync() shouldBe str.asJson
-        }
-        _ = forAll(genHex(1024 * 1500, 1024 * 1500)) { str =>
-          val req = Request.json[IO](UUID.randomUUID(), "", str.asJson)
-          client.request(req).unsafeRunSync().bodyAsJson.unsafeRunSync() shouldBe str.asJson
-        }
+        str = genHex(1024 * 1500, 1024 * 1500).sample.get
+        req = Request.json[IO](UUID.randomUUID(), "", str.asJson)
+        _ <- client.write(req)
+        res <- client.read
+        _ = res.bodyAsJson.unsafeRunSync() shouldBe str.asJson
+        req2 = Request.json[IO](UUID.randomUUID(), "", str.asJson)
+        _    = client.request(req2).unsafeRunSync().bodyAsJson.unsafeRunSync() shouldBe str.asJson
         _ <- fiber.cancel
       } yield ()
       p.unsafeRunSync()
