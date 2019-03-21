@@ -123,7 +123,7 @@ class WorldStateSpec extends JbokSpec {
       world1.stateRootHash shouldBe world2.stateRootHash
     }
 
-    "storing a zero on a contract store position should remove it from the underlying tree" ignore new Fixture {
+    "storing a zero on a contract store position should remove it from the underlying tree" in new Fixture {
       val account = Account(0, 100)
       val world1  = world.putAccount(address1, account).persisted.unsafeRunSync()
       val world2 =

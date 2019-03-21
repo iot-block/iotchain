@@ -148,4 +148,18 @@ class MerklePatriciaTrieSpec extends JbokSpec {
       trie.toMap[Int, Int](namespace).unsafeRunSync() shouldBe m1
     }
   }
+
+  "perform as an immutable data structure with deletion" in {
+    forAll { (trie: MerklePatriciaTrie[IO], m1: Map[Int, Int], m2: Map[Int, Int], namespace: ByteVector) =>
+      m1.foreach { case (k, v) => trie.put(k, v, namespace).unsafeRunSync() }
+      val root1 = trie.getRootHash.unsafeRunSync()
+
+      m2.foreach { case (k, v) => trie.del(k, namespace).unsafeRunSync() }
+
+      trie.toMap[Int, Int](namespace).unsafeRunSync().keySet shouldBe (m1.keySet -- m2.keySet)
+
+      trie.rootHash.set(Some(root1)).unsafeRunSync()
+      trie.toMap[Int, Int](namespace).unsafeRunSync() shouldBe m1
+    }
+  }
 }

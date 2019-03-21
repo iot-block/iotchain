@@ -236,7 +236,7 @@ final class MerklePatriciaTrie[F[_]](
         }
         .map(x => namespace ++ x.hash -> x.bytes)
 
-      db.writeBatchRaw(putOps, delOps).map(_ => newRootHash)
+      db.writeBatchRaw(putOps, Nil).map(_ => newRootHash)
     }
   }
 

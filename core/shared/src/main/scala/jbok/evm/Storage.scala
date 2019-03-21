@@ -7,16 +7,13 @@ import jbok.core.store.namespaces
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 
 final case class Storage[F[_]: Sync](db: StageKeyValueDB[F, UInt256, UInt256]) {
-  def store(offset: UInt256, value: UInt256): F[Storage[F]] =
-    db.getOpt(offset).map {
-      case Some(_) => this.copy(db = db.put(offset, value))
-      case None =>
-        if (value == UInt256.Zero) {
-          this
-        } else {
-          this.copy(db = db.put(offset, value))
-        }
+  def store(offset: UInt256, value: UInt256): F[Storage[F]] = Sync[F].pure {
+    if (value == UInt256.Zero) {
+      this.copy(db = db.del(offset))
+    } else {
+      this.copy(db = db.put(offset, value))
     }
+  }
 
   def load(offset: UInt256): F[UInt256] = db.getOpt(offset).map(_.getOrElse(UInt256.Zero))
 
