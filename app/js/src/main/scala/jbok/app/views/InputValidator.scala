@@ -37,7 +37,7 @@ object InputValidator {
   def isValidPort(data: String): Boolean =
     data.nonEmpty && data.forall(number.contains(_)) && data.length <= 5 && data.toInt > 1000 && data.toInt < 65535
 
-  def isValidABI(data: String): Boolean = true
+  def isValidCode(data: String): Boolean = true
 
   def isValidBool(data: String): Boolean = data == "true" || data == "false"
 

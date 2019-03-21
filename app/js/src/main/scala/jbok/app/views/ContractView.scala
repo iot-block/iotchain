@@ -18,7 +18,7 @@ final case class ContractView(state: AppState) {
     Constants(
       CustomInput("Address", "address", None, (addr: String) => InputValidator.isValidAddress(addr)),
       CustomInput(
-        "Abi",
+        "Code",
         """
           |[
           |	{
@@ -30,24 +30,25 @@ final case class ContractView(state: AppState) {
           |]
         """.stripMargin,
         None,
-        (abi: String) => InputValidator.isValidABI(abi),
+        (code: String) => InputValidator.isValidCode(code),
         "textarea"
       )
     ), { data =>
       if (data.values.forall(_.isValid)) {
         state.currentId.value.map { id =>
-          val abi     = state.clients.value(id).public.parseContractCode(data("Abi").value).unsafeRunSync().contract.get
-          val address = Address(ByteVector.fromValidHex(data("Address").value))
-          if (!state.contractInfo.value.map(_.address).toSet.contains(address))
-            state.contractInfo.value += Contract(address, abi.methods)
+          (for {
+            abi <- state.clients.value(id).public.parseContractCode(data("Code").value)
+            address = Address(ByteVector.fromValidHex(data("Address").value))
+            _ = if (!state.contractInfo.value.map(_.address).toSet.contains(address))
+              state.contractInfo.value += Contract(address, abi.contract.get.methods)
+          } yield ()).unsafeToFuture()
         }
       }
     }
   )
-  def watchOnConfirm(): Unit = {
+  def watchOnConfirm(): Unit =
     watchForm.submit(watchForm.entryMap)
-    watchForm.clear()
-  }
+//    watchForm.clear()
   def watchOnCancel() =
     watchForm.clear()
   val watchModal = Modal("watch", watchForm.render(), () => watchOnConfirm(), () => watchOnCancel())

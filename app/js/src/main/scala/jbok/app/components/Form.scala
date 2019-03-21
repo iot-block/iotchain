@@ -14,7 +14,9 @@ final case class FormEntry(name: String, `type`: String = "text", value: Var[Str
 }
 
 final case class Form2(entries: Constants[CustomInput], submit: Map[String, CustomInput] => Unit) {
-  val entryMap = entries.value.map(x => x.name -> x).toMap
+//  val entryMap = entries.value.map(x => x.name -> x).toMap
+
+  def entryMap = entries.value.map(x => x.name -> x).toMap
 
   def clear() = entries.value.foreach(_.clear())
 
@@ -34,7 +36,9 @@ final case class Form2(entries: Constants[CustomInput], submit: Map[String, Cust
     </div>
 }
 
-final case class Form(entries: Constants[FormEntry], submit: Map[String, String] => Unit, idOpt: Option[String] = None) {
+final case class Form(entries: Constants[FormEntry],
+                      submit: Map[String, String] => Unit,
+                      idOpt: Option[String] = None) {
   val id = idOpt getOrElse UUID.randomUUID().toString
 
   val entryMap = entries.value.map(x => x.name -> x).toMap
@@ -50,7 +54,6 @@ final case class Form(entries: Constants[FormEntry], submit: Map[String, String]
   val onInputHandler = { event: Event =>
     event.currentTarget match {
       case input: HTMLInputElement => {
-        println(data)
         entryMap.get(input.name).foreach(x => x.value.value = input.value.trim)
       }
       case textarea: HTMLTextAreaElement => {

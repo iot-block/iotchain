@@ -10,10 +10,10 @@ import org.scalajs.dom.Event
 import org.scalajs.dom.raw.{Element, HTMLInputElement, HTMLSelectElement, HTMLTextAreaElement}
 
 final case class CustomInput(name: String,
-                       placeholder: String = "",
-                       idOpt: Option[String] = None,
-                       validator: String => Boolean = (value: String) => true,
-                       `type`: String = "text") {
+                             placeholder: String = "",
+                             idOpt: Option[String] = None,
+                             validator: String => Boolean = (value: String) => true,
+                             `type`: String = "text") {
   private val _value: Var[String]   = Var("")
   private val _Syntax: Var[Boolean] = Var(true)
   val id                            = idOpt getOrElse UUID.randomUUID().toString
@@ -55,8 +55,9 @@ final case class CustomInput(name: String,
     </div>
 }
 
-final case class AddressOptionInput(candidates: Vars[Address],
-                              validator: String => Boolean = (addr: String) => InputValidator.isValidAddress(addr)) {
+final case class AddressOptionInput(
+    candidates: Vars[Address],
+    validator: String => Boolean = (addr: String) => InputValidator.isValidAddress(addr)) {
   val address: Var[String]              = Var("")
   val otherAddressDisable: Var[Boolean] = Var(false)
   val addressInput                      = CustomInput("address", "address", None, validator)
