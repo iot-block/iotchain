@@ -574,9 +574,27 @@ class PublicApiSpec extends JbokSpec {
         .unsafeRunSync() shouldBe
         List(Json.fromString("value1")).asJson.noSpaces
 
+      val setValueTx2 = Transaction(
+        nonce = 2,
+        receivingAddress = contractAddress,
+        gasPrice = 1,
+        value = 0,
+        gasLimit = 150000,
+        payload = setValueF.encode("[\"key1\", \"12345678901234567890123456789088\"]").right.get
+      )
+
+      val setValueStx2 = SignedTransaction.sign[IO](setValueTx2, testMiner.keyPair).unsafeRunSync()
+      publicApi.sendSignedTransaction(setValueStx2).unsafeRunSync() shouldBe setValueStx2.hash
+      miner.stream.take(1).compile.toList.unsafeRunSync().head
+
+      publicApi
+        .callContractTransaction(code, "getValue", "[\"key1\"]", testMiner.address, contractAddress, BlockParam.Latest)
+        .unsafeRunSync() shouldBe
+        List(Json.fromString("12345678901234567890123456789088")).asJson.noSpaces
+
       val batchSetValuesF = ContractParser.parse(code).right.get.head.toABI.methods.find(_.name == "batchSetValues").get
       val batchSetValuesTx = Transaction(
-        nonce = 2,
+        nonce = 3,
         receivingAddress = contractAddress,
         gasPrice = 1,
         value = 0,
@@ -596,7 +614,10 @@ class PublicApiSpec extends JbokSpec {
                                  contractAddress,
                                  BlockParam.Latest)
         .unsafeRunSync() shouldBe
-        List(List(Json.fromString("value1"), Json.fromString("value2"), Json.fromString("value3"))).asJson.noSpaces
+        List(
+          List(Json.fromString("12345678901234567890123456789088"),
+               Json.fromString("value2"),
+               Json.fromString("value3"))).asJson.noSpaces
     }
   }
 }

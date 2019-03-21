@@ -146,7 +146,7 @@ final case class BytesType() extends SolidityType {
     if (value.length != 0 && value.length % 32 == 0) {
       val (l, r) = value.splitAt(32)
       val size   = UInt256(l).toBigInt.toLong
-      if (size < r.length && r.takeRight(r.length - size).toArray.forall(_ == 0.toByte)) {
+      if (size <= r.length && r.takeRight(r.length - size).toArray.forall(_ == 0.toByte)) {
         val data = s"0x${r.take(size).toHex}"
         Json.fromString(data).asRight
       } else { InvalidValue(s"type: bytes, cannot get string prefix length, value: $value").asLeft }
@@ -195,7 +195,7 @@ final case class StringType() extends SolidityType {
     if (value.length != 0 && value.length % 32 == 0) {
       val (l, r) = value.splitAt(32)
       val size   = UInt256(l).toBigInt.toLong
-      if (size < r.length && r.takeRight(r.length - size).toArray.forall(_ == 0.toByte)) {
+      if (size <= r.length && r.takeRight(r.length - size).toArray.forall(_ == 0.toByte)) {
         val codec = scodec.codecs.string(StandardCharsets.UTF_8)
         codec.decode(r.take(size).bits).toOption.map(_.value) match {
           case Some(data) => Json.fromString(data).asRight
