@@ -121,7 +121,7 @@ final case class CallTxView(state: AppState) {
     case "decode" => {
       val result = function.value.get.decode(rawResult.value)
       if (result.isRight) {
-        result.right.get.toString
+        result.right.get.noSpaces
       } else {
         result.left.get.toString
       }
@@ -156,6 +156,7 @@ final case class CallTxView(state: AppState) {
         }
       val callTx = CallTx(fromSubmit, toSubmit, None, 1, 0, data)
       if (txType.value == "Call") {
+        reset()
         val p = for {
           ret <- client.get.public.call(callTx, BlockParam.Latest)
           _ = rawResult.value = ret
@@ -235,7 +236,7 @@ final case class CallTxView(state: AppState) {
                   <div>
                     <select name="functionSelect" class="autocomplete" onchange={functionOnChange}>
                       {
-                        for (vf <- Constants(functions: _*)) yield {
+                        for (vf <- Constants(functions.filter(_.name != "constructor"): _*)) yield {
                           val fn = vf.name
                           <option value={fn}>{fn}</option>
                         }
