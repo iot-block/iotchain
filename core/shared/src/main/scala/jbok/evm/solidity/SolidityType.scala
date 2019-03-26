@@ -1,4 +1,4 @@
-package jbok.solidity
+package jbok.evm.solidity
 
 import java.nio.charset.StandardCharsets
 
@@ -246,12 +246,12 @@ object SolidityType {
     }
   }
 
-    def splitToFixSizeList(byteVector: ByteVector): List[ByteVector] = {
-      val (l, r) = byteVector.splitAt(32)
-      if (r.nonEmpty) {
-        List.apply(l) ++ splitToFixSizeList(r)
-      } else {
-        List.apply(l)
-      }
+  def splitToFixSizeList(byteVector: ByteVector): List[ByteVector] = {
+    val (l, r) = byteVector.splitAt(32)
+    if (r.nonEmpty) {
+      List.apply(l) ++ splitToFixSizeList(r)
+    } else {
+      List.apply(l)
     }
+  }
 }

@@ -13,7 +13,7 @@ import org.scalajs.dom
 import scodec.bits.ByteVector
 import io.circe.parser._
 import jbok.sdk.api.{BlockParam, CallTx, TransactionRequest}
-import jbok.solidity.ABIDescription.FunctionDescription
+import jbok.evm.solidity.ABIDescription.FunctionDescription
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final case class CallTxView(state: AppState) {

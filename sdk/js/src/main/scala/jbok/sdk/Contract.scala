@@ -1,8 +1,10 @@
 package jbok.sdk
 
-import jbok.solidity.ABIDescription
-import jbok.solidity.ABIDescription.ContractDescription
+import jbok.evm.solidity.SolidityParser
+import jbok.evm.solidity.ABIDescription
+import jbok.evm.solidity.ABIDescription.ContractDescription
 import scodec.bits.ByteVector
+import jbok.codec.json.implicits._
 
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 import scala.scalajs.js.JSConverters._
@@ -32,4 +34,18 @@ final case class Contract(contractDescription: ContractDescription) {
         case Left(e)      => e.toString
       }
     } yield returns).orUndefined
+}
+
+@JSExportTopLevel("ContractParser")
+@JSExportAll
+object ContractParser {
+  def parse(code: String): UndefOr[Contract] = {
+    val result = SolidityParser.parseContract(code)
+
+    (if (result.isSuccess) {
+       Some(Contract(result.get.value.toABI))
+     } else {
+       None
+     }).orUndefined
+  }
 }

@@ -11,7 +11,7 @@ import jbok.app.client.JbokClient
 import jbok.common.execution._
 import jbok.core.models._
 import jbok.sdk.api.BlockParam
-import jbok.solidity.ABIDescription.FunctionDescription
+import jbok.evm.solidity.ABIDescription.FunctionDescription
 import org.scalajs.dom.Event
 import scodec.bits.ByteVector
 
