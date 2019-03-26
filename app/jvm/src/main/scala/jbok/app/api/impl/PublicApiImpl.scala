@@ -7,8 +7,7 @@ import jbok.codec.rlp.implicits._
 import jbok.core.config.Configs.HistoryConfig
 import jbok.core.mining.BlockMiner
 import jbok.core.models._
-import jbok.sdk.api.{BlockParam, CallTx, ParseResult, PublicAPI}
-import jbok.solidity.visitors.ContractParser
+import jbok.sdk.api.{BlockParam, CallTx, PublicAPI}
 import scodec.bits.ByteVector
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
@@ -193,32 +192,6 @@ final class PublicApiImpl(
     for {
       account <- resolveAccount(address, blockParam)
     } yield account.nonce.toBigInt
-
-  override def parseContractCode(code: String): IO[ParseResult] =
-    IO {
-      ContractParser.parse(code) match {
-        case Right(contracts) => ParseResult(contracts.headOption.map(_.toABI), None)
-        case Left(errors)     => ParseResult(None, Some(errors))
-      }
-    }
-
-  override def callContractTransaction(code: String,
-                                       method: String,
-                                       params: String,
-                                       from: Address,
-                                       contractAddress: Address,
-                                       blockParam: BlockParam): IO[String] =
-    IO {
-      (for {
-        contracts <- ContractParser.parse(code).right.toOption
-        contract  <- contracts.headOption
-        function  <- contract.toABI.methods.find(_.name == method)
-        payload   <- function.encode(params).right.toOption
-        callTx = CallTx(Some(from), Some(contractAddress), None, 0, 0, payload)
-        result = call(callTx, blockParam).unsafeRunSync()
-        a <- function.decode(result).right.toOption
-      } yield a.noSpaces).getOrElse("")
-    }
 
   /////////////////////
   /////////////////////

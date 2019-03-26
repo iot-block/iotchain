@@ -4,7 +4,6 @@ import io.circe.generic.JsonCodec
 import jbok.core.models._
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
-import jbok.solidity.ABIDescription.ContractDescription
 
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
@@ -30,12 +29,6 @@ final case class CallTx(
     gasPrice: BigInt,
     value: BigInt,
     data: ByteVector
-)
-
-@JsonCodec
-final case class ParseResult(
-    contract: Option[ContractDescription],
-    errors: Option[List[String]]
 )
 
 trait PublicAPI[F[_]] {
@@ -98,14 +91,4 @@ trait PublicAPI[F[_]] {
   def getBalance(address: Address, blockParam: BlockParam): F[BigInt]
 
   def getStorageAt(address: Address, position: BigInt, blockParam: BlockParam): F[ByteVector]
-
-  // contract
-  def parseContractCode(code: String): F[ParseResult]
-
-  def callContractTransaction(code: String,
-                              methods: String,
-                              params: String,
-                              from: Address,
-                              contractAddress: Address,
-                              blockParam: BlockParam): F[String]
 }

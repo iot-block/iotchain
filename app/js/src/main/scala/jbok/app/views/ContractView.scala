@@ -6,6 +6,8 @@ import com.thoughtworks.binding.Binding.{Constants, Var}
 import jbok.app.components.{Form2, Modal}
 import jbok.app.{AppState, Contract}
 import jbok.core.models.{Account, Address}
+import jbok.evm.solidity.SolidityParser
+import jbok.sdk.ContractParser
 import org.scalajs.dom._
 import scodec.bits.ByteVector
 
@@ -36,12 +38,11 @@ final case class ContractView(state: AppState) {
     ), { data =>
       if (data.values.forall(_.isValid)) {
         state.currentId.value.map { id =>
-          (for {
-            abi <- state.clients.value(id).public.parseContractCode(data("Code").value)
-            address = Address(ByteVector.fromValidHex(data("Address").value))
-            _ = if (!state.contractInfo.value.map(_.address).toSet.contains(address))
-              state.contractInfo.value += Contract(address, abi.contract.get.methods)
-          } yield ()).unsafeToFuture()
+          val c       = SolidityParser.parseContract(data("Code").value)
+          val address = Address(ByteVector.fromValidHex(data("Address").value))
+          if (c.isSuccess && !state.contractInfo.value.map(_.address).toSet.contains(address)) {
+            state.contractInfo.value += Contract(address, c.get.value.toABI.methods)
+          }
         }
       }
     }

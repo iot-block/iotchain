@@ -1,6 +1,9 @@
 package jbok.evm.solidity
 
 import jbok.JbokSpec
+import scodec.bits._
+import io.circe.Json
+import io.circe.syntax._
 
 class SolidityParserSpec extends JbokSpec {
   val code =
@@ -97,7 +100,7 @@ class SolidityParserSpec extends JbokSpec {
       |     * @param _spender The address authorized to spend
       |     * @param _value the max amount they can spend
       |     */
-      |    function approve(address _spender, uint256 _value) public
+      |    function approve(address _spender, uint256 _value) modifier2 public
       |        returns (bool success) {
       |        allowance[msg.sender][_spender] = _value;
       |        return true;
@@ -113,7 +116,7 @@ class SolidityParserSpec extends JbokSpec {
       |     * @param _extraData some extra information to send to the approved contract
       |     */
       |    function approveAndCall(address _spender, uint256 _value, bytes _extraData)
-      |        public
+      |        public modifier1
       |        returns (bool success) {
       |        tokenRecipient spender = tokenRecipient(_spender);
       |        if (approve(_spender, _value)) {
@@ -129,7 +132,7 @@ class SolidityParserSpec extends JbokSpec {
       |     *
       |     * @param _value the amount of money to burn
       |     */
-      |    function burn(uint256 _value) public returns (bool success) {
+      |    function burn(uint256 _value) onlyBy public onlyOwn returns (bool success) {
       |        require(balanceOf[msg.sender] >= _value);   // Check if the sender has enough
       |        balanceOf[msg.sender] -= _value;            // Subtract from the sender
       |        totalSupply -= _value;                      // Updates totalSupply
@@ -154,6 +157,58 @@ class SolidityParserSpec extends JbokSpec {
       |        Burn(_from, _value);
       |        return true;
       |    }
+      |    function (uint256) external returns(uint256) ffff;
+      |}
+    """.stripMargin
+
+  val code2 =
+    """contract test {
+      |    address public minter;
+      |    uint constant csize1 = 1;
+      |    uint constant csize2 = 2;
+      |    uint constant csize3 = csize1 + csize2;
+      |    bool constant cb = true;
+      |
+      |    mapping (string => string) private values;
+      |
+      |    constructor () public {
+      |        minter = msg.sender;
+      |    }
+      |
+      |    function f1(uint256[csize1][] memory a) public returns(uint256[csize2] memory) {
+      |
+      |    }
+      |
+      |    function setValue(string memory key, string memory newValue) public {
+      |        require(msg.sender == minter,"没有权限");
+      |        values[key] = newValue;
+      |    }
+      |
+      |    function batchSetValues(string[] memory keys,string[] memory newValues) public {
+      |        require(msg.sender == minter,"没有权限");
+      |        require(keys.length == newValues.length,"参数不匹配");
+      |        for (uint i = 0;i<keys.length;i++) {
+      |            values[keys[i]] = newValues[i];
+      |        }
+      |    }
+      |
+      |    function getValue(string memory key) public view returns (string memory){
+      |        // require(msg.sender == minter,"没有权限");
+      |        return values[key];
+      |    }
+      |
+      |    function batchGetValues(string[] memory keys) onlyBy public view returns (string[] memory){
+      |        // require(msg.sender == minter,"没有权限");
+      |        string[] memory list = new string[](keys.length);
+      |        for (uint i = 0;i<keys.length;i++) {
+      |            list[i] = values[keys[i]];
+      |        }
+      |        return list;
+      |    }
+      |
+      |    mapping(address => mapping(address => uint256))[] public ab;
+      |
+      |    function (uint256) external returns(uint256) ffff;
       |}
     """.stripMargin
 
@@ -161,13 +216,13 @@ class SolidityParserSpec extends JbokSpec {
     "parse contract" in {
       val contract = SolidityParser.parseContract(code)
       contract.isSuccess shouldBe true
-      println(contract.get.value.name)
-      println(contract.get.value.parts.collect { case x: Ast.FunctionDef => x}.mkString("\n"))
+      val contractABI = contract.get.value.toABI
+      println(contractABI)
     }
 
     "parse function" in {
       val code =
-        """function burnFrom(address _from, uint256 _value) public returns (bool success) {
+        """function burnFrom(address _from, uint256 _value) onlyBy public returns (bool success) {
           |    require(balanceOf[_from] >= _value);                // Check if the targeted balance is enough
           |    require(_value <= allowance[_from][msg.sender]);    // Check allowance
           |    balanceOf[_from] -= _value;                         // Subtract from the targeted balance
@@ -180,9 +235,113 @@ class SolidityParserSpec extends JbokSpec {
 
       val func = SolidityParser.parseFunc(code)
       func.isSuccess shouldBe true
-      println(func.get.value.name)
-      println(func.get.value)
+      func.get.value.name shouldBe "burnFrom"
+    }
+
+    "parse expr" in {
+      val expr = "((1+ 1*2)+(3*4*5))/3"
+      val e    = SolidityParser.parseExpr(expr)
+      e.isSuccess shouldBe true
+      e.get.value shouldBe 21
+
+      val exprV = "a + b"
+      val value = SolidityParser.parseExpr(exprV, List("a" -> 1, "b" -> 2).toMap)
+      value.isSuccess shouldBe true
+      value.get.value shouldBe 3
+    }
+
+    "parse erc20" in {
+      val parseResult  = SolidityParser.parseContract(code)
+      val contract     = parseResult.get.value
+      val erc20Methods = contract.toABI.methods.map(method => method.name -> method).toMap
+
+      val name = erc20Methods("name")
+        .decode(
+          hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c494f54206f6e20436861696e0000000000000000000000000000000000000000")
+      name.isRight shouldBe true
+      name.right.get shouldBe List(Json.fromString("IOT on Chain")).asJson
+
+      val symbol = erc20Methods("symbol")
+        .decode(
+          hex"0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000034954430000000000000000000000000000000000000000000000000000000000")
+      symbol.isRight shouldBe true
+      symbol.right.get shouldBe List(Json.fromString("ITC")).asJson
+
+      val totalSupply =
+        erc20Methods("totalSupply").decode(hex"0x00000000000000000000000000000000000000000052b7d2dcc80cd2e4000000")
+      totalSupply.isRight shouldBe true
+      totalSupply.right.get shouldBe List(Json.fromBigInt(BigInt(10).pow(26))).asJson
+
+      val balanceOfPayload = erc20Methods("balanceOf").encode("[\"0x1234567890123456789012345678901234567890\"]")
+      balanceOfPayload.isRight shouldBe true
+      balanceOfPayload.right.get shouldBe hex"0x70a082310000000000000000000000001234567890123456789012345678901234567890"
+
+      val allowance = erc20Methods("allowance")
+        .encode("[\"0x1234567890123456789012345678901234567890\", \"0x0987654321098765432109876543210987654321\"]")
+      allowance.isRight shouldBe true
+      allowance.right.get shouldBe hex"0xdd62ed3e00000000000000000000000012345678901234567890123456789012345678900000000000000000000000000987654321098765432109876543210987654321"
+
+      val transfer = erc20Methods("transfer").encode("[\"0x1234567890123456789012345678901234567890\", 233333]")
+      transfer.isRight shouldBe true
+      transfer.right.get shouldBe hex"0xa9059cbb00000000000000000000000012345678901234567890123456789012345678900000000000000000000000000000000000000000000000000000000000038f75"
+
+      val transferFrom = erc20Methods("transferFrom")
+        .encode(
+          "[\"0x1234567890123456789012345678901234567890\", \"0x0987654321098765432109876543210987654321\", 233333]")
+      transferFrom.isRight shouldBe true
+      transferFrom.right.get shouldBe hex"0x23b872dd000000000000000000000000123456789012345678901234567890123456789000000000000000000000000009876543210987654321098765432109876543210000000000000000000000000000000000000000000000000000000000038f75"
+
+      val approve = erc20Methods("approve").encode("[\"0x1234567890123456789012345678901234567890\", 1234]")
+      approve.isRight shouldBe true
+      approve.right.get shouldBe hex"0x095ea7b3000000000000000000000000123456789012345678901234567890123456789000000000000000000000000000000000000000000000000000000000000004d2"
+
+      val approveAndCall =
+        erc20Methods("approveAndCall").encode("[\"0x1234567890123456789012345678901234567890\", 4321, \"1234\"]")
+      approveAndCall.isRight shouldBe true
+      approveAndCall.right.get shouldBe hex"0xcae9ca51000000000000000000000000123456789012345678901234567890123456789000000000000000000000000000000000000000000000000000000000000010e1000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000"
+
+      val burn = erc20Methods("burn").encode("[9999]")
+      burn.isRight shouldBe true
+      burn.right.get shouldBe hex"0x42966c68000000000000000000000000000000000000000000000000000000000000270f"
+
+      val burnFrom = erc20Methods("burnFrom").encode("[\"0x1234567890123456789012345678901234567890\", 8888]")
+      burnFrom.isRight shouldBe true
+      burnFrom.right.get shouldBe hex"0x79cc6790000000000000000000000000123456789012345678901234567890123456789000000000000000000000000000000000000000000000000000000000000022b8"
+    }
+
+    "parse vaccine" in {
+      val parseResult    = SolidityParser.parseContract(code2)
+      val contract       = parseResult.get.value
+      val vaccineMethods = contract.toABI.methods.map(method => method.name -> method).toMap
+
+      println(vaccineMethods)
+
+      val minter = vaccineMethods("minter")
+        .decode(hex"0x0000000000000000000000001234567890123456789012345678901234567890")
+      minter.isRight shouldBe true
+      minter.right.get shouldBe List(Json.fromString("0x1234567890123456789012345678901234567890")).asJson
+
+      val setValue = vaccineMethods("setValue").encode("[\"key1\", \"12345678901234567890123456789088\"]")
+      setValue.isRight shouldBe true
+      setValue.right.get shouldBe hex"0xec86cfad0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000046b6579310000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000203132333435363738393031323334353637383930313233343536373839303838"
+
+      val getValue = vaccineMethods("getValue").decode(
+        hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c494f54206f6e20436861696e0000000000000000000000000000000000000000")
+      getValue.isRight shouldBe true
+      getValue.right.get shouldBe List(Json.fromString("IOT on Chain")).asJson
+
+      val getValue2 = vaccineMethods("getValue").decode(
+        hex"0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000203132333435363738393031323334353637383930313233343536373839303838")
+      getValue2.isRight shouldBe true
+      getValue2.right.get shouldBe List(Json.fromString("12345678901234567890123456789088")).asJson
+
+      val batchSetValues = vaccineMethods("batchSetValues").encode("[[\"key2\", \"key3\"], [\"value2\", \"value3\"]]")
+      batchSetValues.isRight shouldBe true
+      batchSetValues.right.get shouldBe hex"0xd885851e0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000046b6579320000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000046b65793300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000676616c7565320000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000676616c7565330000000000000000000000000000000000000000000000000000"
+
+      val batchGetValues = vaccineMethods("batchGetValues").encode("[[\"key1\", \"key2\", \"key3\"]]")
+      batchGetValues.isRight shouldBe true
+      batchGetValues.right.get shouldBe hex"0xbd7166a800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000046b6579310000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000046b6579320000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000046b65793300000000000000000000000000000000000000000000000000000000"
     }
   }
 }
-

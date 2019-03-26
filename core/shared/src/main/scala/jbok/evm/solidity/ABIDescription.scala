@@ -1,4 +1,4 @@
-package jbok.solidity
+package jbok.evm.solidity
 
 import cats.implicits._
 import io.circe.Json
@@ -9,11 +9,23 @@ import io.circe.parser._
 import io.circe.syntax._
 import jbok.core.models.UInt256
 import jbok.codec.json.implicits._
-import jbok.solidity.visitors.TypeNameParameter.ParameterType
+import jbok.evm.solidity.Ast._
 
 import scala.scalajs.js.annotation.JSExportAll
 
 object ABIDescription {
+  @JSExportAll
+  @JsonCodec
+  final case class ParameterType(solidityType: SolidityType, arrayList: List[Int]) {
+    def typeString: String =
+      solidityType.name + arrayList.map(size => if (size == 0) "[]" else s"[$size]").mkString
+
+    lazy val isDynamic: Boolean = size.isEmpty
+
+    lazy val size: Option[Int] =
+      if (solidityType.isDynamic || arrayList.contains(0)) None else Some(32 * arrayList.product)
+  }
+
   @JSExportAll
   @JsonCodec
   final case class ParameterDescription(name: Option[String], parameterType: ParameterType)

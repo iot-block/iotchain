@@ -3,6 +3,8 @@ package jbok.evm.solidity
 import fastparse.ScalaWhitespace._
 import fastparse._
 
+import scala.util.Try
+
 /**
   * based on https://github.com/antlr/grammars-v4/blob/master/solidity/Solidity.g4
   */
@@ -13,6 +15,9 @@ object SolidityParser {
   def parseFunc[T](code: String) = parse(code, functionDefinition(_))
 
   def parseContract(code: String) = parse(code, contractDefinition(_))
+
+  def parseExpr(expr: String, constantMap: Map[String, Int] = Map.empty) =
+    parse(expr, constantExpression(constantMap)(_))
 
   def sourceUnit[_: P] = P(pragmaDirective | importDirective | contractDefinition)
 
@@ -61,9 +66,25 @@ object SolidityParser {
 
   def stateVariableDeclaration[_: P] =
     P(
-      typeName ~ (PublicKeyword | InternalKeyword | PrivateKeyword | ConstantKeyword).rep
-        ~ identifier ~ ("=" ~ expression).? ~ ";"
-    ).!.map(OtherDef.apply)
+      typeName ~ variableModifiers ~ identifier.! ~ ("=" ~ expression.!).? ~ ";"
+    ).map {
+      case (tnp, vm, name, expression) => StateVariableDef(name, tnp, Some(vm), expression)
+    }
+
+  def variableModifiers[_: P]: P[ModifierList] =
+    P(
+      (ConstantKeyword.map(_ => ModifierList.Constant)
+        | PublicKeyword.map(_ => ModifierList.Public)
+        | InternalKeyword.map(_ => ModifierList.Internal)
+        | PrivateKeyword.map(_ => ModifierList.Private)).rep).map { m =>
+      m.foldLeft(ModifierList()) { (l, m) =>
+        m match {
+          case sm: ModifierList.StateMutability => l.copy(stateMutability = Some(sm))
+          case v: ModifierList.Visibility       => l.copy(visibility = Some(v))
+          case mi: ModifierList.Invocation      => l
+        }
+      }
+    }
 
   def usingForDeclaration[_: P] =
     P(
@@ -72,39 +93,55 @@ object SolidityParser {
 
   def structDefinition[_: P] =
     P(
-      "struct" ~ identifier ~
-        "{" ~ (variableDeclaration ~ ";" ~ (variableDeclaration ~ ";").rep).? ~ "}"
-    ).!.map(OtherDef.apply)
+      "struct" ~ identifier.! ~
+        "{" ~ (variableDeclaration ~ ";").rep.? ~ "}"
+    ).map {
+      case (name, a) => StructDefinition(name, a.map(_.toList).getOrElse(Nil))
+    }
 
   def constructorDefinition[_: P] =
     P(
       "constructor" ~ parameterList ~ modifierList ~ block
-    ).!.map(OtherDef.apply)
+    ).map { case (params, modifiers) => FunctionDef("constructor", params, modifiers, List.empty) }
 
   def modifierDefinition[_: P] =
     P(
       "modifier" ~ identifier ~ parameterList.? ~ block
     ).!.map(OtherDef.apply)
 
-  def modifierInvocation[_: P]: P[Unit] =
+  def modifierInvocation[_: P]: P[String] =
     P(
-      identifier ~ ("(" ~ expressionList.? ~ ")").?
-    ).map(_ => ())
+      identifier.! ~ ("(" ~ expressionList.? ~ ")").?
+    ).map { case (name, t) => name }
 
   def functionDefinition[_: P] =
     P(
-      "function" ~ identifier.?.! ~ parameterList ~ modifierList.! ~ returnParameters ~ (";" | block)
-    ).map { case (name, params, modifiers, returns) => FunctionDef(name, params, modifiers, returns) }
+      "function" ~ identifier.?.! ~ parameterList ~ modifierList ~ returnParameters ~ (";" | block)
+    ).map {
+      case (name, params, modifiers, returns) => FunctionDef(name, params, modifiers, returns)
+    }
 
   def returnParameters[_: P] = P(
     ("returns" ~ nonEmptyParameterList) | Pass.map(_ => Nil)
   )
 
-  def modifierList[_: P]: P[Unit] = P(
-    (//      modifierInvocation |
-    stateMutability | ExternalKeyword
-      | PublicKeyword | InternalKeyword | PrivateKeyword).rep
-  )
+  def modifierList[_: P]: P[ModifierList] =
+    P(
+      (modifierInvocation.map(s => ModifierList.Invocation(s))
+        | stateMutability
+        | ExternalKeyword.map(_ => ModifierList.External)
+        | PublicKeyword.map(_ => ModifierList.Public)
+        | InternalKeyword.map(_ => ModifierList.Internal)
+        | PrivateKeyword.map(_ => ModifierList.Private)).rep
+    ).map { m =>
+      m.foldLeft(ModifierList()) { (l, m) =>
+        m match {
+          case sm: ModifierList.StateMutability => l.copy(stateMutability = Some(sm))
+          case v: ModifierList.Visibility       => l.copy(visibility = Some(v))
+          case mi: ModifierList.Invocation      => l.copy(modifiers = l.modifiers + mi)
+        }
+      }
+    }
 
   def eventDefinition[_: P] =
     P(
@@ -115,8 +152,8 @@ object SolidityParser {
 
   def enumDefinition[_: P] =
     P(
-      "enum" ~ identifier ~ "{" ~ enumValue.? ~ ("," ~ enumValue).rep ~ "}"
-    ).!.map(OtherDef.apply)
+      "enum" ~ identifier.! ~ "{" ~ enumValue.? ~ ("," ~ enumValue).rep ~ "}"
+    ).map(OtherDef.apply)
 
   def parameterList[_: P]: P[List[Parameter]] =
     P(
@@ -152,41 +189,51 @@ object SolidityParser {
     typeName ~ storageLocation.?
   )
 
-  def variableDeclaration[_: P] = P(
-    typeName ~ storageLocation.? ~ identifier
-  )
+  def variableDeclaration[_: P]: P[Parameter] =
+    P(
+      typeName ~ storageLocation.?.! ~ identifier.!.?
+    ).map {
+      case (tn, s, name) => Parameter(tn, name)
+    }
 
-  def typeName[_: P]: P[TypeName] = P(
-    elementaryTypeName
-      | mapping
-      | functionTypeName
-      | (userDefinedTypeName ~ "[" ~ expression.? ~ "]").!.map(OtherType.apply)
-      | userDefinedTypeName
-  )
+  def typeName[_: P]: P[TypeName] =
+    P(
+      (elementaryTypeName.map(ElementaryType.apply)
+        | mapping
+        | functionTypeName
+        | userDefinedTypeName) ~ ("[" ~ expression.!.? ~ "]").rep
+    ).map {
+      case (tne: TypeNameElement, e) => TypeName(tne, e.toList)
+    }
 
-  def userDefinedTypeName[_: P] =
+  def userDefinedTypeName[_: P]: P[UserDefinedType] =
     P(
       identifier ~ ("." ~ identifier).rep
-    ).!.map(OtherType.apply)
+    ).!.map(UserDefinedType)
 
   def mapping[_: P]: P[MappingType] =
     P(
-      "mapping" ~ "(" ~ elementaryTypeName.! ~ "=>" ~ typeName.! ~ ")"
-    ).map { case (from, to) => MappingType(from, to) }
+      "mapping" ~ "(" ~ elementaryTypeName ~ "=>" ~ typeName ~ ")"
+    ).map {
+      case (key, m) => MappingType(ElementaryType(key), m)
+    }
 
-  def functionTypeName[_: P]: P[OtherType] =
+  def functionTypeName[_: P]: P[FunctionType] =
     P(
       "function" ~ functionTypeParameterList ~
         (InternalKeyword | ExternalKeyword | stateMutability).rep ~
         ("returns" ~ functionTypeParameterList).?
-    ).!.map(OtherType.apply)
+    ).!.map(FunctionType.apply)
 
   def storageLocation[_: P] = P(
     "memory" | "storage" | "calldata"
   )
 
-  def stateMutability[_: P] = P(
-    PureKeyword | ConstantKeyword | ViewKeyword | PayableKeyword
+  def stateMutability[_: P]: P[ModifierList.StateMutability] = P(
+    PureKeyword.map(_ => ModifierList.Pure)
+      | ConstantKeyword.map(_ => ModifierList.Constant)
+      | ViewKeyword.map(_ => ModifierList.View)
+      | PayableKeyword.map(_ => ModifierList.Payable)
   )
 
   def block[_: P]: P[Unit] =
@@ -258,7 +305,7 @@ object SolidityParser {
   )
 
   def variableDeclarationStatement[_: P] = P(
-    ("var" ~ (identifierList | variableDeclaration | "(" ~ variableDeclarationList ~ ")")) ~ ("=" ~ expression).? ~ ";"
+    ("var" ~ identifierList | variableDeclaration | "(" ~ variableDeclarationList ~ ")") ~ ("=" ~ expression).? ~ ";"
   )
 
   def variableDeclarationList[_: P] = P(
@@ -269,69 +316,65 @@ object SolidityParser {
     "(" ~ (identifier.? ~ ",").rep ~ identifier.? ~ ")"
   )
 
-  def elementaryTypeName[_: P]: P[ElementaryType] =
+  def elementaryTypeName[_: P]: P[SolidityType] =
     P(
-      int | uint | bytes | fixed | ufixed | ("address" | "bool" | "string" | "var" | "byte").!.map(
-        FixedElementType.apply)
+      int | uint | bytes | fixed | ufixed | ("address" | "bool" | "string" | "var" | "byte").!.map {
+        case "address" => AddressType()
+        case "bool"    => BoolType()
+        case "string"  => StringType()
+        case "byte"    => BytesNType(1)
+      }
     )
 
   def int[_: P] =
     P(
       "int8" | "int16" | "int24" | "int32" | "int40" | "int48" | "int56" | "int64" | "int72" | "int80" | "int88" | "int96" | "int104" | "int112" | "int120" | "int128" | "int136" | "int144" | "int152" | "int160" | "int168" | "int176" | "int184" | "int192" | "int200" | "int208" | "int216" | "int224" | "int232" | "int240" | "int248" | "int256" | "int"
     ).!.map(_.split("int")).map {
-      case Array(_, bits) => VarValue("int", bits.toInt)
-      case Array(_)       => VarValue("int", 256)
+      case Array(_, bits) => IntType(bits.toInt)
+      case Array(_)       => IntType(256)
     }
 
   def uint[_: P] =
     P(
       "uint8" | "uint16" | "uint24" | "uint32" | "uint40" | "uint48" | "uint56" | "uint64" | "uint72" | "uint80" | "uint88" | "uint96" | "uint104" | "uint112" | "uint120" | "uint128" | "uint136" | "uint144" | "uint152" | "uint160" | "uint168" | "uint176" | "uint184" | "uint192" | "uint200" | "uint208" | "uint216" | "uint224" | "uint232" | "uint240" | "uint248" | "uint256" | "uint"
     ).!.map(_.split("uint")).map {
-      case Array(_, bits) => VarValue("uint", bits.toInt)
-      case Array()        => VarValue("uint", 256)
+      case Array(_, bits) => UIntType(bits.toInt)
+      case Array()        => UIntType(256)
     }
 
   def bytes[_: P] =
     P(
       "bytes" | "bytes1" | "bytes2" | "bytes3" | "bytes4" | "bytes5" | "bytes6" | "bytes7" | "bytes8" | "bytes9" | "bytes10" | "bytes11" | "bytes12" | "bytes13" | "bytes14" | "bytes15" | "bytes16" | "bytes17" | "bytes18" | "bytes19" | "bytes20" | "bytes21" | "bytes22" | "bytes23" | "bytes24" | "bytes25" | "bytes26" | "bytes27" | "bytes28" | "bytes29" | "bytes30" | "bytes31" | "bytes32"
     ).!.map(_.split("bytes")).map {
-      case Array(_, bits) => VarValue("bytes", bits.toInt)
-      case Array()        => VarValue("bytes", 256)
+      case Array(_, bits) => BytesNType(bits.toInt)
+      case Array()        => BytesType()
     }
 
   def fixed[_: P] =
     P(
       "fixed" | ("fixed" ~ Basic.Digits ~ "x" ~ Basic.Digits)
     ).!.map(_.split("fixed").lift(1).map(_.split("x"))).map {
-      case Some(Array(m, n)) => FixPointNumber(true, m.toInt, n.toInt)
-      case None              => FixPointNumber(true, 128, 18)
+      case Some(Array(m, n)) => FixedType(m.toInt, n.toInt)
+      case None              => FixedType(128, 18)
     }
 
   def ufixed[_: P] =
     P(
       "ufixed" | ("ufixed" ~ Basic.Digits ~ "x" ~ Basic.Digits)
     ).!.map(_.split("ufixed").lift(1).map(_.split("x"))).map {
-      case Some(Array(m, n)) => FixPointNumber(false, m.toInt, n.toInt)
-      case None              => FixPointNumber(false, 128, 18)
+      case Some(Array(m, n)) => UnFixedType(m.toInt, n.toInt)
+      case None              => UnFixedType(128, 18)
     }
 
   def expression[_: P]: P[_] = P(
-    //    calcExpression | primaryExpression.log("primary")
-    primaryExpression ~ exprRest
+    ("new" ~ typeName | "(" ~ expression ~ ")" | ("++" | "--") | ("+" | "-") | ("after" | "delete") | "!" | "~" | primaryExpression) ~ exprRest
   )
 
   def exprRest[_: P]: P[_] = P(
-    ("++" | "--")
-      | "new" ~ typeName
-      | "[" ~ expression ~ "]" ~ exprRest
-      | "(" ~ functionCallArguments ~ ")" ~ exprRest
-      | "." ~ identifier ~ exprRest
-      | "(" ~ expression ~ ")"
-      | ("++" | "--") ~ expression
-      | ("+" | "-") ~ expression
-      | ("after" | "delete") ~ expression
-      | "!" ~ expression
-      | "~" ~ expression
+    (("++" | "--")
+      | "[" ~ expression ~ "]"
+      | "(" ~ functionCallArguments ~ ")"
+      | "." ~ identifier
       | "**" ~ expression
       | ("*" | "/" | "%") ~ expression
       | ("+" | "-") ~ expression
@@ -343,14 +386,90 @@ object SolidityParser {
       | ("==" | "!=") ~ expression
       | "&&" ~ expression
       | "||" ~ expression
-      | "?" ~ expression ~ exprRest ~ ":" ~ expression ~ exprRest
-      | ("=" | "|=" | "^=" | "&=" | "<<=" | ">>=" | "+=" | "-=" | "*=" | "/=" | "%=") ~ expression
+      | "?" ~ expression ~ exprRest ~ ":" ~ expression
+      | ("=" | "|=" | "^=" | "&=" | "<<=" | ">>=" | "+=" | "-=" | "*=" | "/=" | "%=") ~ expression) ~ exprRest
       | Pass
   )
 
-  def primaryExpression[_: P] = P(
-    BooleanLiteral | numberLiteral | HexLiteral | stringLiteral | identifier | tupleExpression | elementaryTypeNameExpression
+  def constantExpressionEval(tree: (Double, Seq[(String, Double)])) = {
+    val (base, ops) = tree
+    ops.foldLeft(base) {
+      case (left, (op, right)) =>
+        op match {
+          case "+"  => left + right
+          case "-"  => left - right
+          case "*"  => left * right
+          case "/"  => left / right
+          case "%"  => left % right
+          case ">>" => left.toInt >> right.toInt
+          case "<<" => left.toInt << right.toInt
+        }
+    }
+  }
+
+  def constantExpressionEle[_: P](cm: Map[String, Int]): P[Double] =
+    P(
+      numberLiteralNoUnit | identifier.!.filter(cm.contains)
+    ).map {
+      case n: Double => n
+      case i: String => cm(i)
+    }
+
+  def constantExpressionShift[_: P](cm: Map[String, Int]): P[Double] =
+    P(
+      constantExpressionAddSub(cm) ~ (("<<" | ">>").! ~/ constantExpressionAddSub(cm)).rep
+    ).map(constantExpressionEval)
+
+  def constantExpressionAddSub[_: P](cm: Map[String, Int]): P[Double] =
+    P(
+      constantExpressionDivMul(cm) ~ (("+" | "-").! ~/ constantExpressionDivMul(cm)).rep
+    ).map(constantExpressionEval)
+
+  def constantExpressionDivMul[_: P](cm: Map[String, Int]): P[Double] =
+    P(
+      constantExpressionExp(cm) ~ (("*" | "/" | "%").! ~/ constantExpressionExp(cm)).rep
+    ).map(constantExpressionEval)
+
+  def constantExpressionExp[_: P](cm: Map[String, Int]): P[Double] =
+    P(
+      constantExpressionUnary(cm) ~ ("**" ~/ constantExpressionUnary(cm)).rep
+    ).map {
+      case (base, ops) =>
+        val all = base :: ops.toList
+        all.foldRight(1)((n, p) => scala.math.pow(n, p).toInt)
+    }
+
+  def constantExpressionUnary[_: P](cm: Map[String, Int]): P[Double] =
+    P(
+      ("+" | "-").?.! ~ constantExpressionFactor(cm)
+    ).map {
+      case ("-", n) => -n
+      case (_, n)   => n
+    }
+
+  def constantExpressionParens[_: P](cm: Map[String, Int]): P[Double] = P(
+    "(" ~/ constantExpressionShift(cm) ~ ")"
   )
+
+  def constantExpressionFactor[_: P](cm: Map[String, Int]): P[Double] = P(
+    constantExpressionEle(cm)
+      | constantExpressionParens(cm)
+  )
+
+  def constantExpression[_: P](cm: Map[String, Int]): P[Double] = P(
+    constantExpressionShift(cm)
+  )
+
+  def primaryExpression[_: P]: P[Unit] =
+    P(
+      BooleanLiteral
+        | numberLiteral.map(_ => ())
+        | HexLiteral
+        | stringLiteral
+        | identifier
+        | tupleExpression.map(_ => ())
+        | elementaryTypeNameExpression.map(_ => ())
+    )
 
   def expressionList[_: P] = P(
     expression ~ ("," ~ expression).rep
@@ -376,25 +495,26 @@ object SolidityParser {
     "{" ~ assemblyItem.rep ~ "}"
   )
 
-  def assemblyItem[_: P]: P[Unit] = P(
-    identifier
-      | assemblyBlock
-      | assemblyExpression
-      | assemblyLocalDefinition
-      | assemblyAssignment
-      | assemblyStackAssignment
-      | labelDefinition
-      | assemblySwitch
-      | assemblyFunctionDefinition
-      | assemblyFor
-      | assemblyIf
-      | BreakKeyword
-      | ContinueKeyword
-      | subAssembly
-      | numberLiteral
-      | stringLiteral
-      | HexLiteral
-  )
+  def assemblyItem[_: P]: P[Unit] =
+    P(
+      identifier
+        | assemblyBlock
+        | assemblyExpression
+        | assemblyLocalDefinition
+        | assemblyAssignment
+        | assemblyStackAssignment
+        | labelDefinition
+        | assemblySwitch
+        | assemblyFunctionDefinition
+        | assemblyFor
+        | assemblyIf
+        | BreakKeyword
+        | ContinueKeyword
+        | subAssembly
+        | numberLiteral
+        | stringLiteral
+        | HexLiteral
+    ).map(_ => ())
 
   def assemblyExpression[_: P]: P[Unit] = P(
     assemblyCall | assemblyLiteral
@@ -476,6 +596,10 @@ object SolidityParser {
     (HexNumber | DecimalNumber) ~ NumberUnit.?
   )
 
+  def numberLiteralNoUnit[_: P]: P[Double] = P(
+    HexNumber | DecimalNumber
+  )
+
   def identifier[_: P] = P(
     "from" | Identifier
   )
@@ -488,13 +612,15 @@ object SolidityParser {
     "true" | "false"
   )
 
-  def DecimalNumber[_: P] = P(
-    Basic.Digits | (Basic.Digits ~ "." ~ Basic.Digits) ~ (CharIn("eE") ~ Basic.Digits).?
-  )
+  def DecimalNumber[_: P]: P[Double] =
+    P(
+      Basic.Digits | (Basic.Digits ~ "." ~ Basic.Digits) ~ (CharIn("eE") ~ Basic.Digits).?
+    ).!.filter(d => Try(d.toDouble).toOption.isDefined).map(d => Try(d.toDouble).toOption.getOrElse(0))
 
-  def HexNumber[_: P] = P(
-    "0x" ~ HexCharacter.rep
-  )
+  def HexNumber[_: P]: P[Double] =
+    P(
+      "0x" ~ HexCharacter.rep.!.filter(s => Try(Integer.parseInt(s, 16)).toOption.isDefined)
+    ).!.map(h => Try(Integer.parseInt(h.substring(2), 16)).toOption.map(_.toDouble).getOrElse(0))
 
   def NumberUnit[_: P] = P(
     "wei" | "szabo" | "finney" | "ether" | "seconds" | "minutes" | "hours" | "days" | "weeks" | "years"
@@ -531,7 +657,13 @@ object SolidityParser {
         | "switch"
         | "try"
         | "type"
-        | "typeof")
+        | "typeof"
+    )
+
+  def keyword[_: P] =
+    P(
+      AnonymousKeyword | BreakKeyword | ConstantKeyword | ContinueKeyword | ExternalKeyword | IndexedKeyword | InternalKeyword | PayableKeyword
+        | PrivateKeyword | PublicKeyword | PureKeyword | ViewKeyword | ReturnsKeyword)
 
   def AnonymousKeyword[_: P] = P("anonymous")
   def BreakKeyword[_: P]     = P("break")
@@ -545,8 +677,13 @@ object SolidityParser {
   def PublicKeyword[_: P]    = P("public")
   def PureKeyword[_: P]      = P("pure")
   def ViewKeyword[_: P]      = P("view")
+  def ReturnsKeyword[_: P]   = P("returns")
 
-  def Identifier[_: P] = P(identifierStart ~ identifierPart.rep)
+  def Identifier[_: P] = {
+    import fastparse.NoWhitespace._
+
+    P(!(reservedKeyword | keyword) ~ identifierStart ~ identifierPart.rep)
+  }
 
   def identifierStart[_: P] = P(CharIn("a-zA-Z$_"))
 

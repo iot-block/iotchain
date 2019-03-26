@@ -1,11 +1,11 @@
-package jbok.solidity
+package jbok.evm.solidity
 
-import io.circe.parser._
 import io.circe.Json
+import io.circe.parser._
 import jbok.JbokSpec
-import jbok.solidity.ABIDescription.FunctionDescription
-import jbok.solidity.visitors.TypeNameParameter._
 import scodec.bits._
+import jbok.evm.solidity.Ast._
+import jbok.evm.solidity.ABIDescription._
 
 class AbiSpec extends JbokSpec {
   "encode solidity type" should {
