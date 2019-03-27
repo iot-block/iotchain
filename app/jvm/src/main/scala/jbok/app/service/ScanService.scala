@@ -1,4 +1,4 @@
-package jbok.app
+package jbok.app.service
 
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._

@@ -11,12 +11,11 @@ addSbtPlugin("pl.project13.scala" % "sbt-jmh" % "0.3.2")
 // cross build
 addSbtPlugin("org.scala-js"       % "sbt-scalajs"              % "0.6.23")
 addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject" % "0.6.0")
-// addSbtPlugin("ch.epfl.scala"      % "sbt-scalajs-bundler"      % "0.13.1")
-addSbtPlugin("com.vmunier"      % "sbt-web-scalajs"         % "1.0.8-0.6")
-addSbtPlugin("ch.epfl.scala"    % "sbt-web-scalajs-bundler" % "0.13.1")
-addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager"     % "1.3.6")
-addSbtPlugin("com.typesafe.sbt" % "sbt-gzip"                % "1.0.2")
-addSbtPlugin("com.typesafe.sbt" % "sbt-digest"              % "1.1.3")
+addSbtPlugin("com.vmunier"        % "sbt-web-scalajs"          % "1.0.8-0.6")
+addSbtPlugin("ch.epfl.scala"      % "sbt-web-scalajs-bundler"  % "0.13.1")
+addSbtPlugin("com.typesafe.sbt"   % "sbt-native-packager"      % "1.3.6")
+addSbtPlugin("com.typesafe.sbt"   % "sbt-gzip"                 % "1.0.2")
+addSbtPlugin("com.typesafe.sbt"   % "sbt-digest"               % "1.1.3")
 
 // ci
 addSbtPlugin("com.dwijnand"      % "sbt-travisci"    % "1.1.1")
@@ -36,6 +35,3 @@ addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.3.7")
 
 // test coverage
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.1")
-
-// antlr4
-addSbtPlugin("com.simplytyped" % "sbt-antlr4" % "0.8.1")

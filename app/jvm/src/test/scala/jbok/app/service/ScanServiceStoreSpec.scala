@@ -1,14 +1,13 @@
-package jbok.app
+package jbok.app.service
 
 import cats.effect.IO
-import doobie.implicits._
 import jbok.JbokSpec
-import jbok.app.ScanServiceStore.DDL
-import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.ledger.BlockExecutor
 import jbok.core.models.{Block, SignedTransaction}
 import jbok.core.testkit._
+import jbok.app.service.ScanServiceStore.DDL
+import doobie.implicits._
 
 class ScanServiceStoreSpec extends JbokSpec {
   "ScanServiceStore" should {
