@@ -41,7 +41,7 @@ final case class ContractView(state: AppState) {
           val c       = SolidityParser.parseContract(data("Code").value)
           val address = Address(ByteVector.fromValidHex(data("Address").value))
           if (c.isSuccess && !state.contractInfo.value.map(_.address).toSet.contains(address)) {
-            state.contractInfo.value += Contract(address, c.get.value.toABI.methods)
+            state.contractInfo.value += Contract(address, c.get.value.toABI().methods)
           }
         }
       }
