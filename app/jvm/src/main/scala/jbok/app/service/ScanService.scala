@@ -3,7 +3,7 @@ package jbok.app.service
 import cats.effect.{ExitCode, IO}
 import io.circe.generic.auto._
 import fs2._
-import jbok.app.service.middlewares.Swagger
+import jbok.app.service.middleware.Swagger
 import jbok.app.service.store.ServiceStore
 import jbok.common.execution._
 import org.http4s.circe.CirceEntityEncoder._

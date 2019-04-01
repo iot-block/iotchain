@@ -6,6 +6,7 @@ import jbok.app.service.models.Transaction
 import jbok.app.service.store.TransactionStore
 import jbok.core.models.{Receipt, Block => CoreBlock}
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 class QuillTransactionStore(ctx: SqliteJdbcContext[Literal.type]) extends TransactionStore[IO] {
   import ctx.{IO => _, _}
 

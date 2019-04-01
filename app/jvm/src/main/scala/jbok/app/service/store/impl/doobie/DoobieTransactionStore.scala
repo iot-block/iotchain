@@ -10,6 +10,7 @@ import jbok.app.service.models.Transaction
 import jbok.core.models.{Receipt, Block => CoreBlock}
 import cats.implicits._
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 class DoobieTransactionStore(xa: Transactor[IO]) extends TransactionStore[IO] {
 
   def findAllTxs(page: Int, size: Int): IO[List[Transaction]] =

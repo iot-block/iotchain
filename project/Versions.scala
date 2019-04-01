@@ -2,7 +2,7 @@ object Versions {
   val version         = "0.0.1-SNAPSHOT"
   val scala212Version = "2.12.6"
   val circe           = "0.9.1"
-  val tsec            = "0.0.1-RC1"
+  val tsec            = "0.1.0-M3"
   val http4s          = "0.20.0-M6"
   val fs2             = "1.0.2"
   val catsEffect      = "1.1.0"

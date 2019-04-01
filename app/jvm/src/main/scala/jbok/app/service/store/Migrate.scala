@@ -1,5 +1,6 @@
 package jbok.app.service.store
 
+import cats.data.OptionT
 import cats.effect.IO
 import org.flywaydb.core.Flyway
 

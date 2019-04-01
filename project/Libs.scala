@@ -44,9 +44,12 @@ object Libs {
   val tsec = libraryDependencies ++= Seq(
     "io.github.jmcardon" %% "tsec-common",
     "io.github.jmcardon" %% "tsec-hash-jca",
-    "io.github.jmcardon" %% "tsec-signatures",
     "io.github.jmcardon" %% "tsec-cipher-jca",
-    "io.github.jmcardon" %% "tsec-password"
+    "io.github.jmcardon" %% "tsec-signatures",
+    "io.github.jmcardon" %% "tsec-password",
+    "io.github.jmcardon" %% "tsec-jwt-mac",
+    "io.github.jmcardon" %% "tsec-jwt-sig",
+    "io.github.jmcardon" %% "tsec-http4s",
   ).map(_ % Versions.tsec)
 
   lazy val http4s = libraryDependencies ++= Seq(

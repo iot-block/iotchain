@@ -1,4 +1,4 @@
-package jbok.app.service.middlewares
+package jbok.app.service.middleware
 
 import cats.effect.IO
 import org.http4s.rho.RhoMiddleware
