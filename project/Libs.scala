@@ -57,7 +57,9 @@ object Libs {
     "org.http4s" %% "http4s-dsl",
     "org.http4s" %% "http4s-dropwizard-metrics",
     "org.http4s" %% "http4s-prometheus-metrics"
-  ).map(_ % Versions.http4s)
+  ).map(_        % Versions.http4s) ++ Seq(
+    "org.http4s" %% "rho-swagger" % "0.19.0-M6"
+  )
 
   lazy val dropwizard = libraryDependencies ++= Seq(
     "io.dropwizard.metrics" % "metrics-core",
@@ -71,17 +73,29 @@ object Libs {
     "io.prometheus" % "simpleclient_hotspot"
   ).map(_ % Versions.prometheus)
 
+  private val doobie = Seq(
+    "org.tpolecat" %% "doobie-core",
+    "org.tpolecat" %% "doobie-hikari"
+  ).map(_ % Versions.doobie)
+
+  private val quill = Seq(
+    "io.getquill" %% "quill-sql",
+    "io.getquill" %% "quill-core",
+    "io.getquill" %% "quill-jdbc",
+    "io.getquill" %% "quill-async"
+  ).map(_ % Versions.quill)
+
   lazy val persistent = libraryDependencies ++= Seq(
     "org.iq80.leveldb"          % "leveldb"                 % "0.10",
     "org.fusesource.leveldbjni" % "leveldbjni-all"          % "1.8",
     "org.rocksdb"               % "rocksdbjni"              % "5.17.2",
+    "io.lettuce"                % "lettuce-core"            % "5.1.3.RELEASE",
+    "org.xerial"                % "sqlite-jdbc"             % "3.25.2",
+    "org.flywaydb"              % "flyway-core"             % "5.0.5",
     "com.github.cb372"          %%% "scalacache-core"       % Versions.scalacache,
     "com.github.cb372"          %% "scalacache-cats-effect" % Versions.scalacache,
-    "com.github.cb372"          %% "scalacache-caffeine"    % Versions.scalacache,
-    "io.lettuce"                % "lettuce-core"            % "5.1.3.RELEASE",
-    "org.tpolecat"              %% "doobie-core"            % "0.6.0",
-    "org.xerial"                % "sqlite-jdbc"             % "3.25.2"
-  )
+    "com.github.cb372"          %% "scalacache-caffeine"    % Versions.scalacache
+  ) ++ quill ++ doobie
 
   lazy val network = libraryDependencies ++=
     Seq(
@@ -90,7 +104,7 @@ object Libs {
       "com.offbynull.portmapper" % "portmapper"  % "2.0.5",
       "org.bitlet"               % "weupnp"      % "0.1.4"
     )
-  
+
   lazy val fastparse = libraryDependencies += "com.lihaoyi" %%% "fastparse" % "2.1.0"
 
   object js {

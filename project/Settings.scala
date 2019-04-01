@@ -16,6 +16,7 @@ object Settings {
     parallelExecution in test := false,
     scalacOptions ++= ScalacSettings.base ++ ScalacSettings.specificFor(scalaVersion.value),
     javacOptions ++= JavacSettings.base ++ JavacSettings.specificFor(scalaVersion.value),
+    fork in Test := true
   )
 
   lazy val commonJs = Seq(

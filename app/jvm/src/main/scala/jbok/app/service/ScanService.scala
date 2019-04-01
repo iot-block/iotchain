@@ -1,77 +1,102 @@
 package jbok.app.service
 
-import cats.effect.{ExitCode, IO, IOApp}
-import cats.implicits._
+import cats.effect.{ExitCode, IO}
 import io.circe.generic.auto._
-import io.circe.syntax._
-import jbok.core.models.Address
-import org.http4s.HttpRoutes
-import org.http4s.circe._
-import org.http4s.dsl.io._
+import fs2._
+import jbok.app.service.middlewares.Swagger
+import jbok.app.service.store.ServiceStore
+import jbok.common.execution._
+import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.implicits._
+import org.http4s.rho.RhoRoutes
+import org.http4s.rho.swagger.syntax.io._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
-import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
-import jbok.common.execution._
 
-final case class TransactionQueryRes(code: Int, msg: String, data: List[TransactionQueryData])
-final case class TransactionQueryData(
-    id: Long,
-    txHash: String,
-    nonce: Int,
-    fromAddress: String,
-    toAddress: String,
-    value: String,
-    payload: String,
-    v: String,
-    r: String,
-    s: String,
-    gasUsed: String,
-    gasPrice: String,
-    blockNumber: Long,
-    blockHash: String,
-    location: Int
-)
+final case class OhoResp[A](code: Int, msg: String, data: A)
+class ScanService(store: ServiceStore[IO]) {
 
-object ScanService {
-  object AddressParamMatcher extends QueryParamDecoderMatcher[String]("address")
-  object StartParamMatcher   extends OptionalQueryParamDecoderMatcher[Long]("start")
-  object EndParamMatcher     extends OptionalQueryParamDecoderMatcher[Long]("end")
-  object PageParamMatcher    extends OptionalQueryParamDecoderMatcher[Int]("page")
-  object SizeParamMatcher    extends OptionalQueryParamDecoderMatcher[Int]("size")
+  val transactionRhoRoutes: RhoRoutes[IO] = new RhoRoutes[IO] {
+    val address = pathVar[String]("address", "blockchain account address, 20 bytes hex string")
+    val page    = paramD[Int]("page", "page number", 1, (p: Int) => p >= 1)
+    val size    = paramD[Int]("size", "page size", 5, (s: Int) => s >= 1)
+    val hash    = pathVar[String]("hash", "sha256 hash hex string")
 
-  val transactionService = HttpRoutes.of[IO] {
-    case req @ GET -> Root / "address" :?
-          AddressParamMatcher(address) +&
-            StartParamMatcher(start) +&
-            EndParamMatcher(end) +&
-            PageParamMatcher(page) +&
-            SizeParamMatcher(size) =>
+    "Get all transactions, ORDER BY blockNumber, index DESC" **
+      GET / "transactions" +? page & size |>> { (page: Int, size: Int) =>
       for {
-        _ <- println(req.params).pure[IO]
-        data <- ScanServiceStore.select(
-          Address(ByteVector.fromValidHex(address)),
-          start.getOrElse(0),
-          end,
-          page.getOrElse(1),
-          size.getOrElse(5)
-        )
-        resp <- Ok(TransactionQueryRes(200, "success", data).asJson)
+        data <- store.transactionStore.findAllTxs(page, size)
+        resp <- Ok(OhoResp(200, "", data))
       } yield resp
+    }
+
+    "Get transactions by sender or receiver address" **
+      GET / "transactions" / "address" / address +? page & size |>> { (address: String, page: Int, size: Int) =>
+      for {
+        txList <- store.transactionStore.findTransactionsByAddress(
+          address,
+          page,
+          size
+        )
+        resp <- Ok(OhoResp(200, "", txList))
+      } yield resp
+    }
+
+    "Get transaction by hash" **
+      GET / "transactions" / "hash" / hash |>> { hash: String =>
+      for {
+        txOpt <- store.transactionStore.findTransactionByHash(hash)
+        resp  <- Ok(OhoResp(200, "", txOpt))
+      } yield resp
+    }
   }
 
-  val httpApp =
-    Router("/v1/transaction" -> transactionService).orNotFound
+  val blockRhoRoutes: RhoRoutes[IO] = new RhoRoutes[IO] {
+    val page   = paramD[Int]("page", "page number", 1, (p: Int) => p >= 1)
+    val size   = paramD[Int]("size", "page size", 5, (s: Int) => s >= 1)
+    val number = pathVar[Long]("number", "block number")
+    val hash   = pathVar[String]("hash", "block hash sha256 hex string")
 
-  def run(args: List[String]): IO[ExitCode] = {
-    val builder = BlazeServerBuilder[IO]
-      .bindLocal(10086)
+    "Get all blocks, ORDER BY number DESC" **
+      GET / "blocks" +? page & size |>> { (page: Int, size: Int) =>
+      for {
+        data <- store.blockStore.findAllBlocks(page, size)
+        resp <- Ok(OhoResp(200, "", data))
+      } yield resp
+    }
+
+    "Get block by hash" **
+      GET / "blocks" / "hash" / hash |>> { hash: String =>
+      for {
+        data <- store.blockStore.findBlockByHash(hash)
+        resp <- Ok(OhoResp(200, "", data))
+      } yield resp
+    }
+
+    "Get block by number" **
+      GET / "blocks" / "number" / number |>> { number: Long =>
+      for {
+        data <- store.blockStore.findBlockByNumber(number)
+        resp <- Ok(OhoResp(200, "", data))
+      } yield resp
+    }
+  }
+
+  val v1routes = (transactionRhoRoutes and blockRhoRoutes).toRoutes(Swagger.swaggerMiddleware("/v1"))
+
+  val httpApp =
+    Router(
+      "/"   -> StaticFilesService.routes,
+      "/v1" -> v1routes
+    ).orNotFound
+
+  def serve(port: Int): Stream[IO, ExitCode] =
+    BlazeServerBuilder[IO]
+      .bindLocal(port)
       .withHttpApp(httpApp)
       .withoutBanner
       .withIdleTimeout(60.seconds)
-
-    builder.serve.compile.drain.as(ExitCode.Success)
-  }
+      .serve
 }
