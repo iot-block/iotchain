@@ -33,4 +33,10 @@ object JsonCodec {
 
   def decodeSignedTransaction(json: String): js.UndefOr[SignedTransaction] =
     decode[SignedTransaction](json).toOption.orUndefined
+
+  def encodeContracts(contracts: Contracts): String =
+    contracts.asJson.noSpaces
+
+  def decodeContracts(json: String): js.UndefOr[Contracts] =
+    decode[Contracts](json).toOption.orUndefined
 }

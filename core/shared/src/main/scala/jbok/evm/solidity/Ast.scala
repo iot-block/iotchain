@@ -1,24 +1,34 @@
 package jbok.evm.solidity
 
-import io.circe.generic.JsonCodec
-
 object Ast {
   import ABIDescription._
   import ModifierList._
-  final case class ContractDef(name: String, parts: List[ContractPart]) {
-    lazy val functionsABI = {
+  final case class Sources(contractDefs: List[ContractDef]) {
+    def ABI: List[ContractDescription] =
+      contractDefs.foldLeft(List.empty[ContractDescription]) {
+        case (cs, contractDef) =>
+          cs :+ contractDef.toABI(cs)
+      }
+  }
+
+  final case class ContractDef(name: String, parts: List[ContractPart], inheritances: List[String]) {
+    def functionsABI(contractDescriptions: List[ContractDescription] = List.empty) =
       parts.collect {
-        case FunctionDef(name, inputs, m, outputs) if m.visibility.isEmpty || m.visibility.contains(Public) =>
+        case FunctionDef(name, inputs, m, outputs)
+            if !Set("constructor", this.name)
+              .contains(name) && (m.visibility.isEmpty || m.visibility.contains(Public)) =>
           FunctionDescription(
             name,
-            inputs.map(p => ParameterDescription(p.name, p.typeName.parameterType(constantNumericMap))),
-            outputs.map(p => ParameterDescription(p.name, p.typeName.parameterType(constantNumericMap))),
-            if (m.stateMutability.contains(View) || m.stateMutability.contains(Pure)) "view"
+            inputs.map(p =>
+              ParameterDescription(p.name, p.typeName.parameterType(contractDescriptions, constantNumericMap))),
+            outputs.map(p =>
+              ParameterDescription(p.name, p.typeName.parameterType(contractDescriptions, constantNumericMap))),
+            if (m.stateMutability.contains(View) || m.stateMutability.contains(Pure) || m.stateMutability.contains(
+                  Constant)) "view"
             else if (m.stateMutability.contains(Payable)) "payable"
             else "nonpayable"
           )
       }
-    }
 
     lazy val constantNumericMap = {
       val cns = parts.collect {
@@ -43,12 +53,18 @@ object Ast {
       }
     }
 
-    lazy val variablesABI = {
+    def variablesABI(contractDescriptions: List[ContractDescription] = List.empty) =
       parts.collect {
         case StateVariableDef(name, typeName, Some(modifiers), expression)
-            if (modifiers.visibility.isEmpty || modifiers.visibility.contains(Public)) && !modifiers.stateMutability
-              .contains(Constant) && !typeName.typeNameElement.isInstanceOf[FunctionType] && !typeName.typeNameElement
-              .isInstanceOf[UserDefinedType] =>
+            if modifiers.visibility.contains(Public) && !modifiers.stateMutability
+              .contains(Constant) && !typeName.typeNameElement.isInstanceOf[FunctionType] && (!typeName.typeNameElement
+              .isInstanceOf[UserDefinedType] || (typeName.typeNameElement
+              .isInstanceOf[UserDefinedType] && contractDescriptions
+              .map(_.name)
+              .toSet
+              .contains(typeName.typeNameElement
+                .asInstanceOf[UserDefinedType]
+                .userDefinedType))) =>
           def getParameterList(typeName: TypeName): (List[ParameterDescription], List[ParameterDescription]) = {
             val sizeArrayList = typeName.arrayExpr.map { exprOpt =>
               val sizeOpt = exprOpt.map(SolidityParser.parseExpr(_, constantNumericMap).get.value.toInt)
@@ -60,12 +76,16 @@ object Ast {
 
             typeName.typeNameElement match {
               case et: ElementaryType =>
-                (Nil, List(ParameterDescription(None, typeName.parameterType(constantNumericMap))))
+                (Nil,
+                 List(ParameterDescription(None, typeName.parameterType(contractDescriptions, constantNumericMap))))
               case MappingType(et, tn) =>
                 val (inputs, outputs) = getParameterList(tn)
                 val newInputs = sizeArrayList.map(_ => ParameterDescription(None, ParameterType(UIntType(256), Nil))) :+
                   ParameterDescription(None, ParameterType(et.solidityType, Nil))
                 (newInputs ++ inputs, outputs)
+              case udt: UserDefinedType if contractDescriptions.map(_.name).toSet.contains(udt.userDefinedType) =>
+                (Nil,
+                 List(ParameterDescription(None, typeName.parameterType(contractDescriptions, constantNumericMap))))
               case _ => (Nil, Nil)
             }
           }
@@ -73,10 +93,14 @@ object Ast {
           val (inputs, outputs) = getParameterList(typeName)
           FunctionDescription(name, inputs, outputs, "view")
       }
-    }
 
-    def toABI: ContractDescription = {
-      val all = functionsABI ++ variablesABI
+    def toABI(contractDescriptions: List[ContractDescription] = List.empty): ContractDescription = {
+      val thisFunctionDescriptions = functionsABI(contractDescriptions) ++ variablesABI(contractDescriptions)
+      val cdMap                    = contractDescriptions.map(cd => cd.name -> cd).toMap
+      val all = (inheritances.map(cdMap(_).methods).foldLeft(Map.empty[String, FunctionDescription]) {
+        case (methods, fds) => methods ++ fds.map(fd => fd.name -> fd)
+      }
+        ++ thisFunctionDescriptions.map(fd => fd.name -> fd)).values.toList
 
       ContractDescription(name, all)
     }
@@ -101,7 +125,7 @@ object Ast {
   final case class Parameter(typeName: TypeName, name: Option[String])
 
   final case class TypeName(typeNameElement: TypeNameElement, arrayExpr: List[Option[String]]) {
-    def parameterType(cm: Map[String, Int]): ParameterType = {
+    def parameterType(contractDescriptions: List[ContractDescription], cm: Map[String, Int]): ParameterType = {
       val sizeArrayList = arrayExpr.map { exprOpt =>
         val sizeOpt = exprOpt.map(SolidityParser.parseExpr(_, cm).get.value.toInt)
         sizeOpt match {
@@ -111,8 +135,10 @@ object Ast {
       }
 
       typeNameElement match {
-        case t: ElementaryType => ParameterType(t.solidityType, sizeArrayList)
-        case _                 => ParameterType(InvalidSolidityType(), Nil)
+        case et: ElementaryType => ParameterType(et.solidityType, sizeArrayList)
+        case udt: UserDefinedType if contractDescriptions.map(_.name).toSet.contains(udt.userDefinedType) =>
+          ParameterType(AddressType(), Nil)
+        case _ => ParameterType(InvalidSolidityType(), Nil)
       }
     }
   }
