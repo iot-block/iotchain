@@ -1,4 +1,5 @@
 package jbok.app.service.middleware
+
 import java.time.{Duration, Instant}
 
 import cats.data.{Kleisli, OptionT}
@@ -10,8 +11,7 @@ import org.http4s.util.CaseInsensitiveString
 import org.http4s.{AuthScheme, Credentials, HttpRoutes, Request}
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
-import scala.concurrent.duration._
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{FiniteDuration, _}
 
 sealed abstract class HmacAuthError(val message: String) extends Exception(message)
 object HmacAuthError {
@@ -23,10 +23,14 @@ object HmacAuthError {
   case object Timeout          extends HmacAuthError("The request time window is closed")
 }
 
-class HmacAuthMiddleware(key: MacSigningKey[HMACSHA256], duration: FiniteDuration = 5.minutes) {
-  private val javaDuration = Duration.ofNanos(duration.toNanos)
+object HmacAuthMiddleware {
+  val defaultDuration: FiniteDuration = 5.minutes
 
-  def verifyFromHeader(req: Request[IO]): Either[HmacAuthError, Unit] =
+  private def verifyFromHeader(
+      req: Request[IO],
+      key: MacSigningKey[HMACSHA256],
+      duration: FiniteDuration
+  ): Either[HmacAuthError, Unit] =
     for {
       authHeader <- req.headers
         .get(Authorization)
@@ -48,13 +52,19 @@ class HmacAuthMiddleware(key: MacSigningKey[HMACSHA256], duration: FiniteDuratio
         authHeader,
         key
       )
-      _ <- Either.cond(Instant.now().isBefore(instant.plus(javaDuration)), (), HmacAuthError.Timeout)
+      _ <- Either.cond(
+        Instant.now().isBefore(instant.plus(Duration.ofNanos(duration.toNanos))),
+        (),
+        HmacAuthError.Timeout
+      )
     } yield ()
 
-  def apply(routes: HttpRoutes[IO]): HttpRoutes[IO] = Kleisli { req: Request[IO] =>
-    verifyFromHeader(req) match {
-      case Left(error) => OptionT.liftF(Forbidden(error.message))
-      case Right(_)    => routes(req)
+  def apply(key: MacSigningKey[HMACSHA256], duration: FiniteDuration = defaultDuration)(
+      routes: HttpRoutes[IO]): HttpRoutes[IO] =
+    Kleisli { req: Request[IO] =>
+      verifyFromHeader(req, key, duration) match {
+        case Left(error) => OptionT.liftF(Forbidden(error.message))
+        case Right(_)    => routes(req)
+      }
     }
-  }
 }

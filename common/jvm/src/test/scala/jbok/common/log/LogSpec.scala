@@ -8,7 +8,7 @@ class LogSpec extends JbokSpec {
     "set level" in {
       val log = getLogger("oho")
       log.info(s"should be seen")
-      ScribeLog.setLevel[IO](Level.Error).unsafeRunSync()
+      ScribeLog.setRootLevel[IO](Level.Error).unsafeRunSync()
       log.info(s"should not be seen")
     }
   }

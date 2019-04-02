@@ -4,44 +4,54 @@ import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport._
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
 
 object Libs {
-  val common = (libraryDependencies ++= Seq(
+  lazy val common
+    : Seq[Setting[_]] = logging ++ dropwizard ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ (libraryDependencies ++= Seq(
     // typelevel
     "org.typelevel" %%% "cats-effect"          % Versions.catsEffect,
     "org.typelevel" %% "cats-collections-core" % Versions.catsCollections,
     "co.fs2"        %%% "fs2-core"             % Versions.fs2,
     "co.fs2"        %% "fs2-io"                % Versions.fs2,
     "org.typelevel" %%% "spire"                % "0.16.0",
-    // json
-    "io.circe" %%% "circe-core"       % Versions.circe,
-    "io.circe" %%% "circe-generic"    % Versions.circe,
-    "io.circe" %%% "circe-parser"     % Versions.circe,
-    "io.circe" %%% "circe-derivation" % "0.9.0-M5",
-    // binary
-    "org.scodec" %%% "scodec-bits"  % "1.1.6",
-    "org.scodec" %%% "scodec-core"  % "1.10.3",
-    "org.scodec" %% "scodec-stream" % "1.2.0",
-    // graph
-    "org.scala-graph" %%% "graph-core" % "1.12.5",
-    "org.scala-graph" %% "graph-dot"   % "1.12.1",
     // enum
     "com.beachape" %%% "enumeratum"       % "1.5.13",
     "com.beachape" %%% "enumeratum-circe" % "1.5.13",
-    // logging
-    "ch.qos.logback" % "logback-classic" % "1.2.3",
-    "org.log4s"      %% "log4s"          % "1.6.1",
-    "com.outr"       %%% "scribe"        % "2.7.0",
     // files
     "com.github.pathikrit" %% "better-files" % "3.5.0",
-    // test
-    "org.scalatest"  %%% "scalatest"  % "3.0.5"  % Test,
-    "org.scalacheck" %%% "scalacheck" % "1.13.4" % Test,
     // macro
     "com.propensive" %%% "magnolia" % "0.10.0",
     // scalajs-stubs
     "org.scala-js" %% "scalajs-stubs" % "0.6.26"
-  )) ++ dropwizard ++ prometheus
+  ))
 
-  val tsec = libraryDependencies ++= Seq(
+  lazy val graph = libraryDependencies ++= Seq(
+    "org.scala-graph" %%% "graph-core" % "1.12.5",
+    "org.scala-graph" %% "graph-dot"   % "1.12.1"
+  )
+
+  lazy val circe = libraryDependencies ++= Seq(
+    "io.circe" %%% "circe-core"       % Versions.circe,
+    "io.circe" %%% "circe-generic"    % Versions.circe,
+    "io.circe" %%% "circe-parser"     % Versions.circe,
+    "io.circe" %%% "circe-derivation" % "0.9.0-M5"
+  )
+
+  lazy val scodec = libraryDependencies ++= Seq(
+    "org.scodec" %%% "scodec-bits"  % "1.1.6",
+    "org.scodec" %%% "scodec-core"  % "1.10.3",
+    "org.scodec" %% "scodec-stream" % "1.2.0"
+  )
+
+  lazy val test = libraryDependencies ++= Seq(
+    "org.scalatest"  %%% "scalatest"  % "3.0.5",
+    "org.scalacheck" %%% "scalacheck" % "1.13.4"
+  ).map(_ % Test)
+
+  lazy val logging = libraryDependencies ++= Seq(
+    "com.outr" %%% "scribe"      % Versions.scribe,
+    "com.outr" %% "scribe-slf4j" % Versions.scribe
+  )
+
+  lazy val tsec = libraryDependencies ++= Seq(
     "io.github.jmcardon" %% "tsec-common",
     "io.github.jmcardon" %% "tsec-hash-jca",
     "io.github.jmcardon" %% "tsec-cipher-jca",
@@ -85,20 +95,26 @@ object Libs {
     "io.getquill" %% "quill-sql",
     "io.getquill" %% "quill-core",
     "io.getquill" %% "quill-jdbc",
+    "io.getquill" %% "quill-jdbc-monix",
     "io.getquill" %% "quill-async"
   ).map(_ % Versions.quill)
 
-  lazy val persistent = libraryDependencies ++= Seq(
-    "org.iq80.leveldb"          % "leveldb"                 % "0.10",
-    "org.fusesource.leveldbjni" % "leveldbjni-all"          % "1.8",
-    "org.rocksdb"               % "rocksdbjni"              % "5.17.2",
-    "io.lettuce"                % "lettuce-core"            % "5.1.3.RELEASE",
-    "org.xerial"                % "sqlite-jdbc"             % "3.25.2",
-    "org.flywaydb"              % "flyway-core"             % "5.0.5",
-    "com.github.cb372"          %%% "scalacache-core"       % Versions.scalacache,
-    "com.github.cb372"          %% "scalacache-cats-effect" % Versions.scalacache,
-    "com.github.cb372"          %% "scalacache-caffeine"    % Versions.scalacache
-  ) ++ quill ++ doobie
+  lazy val persistent = scalacache ++ (libraryDependencies ++= drivers ++ quill ++ doobie)
+
+  lazy val drivers = Seq(
+    "org.iq80.leveldb"          % "leveldb"        % "0.10",
+    "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8",
+    "org.rocksdb"               % "rocksdbjni"     % "5.17.2",
+    "io.lettuce"                % "lettuce-core"   % "5.1.3.RELEASE",
+    "org.xerial"                % "sqlite-jdbc"    % "3.25.2",
+    "org.flywaydb"              % "flyway-core"    % "5.0.5",
+  )
+
+  lazy val scalacache = libraryDependencies ++= Seq(
+    "com.github.cb372" %%% "scalacache-core"       % Versions.scalacache,
+    "com.github.cb372" %% "scalacache-cats-effect" % Versions.scalacache,
+    "com.github.cb372" %% "scalacache-caffeine"    % Versions.scalacache
+  )
 
   lazy val network = libraryDependencies ++=
     Seq(

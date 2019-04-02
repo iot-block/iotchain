@@ -1,40 +1,41 @@
 package jbok.app.service.store.impl.quill
 
-import io.getquill._
-import cats.effect.IO
+import cats.effect.{ConcurrentEffect, IO}
+import cats.implicits._
 import jbok.app.service.models.Block
 import jbok.app.service.store.BlockStore
 import jbok.core.models.{Block => CoreBlock}
+import monix.eval.Task
 
-class QuillBlockStore(ctx: SqliteJdbcContext[Literal.type]) extends BlockStore[IO] {
-  import ctx.{IO => _, _}
+class QuillBlockStore(ctx: Quill.Ctx)(implicit F: ConcurrentEffect[Task]) extends BlockStore[IO] {
+  import ctx._
 
   private val Blocks = quote(querySchema[Block]("blocks"))
 
-  override def findAllBlocks(page: Int, size: Int): IO[List[Block]] = IO {
+  override def findAllBlocks(page: Int, size: Int): IO[List[Block]] = {
     val q = quote {
       Blocks.drop(lift((page - 1) * size)).take(lift(size))
     }
 
-    ctx.run(q)
+    ctx.run(q).toIO
   }
 
-  override def findBlockByNumber(number: Long): IO[Option[Block]] = IO {
+  override def findBlockByNumber(number: Long): IO[Option[Block]] = {
     val q = quote {
       Blocks.filter(_.number == lift(number))
     }
-    ctx.run(q).headOption
+    ctx.run(q).toIO.map(_.headOption)
   }
 
-  override def findBlockByHash(hash: String): IO[Option[Block]] = IO {
+  override def findBlockByHash(hash: String): IO[Option[Block]] = {
     val q = quote {
       Blocks.filter(_.hash == lift(hash))
     }
 
-    ctx.run(q).headOption
+    ctx.run(q).toIO.map(_.headOption)
   }
 
-  override def insertBlock(block: CoreBlock): IO[Unit] = IO {
+  override def insertBlock(block: CoreBlock): IO[Unit] = {
     val b = Block(
       block.header.hash.toHex,
       block.header.parentHash.toHex,
@@ -52,6 +53,6 @@ class QuillBlockStore(ctx: SqliteJdbcContext[Literal.type]) extends BlockStore[I
       block.header.extra.toHex
     )
     val q = quote(Blocks.insert(lift(b)))
-    ctx.run(q)
+    ctx.run(q).toIO.void
   }
 }

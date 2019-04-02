@@ -2,11 +2,11 @@ package jbok.app.service.authentication
 import java.time.Instant
 
 import cats.effect.IO
-import tsec.mac.MAC
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
-import tsec.common._
 import cats.implicits._
 import jbok.app.service.middleware.HmacAuthError
+import tsec.common._
+import tsec.mac.MAC
+import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 object HMAC {
   def sign(toMac: Array[Byte], key: MacSigningKey[HMACSHA256]): IO[MAC[HMACSHA256]] =
@@ -28,8 +28,11 @@ object HMAC {
       toMac: Array[Byte],
       mac: MAC[HMACSHA256],
       key: MacSigningKey[HMACSHA256]
-  ): Either[Throwable, Boolean] =
-    Either.catchNonFatal(verify(toMac, mac, key).unsafeRunSync())
+  ): Either[Throwable, Unit] =
+    verify(toMac, mac, key).unsafeRunSync() match {
+      case true => Right(())
+      case false => Left(new Exception())
+    }
 
   object http {
     private def concat(method: String, url: String, datetime: String): String =

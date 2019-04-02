@@ -21,7 +21,7 @@ trait JbokSpec
 
   override def timeLimit: Span = 60.seconds
 
-  ScribeLog.setHandlers[IO](ScribeLog.consoleHandler(minimumLevel = Some(Level.Debug))).unsafeRunSync()
+  ScribeLog.setRootHandlers[IO](ScribeLog.consoleHandler(minimumLevel = Some(Level.Debug))).unsafeRunSync()
 }
 
 trait JbokAsyncSpec extends AsyncWordSpec with Matchers with AsyncTimeLimitedTests {

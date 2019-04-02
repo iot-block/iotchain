@@ -7,7 +7,7 @@ import org.http4s.rho.swagger.models._
 import org.http4s.rho.swagger._
 import cats.implicits._
 
-object Swagger {
+object SwaggerMiddleware {
   val title       = "JBOK SCAN API"
   val version     = "1.0.0"
   val description = Some("JBOK SCAN API")

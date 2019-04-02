@@ -1,8 +1,9 @@
 package jbok.app.service.store
 
-import cats.effect.{ContextShift, IO, Resource}
+import cats.effect.{ConcurrentEffect, ContextShift, IO, Resource}
 import jbok.app.service.store.impl.doobie._
 import jbok.app.service.store.impl.quill._
+import monix.eval.Task
 
 class ServiceStore[F[_]](
     val blockStore: BlockStore[F],
@@ -17,10 +18,11 @@ object ServiceStore {
       new ServiceStore[IO](blockStore, transactionStore)
     }
 
-  def quill(dbPath: Option[String]): Resource[IO, ServiceStore[IO]] =
-    Quill.newCtx(dbPath).map { ctx =>
+  def quill(dbPath: Option[String])(implicit F: ConcurrentEffect[Task]): Resource[IO, ServiceStore[IO]] = {
+      Quill.newCtx(dbPath).map { ctx =>
       val blockStore       = new QuillBlockStore(ctx)
       val transactionStore = new QuillTransactionStore(ctx)
       new ServiceStore[IO](blockStore, transactionStore)
     }
+  }
 }

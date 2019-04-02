@@ -13,4 +13,5 @@ object Versions {
   val fs2redis        = "0.5.1"
   val quill           = "3.1.0"
   val doobie          = "0.7.0-M3"
+  val scribe          = "2.7.3"
 }

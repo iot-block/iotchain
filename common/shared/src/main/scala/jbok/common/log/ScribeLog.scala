@@ -14,11 +14,15 @@ object ScribeLog {
     minimumLevel = minimumLevel.map(fromJbokLevel)
   )
 
-  def setLevel[F[_]: Sync](level: Level): F[Unit] = Sync[F].delay {
+  def setRootLevel[F[_]: Sync](level: Level): F[Unit] = Sync[F].delay {
     Logger.root.withMinimumLevel(fromJbokLevel(level)).replace()
   }
 
-  def setHandlers[F[_]: Sync](handlers: LogHandler*): F[Unit] = Sync[F].delay {
+  def setLevel[F[_]: Sync](name: String, level: Level): F[Unit] = Sync[F].delay {
+    Logger(name).withMinimumLevel(fromJbokLevel(level)).replace()
+  }
+
+  def setRootHandlers[F[_]: Sync](handlers: LogHandler*): F[Unit] = Sync[F].delay {
     handlers.foldLeft(Logger.root.clearHandlers())(_ withHandler _).replace()
   }
 
@@ -42,7 +46,7 @@ object ScribeLog {
       separator = '/',
       abbreviateName = true
     )
-    formatter"$date $levelColoredPaddedRight - $messageColored$mdc ($fileNameAbbreviated:$line)$newLine"
+    formatter"$date $levelColoredPaddedRight - $messageColored$mdc [$className]($fileNameAbbreviated:$line)$newLine"
   }
 
   private[log] def fromJbokLevel(level: Level): SL = level match {

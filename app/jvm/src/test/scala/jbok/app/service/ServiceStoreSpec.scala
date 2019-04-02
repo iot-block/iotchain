@@ -9,6 +9,9 @@ import jbok.common.testkit._
 import jbok.core.ledger.BlockExecutor
 import jbok.core.models.{Block, SignedTransaction}
 import jbok.core.testkit._
+import monix.eval.Task
+import monix.eval.instances.CatsConcurrentEffectForTask
+import monix.execution.Scheduler
 
 class ServiceStoreSpec extends JbokSpec {
   implicit val config = testConfig
@@ -62,6 +65,9 @@ class ServiceStoreSpec extends JbokSpec {
   }
 
   "quill" should {
+    implicit val scheduler             = Scheduler.global
+    implicit val options: Task.Options = Task.defaultOptions
+    implicit val taskEff               = new CatsConcurrentEffectForTask
     val file = File.newTemporaryFile()
     Migrate.migrate(Some(file.pathAsString)).unsafeRunSync()
     val (quill, closed) = ServiceStore.quill(Some(file.pathAsString)).allocated.unsafeRunSync()

@@ -76,12 +76,12 @@ object FullNode {
     implicit val chainId: BigInt = config.genesis.chainId
     for {
       _ <- if (config.logHandler.contains("file")) {
-        ScribeLog.setHandlers[IO](
+        ScribeLog.setRootHandlers[IO](
           ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel))),
           ScribeLogPlatform.fileHandler(config.logDir, Some(Level.fromName(config.logLevel)))
         )
       } else {
-        ScribeLog.setHandlers[IO](
+        ScribeLog.setRootHandlers[IO](
           ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel)))
         )
       }
