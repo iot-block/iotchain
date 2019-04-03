@@ -6,9 +6,8 @@ import doobie.util.ExecutionContexts
 import doobie.util.transactor.Transactor
 
 object Doobie {
-  private val log                           = jbok.common.log.getLogger("doobie")
-  private val driver                        = "org.sqlite.JDBC"
-  private def forPath(path: String): String = s"jdbc:sqlite:${path}"
+  private val log    = jbok.common.log.getLogger("doobie")
+  private val driver = "org.sqlite.JDBC"
 
   private val logHandler = {
     import doobie.util.log._
@@ -38,13 +37,13 @@ object Doobie {
     }
   }
 
-  def newXa(dbPath: Option[String])(implicit cs: ContextShift[IO]): Resource[IO, Transactor[IO]] =
+  def newXa(dbUrl: String)(implicit cs: ContextShift[IO]): Resource[IO, Transactor[IO]] =
     for {
       ce <- ExecutionContexts.fixedThreadPool[IO](32) // our connect EC
       te <- ExecutionContexts.cachedThreadPool[IO]    // our transaction EC
       xa <- HikariTransactor.newHikariTransactor[IO](
         driver,
-        forPath(dbPath.getOrElse(":memory:")),
+        dbUrl,
         "", // username
         "", // password
         ce, // await connection here

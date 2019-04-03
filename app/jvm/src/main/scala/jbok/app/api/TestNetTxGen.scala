@@ -7,7 +7,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2._
 import jbok.app.client.JbokClient
-import jbok.core.config.Configs.FullNodeConfig
+import jbok.core.config.Configs.CoreConfig
 import jbok.core.config.GenesisConfig
 import jbok.core.keystore.KeyStorePlatform
 import jbok.core.models.{Account, Address, UInt256}
@@ -22,7 +22,7 @@ import scala.concurrent.duration._
 
 class TestNetTxGen(clients: Ref[IO, Map[String, JbokClient]],
                    genesisConfig: GenesisConfig,
-                   fullNodeConfigs: List[FullNodeConfig],
+                   fullNodeConfigs: List[CoreConfig],
                    keyPairs: List[KeyPair],
                    nTx: Int) {
   private[this] val log = jbok.common.log.getLogger("TestNetTxGen")
@@ -94,8 +94,8 @@ object TestNetTxGen {
       }
     } yield genesis
 
-  private def loadFullNodeConfigs(pathes: List[String]): List[FullNodeConfig] =
-    pathes.map(path => FullNodeConfig.fromJson(File(path).lines.mkString("\n")))
+  private def loadFullNodeConfigs(pathes: List[String]): List[CoreConfig] =
+    pathes.map(path => CoreConfig.fromJson(File(path).lines.mkString("\n")))
 
   private def parseFileDir: IO[(List[String], List[String], List[String])] = {
     val homePath = System.getProperty("user.home")

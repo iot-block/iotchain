@@ -4,23 +4,27 @@ import cats.Id
 import cats.effect.{ExitCode, IO}
 import io.circe.generic.auto._
 import fs2._
+import jbok.app.config.ServiceConfig
 import jbok.app.service.middleware._
-import jbok.app.service.store.ServiceStore
+import jbok.app.service.store.{Migration, ServiceStore}
 import jbok.common.execution._
-import org.http4s.{HttpApp, HttpRoutes}
+import monix.eval.Task
+import monix.eval.instances.CatsConcurrentEffectForTask
+import monix.execution.Scheduler
 import org.http4s.circe.CirceEntityEncoder._
 import org.http4s.implicits._
 import org.http4s.rho.RhoRoutes
 import org.http4s.rho.swagger.syntax.io._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.{HttpApp, HttpRoutes}
 import scodec.bits.ByteVector
-import tsec.mac.jca.{HMACSHA256, MacSigningKey}
+import tsec.mac.jca.HMACSHA256
 
 import scala.concurrent.duration._
 
-final case class OhoResp[A](code: Int, msg: String, data: A)
-class ScanService(store: ServiceStore[IO]) {
+final case class JbokResp[A](code: Int, msg: String, data: A)
+class ScanService(store: ServiceStore[IO], config: ServiceConfig) {
 
   private val transactionRhoRoutes: RhoRoutes[IO] = new RhoRoutes[IO] {
     val address = pathVar[String]("address", "blockchain account address, 20 bytes hex string")
@@ -32,7 +36,7 @@ class ScanService(store: ServiceStore[IO]) {
       GET / "transactions" +? page & size |>> { (page: Int, size: Int) =>
       for {
         data <- store.transactionStore.findAllTxs(page, size)
-        resp <- Ok(OhoResp(200, "", data))
+        resp <- Ok(JbokResp(200, "", data))
       } yield resp
     }
 
@@ -44,7 +48,7 @@ class ScanService(store: ServiceStore[IO]) {
           page,
           size
         )
-        resp <- Ok(OhoResp(200, "", txList))
+        resp <- Ok(JbokResp(200, "", txList))
       } yield resp
     }
 
@@ -52,7 +56,7 @@ class ScanService(store: ServiceStore[IO]) {
       GET / "transactions" / "hash" / hash |>> { hash: String =>
       for {
         txOpt <- store.transactionStore.findTransactionByHash(hash)
-        resp  <- Ok(OhoResp(200, "", txOpt))
+        resp  <- Ok(JbokResp(200, "", txOpt))
       } yield resp
     }
   }
@@ -67,7 +71,7 @@ class ScanService(store: ServiceStore[IO]) {
       GET / "blocks" +? page & size |>> { (page: Int, size: Int) =>
       for {
         data <- store.blockStore.findAllBlocks(page, size)
-        resp <- Ok(OhoResp(200, "", data))
+        resp <- Ok(JbokResp(200, "", data))
       } yield resp
     }
 
@@ -75,7 +79,7 @@ class ScanService(store: ServiceStore[IO]) {
       GET / "blocks" / "hash" / hash |>> { hash: String =>
       for {
         data <- store.blockStore.findBlockByHash(hash)
-        resp <- Ok(OhoResp(200, "", data))
+        resp <- Ok(JbokResp(200, "", data))
       } yield resp
     }
 
@@ -83,16 +87,15 @@ class ScanService(store: ServiceStore[IO]) {
       GET / "blocks" / "number" / number |>> { number: Long =>
       for {
         data <- store.blockStore.findBlockByNumber(number)
-        resp <- Ok(OhoResp(200, "", data))
+        resp <- Ok(JbokResp(200, "", data))
       } yield resp
     }
   }
 
-  private val key = HMACSHA256.buildKey[Id](
-    ByteVector.fromValidHex("70ea14ac30939a972b5a67cab952d6d7d474727b05fe7f9283abc1e505919e83").toArray
-  )
+  private val key = HMACSHA256.buildKey[Id](ByteVector.fromValidHex(config.secretKey).toArray)
 
-  private val v1routes       = (transactionRhoRoutes and blockRhoRoutes).toRoutes(SwaggerMiddleware.swaggerMiddleware("/v1"))
+  private val v1routes = (transactionRhoRoutes and blockRhoRoutes).toRoutes(SwaggerMiddleware.swaggerMiddleware("/v1"))
+
   private val authedV1Routes = HmacAuthMiddleware(key)(v1routes)
 
   private val routes: HttpRoutes[IO] =
@@ -105,19 +108,33 @@ class ScanService(store: ServiceStore[IO]) {
     for {
       metered <- MetricsMiddleware(routes)
       gzipped = GzipMiddleware(metered.orNotFound)
-      throttled <- ThrottleMiddleware(1000, 1.second)(gzipped)
+      throttled <- ThrottleMiddleware(config.qps, 1.second)(gzipped)
       logged = LoggingMiddleware(throttled)
     } yield logged
 
-  def serve(port: Int): Stream[IO, ExitCode] =
+  def serve: Stream[IO, ExitCode] =
     Stream
       .eval(httpApp)
       .flatMap(app => {
         BlazeServerBuilder[IO]
-          .bindLocal(port)
+          .bindHttp(port = config.port, host = config.host)
           .withHttpApp(app)
           .withoutBanner
           .withIdleTimeout(60.seconds)
           .serve
       })
+}
+
+object ScanService {
+  implicit val scheduler             = Scheduler.global
+  implicit val options: Task.Options = Task.defaultOptions
+  implicit val taskEff               = new CatsConcurrentEffectForTask
+
+  def serve(config: ServiceConfig): Stream[IO, Unit] =
+    for {
+      _     <- Stream.eval(Migration.migrate(config.dbUrl))
+      store <- Stream.resource(ServiceStore.quill(config.dbUrl))
+      service = new ScanService(store, config)
+      _ <- service.serve
+    } yield ()
 }

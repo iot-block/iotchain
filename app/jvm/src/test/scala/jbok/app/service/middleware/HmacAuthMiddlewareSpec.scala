@@ -12,7 +12,7 @@ import org.http4s.headers.Authorization
 import org.http4s.implicits._
 import org.http4s.{AuthScheme, Credentials, Header, HttpRoutes, Request, Status, Uri}
 import scodec.bits.ByteVector
-import tsec.mac.jca.HMACSHA256
+import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 import scala.concurrent.duration._
 
@@ -79,6 +79,7 @@ class HmacAuthMiddlewareSpec extends JbokSpec {
       val (sig, date) = sign("/v1/blocks")
       println("Authorization", s"Bearer $sig")
       println("X-Datetime", date)
+      println("Random key", ByteVector(MacSigningKey.toJavaKey[HMACSHA256](HMACSHA256.generateKey[Id]).getEncoded).toHex)
     }
   }
 }

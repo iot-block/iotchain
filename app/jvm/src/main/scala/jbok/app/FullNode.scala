@@ -4,17 +4,17 @@ import java.net.InetSocketAddress
 import java.nio.file.Paths
 
 import cats.effect._
-import cats.effect.implicits._
 import cats.implicits._
 import fs2._
 import fs2.concurrent.SignallingRef
 import jbok.app.api.impl.{AdminApiImpl, PersonalApiImpl, PublicApiImpl}
+import jbok.app.config.PeerNodeConfig
+import jbok.app.service.ScanService
 import jbok.codec.rlp.implicits._
-import jbok.common.FileLock
+import jbok.common.FileUtil
 import jbok.common.execution._
 import jbok.common.log.{Level, ScribeLog, ScribeLogPlatform}
 import jbok.common.metrics.Metrics
-import jbok.core.config.Configs.FullNodeConfig
 import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.{BlockExecutor, History}
@@ -23,19 +23,20 @@ import jbok.core.peer.PeerManagerPlatform
 import jbok.core.pool.{BlockPool, BlockPoolConfig}
 import jbok.core.sync.SyncManager
 import jbok.network.rpc.RpcService
-import jbok.network.server.{WsServer, Server}
+import jbok.network.server.{Server, WsServer}
 
-final case class FullNode[F[_]](
-    config: FullNodeConfig,
-    syncManager: SyncManager[F],
-    miner: BlockMiner[F],
-    keyStore: KeyStore[F],
+final case class FullNode(
+    peerNodeConfig: PeerNodeConfig,
+    syncManager: SyncManager[IO],
+    miner: BlockMiner[IO],
+    keyStore: KeyStore[IO],
     rpc: RpcService,
-    server: Server[F],
-    haltWhenTrue: SignallingRef[F, Boolean]
-)(implicit F: ConcurrentEffect[F], T: Timer[F]) {
+    server: Server[IO],
+    haltWhenTrue: SignallingRef[IO, Boolean]
+)(implicit F: ConcurrentEffect[IO], T: Timer[IO]) {
   private[this] val log = jbok.common.log.getLogger("FullNode")
 
+  val coreConfig      = peerNodeConfig.core
   val executor    = syncManager.executor
   val history     = executor.history
   val peerManager = syncManager.peerManager
@@ -45,34 +46,36 @@ final case class FullNode[F[_]](
   val id          = peerNode.id.toHex
 
   val peerBindAddress: InetSocketAddress =
-    config.peer.bindAddr
+    coreConfig.peer.bindAddr
 
-  def stream: Stream[F, Unit] =
-    Stream.eval(haltWhenTrue.set(false) >> F.delay(log.info(s"(${config.identity}) start"))) ++
+  def stream: Stream[IO, Unit] =
+    Stream.eval(haltWhenTrue.set(false) >> F.delay(log.info(s"(${ coreConfig.identity}) start"))) ++
       Stream(
         peerManager.stream,
         syncManager.stream,
-        if (config.rpc.enabled) server.stream else Stream.empty,
-        if (config.mining.enabled) miner.stream.drain else Stream.empty
+        if (coreConfig.rpc.enabled) server.stream else Stream.empty,
+        if (coreConfig.mining.enabled) miner.stream.drain else Stream.empty,
+        if (peerNodeConfig.service.enabled) ScanService.serve(peerNodeConfig.service) else Stream.empty
       ).parJoinUnbounded
         .interruptWhen(haltWhenTrue)
         .handleErrorWith(e => Stream.eval(F.delay(log.warn("FullNode error", e))))
-        .onFinalize(haltWhenTrue.set(true) >> F.delay(log.info(s"(${config.identity}) ready to exit, bye bye...")))
+        .onFinalize(haltWhenTrue.set(true) >> F.delay(log.info(s"(${coreConfig.identity}) ready to exit, bye bye...")))
 
-  def start: F[Fiber[F, Unit]] =
+  def start: IO[Fiber[IO, Unit]] =
     stream.compile.drain.start
 
-  def stop: F[Unit] =
+  def stop: IO[Unit] =
     haltWhenTrue.set(true)
 }
 
 object FullNode {
 
-  def forConfig(config: FullNodeConfig)(
+  def forConfig(appConfig: PeerNodeConfig)(
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
       CS: ContextShift[IO]
-  ): IO[FullNode[IO]] = {
+  ): IO[FullNode] = {
+    val config                   = appConfig.core
     implicit val chainId: BigInt = config.genesis.chainId
     for {
       _ <- if (config.logHandler.contains("file")) {
@@ -107,24 +110,24 @@ object FullNode {
       publicAPI = PublicApiImpl(config.history, miner)
       personalAPI <- PersonalApiImpl(keystore, history, config.history, executor.txPool)
       adminAPI = AdminApiImpl(peerManager)
-      rpc = RpcService().mountAPI(publicAPI).mountAPI(personalAPI).mountAPI(adminAPI)
-      server = WsServer.bind(config.rpc.addr, rpc.pipe, metrics, Some(rpc.handle _))
+      rpc      = RpcService().mountAPI(publicAPI).mountAPI(personalAPI).mountAPI(adminAPI)
+      server   = WsServer.bind(config.rpc.addr, rpc.pipe, metrics, Some(rpc.handle _))
       haltWhenTrue <- SignallingRef[IO, Boolean](true)
-    } yield FullNode[IO](config, syncManager, miner, keystore, rpc, server, haltWhenTrue)
+    } yield FullNode(appConfig, syncManager, miner, keystore, rpc, server, haltWhenTrue)
   }
 
-  def resource(config: FullNodeConfig)(
+  def resource(config: PeerNodeConfig)(
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
       CS: ContextShift[IO]
-  ): Resource[IO, FullNode[IO]] =
-    FileLock.lock[IO](Paths.get(s"${config.lockPath}")).flatMap[FullNode[IO]] { _ =>
+  ): Resource[IO, FullNode] =
+    FileUtil.lock(Paths.get(s"${config.core.lockPath}")).flatMap[FullNode] { _ =>
       Resource.liftF(forConfig(config))
     }
 
-  def stream(config: FullNodeConfig)(
+  def stream(config: PeerNodeConfig)(
       implicit F: ConcurrentEffect[IO],
       T: Timer[IO],
       CS: ContextShift[IO]
-  ): Stream[IO, FullNode[IO]] = Stream.resource(resource(config))
+  ): Stream[IO, FullNode] = Stream.resource(resource(config))
 }

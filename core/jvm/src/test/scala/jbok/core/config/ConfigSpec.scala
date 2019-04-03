@@ -1,12 +1,12 @@
 package jbok.core.config
 
 import jbok.JbokSpec
-import jbok.core.config.Configs.FullNodeConfig
+import jbok.core.config.Configs.CoreConfig
 
 class ConfigSpec extends JbokSpec {
   "Config" should {
     "load FullNodeConfig from resource" in {
-      FullNodeConfig.fromJson(FullNodeConfig.reference.toJson) shouldBe FullNodeConfig.reference
+      CoreConfig.fromJson(CoreConfig.reference.toJson) shouldBe CoreConfig.reference
     }
   }
 }

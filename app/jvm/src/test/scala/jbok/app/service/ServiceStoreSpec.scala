@@ -3,7 +3,7 @@ package jbok.app.service
 import better.files._
 import cats.effect.IO
 import jbok.JbokSpec
-import jbok.app.service.store.{Migrate, ServiceStore}
+import jbok.app.service.store.{Migration, ServiceStore}
 import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.ledger.BlockExecutor
@@ -59,7 +59,7 @@ class ServiceStoreSpec extends JbokSpec {
 
   "doobie" should {
     val file = File.newTemporaryFile()
-    Migrate.migrate(Some(file.pathAsString)).unsafeRunSync()
+    Migration.migrate(Some(file.pathAsString)).unsafeRunSync()
     val (doobie, closed) = ServiceStore.doobie(Some(file.pathAsString)).allocated.unsafeRunSync()
     check("doobie", doobie)
   }
@@ -69,7 +69,7 @@ class ServiceStoreSpec extends JbokSpec {
     implicit val options: Task.Options = Task.defaultOptions
     implicit val taskEff               = new CatsConcurrentEffectForTask
     val file = File.newTemporaryFile()
-    Migrate.migrate(Some(file.pathAsString)).unsafeRunSync()
+    Migration.migrate(Some(file.pathAsString)).unsafeRunSync()
     val (quill, closed) = ServiceStore.quill(Some(file.pathAsString)).allocated.unsafeRunSync()
     check("quill", quill)
   }

@@ -18,7 +18,7 @@ import jbok.codec.json.implicits._
 import scala.io.Source
 
 object Configs {
-  final case class FullNodeConfig(
+  final case class CoreConfig(
       identity: String,
       logLevel: String,
       logHandler: String,
@@ -61,30 +61,30 @@ object Configs {
 
     lazy val peerNode: PeerNode = PeerNode(nodeKeyPair.public, peer.host, peer.port, peer.discoveryPort)
 
-    def withIdentityAndPort(identity: String, port: Int): FullNodeConfig =
+    def withIdentityAndPort(identity: String, port: Int): CoreConfig =
       copy(identity = identity)
         .withPeer(_.copy(port = port, discoveryPort = port + 1))
         .withRpc(_.copy(port = port + 2))
 
-    def withHistory(f: HistoryConfig => HistoryConfig): FullNodeConfig =
+    def withHistory(f: HistoryConfig => HistoryConfig): CoreConfig =
       copy(history = f(history))
 
-    def withKeyStore(f: KeyStoreConfig => KeyStoreConfig): FullNodeConfig =
+    def withKeyStore(f: KeyStoreConfig => KeyStoreConfig): CoreConfig =
       copy(keystore = f(keystore))
 
-    def withPeer(f: PeerConfig => PeerConfig): FullNodeConfig =
+    def withPeer(f: PeerConfig => PeerConfig): CoreConfig =
       copy(peer = f(peer))
 
-    def withSync(f: SyncConfig => SyncConfig): FullNodeConfig =
+    def withSync(f: SyncConfig => SyncConfig): CoreConfig =
       copy(sync = f(sync))
 
-    def withTxPool(f: TxPoolConfig => TxPoolConfig): FullNodeConfig =
+    def withTxPool(f: TxPoolConfig => TxPoolConfig): CoreConfig =
       copy(txPool = f(txPool))
 
-    def withMining(f: MiningConfig => MiningConfig): FullNodeConfig =
+    def withMining(f: MiningConfig => MiningConfig): CoreConfig =
       copy(mining = f(mining))
 
-    def withRpc(f: RpcConfig => RpcConfig): FullNodeConfig =
+    def withRpc(f: RpcConfig => RpcConfig): CoreConfig =
       copy(rpc = f(rpc))
 
     def toJson: String =
@@ -207,15 +207,15 @@ object Configs {
       requestTimeout: FiniteDuration
   )
 
-  object FullNodeConfig {
-    def fromJson(json: String): FullNodeConfig =
-      decode[FullNodeConfig](json) match {
+  object CoreConfig {
+    def fromJson(json: String): CoreConfig =
+      decode[CoreConfig](json) match {
         case Left(e)  => throw e
         case Right(c) => c
       }
 
-    val reference: FullNodeConfig =
-      FullNodeConfig.fromJson(
+    val reference: CoreConfig =
+      CoreConfig.fromJson(
         Source.fromInputStream(this.getClass.getResourceAsStream("/reference.json")).getLines().mkString("\n"))
   }
 }

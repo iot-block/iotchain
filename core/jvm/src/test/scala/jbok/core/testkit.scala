@@ -39,14 +39,14 @@ object testkit {
 
   val testGenesis = GenesisConfig.generate(chainId, testAlloc)
 
-  def fillConfigs(n: Int): List[FullNodeConfig] =
+  def fillConfigs(n: Int): List[CoreConfig] =
     (0 until n).toList.map { i =>
-      FullNodeConfig.reference.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
+      CoreConfig.reference.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
     }
 
   val genesis = Clique.generateGenesisConfig(testGenesis, List(testMiner.address))
 
-  def fillFullNodeConfigs(n: Int): List[FullNodeConfig] =
+  def fillFullNodeConfigs(n: Int): List[CoreConfig] =
     fillConfigs(n).map { config =>
       config
         .copy(
@@ -58,7 +58,7 @@ object testkit {
         .withPeer(_.copy(dbBackend = "inmem", nodekey = Some(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())))
     }
 
-  val testConfig: FullNodeConfig = fillFullNodeConfigs(1).head
+  val testConfig: CoreConfig = fillFullNodeConfigs(1).head
 
 //  def istanbulTestConfig(keypairs: List[KeyPair]): FullNodeConfig = {
 //    val genesisConfig = prepareIstanbulConfig(keypairs, testMiner)
@@ -68,7 +68,7 @@ object testkit {
 //    )
 //  }
 
-  def genConsensus(implicit config: FullNodeConfig): Gen[Consensus[IO]] = {
+  def genConsensus(implicit config: CoreConfig): Gen[Consensus[IO]] = {
     implicit val chainId = config.genesis.chainId
     val p = config.consensusAlgo match {
       case "clique" =>
@@ -149,11 +149,11 @@ object testkit {
 //    sealConfig
 //  }
 
-  implicit def arbConsensus(implicit config: FullNodeConfig): Arbitrary[Consensus[IO]] = Arbitrary {
+  implicit def arbConsensus(implicit config: CoreConfig): Arbitrary[Consensus[IO]] = Arbitrary {
     genConsensus(config)
   }
 
-  implicit def arbHistory(implicit config: FullNodeConfig): Arbitrary[History[IO]] = Arbitrary {
+  implicit def arbHistory(implicit config: CoreConfig): Arbitrary[History[IO]] = Arbitrary {
     val consensus = random[Consensus[IO]](arbConsensus(config))
     consensus.history
   }
@@ -199,7 +199,7 @@ object testkit {
     genTx
   }
 
-  implicit def arbSignedTransaction(implicit config: FullNodeConfig): Arbitrary[SignedTransaction] = Arbitrary {
+  implicit def arbSignedTransaction(implicit config: CoreConfig): Arbitrary[SignedTransaction] = Arbitrary {
     implicit val chainId = config.genesis.chainId
     for {
       tx <- arbTransaction.arbitrary
@@ -246,19 +246,19 @@ object testkit {
       )
   }
 
-  implicit def arbBlockBody(implicit config: FullNodeConfig): Arbitrary[BlockBody] = Arbitrary {
+  implicit def arbBlockBody(implicit config: CoreConfig): Arbitrary[BlockBody] = Arbitrary {
     for {
       stxs <- arbTxs.arbitrary
     } yield BlockBody(stxs, Nil)
   }
 
-  implicit def arbSignedTransactions(implicit config: FullNodeConfig): Arbitrary[SignedTransactions] = Arbitrary {
+  implicit def arbSignedTransactions(implicit config: CoreConfig): Arbitrary[SignedTransactions] = Arbitrary {
     for {
       txs <- arbTxs.arbitrary
     } yield SignedTransactions(txs)
   }
 
-  implicit def arbBlock(implicit config: FullNodeConfig): Arbitrary[Block] = Arbitrary {
+  implicit def arbBlock(implicit config: CoreConfig): Arbitrary[Block] = Arbitrary {
     for {
       header <- arbBlockHeader.arbitrary
       body   <- arbBlockBody.arbitrary
@@ -284,33 +284,33 @@ object testkit {
       )
   }
 
-  implicit def arbPeerManager(implicit config: FullNodeConfig): Arbitrary[PeerManager[IO]] = Arbitrary {
+  implicit def arbPeerManager(implicit config: CoreConfig): Arbitrary[PeerManager[IO]] = Arbitrary {
     genPeerManager(config)
   }
 
-  def genTxPool(implicit config: FullNodeConfig): Gen[TxPool[IO]] = {
+  def genTxPool(implicit config: CoreConfig): Gen[TxPool[IO]] = {
     val pm = random[PeerManager[IO]]
     TxPool[IO](config.txPool, pm).unsafeRunSync
   }
 
-  implicit def arbTxPool(implicit config: FullNodeConfig): Arbitrary[TxPool[IO]] = Arbitrary {
+  implicit def arbTxPool(implicit config: CoreConfig): Arbitrary[TxPool[IO]] = Arbitrary {
     genTxPool(config)
   }
 
-  def genStatus(number: BigInt = 0)(implicit config: FullNodeConfig): Gen[Status] =
+  def genStatus(number: BigInt = 0)(implicit config: CoreConfig): Gen[Status] =
     Gen.delay(Status(config.genesis.chainId, config.genesis.header.hash, number))
 
-  def genPeer(implicit config: FullNodeConfig): Gen[Peer[IO]] =
+  def genPeer(implicit config: CoreConfig): Gen[Peer[IO]] =
     for {
       keyPair <- arbKeyPair.arbitrary
       status  <- genStatus()
     } yield Peer.dummy[IO](keyPair.public, status).unsafeRunSync()
 
-  implicit def arbPeer(implicit config: FullNodeConfig): Arbitrary[Peer[IO]] = Arbitrary {
+  implicit def arbPeer(implicit config: CoreConfig): Arbitrary[Peer[IO]] = Arbitrary {
     genPeer
   }
 
-  def genPeers(min: Int, max: Int)(implicit config: FullNodeConfig): Gen[List[Peer[IO]]] =
+  def genPeers(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Peer[IO]]] =
     for {
       size  <- Gen.chooseNum(min, max)
       peers <- Gen.listOfN(size, genPeer)
@@ -329,7 +329,7 @@ object testkit {
 
   implicit def arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: FullNodeConfig): Gen[List[SignedTransaction]] = {
+  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: CoreConfig): Gen[List[SignedTransaction]] = {
     implicit val chainId = config.genesis.chainId
     for {
       size <- Gen.chooseNum(min, max)
@@ -337,21 +337,21 @@ object testkit {
     } yield txs
   }
 
-  implicit def arbTxs(implicit config: FullNodeConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
+  implicit def arbTxs(implicit config: CoreConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
     genTxs()(config)
   }
 
-  def genBlockMiner(implicit config: FullNodeConfig): Gen[BlockMiner[IO]] = {
+  def genBlockMiner(implicit config: CoreConfig): Gen[BlockMiner[IO]] = {
     val sm    = random[SyncManager[IO]]
     val miner = BlockMiner[IO](config.mining, sm).unsafeRunSync()
     miner
   }
 
-  implicit def arbBlockMiner(implicit config: FullNodeConfig): Arbitrary[BlockMiner[IO]] = Arbitrary {
+  implicit def arbBlockMiner(implicit config: CoreConfig): Arbitrary[BlockMiner[IO]] = Arbitrary {
     genBlockMiner(config)
   }
 
-  def genBlocks(min: Int, max: Int)(implicit config: FullNodeConfig): Gen[List[Block]] =
+  def genBlocks(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Block]] =
     for {
       miner <- genBlockMiner(config)
       size  <- Gen.chooseNum(min, max)
@@ -362,40 +362,40 @@ object testkit {
       parentOpt: Option[Block] = None,
       stxsOpt: Option[List[SignedTransaction]] = None,
       ommersOpt: Option[List[BlockHeader]] = None
-  )(implicit config: FullNodeConfig): Gen[Block] =
+  )(implicit config: CoreConfig): Gen[Block] =
     for {
       miner <- genBlockMiner(config)
       mined = miner.mine1(parentOpt, stxsOpt, ommersOpt).unsafeRunSync()
     } yield mined.block
 
-  def genPeerManager(implicit config: FullNodeConfig): Gen[PeerManager[IO]] = {
+  def genPeerManager(implicit config: CoreConfig): Gen[PeerManager[IO]] = {
     implicit val chainId: BigInt = config.genesis.chainId
     val consensus                = random[Consensus[IO]]
     val history                  = consensus.history
     PeerManagerPlatform[IO](config, history).unsafeRunSync()
   }
 
-  def genBlockPool(implicit config: FullNodeConfig): Gen[BlockPool[IO]] = {
+  def genBlockPool(implicit config: CoreConfig): Gen[BlockPool[IO]] = {
     val consensus = random[Consensus[IO]]
     val history   = consensus.history
     BlockPool(history, BlockPoolConfig()).unsafeRunSync()
   }
 
-  implicit def arbBlockPool(implicit config: FullNodeConfig): Arbitrary[BlockPool[IO]] = Arbitrary {
+  implicit def arbBlockPool(implicit config: CoreConfig): Arbitrary[BlockPool[IO]] = Arbitrary {
     genBlockPool(config)
   }
 
-  def genOmmerPool(poolSize: Int = 30)(implicit config: FullNodeConfig): Gen[OmmerPool[IO]] = {
+  def genOmmerPool(poolSize: Int = 30)(implicit config: CoreConfig): Gen[OmmerPool[IO]] = {
     val consensus = random[Consensus[IO]]
     val history   = consensus.history
     OmmerPool(history, poolSize).unsafeRunSync()
   }
 
-  implicit def arbOmmerPool(implicit config: FullNodeConfig): Arbitrary[OmmerPool[IO]] = Arbitrary {
+  implicit def arbOmmerPool(implicit config: CoreConfig): Arbitrary[OmmerPool[IO]] = Arbitrary {
     genOmmerPool()(config)
   }
 
-  implicit def arbBlockExecutor(implicit config: FullNodeConfig): Arbitrary[BlockExecutor[IO]] = Arbitrary {
+  implicit def arbBlockExecutor(implicit config: CoreConfig): Arbitrary[BlockExecutor[IO]] = Arbitrary {
     implicit val chainId = config.genesis.chainId
     val consensus        = random[Consensus[IO]]
     val pm = PeerManagerPlatform[IO](config, consensus.history)
@@ -403,22 +403,22 @@ object testkit {
     BlockExecutor[IO](config.history, consensus, pm).unsafeRunSync()
   }
 
-  def genFullSync(implicit config: FullNodeConfig): Gen[FullSync[IO]] = {
+  def genFullSync(implicit config: CoreConfig): Gen[FullSync[IO]] = {
     val executor   = random[BlockExecutor[IO]]
     val syncStatus = Ref.of[IO, SyncStatus](SyncStatus.Booting).unsafeRunSync()
     FullSync[IO](config.sync, executor, syncStatus)
   }
 
-  def genSyncManager(status: SyncStatus = SyncStatus.Booting)(implicit config: FullNodeConfig): Gen[SyncManager[IO]] = {
+  def genSyncManager(status: SyncStatus = SyncStatus.Booting)(implicit config: CoreConfig): Gen[SyncManager[IO]] = {
     val executor = random[BlockExecutor[IO]]
     SyncManager[IO](config.sync, executor, status).unsafeRunSync()
   }
 
-  implicit def arbSyncManager(implicit config: FullNodeConfig): Arbitrary[SyncManager[IO]] = Arbitrary {
+  implicit def arbSyncManager(implicit config: CoreConfig): Arbitrary[SyncManager[IO]] = Arbitrary {
     genSyncManager()(config)
   }
 
-  def genDiscovery(implicit config: FullNodeConfig): Gen[Discovery[IO]] = {
+  def genDiscovery(implicit config: CoreConfig): Gen[Discovery[IO]] = {
     val (transport, _) = UdpTransport[IO](config.peer.discoveryAddr).allocated.unsafeRunSync()
     val keyPair        = random[KeyPair]
     val db             = random[KeyValueDB[IO]]

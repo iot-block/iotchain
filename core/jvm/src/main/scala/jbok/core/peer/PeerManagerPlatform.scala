@@ -7,7 +7,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2.concurrent.Queue
 import jbok.common.concurrent.PriorityQueue
-import jbok.core.config.Configs.FullNodeConfig
+import jbok.core.config.Configs.CoreConfig
 import jbok.core.ledger.History
 import jbok.core.messages.Status
 import jbok.core.rlpx.handshake.AuthHandshaker
@@ -17,7 +17,7 @@ import jbok.codec.rlp.implicits._
 
 object PeerManagerPlatform {
   def apply[F[_]](
-      config: FullNodeConfig,
+      config: CoreConfig,
       history: History[F],
       maxQueueSize: Int = 64
   )(
