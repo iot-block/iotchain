@@ -35,3 +35,5 @@ addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.3.7")
 
 // test coverage
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.1")
+
+addSbtPlugin("com.tapad" % "sbt-docker-compose" % "1.0.34")

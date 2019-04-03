@@ -8,12 +8,12 @@ object Level {
   case object Warn  extends Level
   case object Error extends Level
 
-  def fromName(name: String) = name.toLowerCase match {
-    case "trace" => Level.Trace
-    case "debug" => Level.Debug
-    case "info"  => Level.Info
-    case "warn"  => Level.Warn
-    case "error" => Level.Error
-    case _       => throw new Exception(s"invalid log level name ${name}")
+  def fromName(name: String): Level = name.toLowerCase match {
+    case "t" | "trace" => Level.Trace
+    case "d" | "debug" => Level.Debug
+    case "i" | "info"  => Level.Info
+    case "w" | "warn"  => Level.Warn
+    case "e" | "error" => Level.Error
+    case _             => throw new Exception(s"invalid log level name ${name}")
   }
 }

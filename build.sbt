@@ -26,6 +26,7 @@ lazy val common = crossProject(JSPlatform, JVMPlatform)
   .settings(Settings.common ++ Libs.common ++ Libs.dropwizard ++ Libs.prometheus)
   .settings(name := "jbok-common")
   .jsSettings(ScalaJS.common)
+  .dependsOn(commonMacros)
 
 lazy val core = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -58,8 +59,8 @@ lazy val codec = crossProject(JSPlatform, JVMPlatform)
 
 lazy val app = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
-  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin, WebScalaJSBundlerPlugin))
-  .settings(Settings.common ++ DockerSettings.settings)
+  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin, WebScalaJSBundlerPlugin, DockerComposePlugin))
+  .settings(Settings.common ++ DockerSettings.settings ++ DockerSettings.composeSettings)
   .settings(name := "jbok-app")
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
   .jsSettings(ScalaJS.common ++ ScalaJS.webpackSettings)
@@ -92,8 +93,17 @@ lazy val macros = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .settings(Settings.common)
   .settings(name := "jbok-macros")
-  .jsSettings(ScalaJS.common)
   .dependsOn(common % CompileAndTest, codec)
+
+lazy val commonMacros = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .settings(Settings.common)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "cats-effect" % Versions.catsEffect,
+      "com.outr"      %%% "scribe"      % Versions.scribe
+    ))
+  .settings(name := "jbok-common-macros")
 
 lazy val network = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)

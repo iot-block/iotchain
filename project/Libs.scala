@@ -4,23 +4,33 @@ import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport._
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
 
 object Libs {
-  lazy val common
-    : Seq[Setting[_]] = logging ++ dropwizard ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ (libraryDependencies ++= Seq(
-    // typelevel
+  lazy val typelevel = libraryDependencies ++= Seq(
     "org.typelevel" %%% "cats-effect"          % Versions.catsEffect,
     "org.typelevel" %% "cats-collections-core" % Versions.catsCollections,
     "co.fs2"        %%% "fs2-core"             % Versions.fs2,
     "co.fs2"        %% "fs2-io"                % Versions.fs2,
-    "org.typelevel" %%% "spire"                % "0.16.0",
-    // enum
-    "com.beachape" %%% "enumeratum"       % "1.5.13",
-    "com.beachape" %%% "enumeratum-circe" % "1.5.13",
+    "org.typelevel" %%% "spire"                % Versions.spire
+  )
+
+  lazy val enumeratum = libraryDependencies ++= Seq(
+    "com.beachape" %% "enumeratum"            % Versions.enumeratum,
+    "com.beachape" %% "enumeratum-cats"       % "1.5.15",
+    "com.beachape" %% "enumeratum-circe"      % Versions.enumeratum,
+    "com.beachape" %% "enumeratum-quill"      % Versions.enumeratum,
+    "com.beachape" %% "enumeratum-scalacheck" % Versions.enumeratum,
+    "com.beachape" %% "enumeratum-scalacheck" % Versions.enumeratum
+  )
+
+  lazy val common
+    : Seq[Setting[_]] = di ++ logging ++ dropwizard ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ typelevel ++ enumeratum ++ (libraryDependencies ++= Seq(
     // files
     "com.github.pathikrit" %% "better-files" % "3.5.0",
     // macro
     "com.propensive" %%% "magnolia" % "0.10.0",
     // scalajs-stubs
-    "org.scala-js" %% "scalajs-stubs" % "0.6.26"
+    "org.scala-js" %% "scalajs-stubs" % "0.6.26",
+    // config
+    "com.github.pureconfig" %% "pureconfig" % "0.10.2"
   ))
 
   lazy val graph = libraryDependencies ++= Seq(
@@ -28,11 +38,17 @@ object Libs {
     "org.scala-graph" %% "graph-dot"   % "1.12.1"
   )
 
+  lazy val terminal = libraryDependencies ++= Seq(
+    "net.team2xh" %% "onions"  % "1.0.1",
+    "net.team2xh" %% "Scurses" % "1.0.1"
+  )
+
   lazy val circe = libraryDependencies ++= Seq(
     "io.circe" %%% "circe-core"       % Versions.circe,
     "io.circe" %%% "circe-generic"    % Versions.circe,
     "io.circe" %%% "circe-parser"     % Versions.circe,
-    "io.circe" %%% "circe-derivation" % "0.9.0-M5"
+    "io.circe" %%% "circe-derivation" % "0.9.0-M5",
+    "io.circe" %% "circe-yaml"        % "0.9.0",
   )
 
   lazy val scodec = libraryDependencies ++= Seq(
@@ -45,6 +61,15 @@ object Libs {
     "org.scalatest"  %%% "scalatest"  % "3.0.5",
     "org.scalacheck" %%% "scalacheck" % "1.13.4"
   ).map(_ % Test)
+
+  lazy val di = libraryDependencies ++= Seq(
+    "com.github.pshirshov.izumi.r2" %% "distage-core"    % Versions.izumi,
+    "com.github.pshirshov.izumi.r2" %% "distage-cats"    % Versions.izumi,
+    "com.github.pshirshov.izumi.r2" %% "distage-static"  % Versions.izumi,
+    "com.github.pshirshov.izumi.r2" %% "distage-plugins" % Versions.izumi,
+    "com.github.pshirshov.izumi.r2" %% "distage-app"     % Versions.izumi,
+    "com.github.pshirshov.izumi.r2" %% "distage-roles"   % Versions.izumi,
+  ).map(_.exclude("com.github.pshirshov.izumi.r2", "logstage-adapter-slf4j_2.12"))
 
   lazy val logging = libraryDependencies ++= Seq(
     "com.outr" %%% "scribe"      % Versions.scribe,
@@ -102,12 +127,14 @@ object Libs {
   lazy val persistent = scalacache ++ (libraryDependencies ++= drivers ++ quill ++ doobie)
 
   lazy val drivers = Seq(
-    "org.iq80.leveldb"          % "leveldb"        % "0.10",
-    "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8",
-    "org.rocksdb"               % "rocksdbjni"     % "5.17.2",
-    "io.lettuce"                % "lettuce-core"   % "5.1.3.RELEASE",
-    "org.xerial"                % "sqlite-jdbc"    % "3.25.2",
-    "org.flywaydb"              % "flyway-core"    % "5.0.5",
+    "org.iq80.leveldb"          % "leveldb"              % "0.10",
+    "org.fusesource.leveldbjni" % "leveldbjni-all"       % "1.8",
+    "org.rocksdb"               % "rocksdbjni"           % "5.17.2",
+    "io.lettuce"                % "lettuce-core"         % "5.1.3.RELEASE",
+    "org.xerial"                % "sqlite-jdbc"          % "3.25.2",
+    "org.flywaydb"              % "flyway-core"          % "5.0.5",
+    "mysql"                     % "mysql-connector-java" % "8.0.15",
+    "org.postgresql"            % "postgresql"           % "42.2.5"
   )
 
   lazy val scalacache = libraryDependencies ++= Seq(

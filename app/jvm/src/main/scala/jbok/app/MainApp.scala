@@ -1,6 +1,7 @@
 package jbok.app
 
 import java.net.InetSocketAddress
+import java.nio.file.{Path, Paths}
 
 import _root_.io.circe.generic.auto._
 import _root_.io.circe.syntax._
@@ -13,7 +14,6 @@ import jbok.app.api.{SimulationAPI, TestNetTxGen}
 import jbok.app.config.{PeerNodeConfig, ServiceConfig}
 import jbok.app.simulations.SimulationImpl
 import jbok.codec.rlp.implicits._
-import jbok.common.Configure
 import jbok.common.metrics.Metrics
 import jbok.core.config.Configs.CoreConfig
 import jbok.core.config.GenesisConfig
@@ -24,6 +24,7 @@ import jbok.network.rpc.RpcService
 import jbok.network.server.{Server, WsServer}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
+import jbok.common.config.Config
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
@@ -41,11 +42,11 @@ object MainApp extends StreamApp {
                   ||/__\|   |/__\|   |/__\|   |/__\|
                   |""".stripMargin
 
-  private def loadConfig(path: String): IO[PeerNodeConfig] =
+  private def loadConfig(path: Path): IO[PeerNodeConfig] =
     for {
       _      <- IO(println(version))
       _      <- IO(println(banner))
-      config <- Configure.loadIO[PeerNodeConfig](path)
+      config <- Config.read[PeerNodeConfig](path)
     } yield config
 
   override def run(args: List[String]): IO[ExitCode] =
@@ -64,7 +65,7 @@ object MainApp extends StreamApp {
       case "node" :: path :: Nil =>
         runStream {
           for {
-            config   <- Stream.eval(loadConfig(path))
+            config   <- Stream.eval(loadConfig(Paths.get(path)))
             fullNode <- FullNode.stream(config)
             _        <- fullNode.stream
           } yield ()

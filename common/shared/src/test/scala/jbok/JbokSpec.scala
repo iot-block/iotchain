@@ -1,7 +1,7 @@
 package jbok
 
 import cats.effect.IO
-import jbok.common.log.{Level, ScribeLog}
+import jbok.common.log.{Level, Log}
 import org.scalatest._
 import org.scalatest.concurrent.{AsyncTimeLimitedTests, TimeLimitedTests}
 import org.scalatest.prop.PropertyChecks
@@ -21,7 +21,7 @@ trait JbokSpec
 
   override def timeLimit: Span = 60.seconds
 
-  ScribeLog.setRootHandlers[IO](ScribeLog.consoleHandler(minimumLevel = Some(Level.Debug))).unsafeRunSync()
+  Log.setRootHandlers(Log.consoleHandler(minimumLevel = Some(Level.Debug))).unsafeRunSync()
 }
 
 trait JbokAsyncSpec extends AsyncWordSpec with Matchers with AsyncTimeLimitedTests {

@@ -1,5 +1,7 @@
 package jbok.app
 
+import java.nio.file.{Path, Paths}
+
 import _root_.io.circe.generic.auto._
 import _root_.io.circe.syntax._
 import cats.effect.IO
@@ -7,7 +9,6 @@ import cats.implicits._
 import io.circe.{Encoder, Json}
 import jbok.app.NetworkBuilder.Topology
 import jbok.app.config.{LogConfig, PeerNodeConfig, ServiceConfig}
-import jbok.common.Configure
 import jbok.core.config.Configs.{CoreConfig, PeerConfig}
 import jbok.core.config.GenesisConfig
 import jbok.core.consensus.poa.clique.Clique
@@ -17,17 +18,18 @@ import jbok.core.peer.PeerNode
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
+import jbok.common.FileUtil
+import jbok.common.config.Config
 
 import scala.collection.immutable.ListMap
 
 sealed trait Action
 object Action {
-  final case class WriteJson(json: Json, path: String)                   extends Action
+  final case class WriteJson(json: Json, path: Path)                     extends Action
   final case class ImportSecret(secret: ByteVector, keystoreDir: String) extends Action
-  final case class SaveText(text: String, path: String)                  extends Action
+  final case class SaveText(text: String, path: Path)                    extends Action
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 final case class NetworkBuilder(
     numOfNodes: Int = 0,
     configs: List[PeerNodeConfig] = Nil,
@@ -52,13 +54,13 @@ final case class NetworkBuilder(
   def build: IO[Unit] =
     actions.traverse_ {
       case Action.WriteJson(json, path) =>
-        Configure.saveIO(json, path)
+        Config.dump(json, path)
 
       case Action.ImportSecret(secret, dir) =>
         KeyStorePlatform[IO](dir).flatMap(_.importPrivateKey(secret, "").void)
 
       case Action.SaveText(text, path) =>
-        Configure.writeFile(text, path)
+        FileUtil.dump(text, path)
     }
 
   def printActions(actions: List[Action]): IO[Unit] = IO {
@@ -67,12 +69,12 @@ final case class NetworkBuilder(
 
   def actions: List[Action] = {
     val writeConfigsActions: List[Action] =
-      configs.map(config => Action.WriteJson(config.asJson, s"${config.core.dataDir}/app.json"))
+      configs.map(config => Action.WriteJson(config.asJson, Paths.get(s"${config.core.dataDir}/app.json")))
 
     val writeGenesisActions: List[Action] = {
       val genesisTemplate = GenesisConfig.generate(chainId, alloc)
       val genesis         = Clique.generateGenesisConfig(genesisTemplate, miners)
-      configs.map(config => Action.WriteJson(genesis.asJson, s"${config.core.genesisPath}"))
+      configs.map(config => Action.WriteJson(genesis.asJson, Paths.get(s"${config.core.genesisPath}")))
     }
 
     val writeKeystoreActions: List[Action] =
@@ -81,7 +83,7 @@ final case class NetworkBuilder(
         .map { case (config, kp) => Action.ImportSecret(kp.secret.bytes, config.core.keystoreDir) }
 
     val writeNodeKeys: List[Action] =
-      configs.zip(keyPairs).map { case (config, kp) => Action.SaveText(kp.secret.bytes.toHex, config.core.nodeKeyPath) }
+      configs.zip(keyPairs).map { case (config, kp) => Action.SaveText(kp.secret.bytes.toHex, Paths.get(config.core.nodeKeyPath)) }
 
     writeConfigsActions ++ writeGenesisActions ++ writeKeystoreActions ++ writeNodeKeys
   }

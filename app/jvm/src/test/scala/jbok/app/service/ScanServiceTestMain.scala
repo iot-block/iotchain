@@ -3,6 +3,7 @@ package jbok.app.service
 import better.files.File
 import fs2._
 import jbok.JbokSpec
+import jbok.app.config.ServiceConfig
 import jbok.app.service.store.{Migration, ServiceStore}
 import jbok.common.execution._
 import monix.eval.Task
@@ -17,10 +18,10 @@ class ScanServiceTestMain extends JbokSpec {
     implicit val options: Task.Options = Task.defaultOptions
     implicit val taskEff               = new CatsConcurrentEffectForTask
     val s = for {
-      _     <- Stream.eval(Migration.migrate(Some(file)))
-      store <- Stream.resource(ServiceStore.quill(Some(file)))
-      service = new ScanService(store)
-      ec <- service.serve(10087)
+      _     <- Stream.eval(Migration.migrate(file))
+      store <- Stream.resource(ServiceStore.quill(file))
+      service = new ScanService(store, ServiceConfig())
+      ec <- service.serve
     } yield ec
 
     s.compile.drain.unsafeRunSync()

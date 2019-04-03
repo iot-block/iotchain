@@ -13,7 +13,7 @@ import jbok.app.service.ScanService
 import jbok.codec.rlp.implicits._
 import jbok.common.FileUtil
 import jbok.common.execution._
-import jbok.common.log.{Level, ScribeLog, ScribeLogPlatform}
+import jbok.common.log.{Level, Log, LogJVM}
 import jbok.common.metrics.Metrics
 import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
@@ -34,8 +34,6 @@ final case class FullNode(
     server: Server[IO],
     haltWhenTrue: SignallingRef[IO, Boolean]
 )(implicit F: ConcurrentEffect[IO], T: Timer[IO]) {
-  private[this] val log = jbok.common.log.getLogger("FullNode")
-
   val coreConfig      = peerNodeConfig.core
   val executor    = syncManager.executor
   val history     = executor.history
@@ -49,7 +47,7 @@ final case class FullNode(
     coreConfig.peer.bindAddr
 
   def stream: Stream[IO, Unit] =
-    Stream.eval(haltWhenTrue.set(false) >> F.delay(log.info(s"(${ coreConfig.identity}) start"))) ++
+    Stream.eval(haltWhenTrue.set(false) >> Log.i(s"Node start identity=${coreConfig.identity}")) ++
       Stream(
         peerManager.stream,
         syncManager.stream,
@@ -58,8 +56,8 @@ final case class FullNode(
         if (peerNodeConfig.service.enabled) ScanService.serve(peerNodeConfig.service) else Stream.empty
       ).parJoinUnbounded
         .interruptWhen(haltWhenTrue)
-        .handleErrorWith(e => Stream.eval(F.delay(log.warn("FullNode error", e))))
-        .onFinalize(haltWhenTrue.set(true) >> F.delay(log.info(s"(${coreConfig.identity}) ready to exit, bye bye...")))
+        .handleErrorWith(e => Stream.eval(Log.w("FullNode error", e)))
+        .onFinalize(haltWhenTrue.set(true) >> Log.i(s"identity=${coreConfig.identity} Node ready to exit, bye bye..."))
 
   def start: IO[Fiber[IO, Unit]] =
     stream.compile.drain.start
@@ -79,13 +77,13 @@ object FullNode {
     implicit val chainId: BigInt = config.genesis.chainId
     for {
       _ <- if (config.logHandler.contains("file")) {
-        ScribeLog.setRootHandlers[IO](
-          ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel))),
-          ScribeLogPlatform.fileHandler(config.logDir, Some(Level.fromName(config.logLevel)))
+        Log.setRootHandlers(
+          Log.consoleHandler(Some(Level.fromName(config.logLevel))),
+          LogJVM.fileHandler(config.logDir, Some(Level.fromName(config.logLevel)))
         )
       } else {
-        ScribeLog.setRootHandlers[IO](
-          ScribeLog.consoleHandler(Some(Level.fromName(config.logLevel)))
+        Log.setRootHandlers(
+          Log.consoleHandler(Some(Level.fromName(config.logLevel)))
         )
       }
       metrics  <- Metrics.default[IO]
