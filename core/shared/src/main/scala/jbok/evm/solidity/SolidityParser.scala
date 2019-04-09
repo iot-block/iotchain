@@ -51,9 +51,9 @@ object SolidityParser {
   def importDeclaration[_: P] = P(identifier ~ ("as" ~ identifier).?)
 
   def importDirective[_: P] = P(
-    ("import" ~ stringLiteral ~ ("as" ~ identifier).?) ~ ";"
-      | ("import" ~ ("*" | identifier) ~ ("as" ~ identifier).? ~ "from" ~ stringLiteral) ~ ";"
-      | ("import" ~ "{" ~ importDeclaration ~ ("," ~ importDeclaration).rep ~ "}" ~ "from" ~ stringLiteral) ~ ";"
+    (("import" ~ stringLiteral ~ ("as" ~ identifier).?)
+      | ("import" ~ ("*" | identifier) ~ ("as" ~ identifier).? ~ "from" ~ stringLiteral)
+      | ("import" ~ "{" ~ importDeclaration ~ ("," ~ importDeclaration).rep ~ "}" ~ "from" ~ stringLiteral)) ~/ ";"
   )
 
   def contractDefinition[_: P]: P[ContractDef] =
@@ -325,8 +325,7 @@ object SolidityParser {
   )
 
   def variableDeclarationStatement[_: P] = P(
-    ("var" ~ identifierList | "(" ~ variableDeclarationList
-      .log("(vds vd)") ~ ")" | variableDeclaration) ~ ("=" ~ expression).? ~ ";"
+    ("var" ~ identifierList | "(" ~ variableDeclarationList ~ ")" | variableDeclaration) ~ ("=" ~ expression).? ~ ";"
   )
 
   def variableDeclarationList[_: P] = P(
@@ -428,11 +427,6 @@ object SolidityParser {
         }
     }
   }
-
-  def testParser[_: P] =
-    P(
-      identifier
-    ).!
 
   def constantExpressionEle[_: P](cm: Map[String, Int]): P[Double] =
     P(
@@ -692,7 +686,7 @@ object SolidityParser {
   def keyword[_: P] =
     P(
       (AnonymousKeyword | BreakKeyword | ConstantKeyword | ContinueKeyword | ExternalKeyword | IndexedKeyword | InternalKeyword | PayableKeyword
-        | PrivateKeyword | PublicKeyword | PureKeyword | ViewKeyword | ReturnsKeyword | ByteKeyword | AddressKeyword | reservedKeyword) ~
+        | PrivateKeyword | PublicKeyword | PureKeyword | ViewKeyword | ReturnsKeyword | reservedKeyword | elementaryTypeName) ~
         !CharPred(c => Character.isLetter(c) | Character.isDigit(c) | c == '$' | c == '_'))
 
   def AnonymousKeyword[_: P] = P("anonymous")
@@ -733,8 +727,10 @@ object SolidityParser {
     def UnicodeEscape[_: P] = P("u" ~ HexDigit ~ HexDigit ~ HexDigit ~ HexDigit)
 
     //Numbers and digits
-    def Digit[_: P]  = P(CharIn("0-9"))
-    def Digits[_: P] = Digit.rep(1)
+    def Digit[_: P]       = P(CharIn("0-9"))
+    def Digits[_: P]      = Digit.rep(1)
+    def DigitNoZero[_: P] = P(CharIn("1-9"))
+    def Number[_: P]      = P(DigitNoZero ~ Digit.rep)
 
     def HexDigit[_: P]  = P(CharIn("0-9a-fA-F"))
     def HexNum[_: P]    = P("0x" ~ CharsWhileIn("0-9a-fA-F"))
