@@ -3,11 +3,8 @@ package jbok.sdk
 import jbok.JbokAsyncSpec
 
 import scala.concurrent.ExecutionContext
-import jbok.common.execution._
 
 class SdkClientSpec extends JbokAsyncSpec {
-
-  implicit override def executionContext: ExecutionContext = EC
 
   "SdkClient" should {
     "make http request" ignore {
@@ -19,7 +16,7 @@ class SdkClientSpec extends JbokAsyncSpec {
         .map { result =>
           println(result)
           result.length > 0 shouldBe true
-        }(EC)
+        }
     }
   }
 }

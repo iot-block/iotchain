@@ -4,43 +4,40 @@ import java.net.InetSocketAddress
 
 import cats.effect.IO
 import fs2._
-import jbok.JbokSpec
-import jbok.common.execution._
+import fs2.io.tcp.Socket
+import jbok.core.CoreSpec
+import jbok.core.peer.handshake.AuthHandshaker
 import jbok.crypto.signature.{ECDSA, Signature}
-import jbok.network.common.TcpUtil
 
 import scala.concurrent.duration._
 
-class AuthHandshakerSpec extends JbokSpec {
+class AuthHandshakerSpec extends CoreSpec {
   val serverKey = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
   val clientKey = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
   val addr      = new InetSocketAddress("localhost", 9003)
 
   "AuthHandshakerSpec" should {
     "build auth connection" in {
-      val server = fs2.io.tcp.Socket
+      val server = Socket
         .server[IO](addr)
-        .evalMap[IO, AuthHandshakeResult] { res =>
+        .flatMap { res =>
           for {
-            conn       <- TcpUtil.socketToConnection[IO](res, true)
-            fiber      <- conn.start
-            handshaker <- AuthHandshaker[IO](serverKey)
-            result     <- handshaker.accept(conn)
-            _          <- fiber.cancel
+            socket     <- Stream.resource(res)
+            handshaker <- Stream.eval(AuthHandshaker[IO](serverKey))
+            result     <- Stream.eval(handshaker.accept(socket))
           } yield result
         }
 
       val client =
         for {
-          conn       <- TcpUtil.socketToConnection[IO](fs2.io.tcp.Socket.client[IO](addr), false)
-          _          <- conn.start
-          handshaker <- AuthHandshaker[IO](clientKey)
-          result     <- handshaker.connect(conn, serverKey.public)
+          socket     <- Stream.resource(Socket.client[IO](addr))
+          handshaker <- Stream.eval(AuthHandshaker[IO](clientKey))
+          result     <- Stream.eval(handshaker.connect(socket, serverKey.public))
         } yield result
 
       val result =
         server
-          .merge(Stream.sleep_(1.second) ++ Stream.eval(client))
+          .merge(Stream.sleep_(1.second) ++ client)
           .take(2)
           .compile
           .toList
@@ -48,30 +45,28 @@ class AuthHandshakerSpec extends JbokSpec {
     }
 
     "fail if wrong remotePk" in {
-      val server = fs2.io.tcp.Socket
+      val server = Socket
         .server[IO](addr)
-        .evalMap[IO, Unit] { res =>
+        .flatMap { res =>
           for {
-            conn       <- TcpUtil.socketToConnection[IO](res, true)
-            fiber      <- conn.start
-            handshaker <- AuthHandshaker[IO](serverKey)
-            result     <- handshaker.accept(conn)
-            _ <- fiber.cancel
-          } yield ()
+            socket     <- Stream.resource(res)
+            handshaker <- Stream.eval(AuthHandshaker[IO](serverKey))
+            result     <- Stream.eval(handshaker.accept(socket))
+          } yield result
         }
 
       val client =
         for {
-          conn       <- TcpUtil.socketToConnection[IO](fs2.io.tcp.Socket.client[IO](addr), false)
-          _          <- conn.start
-          handshaker <- AuthHandshaker[IO](clientKey)
-          result     <- handshaker.connect(conn, clientKey.public)
-        } yield ()
+          socket     <- Stream.resource(Socket.client[IO](addr))
+          handshaker <- Stream.eval(AuthHandshaker[IO](clientKey))
+          result     <- Stream.eval(handshaker.connect(socket, clientKey.public))
+        } yield result
 
       server
-        .concurrently(Stream.sleep(1.second) ++ Stream.eval(client))
+        .merge(Stream.sleep_(1.second) ++ client)
+        .take(2)
         .compile
-        .drain
+        .toList
         .attempt
         .unsafeRunSync()
         .isLeft shouldBe true

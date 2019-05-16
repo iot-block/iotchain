@@ -1,30 +1,39 @@
 package jbok.core.peer
+
+import cats.effect.Concurrent
+import cats.implicits._
+import fs2._
+import fs2.concurrent.Queue
+import jbok.codec.rlp.implicits._
+import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
-import scala.concurrent.duration.FiniteDuration
+final class PeerStore[F[_]](db: KeyValueDB[F], queue: Queue[F, PeerUri])(implicit F: Concurrent[F]) {
+  val namespace = ByteVector("peer".getBytes)
 
-trait PeerStore[F[_]] {
-  type NodeId = ByteVector
+  def get(uri: String): F[PeerUri] =
+    db.get[String, PeerUri](uri, namespace)
 
-  def getLastPing(id: NodeId): F[Long]
+  def put(uri: PeerUri): F[Unit] =
+    db.put[String, PeerUri](uri.uri.toString, uri, namespace) >> queue.enqueue1(uri)
 
-  def putLastPing(id: NodeId, ts: Long): F[Unit]
+  def add(uris: PeerUri*): F[Unit] =
+    uris.toList.traverse_(put)
 
-  def getLastPong(id: NodeId): F[Long]
+  def del(uri: String): F[Unit] =
+    db.del[String](uri, namespace)
 
-  def putLastPong(id: NodeId, ts: Long): F[Unit]
+  def getAll: F[List[PeerUri]] =
+    db.toMap[String, PeerUri](namespace).map(_.values.toList)
 
-  def getFails(id: NodeId): F[Int]
+  def getSeeds: F[List[PeerUri]] =
+    getAll.map(_.filter(_.source == PeerSource.Seed))
 
-  def putFails(id: NodeId, n: Int): F[Unit]
+  def subscribe: Stream[F, PeerUri] =
+    Stream.eval_(getSeeds.flatMap(_.traverse(queue.enqueue1))) ++ queue.dequeue
+}
 
-  def getNodeOpt(id: NodeId): F[Option[PeerNode]]
-
-  def putNode(node: PeerNode): F[Unit]
-
-  def delNode(id: NodeId): F[Unit]
-
-  def getNodes: F[List[PeerNode]]
-
-  def getSeeds(n: Int, age: FiniteDuration): F[List[PeerNode]]
+object PeerStore {
+  def apply[F[_]](db: KeyValueDB[F])(implicit F: Concurrent[F]): F[PeerStore[F]] =
+    Queue.bounded[F, PeerUri](100).map(queue => new PeerStore[F](db, queue))
 }

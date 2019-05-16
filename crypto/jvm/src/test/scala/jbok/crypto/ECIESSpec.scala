@@ -3,14 +3,14 @@ package jbok.crypto
 import java.math.BigInteger
 import java.security.SecureRandom
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import org.bouncycastle.crypto.generators.ECKeyPairGenerator
 import org.bouncycastle.crypto.params.ECKeyGenerationParameters
 import ECIES._
 import cats.effect.IO
 import scodec.bits._
 
-class ECIESSpec extends JbokSpec {
+class ECIESSpec extends CommonSpec {
   "ECIES" should {
     "decrypt" in {
       val generator = new ECKeyPairGenerator

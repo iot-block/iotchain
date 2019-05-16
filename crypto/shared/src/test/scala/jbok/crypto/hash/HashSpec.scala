@@ -1,10 +1,10 @@
 package jbok.crypto.hash
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.crypto._
 import scodec.bits._
 
-class HashSpec extends JbokSpec {
+class HashSpec extends CommonSpec {
   val x = ByteVector("jbok".getBytes())
   "hash" should {
     "impl keccak256" in {

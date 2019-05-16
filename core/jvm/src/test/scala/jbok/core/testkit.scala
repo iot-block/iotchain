@@ -1,162 +1,32 @@
 package jbok.core
 
+import java.net.InetSocketAddress
+
 import cats.effect.IO
-import cats.effect.concurrent.Ref
-import jbok.common.execution._
 import jbok.common.testkit._
 import jbok.core.config.Configs._
-import jbok.core.config.GenesisConfig
-import jbok.core.consensus.Consensus
-import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus}
-import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.messages._
-import jbok.core.mining.{BlockMiner, SimAccount, TxGen}
+import jbok.core.mining.{BlockMiner, TxGen}
 import jbok.core.models._
-import jbok.core.peer.discovery.{Discovery, PeerTable}
-import jbok.core.peer.{Peer, PeerManager, PeerManagerPlatform, PeerNode, PeerStorePlatform, PeerType}
-import jbok.core.pool.{BlockPool, BlockPoolConfig, OmmerPool, TxPool}
-import jbok.core.sync._
+import jbok.core.peer.{Peer, PeerUri}
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import jbok.crypto.testkit._
-import jbok.network.transport.UdpTransport
-import jbok.persistent.KeyValueDB
-import jbok.persistent.testkit._
+import monocle.macros.syntax.lens._
 import org.scalacheck._
 import scodec.bits.ByteVector
 
-import scala.collection.immutable.ListMap
-import scala.concurrent.duration._
-
 object testkit {
-  val testMiner =
-    SimAccount(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync(), BigInt("1000000000000000000000000"), 0)
+  import CoreSpec._
 
-  val testAlloc =
-    ListMap(testMiner.address -> testMiner.balance)
-
-  implicit val chainId: BigInt = 1
-
-  val testGenesis = GenesisConfig.generate(chainId, testAlloc)
-
-  def fillConfigs(n: Int): List[CoreConfig] =
+  def fillConfigs(n: Int)(config: CoreConfig): List[CoreConfig] =
     (0 until n).toList.map { i =>
-      CoreConfig.reference.withIdentityAndPort(s"test-node-${i}", 20000 + (i * 3))
-    }
-
-  val genesis = Clique.generateGenesisConfig(testGenesis, List(testMiner.address))
-
-  def fillFullNodeConfigs(n: Int): List[CoreConfig] =
-    fillConfigs(n).map { config =>
       config
-        .copy(
-          genesisConfig = Some(genesis),
-          logHandler = "console",
-        )
-        .withHistory(_.copy(dbBackend = "inmem"))
-        .withMining(_.copy(minerKeyPair = Some(testMiner.keyPair), period = 100.millis))
-        .withPeer(_.copy(dbBackend = "inmem", nodekey = Some(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())))
+        .lens(_.identity)
+        .set(s"test-node-${i}")
+        .lens(_.peer.secret)
+        .set(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync().secret.bytes.toHex)
     }
-
-  val testConfig: CoreConfig = fillFullNodeConfigs(1).head
-
-//  def istanbulTestConfig(keypairs: List[KeyPair]): FullNodeConfig = {
-//    val genesisConfig = prepareIstanbulConfig(keypairs, testMiner)
-//    testConfig.copy(
-//      consensusAlgo = "istanbul",
-//      genesisConfig = Some(genesisConfig)
-//    )
-//  }
-
-  def genConsensus(implicit config: CoreConfig): Gen[Consensus[IO]] = {
-    implicit val chainId = config.genesis.chainId
-    val p = config.consensusAlgo match {
-      case "clique" =>
-        for {
-          history   <- History.forBackendAndPath[IO](config.history.dbBackend, config.chainDataDir)
-          blockPool <- BlockPool(history, BlockPoolConfig())
-          clique    <- Clique(config.mining, config.genesis, history, Some(testMiner.keyPair))
-          consensus = new CliqueConsensus[IO](clique, blockPool)
-        } yield consensus
-//      case "istanbul" =>
-//        genIstanbulConsensus(testMiner.keyPair)
-    }
-    p.unsafeRunSync()
-  }
-
-//  def genIstanbulConsensus(selfPk: KeyPair)(implicit config: FullNodeConfig): IO[Consensus[IO]] = {
-//    implicit val cache = CacheBuilder.build[IO, Snapshot](128).unsafeRunSync()
-//    for {
-//      history   <- History.forBackendAndPath[IO](config.history.dbBackend, config.chainDataDir)
-//      blockPool <- BlockPool[IO](history, BlockPoolConfig())
-//      promise   <- Deferred[IO, Int]
-//      istanbul  <- Istanbul[IO](IstanbulConfig(), history, config.genesis, selfPk, StateNewRound)
-//      consensus = new IstanbulConsensus[IO](blockPool, istanbul)
-//    } yield consensus
-//  }
-
-//  def sign(sigHash: ByteVector, pk: KeyPair)(implicit chainId: BigInt): CryptoSignature =
-//    Signature[ECDSA].sign[IO](sigHash.kec256.toArray, pk, chainId).unsafeRunSync()
-
-//  private def prepareIstanbulConfig(keypairs: List[KeyPair], miner: SimAccount): GenesisConfig = {
-//    implicit val byteArrayOrd: Ordering[Array[Byte]] = new Ordering[Array[Byte]] {
-//      def compare(a: Array[Byte], b: Array[Byte]): Int =
-//        if (a eq null) {
-//          if (b eq null) 0
-//          else -1
-//        } else if (b eq null) 1
-//        else {
-//          val L = math.min(a.length, b.length)
-//          var i = 0
-//          while (i < L) {
-//            if (a(i) < b(i)) return -1
-//            else if (b(i) < a(i)) return 1
-//            i += 1
-//          }
-//          if (L < b.length) -1
-//          else if (L < a.length) 1
-//          else 0
-//        }
-//    }
-//
-//    implicit val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
-//
-//    val signers    = keypairs
-//    val validators = signers.map(Address(_))
-//
-//    val alloc = Map(miner.address -> miner.balance)
-//    val extra = IstanbulExtra(validators, ByteVector.empty, List.empty)
-//    val genesisConfig = GenesisConfig
-//      .generate(chainId, alloc)
-////      .copy(difficulty = BigInt(1),
-////            extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes)
-////    val genesisConfig =
-////      testReference.genesis.copy(
-////        alloc = alloc,
-////        extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(extra).require.bytes)
-//
-//    val sigHash = Istanbul.sigHash(genesisConfig.header)
-//    val seal    = sign(sigHash, miner.keyPair)
-//
-//    val commitSeals = signers.map(pk => {
-//      sign(genesisConfig.header.hash ++ ByteVector(IstanbulMessage.msgCommitCode), pk)
-//    })
-//    val newExtra = IstanbulExtra(validators, ByteVector(seal.bytes), commitSeals)
-//
-//    val sealConfig = genesisConfig
-////      .copy(extraData = ByteVector.fill(Istanbul.extraVanity)(0.toByte) ++ RlpCodec.encode(newExtra).require.bytes)
-//
-//    sealConfig
-//  }
-
-  implicit def arbConsensus(implicit config: CoreConfig): Arbitrary[Consensus[IO]] = Arbitrary {
-    genConsensus(config)
-  }
-
-  implicit def arbHistory(implicit config: CoreConfig): Arbitrary[History[IO]] = Arbitrary {
-    val consensus = random[Consensus[IO]](arbConsensus(config))
-    consensus.history
-  }
 
   def uint256Gen(min: UInt256 = UInt256.Zero, max: UInt256 = UInt256.MaxValue): Gen[UInt256] =
     for {
@@ -199,8 +69,7 @@ object testkit {
     genTx
   }
 
-  implicit def arbSignedTransaction(implicit config: CoreConfig): Arbitrary[SignedTransaction] = Arbitrary {
-    implicit val chainId = config.genesis.chainId
+  implicit def arbSignedTransaction(implicit chainId: BigInt): Arbitrary[SignedTransaction] = Arbitrary {
     for {
       tx <- arbTransaction.arbitrary
       keyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
@@ -246,19 +115,19 @@ object testkit {
       )
   }
 
-  implicit def arbBlockBody(implicit config: CoreConfig): Arbitrary[BlockBody] = Arbitrary {
+  implicit def arbBlockBody(implicit chainId: BigInt): Arbitrary[BlockBody] = Arbitrary {
     for {
       stxs <- arbTxs.arbitrary
     } yield BlockBody(stxs, Nil)
   }
 
-  implicit def arbSignedTransactions(implicit config: CoreConfig): Arbitrary[SignedTransactions] = Arbitrary {
+  implicit def arbSignedTransactions(implicit chainId: BigInt): Arbitrary[SignedTransactions] = Arbitrary {
     for {
       txs <- arbTxs.arbitrary
     } yield SignedTransactions(txs)
   }
 
-  implicit def arbBlock(implicit config: CoreConfig): Arbitrary[Block] = Arbitrary {
+  implicit def arbBlock(implicit chainId: BigInt): Arbitrary[Block] = Arbitrary {
     for {
       header <- arbBlockHeader.arbitrary
       body   <- arbBlockBody.arbitrary
@@ -284,27 +153,14 @@ object testkit {
       )
   }
 
-  implicit def arbPeerManager(implicit config: CoreConfig): Arbitrary[PeerManager[IO]] = Arbitrary {
-    genPeerManager(config)
-  }
-
-  def genTxPool(implicit config: CoreConfig): Gen[TxPool[IO]] = {
-    val pm = random[PeerManager[IO]]
-    TxPool[IO](config.txPool, pm).unsafeRunSync
-  }
-
-  implicit def arbTxPool(implicit config: CoreConfig): Arbitrary[TxPool[IO]] = Arbitrary {
-    genTxPool(config)
-  }
-
   def genStatus(number: BigInt = 0)(implicit config: CoreConfig): Gen[Status] =
     Gen.delay(Status(config.genesis.chainId, config.genesis.header.hash, number))
 
   def genPeer(implicit config: CoreConfig): Gen[Peer[IO]] =
     for {
-      keyPair <- arbKeyPair.arbitrary
-      status  <- genStatus()
-    } yield Peer.dummy[IO](keyPair.public, status).unsafeRunSync()
+      uri    <- arbPeerUri.arbitrary
+      status <- genStatus()
+    } yield Peer[IO](uri, status).unsafeRunSync()
 
   implicit def arbPeer(implicit config: CoreConfig): Arbitrary[Peer[IO]] = Arbitrary {
     genPeer
@@ -329,118 +185,38 @@ object testkit {
 
   implicit def arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: CoreConfig): Gen[List[SignedTransaction]] = {
-    implicit val chainId = config.genesis.chainId
+  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: CoreConfig): Gen[List[SignedTransaction]] =
     for {
       size <- Gen.chooseNum(min, max)
-      (_, txs) = TxGen.genTxs(size, List(testMiner.keyPair -> Account.empty()).toMap).unsafeRunSync()
+      (_, txs) = TxGen.genTxs(size, List(config.mining.minerKeyPair.get -> Account.empty()).toMap).unsafeRunSync()
     } yield txs
-  }
 
   implicit def arbTxs(implicit config: CoreConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
-    genTxs()(config)
+    genTxs()
   }
 
-  def genBlockMiner(implicit config: CoreConfig): Gen[BlockMiner[IO]] = {
-    val sm    = random[SyncManager[IO]]
-    val miner = BlockMiner[IO](config.mining, sm).unsafeRunSync()
-    miner
-  }
-
-  implicit def arbBlockMiner(implicit config: CoreConfig): Arbitrary[BlockMiner[IO]] = Arbitrary {
-    genBlockMiner(config)
-  }
-
-  def genBlocks(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Block]] =
+  def genBlocks(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Block]] = {
+    val miner = CoreSpec.withConfig(config).unsafeRunSync().get[BlockMiner[IO]]
     for {
-      miner <- genBlockMiner(config)
-      size  <- Gen.chooseNum(min, max)
+      size <- Gen.chooseNum(min, max)
       blocks = miner.stream.take(size).compile.toList.unsafeRunSync()
     } yield blocks.map(_.block)
+  }
 
   def genBlock(
       parentOpt: Option[Block] = None,
       stxsOpt: Option[List[SignedTransaction]] = None,
       ommersOpt: Option[List[BlockHeader]] = None
-  )(implicit config: CoreConfig): Gen[Block] =
+  )(implicit config: CoreConfig): Gen[Block] = {
+    val miner = CoreSpec.withConfig(config).unsafeRunSync().get[BlockMiner[IO]]
+    val mined = miner.mine1(parentOpt, stxsOpt, ommersOpt).unsafeRunSync()
+    mined.block
+  }
+
+  implicit def arbPeerUri: Arbitrary[PeerUri] = Arbitrary {
     for {
-      miner <- genBlockMiner(config)
-      mined = miner.mine1(parentOpt, stxsOpt, ommersOpt).unsafeRunSync()
-    } yield mined.block
-
-  def genPeerManager(implicit config: CoreConfig): Gen[PeerManager[IO]] = {
-    implicit val chainId: BigInt = config.genesis.chainId
-    val consensus                = random[Consensus[IO]]
-    val history                  = consensus.history
-    PeerManagerPlatform[IO](config, history).unsafeRunSync()
-  }
-
-  def genBlockPool(implicit config: CoreConfig): Gen[BlockPool[IO]] = {
-    val consensus = random[Consensus[IO]]
-    val history   = consensus.history
-    BlockPool(history, BlockPoolConfig()).unsafeRunSync()
-  }
-
-  implicit def arbBlockPool(implicit config: CoreConfig): Arbitrary[BlockPool[IO]] = Arbitrary {
-    genBlockPool(config)
-  }
-
-  def genOmmerPool(poolSize: Int = 30)(implicit config: CoreConfig): Gen[OmmerPool[IO]] = {
-    val consensus = random[Consensus[IO]]
-    val history   = consensus.history
-    OmmerPool(history, poolSize).unsafeRunSync()
-  }
-
-  implicit def arbOmmerPool(implicit config: CoreConfig): Arbitrary[OmmerPool[IO]] = Arbitrary {
-    genOmmerPool()(config)
-  }
-
-  implicit def arbBlockExecutor(implicit config: CoreConfig): Arbitrary[BlockExecutor[IO]] = Arbitrary {
-    implicit val chainId = config.genesis.chainId
-    val consensus        = random[Consensus[IO]]
-    val pm = PeerManagerPlatform[IO](config, consensus.history)
-      .unsafeRunSync()
-    BlockExecutor[IO](config.history, consensus, pm).unsafeRunSync()
-  }
-
-  def genFullSync(implicit config: CoreConfig): Gen[FullSync[IO]] = {
-    val executor   = random[BlockExecutor[IO]]
-    val syncStatus = Ref.of[IO, SyncStatus](SyncStatus.Booting).unsafeRunSync()
-    FullSync[IO](config.sync, executor, syncStatus)
-  }
-
-  def genSyncManager(status: SyncStatus = SyncStatus.Booting)(implicit config: CoreConfig): Gen[SyncManager[IO]] = {
-    val executor = random[BlockExecutor[IO]]
-    SyncManager[IO](config.sync, executor, status).unsafeRunSync()
-  }
-
-  implicit def arbSyncManager(implicit config: CoreConfig): Arbitrary[SyncManager[IO]] = Arbitrary {
-    genSyncManager()(config)
-  }
-
-  def genDiscovery(implicit config: CoreConfig): Gen[Discovery[IO]] = {
-    val (transport, _) = UdpTransport[IO](config.peer.discoveryAddr).allocated.unsafeRunSync()
-    val keyPair        = random[KeyPair]
-    val db             = random[KeyValueDB[IO]]
-    val store          = PeerStorePlatform.fromKV(db)
-    Discovery[IO](config.peer, transport, keyPair, store).unsafeRunSync()
-  }
-
-  def genPeerTable: Gen[PeerTable[IO]] = {
-    val peerNode = PeerNode(random[KeyPair].public, "localhost", 10000, 0, PeerType.Trusted)
-    val db       = random[KeyValueDB[IO]]
-    val store    = PeerStorePlatform.fromKV(db)
-    PeerTable(peerNode, store, Vector.empty).unsafeRunSync()
-  }
-
-  implicit def arbPeerTable: Arbitrary[PeerTable[IO]] = Arbitrary {
-    genPeerTable
-  }
-
-  implicit def arbPeerNode: Arbitrary[PeerNode] = Arbitrary {
-    for {
-      port <- Gen.chooseNum(10000, 60000)
+      port <- Gen.chooseNum(10000, 65535)
       kp = random[KeyPair]
-    } yield PeerNode(kp.public, "localhost", port, 0, PeerType.Trusted)
+    } yield PeerUri.fromTcpAddr(kp.public, new InetSocketAddress("localhost", port))
   }
 }

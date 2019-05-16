@@ -25,6 +25,7 @@ object WartRemoverPlugin {
     Wart.Recursion,
     Wart.JavaConversions,
     Wart.Option2Iterable,
-    Wart.TraversableOps // TODO
+    Wart.TraversableOps,
+    Wart.ExplicitImplicitTypes
   )
 }

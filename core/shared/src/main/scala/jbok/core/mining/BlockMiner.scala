@@ -3,15 +3,15 @@ package jbok.core.mining
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
-import fs2.concurrent.SignallingRef
 import jbok.codec.rlp.implicits._
+import jbok.common.log.Logger
 import jbok.core.config.Configs.MiningConfig
 import jbok.core.consensus.Consensus
-import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.TypedBlock._
+import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.models.{SignedTransaction, _}
+import jbok.core.pool.TxPool
 import jbok.core.store.namespaces
-import jbok.core.sync.SyncManager
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
@@ -23,18 +23,14 @@ import scodec.bits.ByteVector
   * 3. call [[Consensus]] to seal this [[ExecutedBlock]] into a [[MinedBlock]]
   * 4. submit the [[MinedBlock]] to [[BlockExecutor]]
   */
-final case class BlockMiner[F[_]](
+final class BlockMiner[F[_]](
     config: MiningConfig,
-    syncManager: SyncManager[F],
-    haltWhenTrue: SignallingRef[F, Boolean]
+    history: History[F],
+    consensus: Consensus[F],
+    executor: BlockExecutor[F],
+    txPool: TxPool[F],
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = jbok.common.log.getLogger("BlockMiner")
-
-  val executor = syncManager.executor
-
-  val history = executor.history
-
-  val txPool = executor.txPool
+  private[this] val log = Logger[F]
 
   def prepare(
       parentOpt: Option[Block] = None,
@@ -42,7 +38,7 @@ final case class BlockMiner[F[_]](
       ommersOpt: Option[List[BlockHeader]] = None
   ): F[PendingBlock] =
     for {
-      header <- executor.consensus.prepareHeader(parentOpt)
+      header <- consensus.prepareHeader(parentOpt)
       stxs   <- stxsOpt.fold(txPool.getPendingTransactions.map(_.keys.toList))(F.pure)
       txs    <- prepareTransactions(stxs, header.gasLimit)
     } yield PendingBlock(Block(header, BlockBody(txs, Nil)))
@@ -51,14 +47,10 @@ final case class BlockMiner[F[_]](
     executor.handlePendingBlock(pending)
 
   def mine(executed: ExecutedBlock[F]): F[MinedBlock] =
-    executor.consensus.mine(executed)
+    consensus.mine(executed)
 
   def submit(mined: MinedBlock): F[Unit] =
-    for {
-      blocks   <- executor.handleMinedBlock(mined)
-      messages <- blocks.traverse(syncManager.broadcastBlock)
-      _        <- syncManager.sendMessages(messages.flatten)
-    } yield ()
+    executor.handleMinedBlock(mined).void
 
   def mine1(
       parentOpt: Option[Block] = None,
@@ -75,13 +67,11 @@ final case class BlockMiner[F[_]](
   def stream: Stream[F, MinedBlock] =
     Stream
       .repeatEval(mine1())
-      .onFinalize(haltWhenTrue.set(true))
 
   /////////////////////////////////////
   /////////////////////////////////////
 
-  private[jbok] def prepareTransactions(stxs: List[SignedTransaction],
-                                        blockGasLimit: BigInt): F[List[SignedTransaction]] = {
+  private[jbok] def prepareTransactions(stxs: List[SignedTransaction], blockGasLimit: BigInt): F[List[SignedTransaction]] = {
     log.trace(s"prepare transaction, available: ${stxs.length}")
     val sortedByPrice = stxs
       .groupBy(_.senderAddress.getOrElse(Address.empty))
@@ -124,10 +114,4 @@ final case class BlockMiner[F[_]](
       _    <- entities.zipWithIndex.map { case (v, k) => mpt.put[Int, V](k, v, namespaces.empty) }.sequence
       root <- mpt.getRootHash
     } yield root
-}
-
-object BlockMiner {
-  def apply[F[_]](config: MiningConfig, syncManager: SyncManager[F])(implicit F: ConcurrentEffect[F],
-                                                                     T: Timer[F]): F[BlockMiner[F]] =
-    SignallingRef[F, Boolean](!config.enabled).map(halt => BlockMiner(config, syncManager, halt))
 }

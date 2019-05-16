@@ -1,6 +1,6 @@
 package jbok.evm
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.core.models.UInt256
 import jbok.core.testkit._
 import org.scalacheck.Arbitrary._
@@ -8,7 +8,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits.ByteVector
 
-class MemorySpec extends JbokSpec {
+class MemorySpec extends CommonSpec {
 
   def zeros(size: Int): ByteVector =
     if (size <= 0)

@@ -1,17 +1,19 @@
 package jbok.core.peer
 
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, ContextShift, Sync}
 import cats.implicits._
+import fs2.concurrent.Queue
 import jbok.core.messages.{SignedTransactions, Status}
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
-import jbok.network.Connection
+import jbok.network.Message
 import scodec.bits.ByteVector
 
 final case class Peer[F[_]](
+    uri: PeerUri,
     pk: KeyPair.Public,
-    conn: Connection[F],
+    queue: Queue[F, Message[F]],
     status: Ref[F, Status],
     knownBlocks: Ref[F, Set[ByteVector]],
     knownTxs: Ref[F, Set[SignedTransactions]]
@@ -32,22 +34,17 @@ final case class Peer[F[_]](
 
   def markTxs(stxs: SignedTransactions): F[Unit] =
     knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs)
-
-  override def toString: String =
-    s"Peer(${id})"
 }
 
 object Peer {
   val MaxKnownTxs    = 32768
   val MaxKnownBlocks = 1024
 
-  def apply[F[_]: Sync](pk: KeyPair.Public, conn: Connection[F], status: Status): F[Peer[F]] =
+  def apply[F[_]: Concurrent](uri: PeerUri, status: Status): F[Peer[F]] =
     for {
+      queue       <- Queue.bounded[F, Message[F]](10)
       status      <- Ref.of[F, Status](status)
       knownBlocks <- Ref.of[F, Set[ByteVector]](Set.empty)
       knownTxs    <- Ref.of[F, Set[SignedTransactions]](Set.empty)
-    } yield Peer[F](pk, conn, status, knownBlocks, knownTxs)
-
-  def dummy[F[_]: ConcurrentEffect](pk: KeyPair.Public, status: Status)(implicit CS: ContextShift[F]): F[Peer[F]] =
-    Connection.dummy[F].flatMap(conn => Peer[F](pk, conn, status))
+    } yield Peer[F](uri, uri.pk, queue, status, knownBlocks, knownTxs)
 }

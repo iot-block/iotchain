@@ -3,13 +3,12 @@ package jbok.common.metrics
 import cats.effect.IO
 import com.codahale.metrics.{MetricRegistry, SharedMetricRegistries}
 import fs2._
-import jbok.JbokSpec
-import jbok.common.execution._
+import jbok.common.CommonSpec
 import jbok.common.metrics.implicits._
 
 import scala.concurrent.duration._
 
-class DropwizardSpec extends JbokSpec {
+class DropwizardSpec extends CommonSpec {
   def count(registry: MetricRegistry, counter: Counter): Option[Long] =
     Option(registry.getCounters.get(counter.value)).map(_.getCount)
 
@@ -23,12 +22,12 @@ class DropwizardSpec extends JbokSpec {
   case class Timer(value: String)
 
   val registry        = SharedMetricRegistries.getOrCreate("test")
-  implicit val metrics: Metrics[IO] = Dropwizard[IO](registry)
+  override implicit val metrics: Metrics[IO] = Dropwizard[IO](registry)
 
   "Dropwizard" should {
     "time" in {
       valuesOf(registry, Timer("ioa")) shouldBe None
-      val ioa = T.sleep(1.second)
+      val ioa = timer.sleep(1.second)
       ioa.timed("ioa").unsafeRunSync()
       valuesOf(registry, Timer("ioa")).isDefined shouldBe true
     }
@@ -37,7 +36,7 @@ class DropwizardSpec extends JbokSpec {
       val stream =
         Stream
           .range[IO](0, 20)
-          .evalMap[IO, Unit](_ => T.sleep(100.millis).timed("T.sleep"))
+          .evalMap[IO, Unit](_ => timer.sleep(100.millis).timed("timer.sleep"))
           .concurrently(Dropwizard.consoleReporter[IO](registry, 1.seconds))
 
       stream.compile.drain.unsafeRunSync()

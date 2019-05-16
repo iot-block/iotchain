@@ -5,24 +5,29 @@ import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
 
 object Libs {
   lazy val typelevel = libraryDependencies ++= Seq(
-    "org.typelevel" %%% "cats-effect"          % Versions.catsEffect,
-    "org.typelevel" %% "cats-collections-core" % Versions.catsCollections,
-    "co.fs2"        %%% "fs2-core"             % Versions.fs2,
-    "co.fs2"        %% "fs2-io"                % Versions.fs2,
-    "org.typelevel" %%% "spire"                % Versions.spire
+    "org.typelevel"    %%% "cats-effect"            % Versions.catsEffect,
+    "org.typelevel"    %% "cats-collections-core"   % Versions.catsCollections,
+    "co.fs2"           %%% "fs2-core"               % Versions.fs2,
+    "co.fs2"           %% "fs2-io"                  % Versions.fs2,
+    "org.typelevel"    %%% "spire"                  % Versions.spire,
+    "org.typelevel"    %% "kittens"                 % "1.2.1",
+    "com.github.cb372" %%% "cats-retry-cats-effect" % "0.2.5"
   )
 
   lazy val enumeratum = libraryDependencies ++= Seq(
     "com.beachape" %% "enumeratum"            % Versions.enumeratum,
     "com.beachape" %% "enumeratum-cats"       % "1.5.15",
     "com.beachape" %% "enumeratum-circe"      % Versions.enumeratum,
-    "com.beachape" %% "enumeratum-quill"      % Versions.enumeratum,
     "com.beachape" %% "enumeratum-scalacheck" % Versions.enumeratum,
-    "com.beachape" %% "enumeratum-scalacheck" % Versions.enumeratum
+  )
+
+  lazy val monocle = libraryDependencies ++= Seq(
+    "com.github.julien-truffaut" %% "monocle-core"  % Versions.monocle,
+    "com.github.julien-truffaut" %% "monocle-macro" % Versions.monocle,
   )
 
   lazy val common
-    : Seq[Setting[_]] = di ++ logging ++ dropwizard ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ typelevel ++ enumeratum ++ (libraryDependencies ++= Seq(
+    : Seq[Setting[_]] = di ++ logging ++ dropwizard ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ typelevel ++ enumeratum ++ monocle ++ (libraryDependencies ++= Seq(
     // files
     "com.github.pathikrit" %% "better-files" % "3.5.0",
     // macro
@@ -94,7 +99,9 @@ object Libs {
     "org.http4s" %% "http4s-circe",
     "org.http4s" %% "http4s-dsl",
     "org.http4s" %% "http4s-dropwizard-metrics",
-    "org.http4s" %% "http4s-prometheus-metrics"
+    "org.http4s" %% "http4s-prometheus-metrics",
+    "org.http4s" %% "http4s-okhttp-client",
+    "org.http4s" %% "http4s-async-http-client"
   ).map(_        % Versions.http4s) ++ Seq(
     "org.http4s" %% "rho-swagger" % "0.19.0-M6"
   )
@@ -111,22 +118,15 @@ object Libs {
     "io.prometheus" % "simpleclient_hotspot"
   ).map(_ % Versions.prometheus)
 
-  private val doobie = Seq(
+  lazy val persistent = scalacache ++ drivers ++ doobie
+
+  private lazy val doobie = libraryDependencies ++= Seq(
     "org.tpolecat" %% "doobie-core",
-    "org.tpolecat" %% "doobie-hikari"
+    "org.tpolecat" %% "doobie-hikari",
+    "org.tpolecat" %% "doobie-h2"
   ).map(_ % Versions.doobie)
 
-  private val quill = Seq(
-    "io.getquill" %% "quill-sql",
-    "io.getquill" %% "quill-core",
-    "io.getquill" %% "quill-jdbc",
-    "io.getquill" %% "quill-jdbc-monix",
-    "io.getquill" %% "quill-async"
-  ).map(_ % Versions.quill)
-
-  lazy val persistent = scalacache ++ (libraryDependencies ++= drivers ++ quill ++ doobie)
-
-  lazy val drivers = Seq(
+  private lazy val drivers = libraryDependencies ++= Seq(
     "org.iq80.leveldb"          % "leveldb"              % "0.10",
     "org.fusesource.leveldbjni" % "leveldbjni-all"       % "1.8",
     "org.rocksdb"               % "rocksdbjni"           % "5.17.2",
@@ -137,7 +137,7 @@ object Libs {
     "org.postgresql"            % "postgresql"           % "42.2.5"
   )
 
-  lazy val scalacache = libraryDependencies ++= Seq(
+  private lazy val scalacache = libraryDependencies ++= Seq(
     "com.github.cb372" %%% "scalacache-core"       % Versions.scalacache,
     "com.github.cb372" %% "scalacache-cats-effect" % Versions.scalacache,
     "com.github.cb372" %% "scalacache-caffeine"    % Versions.scalacache
@@ -145,7 +145,7 @@ object Libs {
 
   lazy val network = libraryDependencies ++=
     Seq(
-      "com.spinoco"              %% "fs2-http"   % "0.4.0",
+      "com.spinoco"              %% "fs2-http"   % "0.4.1",
       "com.spinoco"              %% "fs2-crypto" % "0.4.0",
       "com.offbynull.portmapper" % "portmapper"  % "2.0.5",
       "org.bitlet"               % "weupnp"      % "0.1.4"

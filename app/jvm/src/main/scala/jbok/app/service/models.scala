@@ -2,7 +2,7 @@ package jbok.app.service
 
 object models {
   final case class Block(
-      hash: String,
+      blockHash: String,
       parentHash: String, // B32 pre
       ommersHash: String, // B32 body
       beneficiary: String, // B20 pre
@@ -11,7 +11,7 @@ object models {
       receiptsRoot: String, // B32 exec
       logsBloom: String, // B256 post exec
       difficulty: String, // consensus
-      number: Long,
+      blockNumber: Long,
       gasLimit: String, // consensus field
       gasUsed: String, // post
       unixTimestamp: Long, // pre

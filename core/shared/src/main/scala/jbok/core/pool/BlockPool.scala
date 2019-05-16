@@ -5,26 +5,26 @@ import cats.effect.ConcurrentEffect
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common._
+import jbok.core.config.Configs.BlockPoolConfig
 import jbok.core.ledger.History
 import jbok.core.models.Block
 import jbok.core.pool.BlockPool._
 import scodec.bits.ByteVector
-
-final case class BlockPoolConfig(
-    maxBlockAhead: Int = 10,
-    maxBlockBehind: Int = 10
-)
 
 /**
   * [[BlockPool]] is responsible for stashing blocks with unknown ancestors
   * or candidate branches of blocks in consensus protocols with some finality criteria
   */
 final class BlockPool[F[_]](
-    private[jbok] val history: History[F],
-    private[jbok] val config: BlockPoolConfig,
-    blocks: Ref[F, Map[ByteVector, PooledBlock]], // blockHash -> block
-    parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]] // blockHash -> childrenHashes
-)(implicit F: ConcurrentEffect[F])  {
+    config: BlockPoolConfig,
+    history: History[F]
+)(implicit F: ConcurrentEffect[F]) {
+  // blockHash -> block
+  private val blocks: Ref[F, Map[ByteVector, PooledBlock]] = Ref.unsafe[F, Map[ByteVector, PooledBlock]](Map.empty)
+
+  // blockHash -> childrenHashes
+  private val parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]] = Ref.unsafe[F, Map[ByteVector, Set[ByteVector]]](Map.empty)
+
   private[this] val log = jbok.common.log.getLogger("BlockPool")
 
   def contains(blockHash: ByteVector): F[Boolean] =
@@ -49,8 +49,7 @@ final class BlockPool[F[_]](
           F.pure(None)
 
         case None if isNumberOutOfRange(block.header.number, bestBlockNumber) =>
-          log.debug(
-            s"${block.tag} is outside accepted range [${bestBlockNumber} - ${config.maxBlockAhead}, ${bestBlockNumber} + ${config.maxBlockBehind}]")
+          log.debug(s"${block.tag} is outside accepted range [${bestBlockNumber} - ${config.maxBlockAhead}, ${bestBlockNumber} + ${config.maxBlockBehind}]")
           F.pure(None)
 
         case None =>
@@ -211,11 +210,4 @@ final class BlockPool[F[_]](
 object BlockPool {
   final case class PooledBlock(block: Block, totalDifficulty: Option[BigInt])
   final case class Leaf(hash: ByteVector, totalDifficulty: BigInt)
-
-  def apply[F[_]: ConcurrentEffect](history: History[F],
-                                    blockPoolConfig: BlockPoolConfig = BlockPoolConfig()): F[BlockPool[F]] =
-    for {
-      blocks           <- Ref.of[F, Map[ByteVector, PooledBlock]](Map.empty)
-      parentToChildren <- Ref.of[F, Map[ByteVector, Set[ByteVector]]](Map.empty)
-    } yield new BlockPool(history, blockPoolConfig, blocks, parentToChildren)
 }

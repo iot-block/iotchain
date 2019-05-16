@@ -1,12 +1,12 @@
 package jbok.evm
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.common.testkit._
 import jbok.evm.testkit._
 import org.scalacheck.Gen
 import scodec.bits.ByteVector
 
-class ProgramSpec extends JbokSpec {
+class ProgramSpec extends CommonSpec {
 
   val CodeSize      = Byte.MaxValue
   val PositionsSize = 10

@@ -3,26 +3,36 @@ package jbok.core.pool
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import fs2._
+import jbok.common.log.Logger
 import jbok.core.config.Configs.TxPoolConfig
+import jbok.core.ledger.History
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.SignedTransaction
+import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.core.peer._
+import jbok.core.queue.{Consumer, Producer}
 import jbok.core.validators.TxValidator
-import jbok.network.Request
-import jbok.codec.rlp.implicits._
 
 import scala.concurrent.duration._
 
-final class TxPool[F[_]] private (
-    val config: TxPoolConfig,
-    val peerManager: PeerManager[F],
-    private val pending: Ref[F, Map[SignedTransaction, Long]],
+/**
+  * `TxPool` is responsible for consume transaction messages from peers
+  * and produce message request for broadcasting
+  */
+final class TxPool[F[_]](
+    config: TxPoolConfig,
+    history: History[F],
+    inbound: Consumer[F, Peer[F], SignedTransactions],
+    outbound: Producer[F, PeerSelector[F], SignedTransactions]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
-  private[this] val log = jbok.common.log.getLogger("TxPool")
+  private[this] val log = Logger[F]
+
+  val pending: Ref[F, Map[SignedTransaction, Long]] = Ref.unsafe(Map.empty)
 
   def addTransactions(stxs: SignedTransactions, notify: Boolean = false): F[Unit] =
     for {
-      _       <- F.delay(log.debug(s"add ${stxs.txs.length} txs"))
+      _       <- log.debug(s"add ${stxs.txs.length} txs")
       current <- T.clock.realTime(MILLISECONDS)
       _ <- pending.update { txs =>
         val updated = txs ++ stxs.txs.map(_ -> current)
@@ -35,9 +45,15 @@ final class TxPool[F[_]] private (
       _ <- if (notify) broadcast(stxs) else F.unit
     } yield ()
 
+  def receiveTransactions(peer: Peer[F], stxs: SignedTransactions): F[Unit] =
+    peer.markTxs(stxs) >> addTransactions(stxs, notify = true)
+
+  def reAddTransactions(stxs: SignedTransactions): F[Unit] =
+    addTransactions(stxs, notify = false)
+
   def addOrUpdateTransaction(newStx: SignedTransaction): F[Unit] =
     for {
-      _       <- TxValidator.checkSyntacticValidity(newStx, peerManager.history.chainId)
+      _       <- TxValidator.checkSyntacticValidity(newStx, history.chainId)
       current <- T.clock.realTime(MILLISECONDS)
       _ <- pending.update { txs =>
         val (_, b) = txs.partition {
@@ -56,8 +72,8 @@ final class TxPool[F[_]] private (
 
   def removeTransactions(signedTransactions: List[SignedTransaction]): F[Unit] =
     if (signedTransactions.nonEmpty) {
-      log.debug(s"remove ${signedTransactions.length} txs")
-      pending.update(_.filterNot { case (tx, _) => signedTransactions.contains(tx) })
+      log.debug(s"remove ${signedTransactions.length} txs") >>
+        pending.update(_.filterNot { case (tx, _) => signedTransactions.contains(tx) })
     } else {
       F.unit
     }
@@ -72,20 +88,8 @@ final class TxPool[F[_]] private (
     } yield alive
 
   def broadcast(stxs: SignedTransactions): F[Unit] =
-    Request.binary[F, SignedTransactions]("SignedTransactions", stxs).flatMap { message =>
-      peerManager.distribute(PeerSelectStrategy.withoutTxs(stxs), message)
-    }
-}
+    outbound.produce(PeerSelector.withoutTxs(stxs), stxs)
 
-object TxPool {
-  def apply[F[_]](
-      config: TxPoolConfig,
-      peerManager: PeerManager[F]
-  )(
-      implicit F: ConcurrentEffect[F],
-      T: Timer[F]
-  ): F[TxPool[F]] =
-    for {
-      pending <- Ref.of[F, Map[SignedTransaction, Long]](Map.empty)
-    } yield new TxPool(config, peerManager, pending)
+  val stream: Stream[F, Unit] =
+    inbound.consume.evalMap { case (peer, stxs) => receiveTransactions(peer, stxs) }
 }

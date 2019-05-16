@@ -2,7 +2,6 @@ package jbok.core.config
 
 import better.files.File
 import cats.effect.IO
-import io.circe.Json
 import io.circe.generic.JsonCodec
 import io.circe.parser._
 import io.circe.syntax._
@@ -24,8 +23,6 @@ final case class GenesisConfig(
     chainId: BigInt,
     timestamp: Long
 ) {
-  def json: Json = this.asJson
-
   def withAlloc(alloc: Map[Address, BigInt]): GenesisConfig =
     copy(alloc = alloc.map { case (k, v) => k.toString -> v.toString() })
 

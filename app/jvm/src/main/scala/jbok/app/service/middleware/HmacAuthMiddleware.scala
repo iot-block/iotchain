@@ -3,12 +3,11 @@ package jbok.app.service.middleware
 import java.time.{Duration, Instant}
 
 import cats.data.{Kleisli, OptionT}
-import cats.effect.IO
+import cats.effect.Sync
 import jbok.app.service.authentication.HMAC
-import org.http4s.dsl.io._
 import org.http4s.headers.Authorization
 import org.http4s.util.CaseInsensitiveString
-import org.http4s.{AuthScheme, Credentials, HttpRoutes, Request}
+import org.http4s.{AuthScheme, Credentials, HttpRoutes, Request, Response, Status}
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -26,8 +25,8 @@ object HmacAuthError {
 object HmacAuthMiddleware {
   val defaultDuration: FiniteDuration = 5.minutes
 
-  private def verifyFromHeader(
-      req: Request[IO],
+  private def verifyFromHeader[F[_]](
+      req: Request[F],
       key: MacSigningKey[HMACSHA256],
       duration: FiniteDuration
   ): Either[HmacAuthError, Unit] =
@@ -59,11 +58,10 @@ object HmacAuthMiddleware {
       )
     } yield ()
 
-  def apply(key: MacSigningKey[HMACSHA256], duration: FiniteDuration = defaultDuration)(
-      routes: HttpRoutes[IO]): HttpRoutes[IO] =
-    Kleisli { req: Request[IO] =>
+  def apply[F[_]: Sync](key: MacSigningKey[HMACSHA256], duration: FiniteDuration = defaultDuration)(routes: HttpRoutes[F]): HttpRoutes[F] =
+    Kleisli { req: Request[F] =>
       verifyFromHeader(req, key, duration) match {
-        case Left(error) => OptionT.liftF(Forbidden(error.message))
+        case Left(error) => OptionT.some[F](Response[F](Status.Forbidden).withEntity(error.message))
         case Right(_)    => routes(req)
       }
     }

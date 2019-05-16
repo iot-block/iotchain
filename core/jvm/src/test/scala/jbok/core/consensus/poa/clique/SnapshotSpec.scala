@@ -1,10 +1,9 @@
 package jbok.core.consensus.poa.clique
 
 import cats.effect.IO
-import jbok.JbokSpec
 import jbok.codec.rlp.implicits._
-import jbok.common.execution._
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Address, BlockHeader}
 import jbok.core.testkit._
@@ -22,10 +21,10 @@ final case class TestVote(
 
 final case class Test(signers: List[String], votes: List[TestVote], results: List[String], epoch: BigInt = 30000)
 
-trait SnapshotFixture {
+trait SnapshotFixture extends CoreSpec {
   def mkHistory(signers: List[Address]) = {
     val extra            = Clique.fillExtraData(signers)
-    val config           = testGenesis.copy(extraData = extra)
+    val config           = genesis.copy(extraData = extra)
     implicit val chainId = config.chainId
     val history          = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
     history.initGenesis(config).unsafeRunSync()
@@ -52,20 +51,19 @@ trait SnapshotFixture {
     val extraBytes = extra.asValidBytes
 //    val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val signed    = header.copy(extra = extraBytes)
-    val recovered = Clique.ecrecover[IO](signed, testGenesis.chainId).unsafeRunSync().get
+    val recovered = Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get
     require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")
     signed
   }
 }
 
-class SnapshotSpec extends JbokSpec {
+class SnapshotSpec extends CoreSpec {
   def check(test: Test) = new SnapshotFixture {
-    val miningConfig     = testConfig.mining.copy(epoch = test.epoch)
-    val signers          = test.signers.map(signer => address(signer))
-    val extra            = Clique.fillExtraData(signers)
-    val genesisConfig    = testGenesis.copy(extraData = extra)
-    implicit val chainId = genesisConfig.chainId
-    val history          = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val miningConfig  = config.mining.copy(epoch = test.epoch)
+    val signers       = test.signers.map(signer => address(signer))
+    val extra         = Clique.fillExtraData(signers)
+    val genesisConfig = genesis.copy(extraData = extra)
+    val history       = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
 
     history.initGenesis(genesisConfig).unsafeRunSync()
 
@@ -93,8 +91,8 @@ class SnapshotSpec extends JbokSpec {
 
     val head           = headers.last
     val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
-    val keyPair        = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val clique         = Clique[IO](miningConfig, genesisConfig, history, Some(keyPair)).unsafeRunSync()
+    val kp = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+    val clique         = Clique[IO](miningConfig, genesisConfig, history, Some(kp)).unsafeRunSync()
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd
@@ -117,8 +115,8 @@ class SnapshotSpec extends JbokSpec {
           beneficiary = coinbase.bytes,
           extra = extraBytes
         )
-      val signed = sign(header, "A")(testGenesis.chainId)
-      Clique.ecrecover[IO](signed, testGenesis.chainId).unsafeRunSync().get shouldBe signer
+      val signed = sign(header, "A")(genesis.chainId)
+      Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get shouldBe signer
     }
 
     "single signer, no votes cast" in {

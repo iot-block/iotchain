@@ -7,11 +7,7 @@ import scalax.collection.io.dot._
 import scalax.collection.io.dot.implicits._
 
 object GraphUtil {
-  @SuppressWarnings(Array("org.wartremover.warts.ToString"))
-  def defaultNodeTransformer[N](x: N): List[DotAttr] = List(DotAttr("label", x.toString))
-
-  def graphviz[N, E[X] <: EdgeLikeIn[X]](graph: Graph[N, E],
-                                         nt: N => List[DotAttr] = defaultNodeTransformer[N] _): String = {
+  def graphviz[N, E[X] <: EdgeLikeIn[X]](graph: Graph[N, E], nt: N => List[DotAttr] = (n: N) => DotAttr("label", n.toString) :: Nil): String = {
     val dotRoot = DotRootGraph(
       directed = true,
       id = None,

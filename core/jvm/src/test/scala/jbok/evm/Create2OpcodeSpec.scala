@@ -1,10 +1,9 @@
 package jbok.evm
 
-import jbok.JbokSpec
-import jbok.common.execution._
+import jbok.common.CommonSpec
 import jbok.core.models.Address
 
-class Create2OpcodeSpec extends JbokSpec {
+class Create2OpcodeSpec extends CommonSpec {
   val config = EvmConfig.ConstantinopleConfigBuilder(None)
   import config.feeSchedule._
   val fxt = CreateOpFixture(config)

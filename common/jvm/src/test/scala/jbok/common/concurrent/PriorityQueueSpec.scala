@@ -2,10 +2,9 @@ package jbok.common.concurrent
 import cats.effect.IO
 import cats.implicits._
 import fs2._
-import jbok.JbokSpec
-import jbok.common.execution._
+import jbok.common.CommonSpec
 
-class PriorityQueueSpec extends JbokSpec {
+class PriorityQueueSpec extends CommonSpec {
   def test[A](input: Vector[(A, Int)]): IO[Vector[A]] =
     for {
       queue <- PriorityQueue.unbounded[IO, Option[A]]

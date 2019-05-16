@@ -1,12 +1,12 @@
 package jbok.crypto.authds.mpt
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
 
-class StageMPTSpec extends JbokSpec {
+class StageMPTSpec extends CommonSpec {
   trait Fixture {
     val db        = KeyValueDB.inmem[IO].unsafeRunSync()
     val namespace = ByteVector.empty

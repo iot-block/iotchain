@@ -1,12 +1,12 @@
 package jbok.codec.rlp
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.codec.rlp.implicits._
 import jbok.codec.testkit
 import scodec.bits._
 
-class RlpSpec extends JbokSpec with testkit {
+class RlpSpec extends CommonSpec with testkit {
 
   "RLP Codec" should {
     "encode boolean" in {

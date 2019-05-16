@@ -1,0 +1,89 @@
+identity: identity-0
+
+log:
+  logDir: /var/log/jbok
+  prefix: jbok
+  level: INFO
+  handler: console
+
+genesis:
+  nonce: "42"
+  difficulty: "1024"
+  extraData: "dbd594bbe42855605b441e0bbd4e88322cfb0a13bb5bf4c380808000"
+  gasLimit: "16716680"
+  coinbase: "0000000000000000000000000000000000000000"
+  alloc: {}
+  chainId: "1"
+  timestamp: 0
+
+history:
+  dbBackend: "inmem"
+  frontierBlockNumber: "0"
+  homesteadBlockNumber: "0"
+  tangerineWhistleBlockNumber: "0"
+  spuriousDragonBlockNumber: "0"
+  byzantiumBlockNumber: "0"
+  constantinopleBlockNumber: "1000000000000000000000"
+  difficultyBombPauseBlockNumber: "3000000"
+  difficultyBombContinueBlockNumber: "5000000"
+
+keystore:
+  dbBackend: "inmem"
+
+peer:
+  host: localhost
+  port: 0 # auto select
+  secret: "0xcfb8493e50c4aacda5813b2b48f13b4af17106993dbf142877e2e346dfc40668"
+  dbBackend: "inmem"
+  seeds: []
+  updatePeersInterval: "10seconds"
+  maxOutgoingPeers: 10
+  maxIncomingPeers: 10
+  maxBufferSize: 4194304 # 4 MiB
+  timeout: "10seconds"
+
+sync:
+  host: localhost
+  port: 0 # auto select
+  maxConcurrentRequests: 50
+  maxBlockHeadersPerRequest: 128
+  maxBlockBodiesPerRequest: 128
+  minPeersToChooseTargetBlock: 2
+  fullSyncOffset: 10
+  retryInterval: "15seconds"
+  checkForNewBlockInterval: "5seconds"
+  banDuration: "200seconds"
+  requestTimeout: "10seconds"
+
+txPool:
+  poolSize: 4096
+  transactionTimeout: "10minutes"
+
+blockPool:
+  maxBlockAhead: 10
+  maxBlockBehind: 10
+
+ommerPool:
+  poolSize: 30
+  ommerGenerationLimit: 6
+  ommerSizeLimit: 2
+
+mining:
+  enabled: false
+  ommersPoolSize: 30
+  blockCacheSize: 30
+  minerKeyPair: null
+  minerAddress: "0000000000000000000000000000000000000042"
+  coinbase: "0000000000000000000000000000000000000042"
+  extraData: ""
+  mineRounds: 100000
+  period: "100millis"
+  epoch: "30000"
+  checkpointInterval: 1024
+  minBroadcastPeers: 4
+
+rpc:
+  enabled: true
+  host: localhost
+  port: 0 # auto select
+  apis: "public,admin,personal"

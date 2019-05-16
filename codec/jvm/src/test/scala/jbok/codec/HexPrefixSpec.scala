@@ -1,10 +1,10 @@
 package jbok.codec
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import org.scalacheck.Gen
 import scodec.bits._
 
-class HexPrefixSpec extends JbokSpec {
+class HexPrefixSpec extends CommonSpec {
   "HexPrefix" should {
     val charGen: Gen[Char] = Gen.oneOf("0123456789abcdef")
     val hexGen: Gen[String] = for {

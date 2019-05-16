@@ -1,28 +1,28 @@
 package jbok.core.pool
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.core.models.Block
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.testkit._
+import monocle.macros.syntax.lens._
 
-class OmmerPoolSpec extends JbokSpec {
+class OmmerPoolSpec extends CoreSpec {
   "OmmerPool" should {
-    implicit val config = testConfig
-
     "accept ommers" in {
       val n       = 10
-      val pool    = random[OmmerPool[IO]]
+      val pool    = locator.unsafeRunSync().get[OmmerPool[IO]]
       val blocks  = random[List[Block]](genBlocks(n, n))
       val headers = blocks.map(_.header)
       pool.addOmmers(headers).unsafeRunSync()
       val ommers = pool.getOmmers(n + 1).unsafeRunSync()
-      ommers shouldBe headers.takeRight(OmmerPool.OmmerGenerationLimit).take(OmmerPool.OmmerSizeLimit)
+      ommers shouldBe headers.takeRight(config.ommerPool.ommerGenerationLimit).take(config.ommerPool.ommerSizeLimit)
     }
 
     "remove ommers" in {
       val n       = 6
-      val pool    = random[OmmerPool[IO]]
+      val pool    = locator.unsafeRunSync().get[OmmerPool[IO]]
       val blocks  = random[List[Block]](genBlocks(n, n))
       val headers = blocks.map(_.header)
       pool.addOmmers(headers).unsafeRunSync()
@@ -31,7 +31,8 @@ class OmmerPoolSpec extends JbokSpec {
     }
 
     "return ommers when out of pool size" in {
-      val pool    = random[OmmerPool[IO]](genOmmerPool(poolSize = 3))
+      val config2 = config.lens(_.ommerPool.poolSize).set(3)
+      val pool    = withConfig(config2).unsafeRunSync().get[OmmerPool[IO]]
       val blocks  = random[List[Block]](genBlocks(5, 5))
       val headers = blocks.map(_.header)
 

@@ -1,11 +1,10 @@
 package jbok.evm
 
-import jbok.JbokSpec
-import jbok.common.execution._
+import jbok.common.CommonSpec
 import jbok.core.models.{Account, Address, UInt256}
 import scodec.bits.ByteVector
 
-class CreateOpcodeSpec extends JbokSpec {
+class CreateOpcodeSpec extends CommonSpec {
   val config = EvmConfig.SpuriousDragonConfigBuilder(None)
   import config.feeSchedule._
   val fxt = CreateOpFixture(config)

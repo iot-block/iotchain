@@ -1,11 +1,11 @@
 package jbok.evm.solidity
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import scodec.bits._
 import io.circe.Json
 import io.circe.syntax._
 
-class SolidityParserSpec extends JbokSpec {
+class SolidityParserSpec extends CommonSpec {
   val code =
     """contract TokenERC20 {
       |    event LogNote(
@@ -2057,9 +2057,7 @@ class SolidityParserSpec extends JbokSpec {
       println(contractABI)
       println(fastparse.parse("addr := mload(bytePos)", SolidityParser.assemblyAssignment(_)))
       println(fastparse.parse("init", SolidityParser.testParser(_)))
-      println(
-        fastparse.parse("(, uint256 retAmount) = convertByPath(_path, _amount, _minReturn, _path[0], this);",
-                        SolidityParser.simpleStatement(_)))
+      println(fastparse.parse("(, uint256 retAmount) = convertByPath(_path, _amount, _minReturn, _path[0], this);", SolidityParser.simpleStatement(_)))
     }
 
     "parse function" in {

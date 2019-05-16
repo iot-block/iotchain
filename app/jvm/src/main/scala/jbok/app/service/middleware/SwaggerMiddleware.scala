@@ -1,11 +1,10 @@
 package jbok.app.service.middleware
 
-import cats.effect.IO
-import org.http4s.rho.RhoMiddleware
-import org.http4s.rho.swagger.syntax.{io => ioSwagger}
-import org.http4s.rho.swagger.models._
-import org.http4s.rho.swagger._
+import cats.Monad
 import cats.implicits._
+import org.http4s.rho.RhoMiddleware
+import org.http4s.rho.swagger._
+import org.http4s.rho.swagger.models._
 
 object SwaggerMiddleware {
   val title       = "JBOK SCAN API"
@@ -34,7 +33,7 @@ object SwaggerMiddleware {
     )
   )
 
-  def swaggerMiddleware(basePath: String): RhoMiddleware[IO] = ioSwagger.createRhoMiddleware(
+  def swaggerMiddleware[F[_]: Monad](basePath: String): RhoMiddleware[F] = SwaggerSupport[F].createRhoMiddleware(
     swaggerFormats = DefaultSwaggerFormats,
     apiInfo = apiInfo,
     basePath = Some(basePath),

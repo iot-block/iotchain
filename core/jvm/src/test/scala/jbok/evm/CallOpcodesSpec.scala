@@ -1,24 +1,21 @@
 package jbok.evm
 
 import cats.effect.IO
-import jbok.JbokSpec
-import jbok.common.execution._
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models._
-import jbok.core.testkit._
 import jbok.crypto._
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
 
-class CallOpcodesSpec extends JbokSpec {
-
-  val config     = EvmConfig.FrontierConfigBuilder(None)
+class CallOpcodesSpec extends CoreSpec {
+  val evmConfig     = EvmConfig.FrontierConfigBuilder(None)
   val history    = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
-  import config.feeSchedule._
+  import evmConfig.feeSchedule._
 
-  val fxt = new CallOpFixture(config, startState)
+  val fxt = new CallOpFixture(evmConfig, startState)
 
   "CALL" should {
 
@@ -78,7 +75,7 @@ class CallOpcodesSpec extends JbokSpec {
       }
 
       "consume correct gas (refund call gas)" in {
-        val expectedGas = G_call + G_callvalue - G_callstipend + config.calcMemCost(32, 32, 16)
+        val expectedGas = G_call + G_callvalue - G_callstipend + evmConfig.calcMemCost(32, 32, 16)
         call.stateOut.gasUsed shouldBe expectedGas
       }
     }
@@ -96,7 +93,7 @@ class CallOpcodesSpec extends JbokSpec {
       }
 
       "consume correct gas (refund call gas)" in {
-        val expectedGas = G_call + G_callvalue - G_callstipend + config.calcMemCost(32, 32, 16)
+        val expectedGas = G_call + G_callvalue - G_callstipend + evmConfig.calcMemCost(32, 32, 16)
         call.stateOut.gasUsed shouldBe expectedGas
       }
     }
@@ -310,7 +307,7 @@ class CallOpcodesSpec extends JbokSpec {
       }
 
       "consume correct gas (refund unused gas)" in {
-        val expectedMemCost = config.calcMemCost(fxt.inputData.size, fxt.inputData.size, call.outSize)
+        val expectedMemCost = evmConfig.calcMemCost(fxt.inputData.size, fxt.inputData.size, call.outSize)
         val expectedGas     = fxt.requiredGas - G_callstipend + G_call + G_callvalue + expectedMemCost
         call.stateOut.gasUsed shouldBe expectedGas
       }
@@ -435,7 +432,7 @@ class CallOpcodesSpec extends JbokSpec {
 
       "consume correct gas" in {
         val contractCost = 60 + 12 * wordsForBytes(inputData.size)
-        val expectedGas  = contractCost - G_callstipend + G_call + G_callvalue + config.calcMemCost(128, 128, 32)
+        val expectedGas  = contractCost - G_callstipend + G_call + G_callvalue + evmConfig.calcMemCost(128, 128, 32)
         call.stateOut.gasUsed shouldBe expectedGas
       }
     }
@@ -514,7 +511,7 @@ class CallOpcodesSpec extends JbokSpec {
       }
 
       "consume correct gas (refund unused gas)" in {
-        val expectedMemCost = config.calcMemCost(fxt.inputData.size, fxt.inputData.size, call.outSize)
+        val expectedMemCost = evmConfig.calcMemCost(fxt.inputData.size, fxt.inputData.size, call.outSize)
         val expectedGas     = fxt.requiredGas + G_call + expectedMemCost
         call.stateOut.gasUsed shouldBe expectedGas
       }
@@ -611,7 +608,7 @@ class CallOpcodesSpec extends JbokSpec {
 
       "consume correct gas" in {
         val contractCost = 600 + 120 * wordsForBytes(inputData.size)
-        val expectedGas  = contractCost + G_call + config.calcMemCost(128, 128, 20)
+        val expectedGas  = contractCost + G_call + evmConfig.calcMemCost(128, 128, 20)
         call.stateOut.gasUsed shouldBe expectedGas
       }
     }
@@ -666,7 +663,7 @@ class CallOpcodesSpec extends JbokSpec {
   "gas cost bigger than available gas DELEGATECALL" should {
 
     val memCost  = 0
-    val c_extra  = config.feeSchedule.G_call
+    val c_extra  = evmConfig.feeSchedule.G_call
     val startGas = c_extra - 1
     val gas      = UInt256.MaxValue - c_extra + 1 //u_s[0]
     val context  = fxt.context.copy(startGas = startGas)

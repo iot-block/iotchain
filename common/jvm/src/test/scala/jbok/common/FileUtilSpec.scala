@@ -2,14 +2,13 @@ package jbok.common
 
 import better.files.File
 import cats.effect.IO
-import jbok.JbokSpec
 import jbok.common.FileUtil.FileLockErr
 
-class FileUtilSpec extends JbokSpec {
+class FileUtilSpec extends CommonSpec {
   "FileUtil" should {
     "release lock whatever use" in {
       val file = File.newTemporaryFile()
-      val p = FileUtil
+      val p = FileUtil[IO]
         .lock(file.path)
         .use { _ =>
           IO.raiseError(new Exception("boom"))
@@ -21,10 +20,10 @@ class FileUtilSpec extends JbokSpec {
 
     "raise FileLockErr if already locked" in {
       val file = File.newTemporaryFile()
-      val p = FileUtil
+      val p = FileUtil[IO]
         .lock(file.path)
         .use { _ =>
-          FileUtil
+          FileUtil[IO]
             .lock(file.path)
             .use { _ =>
               IO.unit
@@ -39,7 +38,7 @@ class FileUtilSpec extends JbokSpec {
 
     "lock with content" in {
       val file = File.newTemporaryFile()
-      val p = FileUtil
+      val p = FileUtil[IO]
         .lock(file.path, "oho")
         .use { _ =>
           IO(println(file.lines.head)).flatMap(_ => IO.raiseError(new Exception("boom")))

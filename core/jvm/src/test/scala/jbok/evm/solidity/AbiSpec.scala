@@ -2,12 +2,12 @@ package jbok.evm.solidity
 
 import io.circe.Json
 import io.circe.parser._
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import scodec.bits._
 import jbok.evm.solidity.Ast._
 import jbok.evm.solidity.ABIDescription._
 
-class AbiSpec extends JbokSpec {
+class AbiSpec extends CommonSpec {
   "encode solidity type" should {
     "encode int32" in {
       val param  = parse("-2").getOrElse(Json.Null)

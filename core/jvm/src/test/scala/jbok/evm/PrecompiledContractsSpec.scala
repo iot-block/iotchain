@@ -1,18 +1,16 @@
 package jbok.evm
 
 import cats.effect.IO
-import jbok.JbokSpec
-import jbok.common.execution._
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Address, UInt256}
-import jbok.core.testkit._
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 
-class PrecompiledContractsSpec extends JbokSpec {
+class PrecompiledContractsSpec extends CoreSpec {
 
   def buildContext(recipient: Address, inputData: ByteVector, gas: UInt256 = 1000000): ProgramContext[IO] = {
     val origin = Address(0xcafebabe)

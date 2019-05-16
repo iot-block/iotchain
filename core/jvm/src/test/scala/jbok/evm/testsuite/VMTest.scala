@@ -5,7 +5,6 @@ import cats.effect.IO
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.parser._
-import jbok.JbokSpec
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.core.ledger.History
@@ -17,8 +16,7 @@ import jbok.evm._
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits.ByteVector
 import jbok.common.testkit._
-import jbok.common.execution._
-import jbok.core.testkit._
+import jbok.core.CoreSpec
 
 import scala.collection.JavaConverters._
 
@@ -94,7 +92,7 @@ final case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLi
 
 final case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
-class VMTest extends JbokSpec {
+class VMTest extends CoreSpec {
   def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: BigInt): WorldState[IO] = {
     val accounts = json.map {
       case (addr, account) => (addr, Account(balance = UInt256(account.balance), nonce = UInt256(account.nonce)))

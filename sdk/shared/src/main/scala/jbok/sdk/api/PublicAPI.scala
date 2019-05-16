@@ -68,8 +68,6 @@ trait PublicAPI[F[_]] {
 
   def getOmmerCountByBlockHash(blockHash: ByteVector): F[Int]
 
-  def isMining: F[Boolean]
-
   // send tx
   def sendSignedTransaction(stx: SignedTransaction): F[ByteVector]
 

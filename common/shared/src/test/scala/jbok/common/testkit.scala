@@ -2,15 +2,11 @@ package jbok.common
 
 import java.math.BigInteger
 
-import cats.effect.IO
-import jbok.common.metrics.Metrics
 import org.scalacheck.Arbitrary._
 import org.scalacheck._
 import scodec.bits.ByteVector
 
 object testkit {
-  implicit val metrics: Metrics[IO] = Metrics.nop[IO].unsafeRunSync()
-
   def random[A](implicit arbA: Arbitrary[A]): A =
     arbA.arbitrary.sample.get
 

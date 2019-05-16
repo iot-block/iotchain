@@ -1,20 +1,17 @@
 package jbok.app.service.middleware
 
-import cats.effect.IO
+import cats.effect.{Clock, Effect}
+import cats.implicits._
 import io.prometheus.client.CollectorRegistry
 import org.http4s.HttpRoutes
 import org.http4s.metrics.prometheus.Prometheus
 import org.http4s.server.middleware
 
-import scala.concurrent.ExecutionContext
-
 object MetricsMiddleware {
-  implicit private val clock = IO.timer(ExecutionContext.global).clock
-
   val registry = new CollectorRegistry()
 
-  def apply(routes: HttpRoutes[IO]): IO[HttpRoutes[IO]] =
-    Prometheus[IO](registry, "jbok_http_server").map { metricsOps =>
-      middleware.Metrics[IO](metricsOps)(routes)
+  def apply[F[_]](routes: HttpRoutes[F])(implicit F: Effect[F], clock: Clock[F]): F[HttpRoutes[F]] =
+    Prometheus[F](registry, "jbok_http_server").map { metricsOps =>
+      middleware.Metrics[F](metricsOps)(routes)
     }
 }

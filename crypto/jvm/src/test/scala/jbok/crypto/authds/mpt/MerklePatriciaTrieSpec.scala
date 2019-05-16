@@ -1,7 +1,7 @@
 package jbok.crypto.authds.mpt
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.common.testkit._
@@ -13,7 +13,7 @@ import scodec.bits._
 
 import scala.util.Random
 
-class MerklePatriciaTrieSpec extends JbokSpec {
+class MerklePatriciaTrieSpec extends CommonSpec {
   trait Fixture {
     val db        = KeyValueDB.inmem[IO].unsafeRunSync()
     val namespace = ByteVector.empty

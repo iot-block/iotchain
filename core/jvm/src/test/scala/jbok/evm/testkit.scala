@@ -1,8 +1,8 @@
 package jbok.evm
 
 import cats.effect.IO
-import jbok.common.execution._
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.testkit._
@@ -45,7 +45,11 @@ object testkit {
   }
 
   implicit def arbWorldState(env: ExecEnv): Arbitrary[WorldState[IO]] = Arbitrary {
+    import CoreSpec.chainId
+    import CoreSpec.timer
+    import CoreSpec.metrics
     val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+
     history
       .getWorldState()
       .unsafeRunSync()

@@ -4,10 +4,8 @@ import cats.effect.IO
 import jbok.JbokAsyncSpec
 
 import scala.concurrent.ExecutionContext
-import jbok.common.execution._
 
 class ContractSpec extends JbokAsyncSpec {
-  implicit override def executionContext: ExecutionContext = EC
 
   "Contract Parser" should {
     "parse contract code" in {

@@ -1,14 +1,12 @@
 package jbok.core.models
 
-import jbok.JbokSpec
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.core.testkit._
 import jbok.codec.testkit._
+import jbok.core.CoreSpec
 
-class ModelCodecSpec extends JbokSpec {
-  implicit val config = testConfig
-
+class ModelCodecSpec extends CoreSpec {
   "model rlp codecs" should {
     "roundtrip Address" in {
       forAll { address: Address =>

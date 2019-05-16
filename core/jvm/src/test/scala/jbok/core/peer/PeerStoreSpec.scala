@@ -1,29 +1,28 @@
 package jbok.core.peer
 
 import cats.effect.IO
-import jbok.JbokSpec
-import jbok.common.execution._
+import cats.implicits._
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.testkit._
 import jbok.persistent.KeyValueDB
-import jbok.persistent.testkit._
 import org.scalacheck.Gen
-import cats.implicits._
 
-class PeerStoreSpec extends JbokSpec {
+class PeerStoreSpec extends CoreSpec {
   "PeerStore" should {
-    val db = random[KeyValueDB[IO]]
-    val store = PeerStorePlatform.fromKV[IO](db)
+    val objects = locator.unsafeRunSync()
+    val db      = objects.get[KeyValueDB[IO]]
+    val store   = objects.get[PeerStore[IO]]
 
-    "put and get PeerNode" in {
-      val nodes = random[List[PeerNode]](Gen.listOfN(100, arbPeerNode.arbitrary))
-      nodes.traverse(store.putNode).unsafeRunSync()
-      nodes.map { node =>
-        store.getNodeOpt(node.id).unsafeRunSync() shouldBe Some(node)
+    "put and get PeerUri" in {
+      val uris = random[List[PeerUri]](Gen.listOfN(100, arbPeerUri.arbitrary))
+      uris.traverse(store.put).unsafeRunSync()
+      uris.map { uri =>
+        store.get(uri.uri.toString).unsafeRunSync() shouldBe uri
       }
 
-      val xs = store.getNodes.unsafeRunSync()
-      xs should contain theSameElementsAs nodes
+      val xs = store.getAll.unsafeRunSync()
+      xs should contain theSameElementsAs uris
     }
   }
 }

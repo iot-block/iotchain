@@ -3,7 +3,9 @@ package jbok.core.ledger
 import cats.data.OptionT
 import cats.effect.{Sync, Timer}
 import cats.implicits._
+import io.circe.syntax._
 import jbok.codec.rlp.implicits._
+import jbok.common.log.Logger
 import jbok.common.metrics.Metrics
 import jbok.core.config.GenesisConfig
 import jbok.core.models._
@@ -86,12 +88,12 @@ object History {
   def forBackendAndPath[F[_]: Sync](dbBackend: String, dbPath: String)(implicit chainId: BigInt,
                                                                        T: Timer[F],
                                                                        M: Metrics[F]): F[History[F]] =
-    KeyValueDB.forBackendAndPath[F](dbBackend, dbPath).map(db => new HistoryImpl[F](db))
+    KeyValueDB.forBackendAndPath[F](dbBackend, dbPath).map(db => new HistoryImpl[F](db, M))
 }
 
-class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F], M: Metrics[F])
+class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F])
     extends History[F](db) {
-  private[this] val log = jbok.common.log.getLogger("History")
+  private[this] val log = Logger[F]
 
   // init
   override def initGenesis(config: GenesisConfig): F[Unit] =
@@ -99,7 +101,7 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
       _ <- getBlockHeaderByNumber(0)
         .map(_.isDefined)
         .ifM(F.raiseError(new Exception("genesis already defined")), F.unit)
-      _     <- F.delay(log.info(s"init with genesis config:\n${config.json.spaces2}"))
+      _     <- log.d(s"init with genesis config:\n${config.asJson.spaces2}")
       state <- getWorldState()
       world <- config.alloc.toList
         .foldLeft(state) {
@@ -112,11 +114,11 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
     } yield ()
 
   // header
-  override def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]] = M.timeF("getBlockHeaderByHash") {
+  override def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]] = metrics.timeF("getBlockHeaderByHash") {
     db.getOpt[ByteVector, BlockHeader](hash, namespaces.BlockHeader)
   }
 
-  override def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]] = M.timeF("getBlockHeaderByNumber") {
+  override def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]] = metrics.timeF("getBlockHeaderByNumber") {
     val p = for {
       hash   <- OptionT(getHashByBlockNumber(number))
       header <- OptionT(getBlockHeaderByHash(hash))
@@ -124,7 +126,7 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
     p.value
   }
 
-  override def putBlockHeader(blockHeader: BlockHeader, updateTD: Boolean): F[Unit] = M.timeF("putBlockHeader") {
+  override def putBlockHeader(blockHeader: BlockHeader, updateTD: Boolean): F[Unit] = metrics.timeF("putBlockHeader") {
     if (updateTD) {
       if (blockHeader.number == 0) {
         db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) >>
@@ -149,11 +151,11 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
   }
 
   // body
-  override def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]] = M.timeF("getBlockBodyByHash") {
+  override def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]] = metrics.timeF("getBlockBodyByHash") {
     db.getOpt[ByteVector, BlockBody](hash, namespaces.BlockBody)
   }
 
-  override def putBlockBody(blockHash: ByteVector, blockBody: BlockBody): F[Unit] = M.timeF("putBlockBody") {
+  override def putBlockBody(blockHash: ByteVector, blockBody: BlockBody): F[Unit] = metrics.timeF("putBlockBody") {
     db.put(blockHash, blockBody, namespaces.BlockBody) >>
       blockBody.transactionList.zipWithIndex
         .map {
@@ -165,16 +167,16 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
   }
 
   // receipts
-  override def getReceiptsByHash(blockhash: ByteVector): F[Option[List[Receipt]]] = M.timeF("getReceiptsByHash") {
+  override def getReceiptsByHash(blockhash: ByteVector): F[Option[List[Receipt]]] = metrics.timeF("getReceiptsByHash") {
     db.getOpt[ByteVector, List[Receipt]](blockhash, namespaces.Receipts)
   }
 
-  override def putReceipts(blockHash: ByteVector, receipts: List[Receipt]): F[Unit] = M.timeF("putReceipts") {
+  override def putReceipts(blockHash: ByteVector, receipts: List[Receipt]): F[Unit] = metrics.timeF("putReceipts") {
     db.put(blockHash, receipts, namespaces.Receipts)
   }
 
   // block
-  override def getBlockByHash(hash: ByteVector): F[Option[Block]] = M.timeF("getBlockByHash") {
+  override def getBlockByHash(hash: ByteVector): F[Option[Block]] = metrics.timeF("getBlockByHash") {
     val p = for {
       header <- OptionT(getBlockHeaderByHash(hash))
       body   <- OptionT(getBlockBodyByHash(hash))
@@ -183,7 +185,7 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
     p.value
   }
 
-  override def getBlockByNumber(number: BigInt): F[Option[Block]] = M.timeF("getBlockByNumber") {
+  override def getBlockByNumber(number: BigInt): F[Option[Block]] = metrics.timeF("getBlockByNumber") {
     val p = for {
       hash  <- OptionT(getHashByBlockNumber(number))
       block <- OptionT(getBlockByHash(hash))
@@ -199,12 +201,12 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
       putBlockBody(block.header.hash, block.body) >>
       putReceipts(block.header.hash, receipts) >>
       (if (asBestBlock) {
-         putBestBlockNumber(block.header.number) <* M.current("BestBlockNumber")(block.header.number.toDouble)
+         putBestBlockNumber(block.header.number) <* metrics.current("BestBlockNumber")(block.header.number.toDouble)
        } else {
          F.unit
        })
 
-  override def delBlock(blockHash: ByteVector, parentAsBestBlock: Boolean): F[Unit] = M.timeF("delBlock") {
+  override def delBlock(blockHash: ByteVector, parentAsBestBlock: Boolean): F[Unit] = metrics.timeF("delBlock") {
     val maybeBlockHeader = getBlockHeaderByHash(blockHash)
     val maybeTxList      = getBlockBodyByHash(blockHash).map(_.map(_.transactionList))
 
@@ -240,7 +242,7 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
   override def putMptNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
     db.putRaw(namespaces.Node ++ hash, bytes)
 
-  override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] = M.timeF("getAccount") {
+  override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] = metrics.timeF("getAccount") {
     val p = for {
       header  <- OptionT(getBlockHeaderByNumber(blockNumber))
       mpt     <- OptionT.liftF(MerklePatriciaTrie[F](namespaces.Node, db, Some(header.stateRoot)))
@@ -249,18 +251,18 @@ class HistoryImpl[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt,
     p.value
   }
 
-  override def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector] = M.timeF("getStorage") {
+  override def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector] = metrics.timeF("getStorage") {
     for {
       mpt   <- MerklePatriciaTrie[F](namespaces.Node, db, Some(rootHash))
       bytes <- mpt.getOpt[UInt256, UInt256](UInt256(position), namespaces.empty).map(_.getOrElse(UInt256.Zero).bytes)
     } yield bytes
   }
 
-  override def getCode(hash: ByteVector): F[Option[ByteVector]] = M.timeF("getCode") {
+  override def getCode(hash: ByteVector): F[Option[ByteVector]] = metrics.timeF("getCode") {
     db.getRaw(namespaces.Code ++ hash)
   }
 
-  override def putCode(hash: ByteVector, code: ByteVector): F[Unit] = M.timeF("putCode") {
+  override def putCode(hash: ByteVector, code: ByteVector): F[Unit] = metrics.timeF("putCode") {
     db.putRaw(namespaces.Code ++ hash, code)
   }
 

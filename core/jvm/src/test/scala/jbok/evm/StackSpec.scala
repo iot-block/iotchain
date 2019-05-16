@@ -1,12 +1,12 @@
 package jbok.evm
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.core.models.UInt256
 import jbok.core.testkit._
 import jbok.evm.testkit._
 import org.scalacheck.Gen
 
-class StackSpec extends JbokSpec {
+class StackSpec extends CommonSpec {
   val maxStackSize   = 32
   val stackGen       = arbStack(maxStackSize, uint256Gen()).arbitrary
   val intGen         = Gen.choose(0, maxStackSize).filter(_ >= 0)

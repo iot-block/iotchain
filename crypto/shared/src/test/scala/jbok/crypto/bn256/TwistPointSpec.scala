@@ -1,8 +1,8 @@
 package jbok.crypto.bn256
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 
-class TwistPointSpec extends JbokSpec {
+class TwistPointSpec extends CommonSpec {
   "TwistPoint" should {
     val cp = TwistPoint.twistGen * BigInt("9876543210")
     "a + a = a * 2" in {

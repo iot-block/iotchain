@@ -2,42 +2,44 @@ package jbok.core.ledger
 
 import cats.Foldable
 import cats.effect.concurrent.Semaphore
-import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
+import cats.effect.{Resource, Sync, Timer}
 import cats.implicits._
-import jbok.codec.rlp.implicits._
+import fs2._
 import jbok.common.ByteUtils
-import jbok.core.config.Configs.{HistoryConfig, TxPoolConfig}
+import jbok.core.config.Configs.HistoryConfig
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.UInt256._
 import jbok.core.models._
-import jbok.core.peer.PeerManager
+import jbok.core.peer.PeerSelector.PeerSelector
+import jbok.core.peer.{Peer, PeerSelector}
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
+import jbok.core.queue.{Consumer, Producer}
 import jbok.core.validators.{HeaderValidator, TxValidator}
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
 import jbok.persistent.DBErr
 import scodec.bits.ByteVector
+import jbok.codec.rlp.implicits._
 
 import scala.concurrent.duration._
 
-final case class BlockExecutor[F[_]](
+final class BlockExecutor[F[_]](
     config: HistoryConfig,
+    history: History[F],
     consensus: Consensus[F],
-    peerManager: PeerManager[F],
     txValidator: TxValidator[F],
     txPool: TxPool[F],
+    blockPool: BlockPool[F],
     ommerPool: OmmerPool[F],
-    semaphore: Semaphore[F]
+    semaphore: Semaphore[F],
+    inbound: Consumer[F, Peer[F], Block],
+    outbound: Producer[F, PeerSelector[F], Block],
 )(implicit F: Sync[F], T: Timer[F]) {
   private[this] val log = jbok.common.log.getLogger("BlockExecutor")
 
   import BlockExecutor._
-
-  val history: History[F] = consensus.history
-
-  val blockPool: BlockPool[F] = consensus.pool
 
   def handleReceivedBlock(received: ReceivedBlock[F]): F[List[Block]] =
     for {
@@ -48,7 +50,14 @@ final case class BlockExecutor[F[_]](
     requested.blocks.flatTraverse(importBlock)
 
   def handleMinedBlock(mined: MinedBlock): F[List[Block]] =
-    importBlock(mined.block)
+    for {
+      blocks <- importBlock(mined.block)
+      messages = blocks.map(mkBroadcast)
+      _ <- messages.traverse { case (selector, block) => outbound.produce(selector, block) }
+    } yield blocks
+
+  def mkBroadcast(block: Block) =
+    PeerSelector.withoutBlock(block).andThen(PeerSelector.randomSelectSqrt(4)) -> block
 
   def handlePendingBlock(pending: PendingBlock): F[ExecutedBlock[F]] =
     for {
@@ -78,9 +87,7 @@ final case class BlockExecutor[F[_]](
       block2  = executed.block.copy(header = header2)
     } yield executed.copy(block = block2, world = persisted)
 
-  def simulateTransaction(stx: SignedTransaction,
-                          senderAddress: Address,
-                          blockHeader: BlockHeader): F[TxExecResult[F]] = {
+  def simulateTransaction(stx: SignedTransaction, senderAddress: Address, blockHeader: BlockHeader): F[TxExecResult[F]] = {
     val stateRoot = blockHeader.stateRoot
     val gasLimit  = stx.gasLimit
     val vmConfig  = EvmConfig.forBlock(blockHeader.number, config)
@@ -101,12 +108,7 @@ final case class BlockExecutor[F[_]](
            |gas refund: ${totalGasToRefund}""".stripMargin
       )
 
-      TxExecResult(result.world,
-                   gasLimit - totalGasToRefund,
-                   result.logs,
-                   result.returnData,
-                   result.error,
-                   result.contractAddress)
+      TxExecResult(result.world, gasLimit - totalGasToRefund, result.logs, result.returnData, result.error, result.contractAddress)
     }
   }
 
@@ -117,10 +119,18 @@ final case class BlockExecutor[F[_]](
     if (highLimit < lowLimit)
       F.pure(highLimit)
     else {
-      binaryChop(lowLimit, highLimit)(gasLimit =>
-        simulateTransaction(stx.copy(gasLimit = gasLimit), senderAddress, blockHeader).map(_.vmError))
+      binaryChop(lowLimit, highLimit)(gasLimit => simulateTransaction(stx.copy(gasLimit = gasLimit), senderAddress, blockHeader).map(_.vmError))
     }
   }
+
+  val stream: Stream[F, Unit] =
+    inbound.consume
+      .evalMap { case (peer, block) => handleReceivedBlock(ReceivedBlock(block, peer)) }
+      .map {
+        case block :: _ =>
+          PeerSelector.withoutBlock(block).andThen(PeerSelector.randomSelectSqrt(4)) -> block
+      }
+      .through(outbound.sink)
 
   ////////////////////////////////
   ////////////////////////////////
@@ -164,8 +174,7 @@ final case class BlockExecutor[F[_]](
     }
   }
 
-  private def executeTransactions(block: Block,
-                                  shortCircuit: Boolean): F[(BlockExecResult[F], List[SignedTransaction])] =
+  private def executeTransactions(block: Block, shortCircuit: Boolean): F[(BlockExecResult[F], List[SignedTransaction])] =
     for {
       parentStateRoot <- history.getBlockHeaderByHash(block.header.parentHash).map(_.map(_.stateRoot))
       world <- history.getWorldState(
@@ -276,12 +285,7 @@ final case class BlockExecutor[F[_]](
            |return data: ${result.returnData.toHex}
            |gas refund: ${totalGasToRefund}, gas paid to miner: ${executionGasToPayToMiner}""".stripMargin
       )
-      TxExecResult(world2,
-                   executionGasToPayToMiner,
-                   resultWithErrorHandling.logs,
-                   result.returnData,
-                   result.error,
-                   result.contractAddress)
+      TxExecResult(world2, executionGasToPayToMiner, resultWithErrorHandling.logs, result.returnData, result.error, result.contractAddress)
     }
 
   private def updateSenderAccountBeforeExecution(
@@ -337,16 +341,13 @@ final case class BlockExecutor[F[_]](
     val maxCodeSizeExceeded = config.maxCodeSize.exists(codeSizeLimit => contractCode.size > codeSizeLimit)
     val codeStoreOutOfGas   = result.gasRemaining < codeDepositCost
 
-    log.debug(
-      s"codeDepositCost: ${codeDepositCost}, maxCodeSizeExceeded: ${maxCodeSizeExceeded}, codeStoreOutOfGas: ${codeStoreOutOfGas}")
+    log.debug(s"codeDepositCost: ${codeDepositCost}, maxCodeSizeExceeded: ${maxCodeSizeExceeded}, codeStoreOutOfGas: ${codeStoreOutOfGas}")
     if (maxCodeSizeExceeded || codeStoreOutOfGas) {
       // Code size too big or code storage causes out-of-gas with exceptionalFailedCodeDeposit enabled
       result.copy(error = Some(OutOfGas))
     } else {
       // Code storage succeeded
-      result.copy(gasRemaining = result.gasRemaining - codeDepositCost,
-                  world = result.world.putCode(address, result.returnData),
-                  contractAddress = Some(address))
+      result.copy(gasRemaining = result.gasRemaining - codeDepositCost, world = result.world.putCode(address, result.returnData), contractAddress = Some(address))
     }
   }
 
@@ -427,16 +428,4 @@ object BlockExecutor {
       vmError: Option[ProgramError],
       contractAddress: Option[Address] = None
   )
-
-  def apply[F[_]](
-      config: HistoryConfig,
-      consensus: Consensus[F],
-      peerManager: PeerManager[F],
-  )(implicit F: ConcurrentEffect[F], T: Timer[F]): F[BlockExecutor[F]] =
-    for {
-      txPool    <- TxPool[F](TxPoolConfig(), peerManager)
-      ommerPool <- OmmerPool[F](consensus.history)
-      semaphore <- Semaphore(1)
-      txValidator = new TxValidator[F](config, consensus.history.chainId)
-    } yield BlockExecutor(config, consensus, peerManager, txValidator, txPool, ommerPool, semaphore)
 }

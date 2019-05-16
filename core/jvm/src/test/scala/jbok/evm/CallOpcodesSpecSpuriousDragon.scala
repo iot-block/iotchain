@@ -1,22 +1,19 @@
 package jbok.evm
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.UInt256
 import jbok.persistent.KeyValueDB
-import jbok.common.testkit._
-import jbok.common.execution._
-import jbok.core.testkit._
 
-class CallOpcodesSpecSpuriousDragon extends JbokSpec {
-
-  val config     = EvmConfig.SpuriousDragonConfigBuilder(None)
-  val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+class CallOpcodesSpecSpuriousDragon extends CoreSpec {
+  val evmConfig  = EvmConfig.SpuriousDragonConfigBuilder(None)
+  val history    = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
-  import config.feeSchedule._
+  import evmConfig.feeSchedule._
 
-  val fxt = new CallOpFixture(config, startState)
+  val fxt = new CallOpFixture(evmConfig, startState)
 
   "CALL" when {
 

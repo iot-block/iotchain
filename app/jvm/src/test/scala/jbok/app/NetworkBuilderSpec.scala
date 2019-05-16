@@ -1,9 +1,9 @@
 package jbok.app
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.app.NetworkBuilder.Topology
 import jbok.core.models.Address
 
-class NetworkBuilderSpec extends JbokSpec {
+class NetworkBuilderSpec extends CommonSpec {
   "NetworkBuilder" should {
     "dry run" in {
       val address =
@@ -11,7 +11,7 @@ class NetworkBuilderSpec extends JbokSpec {
 
       val builder = NetworkBuilder()
         .withNumOfNodes(4)
-        .withMiners(1)
+        .withMiners(2)
         .withAlloc(List(address), BigInt("1" + "0" * 28))
         .withChainId(1)
         .withTopology(Topology.Star)

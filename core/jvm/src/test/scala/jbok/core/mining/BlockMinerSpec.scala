@@ -2,32 +2,38 @@ package jbok.core.mining
 
 import cats.effect.IO
 import cats.implicits._
-import jbok.JbokSpec
 import jbok.common.testkit._
+import jbok.core.CoreSpec
+import jbok.core.ledger.History
 import jbok.core.models.SignedTransaction
 import jbok.core.testkit._
 
-class BlockMinerSpec extends JbokSpec {
+class BlockMinerSpec extends CoreSpec {
   "BlockMiner" should {
-    implicit val config = testConfig
     "mine block with no transaction" in {
-      val miner  = random[BlockMiner[IO]]
-      val parent = miner.history.getBestBlock.unsafeRunSync()
+      val objects = locator.unsafeRunSync()
+      val miner   = objects.get[BlockMiner[IO]]
+      val history = objects.get[History[IO]]
+      val parent  = history.getBestBlock.unsafeRunSync()
       miner.mine1(parent.some).unsafeRunSync()
     }
 
     "mine block with transactions" in {
-      val miner = random[BlockMiner[IO]]
-      val txs   = random[List[SignedTransaction]](genTxs(1, 1024))
-      val parent = miner.history.getBestBlock.unsafeRunSync()
+      val objects = locator.unsafeRunSync()
+      val miner   = objects.get[BlockMiner[IO]]
+      val history = objects.get[History[IO]]
+      val txs     = random[List[SignedTransaction]](genTxs(1, 1024))
+      val parent  = history.getBestBlock.unsafeRunSync()
       miner.mine1(parent.some, txs.some).unsafeRunSync()
     }
 
     "mine blocks" in {
-      val N     = 10
-      val miner = random[BlockMiner[IO]]
+      val N       = 10
+      val objects = locator.unsafeRunSync()
+      val miner   = objects.get[BlockMiner[IO]]
+      val history = objects.get[History[IO]]
       miner.stream.take(N).compile.toList.unsafeRunSync()
-      miner.history.getBestBlockNumber.unsafeRunSync() shouldBe N
+      history.getBestBlockNumber.unsafeRunSync() shouldBe N
     }
   }
 }

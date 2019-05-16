@@ -1,18 +1,17 @@
 package jbok.core.validators
 
 import cats.effect.IO
-import jbok.JbokSpec
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.models._
 import jbok.core.validators.TxInvalid._
 import jbok.crypto.signature.{ECDSA, Signature}
 import scodec.bits._
-import jbok.core.testkit._
 
-class TxValidatorSpec extends JbokSpec {
-  implicit val config = testConfig
+class TxValidatorSpec extends CoreSpec {
+  val txValidator = locator.unsafeRunSync().get[TxValidator[IO]]
 
-  val keyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+  val randomKeyPair = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
 
   val tx = Transaction(
     nonce = 12345,
@@ -23,7 +22,7 @@ class TxValidatorSpec extends JbokSpec {
     payload = ByteVector.empty
   )
 
-  val stx = SignedTransaction.sign[IO](tx, keyPair).unsafeRunSync()
+  val stx = SignedTransaction.sign[IO](tx, randomKeyPair).unsafeRunSync()
 
   val senderBalance = 100
 
@@ -50,8 +49,6 @@ class TxValidatorSpec extends JbokSpec {
   val accumGasUsed = 0 //Both are the first tx in the block
 
   val upfrontGasCost: UInt256 = UInt256(senderBalance / 2)
-
-  val txValidator = new TxValidator[IO](testConfig.history, testGenesis.chainId)
 
   "TxValidator" should {
     "report as valid a tx from after EIP155" in {

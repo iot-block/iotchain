@@ -1,8 +1,8 @@
 package jbok.crypto.bn256
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 
-class BN256Spec extends JbokSpec {
+class BN256Spec extends CommonSpec {
   "fp2 invert" in {
     val a   = Fp2(BigInt("23423492374"), BigInt("12934872398472394827398470"))
     val inv = a.invert()

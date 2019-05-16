@@ -1,13 +1,13 @@
 package jbok.core.models
 
 import cats.effect.{IO, Sync}
-import jbok.JbokSpec
+import jbok.core.CoreSpec
 import jbok.core.testkit._
 import jbok.core.validators.TxValidator
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, Signature}
 
-class SignedTransactionSpec extends JbokSpec {
+class SignedTransactionSpec extends CoreSpec {
   "SignedTransaction" should {
     "correctly set pointSign for chainId with chain specific signing schema" in {
       forAll { tx: Transaction =>
@@ -21,7 +21,6 @@ class SignedTransactionSpec extends JbokSpec {
     }
 
     "respect chainId" in {
-      implicit val config = testConfig
       forAll { tx: Transaction =>
         val keyPair                  = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
         implicit val chainId: BigInt = config.genesis.chainId

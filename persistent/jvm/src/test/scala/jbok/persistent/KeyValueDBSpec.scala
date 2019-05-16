@@ -1,14 +1,13 @@
 package jbok.persistent
 
 import cats.effect.IO
-import jbok.common.execution._
 import cats.implicits._
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.codec.rlp.implicits._
 import scodec.bits.ByteVector
 import jbok.common.testkit._
 
-class KeyValueDBSpec extends JbokSpec {
+class KeyValueDBSpec extends CommonSpec {
   def check(backend: String, path: String) = {
     s"KeyValueDB of ${backend}" should {
       "toMap" in {

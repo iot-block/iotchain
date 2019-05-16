@@ -1,40 +1,40 @@
 CREATE TABLE transactions
 (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  txHash      TEXT    NOT NULL UNIQUE,
-  nonce       INTEGER NOT NULL,
-  fromAddress TEXT    NOT NULL,
-  toAddress   TEXT    NOT NULL,
-  value       TEXT    NOT NULL,
-  payload     TEXT    NOT NULL,
-  v           TEXT    NOT NULL,
-  r           TEXT    NOT NULL,
-  s           TEXT    NOT NULL,
-  gasUsed     TEXT    NOT NULL,
-  gasPrice    TEXT    NOT NULL,
-  blockNumber INTEGER NOT NULL,
-  blockHash   TEXT    NOT NULL,
-  location    INTEGER NOT NULL
+  id          int unsigned primary key auto_increment,
+  txHash      varchar(255) not null unique,
+  nonce       int unsigned not null,
+  fromAddress varchar(255) not null,
+  toAddress   varchar(255) not null,
+  value       varchar(255) not null,
+  payload     varchar(255) not null,
+  v           varchar(255) not null,
+  r           varchar(255) not null,
+  s           varchar(255) not null,
+  gasUsed     varchar(255) not null,
+  gasPrice    varchar(255) not null,
+  blockNumber int unsigned not null,
+  blockHash   varchar(255) not null,
+  location    int unsigned not null
 );
 
 CREATE TABLE blocks
 (
-  hash             TEXT PRIMARY KEY,
-  parentHash       TEXT    NOT NULL,
-  ommersHash       TEXT    NOT NULL,
-  beneficiary      TEXT    NOT NULL,
-  stateRoot        TEXT    NOT NULL,
-  transactionsRoot TEXT    NOT NULL,
-  receiptsRoot     TEXT    NOT NULL,
-  logsBloom        TEXT    NOT NULL,
-  difficulty       TEXT    NOT NULL,
-  number           INTEGER NOT NULL,
-  gasLimit         TEXT    NOT NULL,
-  gasUsed          TEXT    NOT NULL,
-  unixTimestamp    TEXT    NOT NULL,
-  extra            TEXT    NOT NULL
+  blockHash        varchar(255) primary key,
+  parentHash       varchar(255)  not null,
+  ommersHash       varchar(255)  not null,
+  beneficiary      varchar(255)  not null,
+  stateRoot        varchar(255)  not null,
+  transactionsRoot varchar(255)  not null,
+  receiptsRoot     varchar(255)  not null,
+  logsBloom        varchar(1024) not null,
+  difficulty       varchar(255)  not null,
+  blockNumber      int unsigned  not null,
+  gasLimit         varchar(255)  not null,
+  gasUsed          varchar(255)  not null,
+  unixTimestamp    varchar(255)  not null,
+  extra            varchar(255)  not null
 );
 
-CREATE INDEX IF NOT EXISTS `from_address_index` ON transactions (fromAddress);
-CREATE INDEX IF NOT EXISTS `to_address_index` ON transactions (toAddress);
+CREATE INDEX `from_address_index` ON transactions (fromAddress);
+CREATE INDEX `to_address_index` ON transactions (toAddress);
 

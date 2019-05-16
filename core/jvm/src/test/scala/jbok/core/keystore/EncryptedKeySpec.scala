@@ -3,14 +3,14 @@ package jbok.core.keystore
 import java.security.SecureRandom
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import io.circe.parser._
 import jbok.crypto._
 import jbok.codec.json.implicits._
 import jbok.crypto.signature.KeyPair
 import io.circe.syntax._
 
-class EncryptedKeySpec extends JbokSpec {
+class EncryptedKeySpec extends CommonSpec {
 
   val gethKey =
     """{

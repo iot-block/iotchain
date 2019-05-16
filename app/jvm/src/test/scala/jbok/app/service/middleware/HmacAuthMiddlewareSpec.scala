@@ -1,12 +1,12 @@
 package jbok.app.service.middleware
+
 import java.time.Instant
 
 import cats.Id
 import cats.effect.IO
 import cats.implicits._
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.app.service.authentication.HMAC
-import jbok.common.execution._
 import org.http4s.dsl.io._
 import org.http4s.headers.Authorization
 import org.http4s.implicits._
@@ -16,14 +16,14 @@ import tsec.mac.jca.{HMACSHA256, MacSigningKey}
 
 import scala.concurrent.duration._
 
-class HmacAuthMiddlewareSpec extends JbokSpec {
+class HmacAuthMiddlewareSpec extends CommonSpec {
   "HmacAuthMiddleware" should {
     val key = HMACSHA256.buildKey[Id](
       ByteVector.fromValidHex("70ea14ac30939a972b5a67cab952d6d7d474727b05fe7f9283abc1e505919e83").toArray
     )
 
     def sign(url: String): (String, String) = {
-      val datetime = Instant.now().toString
+      val datetime  = Instant.now().toString
       val signature = HMAC.http.signForHeader("GET", url, datetime, key).unsafeRunSync()
       (signature, datetime)
     }

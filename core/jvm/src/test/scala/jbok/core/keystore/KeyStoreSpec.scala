@@ -1,21 +1,17 @@
 package jbok.core.keystore
 
-import java.security.SecureRandom
-
-import better.files._
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.core.CoreSpec
 import jbok.core.keystore.KeyStoreError._
 import jbok.core.models.Address
 import jbok.crypto.signature.KeyPair
 import scodec.bits._
 
-class KeyStoreSpec extends JbokSpec {
-  val secureRandom = new SecureRandom()
-  val dir          = File.newTemporaryDirectory()
-  val keyStore     = KeyStorePlatform[IO](dir.pathAsString).unsafeRunSync()
-  val key1         = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
-  val addr1        = Address(hex"aa6826f00d01fe4085f0c3dd12778e206ce4e2ac")
+class KeyStoreSpec extends CoreSpec {
+  val key1     = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
+  val addr1    = Address(hex"aa6826f00d01fe4085f0c3dd12778e206ce4e2ac")
+  val objects = locator.unsafeRunSync()
+  val keyStore = objects.get[KeyStore[IO]]
 
   "KeyStore" should {
     "import and list accounts" in {
@@ -104,5 +100,5 @@ class KeyStoreSpec extends JbokSpec {
   }
 
   override protected def afterEach(): Unit =
-    dir.delete(true)
+    keyStore.clear.unsafeRunSync()
 }

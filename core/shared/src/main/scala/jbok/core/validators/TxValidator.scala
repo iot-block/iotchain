@@ -28,7 +28,7 @@ object TxInvalid {
       )
 }
 
-class TxValidator[F[_]](blockChainConfig: HistoryConfig, chainId: BigInt)(implicit F: Sync[F]) {
+final class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[F], chainId: BigInt) {
   import TxValidator._
 
   def validate(

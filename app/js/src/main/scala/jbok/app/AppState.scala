@@ -6,9 +6,6 @@ import cats.effect.IO
 import cats.implicits._
 import com.thoughtworks.binding.Binding.{Var, Vars}
 import fs2.Stream
-import jbok.app.api.NodeInfo
-import jbok.app.client.JbokClient
-import jbok.common.execution._
 import jbok.core.models._
 import jbok.sdk.api.BlockParam
 import jbok.evm.solidity.ABIDescription.FunctionDescription
@@ -17,10 +14,12 @@ import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
 
-final case class ClientStatus(number: Var[BigInt] = Var(0),
-                              gasPrice: Var[BigInt] = Var(0),
-                              gasLimit: Var[BigInt] = Var(0),
-                              miningStatus: Var[String] = Var("idle"))
+final case class ClientStatus(
+    number: Var[BigInt] = Var(0),
+    gasPrice: Var[BigInt] = Var(0),
+    gasLimit: Var[BigInt] = Var(0),
+    miningStatus: Var[String] = Var("idle")
+)
 
 final case class BlockHistory(bestBlockNumber: Var[BigInt] = Var(-1), history: Vars[Block] = Vars.empty)
 
@@ -30,9 +29,8 @@ final case class AppState(
     config: Var[AppConfig],
     hrefHandler: Event => Unit,
     currentId: Var[Option[String]] = Var(None),
-    clients: Var[Map[String, JbokClient]] = Var(Map.empty),
+    clients: Var[Map[String, JbokClient[IO]]] = Var(Map.empty),
     status: Var[Map[String, ClientStatus]] = Var(Map.empty),
-    nodeInfos: Var[Map[String, NodeInfo]] = Var(Map.empty),
     blocks: Var[Map[String, BlockHistory]] = Var(Map.empty),
     accounts: Var[Map[String, Var[Map[Address, Var[Account]]]]] = Var(Map.empty),
     stxs: Var[Map[String, Vars[SignedTransaction]]] = Var(Map.empty),
@@ -47,40 +45,17 @@ final case class AppState(
 ) {
   def init() = {
     val p = for {
-      sc           <- SimuClient(config.value.uri)
+      sc           <- JbokClient(config.value.uri).pure[IO]
       nodes        <- sc.simulation.getNodes
       simuAccounts <- sc.simulation.getAccounts
       _ = simuAddress.value ++= simuAccounts.map(_._1)
       _ = nodes.foreach(addNodeInfo)
-      jbokClients <- nodes.traverse[IO, JbokClient](node => jbok.app.client.JbokClient(new URI(node.rpcAddr.toString)))
+      jbokClients = nodes.map(node => JbokClient(new URI(node.rpcAddr.toString)))
       _ = clients.value = nodes.map(_.id).zip(jbokClients).toMap
     } yield ()
 
     p.unsafeToFuture()
     stream.compile.drain.unsafeToFuture()
-  }
-
-  def addNodeInfo(node: NodeInfo): Unit = {
-    nodeInfos.value += (node.id)    -> node
-    blocks.value += (node.id        -> BlockHistory())
-    status.value += (node.id        -> ClientStatus())
-    accounts.value += (node.id      -> Var(Map.empty[Address, Var[Account]]))
-    contracts.value += (node.id     -> Var(Map.empty[Address, Var[Account]]))
-    receipts.value += (node.id      -> Var(Map.empty[ByteVector, Var[Option[Receipt]]]))
-    stxs.value += (node.id          -> Vars.empty[SignedTransaction])
-    addressInNode.value += (node.id -> Vars.empty[Address])
-  }
-
-  def removeNodeInfo(node: NodeInfo): Unit = {
-    nodeInfos.value -= node.id
-    blocks.value -= node.id
-    status.value -= node.id
-    accounts.value -= node.id
-    contracts.value -= node.id
-    receipts.value -= node.id
-    stxs.value -= node.id
-    addressInNode.value -= node.id
-    clients.value -= node.id
   }
 
   def updateStatus(id: String, client: JbokClient): IO[Unit] =

@@ -2,10 +2,11 @@ package jbok.common.log
 
 import java.nio.file.Paths
 
-import jbok.JbokSpec
+import cats.effect.IO
+import jbok.common.CommonSpec
 import jbok.common.FileUtil
 
-class LoggerSpec extends JbokSpec {
+class LoggerSpec extends CommonSpec {
   "Logger" should {
     "set root log level" in {
       Log.i("should be seen").unsafeRunSync()
@@ -19,10 +20,10 @@ class LoggerSpec extends JbokSpec {
       Log.t("should not be written into file").unsafeRunSync()
 
       val path = Paths.get("logs/jbok.log")
-      val text = FileUtil.read(path).unsafeRunSync()
+      val text = FileUtil[IO].read(path).unsafeRunSync()
       text.contains("should be written into file") shouldBe true
       text.contains("should not be written into file") shouldBe false
-      FileUtil.remove(path).unsafeRunSync()
+      FileUtil[IO].remove(path).unsafeRunSync()
     }
 
     "level1" ignore {

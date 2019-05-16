@@ -15,7 +15,7 @@ trait PriorityQueue[F[_], A] {
     */
   def enqueue1(a: A, priority: Int): F[Unit]
 
-  def enqueue: Sink[F, (A, Int)] = _.evalMap(t => enqueue1(t._1, t._2))
+  def enqueue: Pipe[F, (A, Int), Unit] = _.evalMap(t => enqueue1(t._1, t._2))
 
   /**
     * Tries to dequeue the higher priority element. In case there

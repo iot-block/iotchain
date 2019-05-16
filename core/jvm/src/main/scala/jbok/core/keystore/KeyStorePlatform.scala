@@ -15,9 +15,10 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
 import jbok.common.Terminal
+import jbok.common.log.Logger
 
 class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
-  private[this] val log = jbok.common.log.getLogger("KeyStore")
+  private[this] val log = Logger[F]
 
   private val keyLength = 32
 
@@ -76,8 +77,8 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       _         <- overwrite(keyFile, newEncKey)
     } yield true
 
-  override def isEmpty: F[Boolean] =
-    listAccounts.map(_.isEmpty)
+  override def clear: F[Unit] =
+    F.delay(keyStoreDir.delete()) >> F.delay(keyStoreDir.createIfNotExists(asDirectory = true))
 
   private def save(encryptedKey: EncryptedKey): F[Unit] = {
     val json = encryptedKey.asJson.spaces2

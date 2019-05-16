@@ -1,0 +1,14 @@
+db:
+  driver: "com.mysql.cj.jdbc.MysqlDataSource"
+  url: "jdbc:h2:mem:test;MODE=MYSQL;DB_CLOSE_DELAY=-1"
+  user: "sa"
+  password: ""
+
+service:
+  enabled: false
+  secretKey: "change me"
+  host: "0.0.0.0"
+  port: 10087
+  enableGzip: false
+  logBody: true
+  qps: 1000

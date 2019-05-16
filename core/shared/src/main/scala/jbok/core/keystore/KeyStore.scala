@@ -30,5 +30,5 @@ trait KeyStore[F[_]] {
       newPassphrase: String
   ): F[Boolean]
 
-  def isEmpty: F[Boolean]
+  def clear: F[Unit]
 }

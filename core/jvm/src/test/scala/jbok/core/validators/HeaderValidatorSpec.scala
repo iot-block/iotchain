@@ -1,18 +1,15 @@
 package jbok.core.validators
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.BlockHeader
 import jbok.core.validators.HeaderInvalid._
 import scodec.bits._
-import jbok.common.testkit._
-import jbok.core.testkit._
 
-class HeaderValidatorSpec extends JbokSpec {
-  implicit val config = testConfig
-
-  val history = random[History[IO]]
+class HeaderValidatorSpec extends CoreSpec {
+  val history = locator.unsafeRunSync().get[History[IO]]
 
   val validHeader = BlockHeader(
     parentHash = hex"d882d5c210bab4cb7ef0b9f3dc2130cb680959afcd9a8f9bf83ee6f13e2f9da3",

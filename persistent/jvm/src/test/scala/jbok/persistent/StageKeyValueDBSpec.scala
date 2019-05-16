@@ -1,11 +1,11 @@
 package jbok.persistent
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.codec.rlp.implicits._
 import scodec.bits.ByteVector
 
-class StageKeyValueDBSpec extends JbokSpec {
+class StageKeyValueDBSpec extends CommonSpec {
   class Fixture {
     val db        = KeyValueDB.inmem[IO].unsafeRunSync()
     val namespace = ByteVector.empty

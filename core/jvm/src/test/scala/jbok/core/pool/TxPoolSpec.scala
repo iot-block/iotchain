@@ -2,30 +2,27 @@ package jbok.core.pool
 
 import cats.effect.IO
 import cats.implicits._
-import jbok.JbokSpec
-import jbok.common.execution._
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.SignedTransaction
 import jbok.core.testkit._
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.testkit._
-
+import monocle.macros.syntax.lens._
 import scala.concurrent.duration._
 
-class TxPoolSpec extends JbokSpec {
+class TxPoolSpec extends CoreSpec {
   "TxPool" should {
-    implicit val config = testConfig
-
     "store pending transactions" in {
-      val txPool = random[TxPool[IO]]
+      val txPool = locator.unsafeRunSync().get[TxPool[IO]]
       val txs    = random[List[SignedTransaction]](genTxs(1, 10))
       txPool.addTransactions(SignedTransactions(txs)).unsafeRunSync()
       txPool.getPendingTransactions.unsafeRunSync().keys should contain theSameElementsAs txs
     }
 
     "ignore known transactions" in {
-      val txPool = random[TxPool[IO]]
+      val txPool = locator.unsafeRunSync().get[TxPool[IO]]
       val txs    = random[List[SignedTransaction]](genTxs(1, 10))
       val stxs   = SignedTransactions(txs)
       txPool.addTransactions(stxs).unsafeRunSync()
@@ -34,7 +31,7 @@ class TxPoolSpec extends JbokSpec {
     }
 
     "broadcast received pending transactions to other peers" in {
-      val txPool = random[TxPool[IO]]
+      val txPool = locator.unsafeRunSync().get[TxPool[IO]]
       val txs    = random[List[SignedTransaction]](genTxs(1, 10))
 //      val peerSet = genPeerSet(1, 10).sample.get
       val output = txPool.addTransactions(SignedTransactions(txs)).unsafeRunSync()
@@ -42,7 +39,7 @@ class TxPoolSpec extends JbokSpec {
     }
 
     "override transactions with the same sender and nonce" in {
-      val txPool = random[TxPool[IO]]
+      val txPool = locator.unsafeRunSync().get[TxPool[IO]]
       val tx1    = genTx.sample.get
       val tx2    = genTx.sample.get
       val tx3    = genTx.sample.get
@@ -66,14 +63,14 @@ class TxPoolSpec extends JbokSpec {
     }
 
     "remove transaction on timeout" in {
-      val conf = testConfig.withTxPool(_.copy(transactionTimeout = 100.millis))
-      val txPool = random[TxPool[IO]](genTxPool(conf))
+      val config2 = config.lens(_.txPool.transactionTimeout).set(100.millis)
+      val txPool = withConfig(config2).unsafeRunSync().get[TxPool[IO]]
       val stx    = random[List[SignedTransaction]](genTxs(1, 1)).head
       val p = for {
         _  <- txPool.addTransactions(SignedTransactions(stx :: Nil))
         p1 <- txPool.getPendingTransactions
         _ = p1.size shouldBe 1
-        p2 <- T.sleep(2.seconds) >> txPool.getPendingTransactions
+        p2 <- timer.sleep(2.seconds) >> txPool.getPendingTransactions
         _ = p2.size shouldBe 0
       } yield ()
       p.unsafeRunSync()

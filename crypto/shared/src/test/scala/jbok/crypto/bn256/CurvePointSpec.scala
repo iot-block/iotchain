@@ -1,8 +1,8 @@
 package jbok.crypto.bn256
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 
-class CurvePointSpec extends JbokSpec {
+class CurvePointSpec extends CommonSpec {
   "curve point" should {
     val cp = CurvePoint.curveGen * BigInt("9876543210")
     "a + a = a * 2" in {

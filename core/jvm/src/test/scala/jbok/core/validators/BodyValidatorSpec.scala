@@ -1,14 +1,13 @@
 package jbok.core.validators
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.core.models._
 import jbok.core.validators.BodyInvalid.{BodyOmmersHashInvalid, BodyTransactionsHashInvalid}
-import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
 import jbok.codec.rlp.implicits._
 
-class BodyValidatorSpec extends JbokSpec {
+class BodyValidatorSpec extends CommonSpec {
   val validBlockHeader = BlockHeader(
     parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
     ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",

@@ -2,11 +2,11 @@ package jbok.crypto
 
 import java.nio.charset.StandardCharsets
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.crypto.password._
 import scodec.bits.ByteVector
 
-class SCryptSpec extends JbokSpec {
+class SCryptSpec extends CommonSpec {
   "SCrypt" should {
     "correctly evaluate for the test vectors" in {
       // https://datatracker.ietf.org/doc/rfc7914/?include_text=1

@@ -1,29 +1,32 @@
 package jbok.core.ledger
 
 import cats.effect.IO
-import jbok.JbokSpec
-import jbok.common.testkit._
-import jbok.core.testkit._
-import jbok.common.execution._
-import jbok.core.models._
 import cats.implicits._
-import jbok.core.ledger.TypedBlock.{ReceivedBlock, SyncBlocks}
-import jbok.core.peer.Peer
-import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
+import jbok.common.testkit._
+import jbok.core.CoreSpec
+import jbok.core.consensus.Consensus
+import jbok.core.ledger.TypedBlock.{ReceivedBlock, SyncBlocks}
+import jbok.core.models._
+import jbok.core.peer.Peer
+import jbok.core.testkit._
 import jbok.crypto._
+import scodec.bits.ByteVector
 
-class BlockExecutorSpec extends JbokSpec {
+class BlockExecutorSpec extends CoreSpec {
   "BlockExecutor" should {
-    implicit val config = testConfig
     "calculate the value, gas and reward transfer" in {
-      val executor = random[BlockExecutor[IO]]
+      val objects = locator.unsafeRunSync()
+      val executor = objects.get[BlockExecutor[IO]]
+      val history = objects.get[History[IO]]
+      val consensus = objects.get[Consensus[IO]]
+
       val txs      = random[List[SignedTransaction]](genTxs(1, 1))
       val stx      = txs.head
       val sender   = stx.senderAddress.get
-      val parent   = executor.history.getBestBlock.unsafeRunSync()
-      val header   = executor.consensus.prepareHeader(Some(parent), Nil).unsafeRunSync()
-      val world = executor.history
+      val parent   = history.getBestBlock.unsafeRunSync()
+      val header   = consensus.prepareHeader(Some(parent), Nil).unsafeRunSync()
+      val world = history
         .getWorldState(UInt256.Zero, Some(parent.header.stateRoot))
         .unsafeRunSync()
       val initSenderBalance =
@@ -41,13 +44,17 @@ class BlockExecutorSpec extends JbokSpec {
     }
 
     "change the nonce" in {
-      val executor = random[BlockExecutor[IO]]
+      val objects = locator.unsafeRunSync()
+      val executor = objects.get[BlockExecutor[IO]]
+      val history = objects.get[History[IO]]
+      val consensus = objects.get[Consensus[IO]]
+
       val txs      = random[List[SignedTransaction]](genTxs(1, 1))
       val stx      = txs.head
       val sender   = stx.senderAddress.get
-      val parent   = executor.history.getBestBlock.unsafeRunSync()
-      val header   = executor.consensus.prepareHeader(Some(parent), Nil).unsafeRunSync()
-      val world = executor.history
+      val parent   = history.getBestBlock.unsafeRunSync()
+      val header   = consensus.prepareHeader(Some(parent), Nil).unsafeRunSync()
+      val world = history
         .getWorldState(UInt256.Zero, Some(parent.header.stateRoot))
         .unsafeRunSync()
       val preNonce  = world.getAccount(sender).unsafeRunSync().nonce
@@ -58,32 +65,40 @@ class BlockExecutorSpec extends JbokSpec {
     }
 
     "executeBlock for a valid block without txs" in {
-      val executor = random[BlockExecutor[IO]]
+      val objects = locator.unsafeRunSync()
+      val executor = objects.get[BlockExecutor[IO]]
+
       val block    = random[List[Block]](genBlocks(1, 1)).head
       val result   = executor.handleSyncBlocks(SyncBlocks(block :: Nil, None)).unsafeRunSync()
     }
 
     "create sender account if it does not exists" in {
-      val executor  = random[BlockExecutor[IO]]
+      val objects = locator.unsafeRunSync()
+      val executor = objects.get[BlockExecutor[IO]]
+      val history = objects.get[History[IO]]
+
       val txs       = random[List[SignedTransaction]](genTxs(10, 10))
       val block     = random[Block](genBlock(stxsOpt = Some(txs)))
       val peer      = random[Peer[IO]]
-      val number    = executor.history.getBestBlockNumber.unsafeRunSync()
+      val number    = history.getBestBlockNumber.unsafeRunSync()
       val receivers = block.body.transactionList.map(_.receivingAddress)
       val xs =
-        receivers.traverse[IO, Option[Account]](addr => executor.history.getAccount(addr, number)).unsafeRunSync()
+        receivers.traverse[IO, Option[Account]](addr => history.getAccount(addr, number)).unsafeRunSync()
       xs.forall(_.isEmpty) shouldBe true
 
       executor.handleReceivedBlock(ReceivedBlock(block, peer)).unsafeRunSync()
 
-      val number2 = executor.history.getBestBlockNumber.unsafeRunSync()
+      val number2 = history.getBestBlockNumber.unsafeRunSync()
       val xs2 =
-        receivers.traverse[IO, Option[Account]](addr => executor.history.getAccount(addr, number2)).unsafeRunSync()
+        receivers.traverse[IO, Option[Account]](addr => history.getAccount(addr, number2)).unsafeRunSync()
       xs2.forall(_.isDefined) shouldBe true
     }
 
     "create contract account" in {
-      val executor = random[BlockExecutor[IO]]
+      val objects = locator.unsafeRunSync()
+      val executor = objects.get[BlockExecutor[IO]]
+      val history = objects.get[History[IO]]
+
       val tx = Transaction(
         nonce = 0,
         receivingAddress = None,
@@ -96,14 +111,14 @@ class BlockExecutorSpec extends JbokSpec {
       val txs    = List(SignedTransaction.sign[IO](tx, testMiner.keyPair).unsafeRunSync())
       val block  = random[Block](genBlock(stxsOpt = Some(txs)))
       val peer   = random[Peer[IO]]
-      val number = executor.history.getBestBlockNumber.unsafeRunSync()
+      val number = history.getBestBlockNumber.unsafeRunSync()
 
       executor.executeBlock(block).unsafeRunSync()
 
       val hash            = (testMiner.address, UInt256(0)).asValidBytes.kec256
       val contractAddress = Address.apply(hash)
-      val contract        = executor.history.getAccount(contractAddress, BigInt(1)).unsafeRunSync().get
-      val code            = executor.history.getCode(contract.codeHash).unsafeRunSync().get
+      val contract        = history.getAccount(contractAddress, BigInt(1)).unsafeRunSync().get
+      val code            = history.getCode(contract.codeHash).unsafeRunSync().get
       println(contractAddress)
 
       code shouldBe ByteVector.fromValidHex(

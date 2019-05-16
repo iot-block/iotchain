@@ -3,34 +3,34 @@ package jbok.core.config
 import java.net.InetSocketAddress
 
 import jbok.core.models.{Address, UInt256}
-import jbok.core.peer.PeerNode
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits._
-import _root_.io.circe.syntax._
-import _root_.io.circe.parser._
-import _root_.io.circe.generic.auto._
 import better.files.{DefaultCharset, File}
 import cats.effect.IO
+import io.circe.generic.JsonCodec
 
 import scala.concurrent.duration._
 import jbok.codec.json.implicits._
-
-import scala.io.Source
+import jbok.common.log.LogConfig
+import jbok.core.peer.PeerUri
+import monocle.macros.Lenses
 
 object Configs {
+  @JsonCodec
+  @Lenses
   final case class CoreConfig(
       identity: String,
-      logLevel: String,
-      logHandler: String,
-      genesisConfig: Option[GenesisConfig],
+      log: LogConfig,
+      genesis: GenesisConfig,
       history: HistoryConfig,
       keystore: KeyStoreConfig,
       peer: PeerConfig,
       sync: SyncConfig,
       txPool: TxPoolConfig,
+      blockPool: BlockPoolConfig,
+      ommerPool: OmmerPoolConfig,
       mining: MiningConfig,
-      rpc: RpcConfig,
-      consensusAlgo: String
+      rpc: RpcConfig
   ) {
     val dataDir: String = {
       val home = System.getProperty("user.home")
@@ -52,49 +52,17 @@ object Configs {
 
     val genesisPath: String = s"${dataDir}/genesis.json"
 
-    lazy val genesis: GenesisConfig = genesisConfig match {
-      case Some(g) => g
-      case None    => GenesisConfig.fromFile(genesisPath).unsafeRunSync()
-    }
-
-    lazy val nodeKeyPair: KeyPair = peer.nodekey.getOrElse(PeerConfig.loadOrGenerateNodeKey(nodeKeyPath))
-
-    lazy val peerNode: PeerNode = PeerNode(nodeKeyPair.public, peer.host, peer.port, peer.discoveryPort)
-
-    def withIdentityAndPort(identity: String, port: Int): CoreConfig =
-      copy(identity = identity)
-        .withPeer(_.copy(port = port, discoveryPort = port + 1))
-        .withRpc(_.copy(port = port + 2))
-
-    def withHistory(f: HistoryConfig => HistoryConfig): CoreConfig =
-      copy(history = f(history))
-
-    def withKeyStore(f: KeyStoreConfig => KeyStoreConfig): CoreConfig =
-      copy(keystore = f(keystore))
-
-    def withPeer(f: PeerConfig => PeerConfig): CoreConfig =
-      copy(peer = f(peer))
-
-    def withSync(f: SyncConfig => SyncConfig): CoreConfig =
-      copy(sync = f(sync))
-
-    def withTxPool(f: TxPoolConfig => TxPoolConfig): CoreConfig =
-      copy(txPool = f(txPool))
-
-    def withMining(f: MiningConfig => MiningConfig): CoreConfig =
-      copy(mining = f(mining))
-
-    def withRpc(f: RpcConfig => RpcConfig): CoreConfig =
-      copy(rpc = f(rpc))
-
-    def toJson: String =
-      this.asJson.spaces2
+//    lazy val nodeKeyPair: KeyPair = peer.nodekey.getOrElse(PeerConfig.loadOrGenerateNodeKey(nodeKeyPath))
+//
+//    lazy val peerUri: PeerUri = PeerUri.fromTcpAddr(nodeKeyPair.public, new InetSocketAddress(peer.host, peer.port))
   }
 
+  @JsonCodec
   final case class KeyStoreConfig(
       dbBackend: String
   )
 
+  @JsonCodec
   final case class HistoryConfig(
       dbBackend: String,
       frontierBlockNumber: BigInt = 0,
@@ -111,23 +79,21 @@ object Configs {
     val monetaryPolicyConfig: MonetaryPolicyConfig = MonetaryPolicyConfig()
   }
 
+  @JsonCodec
   final case class PeerConfig(
-      port: Int,
       host: String,
-      nodekey: Option[KeyPair],
-      enableDiscovery: Boolean,
-      discoveryPort: Int,
+      port: Int,
+      secret: String,
       dbBackend: String,
-      bootUris: List[String],
+      seeds: List[String],
       updatePeersInterval: FiniteDuration,
       maxOutgoingPeers: Int,
       maxIncomingPeers: Int,
-      maxPendingPeers: Int,
+      maxBufferSize: Int,
       timeout: FiniteDuration
   ) {
-    val bindAddr: InetSocketAddress      = new InetSocketAddress(host, port)
-    val discoveryAddr: InetSocketAddress = new InetSocketAddress(host, discoveryPort)
-    val bootNodes: List[PeerNode]        = bootUris.flatMap(s => PeerNode.fromStr(s).toOption.toList)
+    val bindAddr: InetSocketAddress = new InetSocketAddress(host, port)
+    val seedUris: List[PeerUri]     = seeds.flatMap(s => PeerUri.fromStr(s).toOption.toList)
   }
 
   object PeerConfig {
@@ -156,21 +122,24 @@ object Configs {
         .unsafeRunSync()
   }
 
+  @JsonCodec
   final case class RpcConfig(
       enabled: Boolean,
       host: String,
       port: Int,
       apis: String
   ) {
-    val addr = new InetSocketAddress(host, port)
+    val rpcAddr = new InetSocketAddress(host, port)
   }
 
+  @JsonCodec
   final case class MonetaryPolicyConfig(
       eraDuration: Int = 5000000,
       rewardReductionRate: Double = 0.2,
       firstEraBlockReward: BigInt = BigInt("5000000000000000000")
   )
 
+  @JsonCodec
   final case class MiningConfig(
       enabled: Boolean,
       ommersPoolSize: Int,
@@ -182,40 +151,52 @@ object Configs {
       mineRounds: Int,
       period: FiniteDuration = 15.seconds,
       epoch: BigInt = BigInt("30000"),
-      checkpointInterval: Int = 1024
+      checkpointInterval: Int = 1024,
+      minBroadcastPeers: Int = 4
   )
 
+  @JsonCodec
   final case class TxPoolConfig(
       poolSize: Int = 4096,
       transactionTimeout: FiniteDuration = 10.minutes
   )
 
+  @JsonCodec
+  final case class OmmerPoolConfig(
+      poolSize: Int,
+      ommerGenerationLimit: Int = 6,
+      ommerSizeLimit: Int = 2
+  )
+
+  @JsonCodec
+  final case class BlockPoolConfig(
+      maxBlockAhead: Int,
+      maxBlockBehind: Int
+  )
+
+  @JsonCodec
   final case class SyncConfig(
+      host: String,
+      port: Int,
       maxConcurrentRequests: Int,
       maxBlockHeadersPerRequest: Int,
       maxBlockBodiesPerRequest: Int,
-      maxReceiptsPerRequest: Int,
-      maxNodesPerRequest: Int,
       minPeersToChooseTargetBlock: Int,
-      minBroadcastPeers: Int,
       fullSyncOffset: Int,
-      fastSyncOffset: Int,
-      fastEnabled: Boolean,
       retryInterval: FiniteDuration,
       checkForNewBlockInterval: FiniteDuration,
       banDuration: FiniteDuration,
       requestTimeout: FiniteDuration
-  )
-
-  object CoreConfig {
-    def fromJson(json: String): CoreConfig =
-      decode[CoreConfig](json) match {
-        case Left(e)  => throw e
-        case Right(c) => c
-      }
-
-    val reference: CoreConfig =
-      CoreConfig.fromJson(
-        Source.fromInputStream(this.getClass.getResourceAsStream("/reference.json")).getLines().mkString("\n"))
+  ) {
+    val syncAddr: InetSocketAddress = new InetSocketAddress(host, port)
   }
+
+  @JsonCodec
+  final case class TcpConfig(
+      readTimeout: FiniteDuration,
+      writeTimeout: FiniteDuration,
+      bindHost: String,
+      bindPort: Int,
+      maxBufferSize: Int = 4 * 1024 * 1024
+  )
 }

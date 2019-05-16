@@ -40,7 +40,7 @@ final case class EncryptedKey(
     crypto: CryptoSpec,
     version: Int
 ) {
-  implicit val encryptor = AES128CTR.genEncryptor[IO]
+  private implicit val encryptor = AES128CTR.genEncryptor[IO]
 
   def decrypt(passphrase: String): Either[String, KeyPair.Secret] = {
     val dk         = deriveKey(passphrase, crypto.kdfparams)
@@ -64,7 +64,7 @@ final case class EncryptedKey(
 }
 
 object EncryptedKey {
-  implicit val encryptor = AES128CTR.genEncryptor[IO]
+  private implicit val encryptor = AES128CTR.genEncryptor[IO]
 
   def apply[F[_]](prvKey: KeyPair.Secret, passphrase: String, secureRandom: SecureRandom)(
       implicit F: Sync[F]): F[EncryptedKey] = {
@@ -100,5 +100,4 @@ object EncryptedKey {
 
   private def createMac(dk: ByteVector, ciphertext: ByteVector): ByteVector =
     (dk.slice(16, 32) ++ ciphertext).kec256
-
 }

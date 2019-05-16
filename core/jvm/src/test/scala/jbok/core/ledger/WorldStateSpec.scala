@@ -1,18 +1,16 @@
 package jbok.core.ledger
 
 import cats.effect.IO
-import jbok.JbokSpec
-import jbok.common.execution._
 import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.testkit._
 import jbok.evm.WorldState
 import jbok.persistent.KeyValueDB
 import scodec.bits._
 
-class WorldStateSpec extends JbokSpec {
+class WorldStateSpec extends CoreSpec {
   trait Fixture {
-    import jbok.common.testkit._
     val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
 
     val world = history

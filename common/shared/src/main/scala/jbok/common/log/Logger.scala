@@ -1,6 +1,7 @@
 package jbok.common.log
 
-import cats.effect.Sync
+import cats.Monad
+
 import scala.language.experimental.macros
 
 trait Logger[F[_]] {
@@ -30,5 +31,6 @@ trait Logger[F[_]] {
 }
 
 object Logger {
-  def apply[F[_]: Sync]: Logger[F] = new Logger[F] {}
+  // this is impure, but whatever
+  def apply[F[_]: Monad]: Logger[F] = new Logger[F] {}
 }

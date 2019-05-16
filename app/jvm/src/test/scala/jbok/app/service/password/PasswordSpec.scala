@@ -1,7 +1,7 @@
 package jbok.app.service.password
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 
-class PasswordSpec extends JbokSpec {
+class PasswordSpec extends CommonSpec {
   "Password Hash" should {
     "hash pw use SCrypt" in {
       val hash     = Password.hash("oho".toCharArray).unsafeRunSync()

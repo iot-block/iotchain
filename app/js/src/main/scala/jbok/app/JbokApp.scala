@@ -8,7 +8,6 @@ import com.thoughtworks.binding._
 import jbok.app.components.{SelectItem, SelectMenu, Spinner}
 import jbok.app.views.Nav.{Tab, TabList}
 import jbok.app.views._
-import jbok.common.execution._
 import org.scalajs.dom._
 import jbok.core.models.Address
 import jbok.sdk.api.BlockParam

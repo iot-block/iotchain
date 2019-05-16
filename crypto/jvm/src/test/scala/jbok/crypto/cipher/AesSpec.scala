@@ -3,12 +3,12 @@ package jbok.crypto.cipher
 import java.nio.charset.StandardCharsets
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import scodec.bits._
 import tsec.cipher.symmetric.jca._
 import tsec.cipher.symmetric.{Iv, PlainText}
 
-class AesSpec extends JbokSpec {
+class AesSpec extends CommonSpec {
 
   "AES-CBC" should {
 

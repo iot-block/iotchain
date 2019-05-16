@@ -1,10 +1,10 @@
 package jbok.core.ledger
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import jbok.core.models.{Address, Receipt}
 import scodec.bits._
 
-class BloomFilterSpec extends JbokSpec {
+class BloomFilterSpec extends CommonSpec {
   "bloom filter" should {
 
     val receiptWithoutLogs = Receipt(

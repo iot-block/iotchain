@@ -1,8 +1,8 @@
 package jbok.crypto.bn256
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 
-class PairingSpec extends JbokSpec {
+class PairingSpec extends CommonSpec {
   "pairing" in {
     val a1  = CurvePoint.curveGen * BigInt(1)
     val a2  = CurvePoint.curveGen * BigInt(2)

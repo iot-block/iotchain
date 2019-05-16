@@ -1,22 +1,19 @@
 package jbok.evm
 
 import cats.effect.IO
-import jbok.JbokSpec
+import jbok.common.testkit._
+import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.persistent.KeyValueDB
 import scodec.bits.ByteVector
-import jbok.common.testkit._
-import jbok.common.execution._
-import jbok.core.testkit._
 
-class CallOpcodesSpecByzantium extends JbokSpec {
-
-  val config     = EvmConfig.ByzantiumConfigBuilder(None)
+class CallOpcodesSpecByzantium extends CoreSpec {
+  val evmConfig  = EvmConfig.ByzantiumConfigBuilder(None)
   val history    = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
 
-  val fxt = new CallOpFixture(config, startState)
+  val fxt = new CallOpFixture(evmConfig, startState)
 
   "STATICCALL" should {
 
