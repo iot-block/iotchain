@@ -102,17 +102,19 @@ class VMTest extends CoreSpec {
       case (addr, account) => (addr, account.code)
     }
 
-    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history       = History(db)
 
     val storages = json.map {
       case (addr, account) =>
         (addr, Storage.fromMap[IO](account.storage.map(s => (UInt256(s._1), UInt256(s._2)))).unsafeRunSync())
     }
 
-    val mpt          = MerklePatriciaTrie[IO](namespaces.Node, history.db).unsafeRunSync()
+    val mpt          = MerklePatriciaTrie[IO](namespaces.Node, db).unsafeRunSync()
     val accountProxy = StageKeyValueDB[IO, Address, Account](namespaces.empty, mpt) ++ accounts
 
     WorldState[IO](
+      db,
       history,
       accountProxy,
       MerklePatriciaTrie.emptyRootHash,

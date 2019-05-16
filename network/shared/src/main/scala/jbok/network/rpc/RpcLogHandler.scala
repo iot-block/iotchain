@@ -21,6 +21,6 @@ object RpcLogHandler {
     val pathString = path.mkString(".")
     val argString  = "(" + arguments.fold(List.empty[Any])(_.productIterator.toList).mkString(",") + ")"
     val request    = pathString + argString
-    result.fold(request)(result => s"$request => $result")
+    result.fold(request)(result => s"$request, result: $result")
   }
 }

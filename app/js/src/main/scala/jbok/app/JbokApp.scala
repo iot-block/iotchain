@@ -10,7 +10,6 @@ import jbok.app.views.Nav.{Tab, TabList}
 import jbok.app.views._
 import org.scalajs.dom._
 import jbok.core.models.Address
-import jbok.sdk.api.BlockParam
 import org.scalajs.dom.raw.HTMLAnchorElement
 import scodec.bits.ByteVector
 

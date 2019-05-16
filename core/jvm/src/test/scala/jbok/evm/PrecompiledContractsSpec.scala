@@ -16,7 +16,8 @@ class PrecompiledContractsSpec extends CoreSpec {
     val origin = Address(0xcafebabe)
     val env    = ExecEnv(recipient, origin, origin, 1000, inputData, 0, Program(ByteVector.empty), null, 0)
 
-    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history       = History(db)
     val world = history
       .getWorldState()
       .unsafeRunSync()

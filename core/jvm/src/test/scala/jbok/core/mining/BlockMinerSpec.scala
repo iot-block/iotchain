@@ -15,7 +15,7 @@ class BlockMinerSpec extends CoreSpec {
       val miner   = objects.get[BlockMiner[IO]]
       val history = objects.get[History[IO]]
       val parent  = history.getBestBlock.unsafeRunSync()
-      miner.mine1(parent.some).unsafeRunSync()
+      miner.mine1(parent.some).unsafeRunSync().isRight shouldBe true
     }
 
     "mine block with transactions" in {
@@ -24,7 +24,7 @@ class BlockMinerSpec extends CoreSpec {
       val history = objects.get[History[IO]]
       val txs     = random[List[SignedTransaction]](genTxs(1, 1024))
       val parent  = history.getBestBlock.unsafeRunSync()
-      miner.mine1(parent.some, txs.some).unsafeRunSync()
+      miner.mine1(parent.some, txs.some).unsafeRunSync().isRight shouldBe true
     }
 
     "mine blocks" in {

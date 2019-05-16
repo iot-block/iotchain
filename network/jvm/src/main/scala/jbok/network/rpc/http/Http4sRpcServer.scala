@@ -1,21 +1,17 @@
 package jbok.network.rpc.http
 
-import cats.data.EitherT
 import cats.effect.{ConcurrentEffect, Resource, Sync, Timer}
 import cats.implicits._
-import com.offbynull.portmapper.mappers.upnpigd.externalmessages.RootUpnpIgdResponse.ServiceReference
-import io.circe.Json
 import io.circe
+import io.circe.Json
 import io.circe.generic.JsonCodec
-import io.circe.syntax._
-import jbok.network.rpc.{RpcRequest, RpcService, ServerFailure, ServiceResult}
-import org.http4s.{EntityDecoder, EntityEncoder, HttpRoutes, Response}
-import org.http4s.dsl.Http4sDsl
+import jbok.network.rpc.{RpcRequest, RpcService, ServiceResult}
+import org.http4s.HttpRoutes
 import org.http4s.circe.CirceEntityCodec._
-import org.http4s.implicits._
-import fs2._
+import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Server
 import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.implicits._
 
 @JsonCodec
 final case class HttpResponse(
@@ -82,6 +78,7 @@ object Http4sRpcServer {
 
   def server[F[_]](service: RpcService[F, Json])(implicit F: ConcurrentEffect[F], T: Timer[F]): Resource[F, Server[F]] =
     BlazeServerBuilder[F]
+      .bindLocal(0)
       .withHttpApp(routes[F](service).orNotFound)
       .withWebSockets(true)
       .resource

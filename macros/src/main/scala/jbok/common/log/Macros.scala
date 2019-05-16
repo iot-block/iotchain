@@ -60,7 +60,7 @@ object Macros {
     c.internal.changeOwner(message, c.internal.enclosingOwner, messageFunction.symbol)
 
     q"""
-        _root_.cats.Monad[${f.tpe.typeConstructor}].pure {
+        _root_.cats.effect.Sync[${f.tpe.typeConstructor}].delay {
          _root_.scribe.log(_root_.scribe.LogRecord[$m](
           level = $level,
           value = $level.value,

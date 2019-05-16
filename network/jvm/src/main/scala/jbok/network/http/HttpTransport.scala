@@ -11,8 +11,6 @@ final class HttpTransport[F[_]](baseUri: String, client: Client[F])(implicit F: 
   override def fetch(request: RpcRequest[Json]): F[Json] = {
     val uri = request.path.foldLeft(Uri.unsafeFromString(baseUri))(_ / _)
     val req = Request[F](Method.POST, uri = uri).withEntity(request.payload)
-    HttpClients.okHttp[F].use { client =>
-      client.fetchAs[Json](req)
-    }
+    client.fetchAs[Json](req)
   }
 }

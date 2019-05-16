@@ -1,6 +1,6 @@
 package jbok.core.models
 
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
@@ -27,9 +27,13 @@ object Address {
 
   implicit val codec: RlpCodec[Address] = rlp(codecs.bytes.xmap[Address](Address.apply, _.bytes))
 
-  implicit val addressJsonEncoder: Encoder[Address] = bytesEncoder.contramap[Address](_.bytes)
+  implicit val addressEncoder: Encoder[Address] = Encoder.encodeString.contramap[Address](_.toString)
 
-  implicit val addressJsonDecoder: Decoder[Address] = bytesDecoder.map(Address.apply)
+  implicit val addressDecoder: Decoder[Address] = Decoder.decodeString.map(Address.fromHex)
+
+  implicit val addressKeyEncoder: KeyEncoder[Address] = KeyEncoder.encodeKeyString.contramap[Address](_.toString)
+
+  implicit val addressKeyDecoder: KeyDecoder[Address] = KeyDecoder.decodeKeyString.map[Address](Address.fromHex)
 
   @JSExport("fromString")
   def fromHex(hex: String): Address = Address.apply(ByteVector.fromValidHex(hex))

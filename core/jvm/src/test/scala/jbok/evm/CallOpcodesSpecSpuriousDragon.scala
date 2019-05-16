@@ -9,7 +9,8 @@ import jbok.persistent.KeyValueDB
 
 class CallOpcodesSpecSpuriousDragon extends CoreSpec {
   val evmConfig  = EvmConfig.SpuriousDragonConfigBuilder(None)
-  val history    = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history       = History(db)
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
   import evmConfig.feeSchedule._
 

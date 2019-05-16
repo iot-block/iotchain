@@ -40,7 +40,7 @@ object JsMessageBuilder {
 
     def pack(payload: ByteBuffer): Message = payload.arrayBuffer.slice(payload.position, payload.limit)
 
-    def unpack(msg: Message): F[Option[ByteBuffer]] = (m: Any) match {
+    def unpack(msg: Message): F[Option[ByteBuffer]] = (msg: Any) match {
       case a: ArrayBuffer => F.pure(Option(TypedArrayBuffer.wrap(a)))
       case b: Blob        => readBlob[F, ArrayBuffer, ByteBuffer](_.readAsArrayBuffer(b))(TypedArrayBuffer.wrap(_))
       case _              => F.pure(None)

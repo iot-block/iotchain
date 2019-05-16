@@ -5,10 +5,16 @@ db:
   password: ""
 
 service:
-  enabled: false
-  secretKey: "change me"
-  host: "0.0.0.0"
-  port: 10087
-  enableGzip: false
-  logBody: true
-  qps: 1000
+  enable: true
+  enableHttp2: true
+  enableWebsockets: false
+  secure: true
+  host: localhost
+  port: 30315
+  apis:
+    - account
+    - admin
+    - block
+    - contract
+    - personal
+    - transaction

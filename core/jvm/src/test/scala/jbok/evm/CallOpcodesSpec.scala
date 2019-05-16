@@ -11,7 +11,8 @@ import scodec.bits.ByteVector
 
 class CallOpcodesSpec extends CoreSpec {
   val evmConfig     = EvmConfig.FrontierConfigBuilder(None)
-  val history    = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history       = History(db)
   val startState = history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
   import evmConfig.feeSchedule._
 

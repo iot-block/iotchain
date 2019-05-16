@@ -48,7 +48,8 @@ object testkit {
     import CoreSpec.chainId
     import CoreSpec.timer
     import CoreSpec.metrics
-    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history       = History(db)
 
     history
       .getWorldState()

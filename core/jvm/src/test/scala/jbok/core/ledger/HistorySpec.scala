@@ -15,6 +15,12 @@ class HistorySpec extends CoreSpec {
     val objects = locator.unsafeRunSync()
     val history = objects.get[History[IO]]
 
+    "load genesis config" in {
+      val addresses = genesis.alloc.keysIterator.toList
+      val accounts  = addresses.flatMap(addr => history.getAccount(addr, 0).unsafeRunSync())
+      accounts.length shouldBe addresses.length
+    }
+
     // accounts, storages and codes
     "put and get account node" in {
       forAll { (addr: Address, acc: Account) =>

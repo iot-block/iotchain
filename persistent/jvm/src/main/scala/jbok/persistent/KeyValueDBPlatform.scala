@@ -1,18 +1,14 @@
 package jbok.persistent
+import java.nio.file.Paths
 
-import cats.effect.{Sync, Timer}
-import jbok.common.metrics.Metrics
-import jbok.persistent.leveldb.LevelDB
-import jbok.persistent.rocksdb.Rocks
+import cats.effect.{ContextShift, Resource, Sync, Timer}
+import jbok.persistent.rocksdb.RocksDB
 
-trait KeyValueDBPlatform {
-
-  def _forBackendAndPath[F[_]: Sync](backend: String, path: String)(implicit T: Timer[F],
-                                                                    M: Metrics[F]): F[KeyValueDB[F]] =
-    backend match {
-      case "inmem"   => KeyValueDB.inmem[F]
-      case "leveldb" => LevelDB[F](path)
-      case "rocksdb" => Rocks[F](path)
-      case x         => throw new Exception(s"backend ${x} is not supported")
+object KeyValueDBPlatform {
+  def resource[F[_]](config: PersistConfig)(implicit F: Sync[F], cs: ContextShift[F], T: Timer[F]): Resource[F, KeyValueDB[F]] =
+    config.driver match {
+      case "inmem"   => Resource.liftF(KeyValueDB.inmem[F])
+      case "rocksdb" => RocksDB.resource[F](Paths.get(config.path))
+      case driver    => Resource.liftF(F.raiseError(new IllegalArgumentException(s"database driver=${driver} is not supported")))
     }
 }

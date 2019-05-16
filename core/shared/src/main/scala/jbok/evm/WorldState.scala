@@ -6,16 +6,18 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common._
+import jbok.common.log.Logger
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.store.namespaces
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
-import jbok.persistent.{DBErr, StageKeyValueDB}
+import jbok.persistent.{DBErr, KeyValueDB, StageKeyValueDB}
 import scodec.bits._
 import scodec.bits.ByteVector
 
 final case class WorldState[F[_]](
+    db: KeyValueDB[F],
     history: History[F],
     accountProxy: StageKeyValueDB[F, Address, Account],
     stateRootHash: ByteVector = MerklePatriciaTrie.emptyRootHash,
@@ -25,9 +27,6 @@ final case class WorldState[F[_]](
     accountStartNonce: UInt256 = UInt256.Zero,
     noEmptyAccounts: Boolean = true
 )(implicit F: Sync[F]) {
-  private[this] val log = jbok.common.log.getLogger("WorldState")
-
-  // FIXME
   def getBlockHash(number: UInt256): F[Option[UInt256]] =
     Sync[F].pure(Some(UInt256(ByteVector(number.toString.getBytes).kec256)))
 
@@ -61,7 +60,7 @@ final case class WorldState[F[_]](
   def getOriginalStorage(address: Address): F[Storage[F]] =
     for {
       storageRoot <- getAccountOpt(address).map(_.storageRoot).value
-      mpt         <- MerklePatriciaTrie[F](namespaces.Node, history.db, storageRoot)
+      mpt         <- MerklePatriciaTrie[F](namespaces.Node, db, storageRoot)
       s = StageKeyValueDB[F, UInt256, UInt256](namespaces.empty, mpt)
     } yield Storage[F](s)
 
@@ -155,9 +154,7 @@ final case class WorldState[F[_]](
       createdAddress <- updatedWorld.createContractAddress(creatorAddr)
     } yield createdAddress -> updatedWorld
 
-  def create2AddressWithOpCode(creatorAddr: Address,
-                               salt: ByteVector,
-                               initCode: ByteVector): F[(Address, WorldState[F])] =
+  def create2AddressWithOpCode(creatorAddr: Address, salt: ByteVector, initCode: ByteVector): F[(Address, WorldState[F])] =
     for {
       creatorAccount <- getAccount(creatorAddr)
       updateWorld = putAccount(creatorAddr, creatorAccount.increaseNonce())

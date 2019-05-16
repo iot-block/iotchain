@@ -1,9 +1,15 @@
 package jbok.app.cli
 
+import java.nio.file.Paths
+import java.time.{Instant, LocalDateTime, ZoneId}
+
 import cats.effect._
 import cats.implicits._
 import fs2._
-import jbok.app.{AppModule, JbokClient}
+import jbok.app.AppModule
+import jbok.app.config.FullConfig
+import jbok.common.log.{Level, Logger}
+import jbok.core.api.{JbokClient, JbokClientPlatform}
 import net.team2xh.onions.components._
 import net.team2xh.onions.components.widgets.Label
 import net.team2xh.scurses.Scurses
@@ -17,21 +23,30 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
   // layout
   val frame = Frame(Some("JBOK"), debug = true)
   val left  = frame.panel
-  val right = left.splitRight
+  left.title = "status"
+  val middle  = left.splitRight
+  val right   = middle.splitRight
+  val middle1 = middle.splitDown
+  val middle2 = middle1.splitDown
+  middle1.title = "incoming"
+  middle2.title = "outgoing"
 
   // history
   val bestBlockNumber     = Label(left, "0")
   val bestBlockHash       = Label(left, "")
   val pendingTransactions = Label(left, "0")
+  val totalDifficulty     = Label(left, "0")
   def renderHistory =
     for {
-      bestBlockOpt <- client.public.bestBlockNumber >>= client.public.getBlockByNumber
-      bestBlock <- F.fromOption(bestBlockOpt, new Exception(""))
-      txs       <- client.admin.pendingTransactions
+      bestBlockOpt <- client.block.getBestBlockNumber >>= client.block.getBlockByNumber
+      bestBlock    <- F.fromOption(bestBlockOpt, new Exception(""))
+      td           <- client.block.getTotalDifficultyByHash(bestBlock.header.hash)
+      txs          <- client.admin.pendingTransactions
     } yield {
-      bestBlockNumber.text := bestBlock.header.number.toString
-      bestBlockHash.text := bestBlock.header.hash.toHex
-      pendingTransactions.text := txs.size.toString
+      bestBlockNumber.text := s"bestBlockNumber: ${bestBlock.header.number}"
+      bestBlockHash.text := s"bestBlockHash: ${bestBlock.header.hash.toHex}"
+      totalDifficulty.text := s"totalDifficulty: ${td.getOrElse(BigInt(0))}"
+      pendingTransactions.text := s"pendingTxs: ${txs.size}"
       frame.redraw()
     }
 
@@ -44,50 +59,75 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
       outgoingPeers <- client.admin.outgoingPeers
     } yield {
       incomingPeers.foreach { peer =>
-          val text = s"${peer.uri} [${peer.source}]"
-          if (incoming.contains(peer.uri.toString)) {
-            incoming(peer.uri.toString).text := text
-          } else {
-            incoming += peer.uri.toString -> Label(right, text)
-          }
+        val text = s"incoming: ${peer.address}"
+        if (incoming.contains(peer.uri.toString)) {
+          incoming(peer.uri.toString).text := text
+        } else {
+          incoming += peer.uri.toString -> Label(middle1, text)
+        }
       }
 
       outgoingPeers.foreach { peer =>
-          val text = s"${peer.uri} [${peer.source}]"
-          if (outgoing.contains(peer.uri.toString)) {
-            outgoing(peer.uri.toString).text := text
-          } else {
-            outgoing += peer.uri.toString -> Label(right, text)
-          }
+        val text = s"outgoing: ${peer.address}"
+        if (outgoing.contains(peer.uri.toString)) {
+          outgoing(peer.uri.toString).text := text
+        } else {
+          outgoing += peer.uri.toString -> Label(middle2, text)
+        }
       }
+
+      frame.redraw()
     }
 
+  // blocks
+  val blocks = mutable.ArrayBuffer[Label](List.fill(10)(Label(right, "")): _*)
+  val renderBlocks = for {
+    start   <- client.block.getBestBlockNumber
+    headers <- client.block.getBlockHeadersByNumber((start - 10) max 0, 10)
+    bodies  <- client.block.getBlockBodies(headers.map(_.hash))
+  } yield {
+    headers.zip(bodies).reverse.zipWithIndex.map { case ((header, body), idx) =>
+      val datetime = LocalDateTime.ofInstant(Instant.ofEpochMilli(header.unixTimestamp), ZoneId.systemDefault())
+      val text = s"(${header.number}) #${header.hash.toHex.take(7)} #txs=${body.transactionList.length} state=${header.stateRoot.toHex.take(7)} [${datetime}]"
+      blocks(idx).text := text
+    }
+
+    frame.redraw()
+  }
+
   // configs
-  val peerService = Label(right, "")
-  val syncService = Label(right, "")
-  val rpcService  = Label(right, "")
+  val peerService = Label(middle1, "")
   def renderConfigs = client.admin.getCoreConfig.map { config =>
-    peerService.text := s"addr: ${config.peer.bindAddr}"
-    syncService.text := s"addr: ${config.sync.syncAddr}"
-    rpcService.text := s"enabled: ${config.rpc.enabled} addr: ${config.rpc.rpcAddr}"
-    ()
+    peerService.text := s"local addr: ${config.peer.bindAddr}"
+//    rpcService.text := s"enabled: ${config.rpc.enabled} addr: ${config.rpc.rpcAddr}"
+    frame.redraw()
   }
 
   // loop
   def loop(interval: FiniteDuration): Stream[F, Unit] =
-    Stream.eval(F.delay(frame.show())) ++
-      Stream
-        .fixedDelay[F](interval)
-        .evalMap { _ =>
-          renderHistory >> renderPeers >> renderConfigs
-        }
-        .onFinalize(F.delay(screen.close()))
+    Stream
+      .eval(F.delay(frame.show))
+      .concurrently(
+        Stream
+          .eval(renderHistory >> renderPeers >> renderConfigs >> renderBlocks >> T.sleep(interval))
+          .repeat
+      )
+      .onFinalize(F.delay(screen.close()))
 }
 
 object Cli extends IOApp {
-  override def run(args: List[String]): IO[ExitCode] =
-    AppModule.locator[IO].use { objects =>
-      val cli = new Cli[IO](objects.get[JbokClient[IO]])
-      cli.loop(2.seconds).compile.drain.as(ExitCode.Success)
+  override def run(args: List[String]): IO[ExitCode] = {
+    val resource = args match {
+      case path :: _ => AppModule.resource[IO](Paths.get(path))
+      case _         => AppModule.resource[IO]()
     }
+    resource.use { objects =>
+      val config = objects.get[FullConfig]
+      JbokClientPlatform.resource[IO](s"https://${config.app.service.host}:${config.app.service.port}").use { client =>
+        Logger.setRootLevel[IO](Level.Error).unsafeRunSync()
+        val cli = new Cli[IO](client)
+        cli.loop(5.seconds).compile.drain.as(ExitCode.Success)
+      }
+    }
+  }
 }

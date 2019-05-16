@@ -13,7 +13,8 @@ case class CreateOpFixture(evmConfig: EvmConfig) extends CoreSpec {
 
   val creatorAddr        = Address(0xcafe)
   val endowment: UInt256 = 123
-  val history            = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history       = History(db)
   val initWorld =
     history
       .getWorldState()

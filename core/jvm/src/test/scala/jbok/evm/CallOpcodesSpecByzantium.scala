@@ -10,7 +10,8 @@ import scodec.bits.ByteVector
 
 class CallOpcodesSpecByzantium extends CoreSpec {
   val evmConfig  = EvmConfig.ByzantiumConfigBuilder(None)
-  val history    = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+  val history       = History(db)
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
 
   val fxt = new CallOpFixture(evmConfig, startState)

@@ -1,35 +1,25 @@
 package jbok.core.config
 
-import better.files.File
-import cats.effect.IO
 import io.circe.generic.JsonCodec
-import io.circe.parser._
-import io.circe.syntax._
 import jbok.codec.json.implicits._
+import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
 
-import scala.collection.immutable.ListMap
-
 @JsonCodec
 final case class GenesisConfig(
-    nonce: ByteVector,
-    difficulty: BigInt,
-    extraData: ByteVector,
-    gasLimit: BigInt,
-    coinbase: ByteVector,
-    alloc: Map[String, String],
-    chainId: BigInt,
-    timestamp: Long
+    chainId: BigInt = BigInt(0),
+    alloc: Map[Address, BigInt] = Map.empty,
+    miners: List[Address] = Nil,
+    timestamp: Long = 0L,
+    coinbase: Address = Address.empty,
+    difficulty: BigInt = BigInt(0),
+    gasLimit: BigInt = BigInt("16716680"),
 ) {
-  def withAlloc(alloc: Map[Address, BigInt]): GenesisConfig =
-    copy(alloc = alloc.map { case (k, v) => k.toString -> v.toString() })
-
   lazy val header = BlockHeader(
     parentHash = ByteVector.empty,
-    ommersHash = ByteVector.empty,
-    beneficiary = coinbase,
+    beneficiary = coinbase.bytes,
     stateRoot = MerklePatriciaTrie.emptyRootHash,
     transactionsRoot = MerklePatriciaTrie.emptyRootHash,
     receiptsRoot = MerklePatriciaTrie.emptyRootHash,
@@ -39,31 +29,10 @@ final case class GenesisConfig(
     gasLimit = gasLimit,
     gasUsed = 0,
     unixTimestamp = timestamp,
-    extra = extraData
+    extra = Clique.fillExtraData(miners)
   )
 
-  lazy val body = BlockBody(Nil, Nil)
+  lazy val body = BlockBody(Nil)
 
   lazy val block = Block(header, body)
-}
-
-object GenesisConfig {
-  def generate(chainId: BigInt, alloc: ListMap[Address, BigInt]): GenesisConfig =
-    GenesisConfig(
-      nonce = hex"0x42",
-      difficulty = BigInt("1024"),
-      extraData = hex"",
-      gasLimit = BigInt("16716680"),
-      coinbase = hex"0x0000000000000000000000000000000000000000",
-      alloc = alloc.map { case (key, value) => key.toString -> value.toString },
-      chainId = chainId,
-      timestamp = 0
-    )
-
-  def fromFile(path: String): IO[GenesisConfig] =
-    IO(File(path).lines.mkString("\n")).map(text =>
-      decode[GenesisConfig](text) match {
-        case Left(e)  => throw new Exception(s"read genesis file from ${path} error, ${e}")
-        case Right(c) => c
-    })
 }

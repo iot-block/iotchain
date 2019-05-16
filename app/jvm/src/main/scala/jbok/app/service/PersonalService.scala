@@ -3,14 +3,14 @@ package jbok.app.service
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import jbok.core.config.Configs.HistoryConfig
+import jbok.core.config.HistoryConfig
 import jbok.core.keystore.{KeyStore, Wallet}
 import jbok.core.ledger.History
-import jbok.core.models.{Address, SignedTransaction}
+import jbok.core.models.Address
 import jbok.core.pool.TxPool
 import jbok.crypto._
 import jbok.crypto.signature._
-import jbok.sdk.api.{BlockParam, PersonalAPI, TransactionRequest}
+import jbok.core.api.{PersonalAPI, TransactionRequest}
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration.Duration
@@ -85,29 +85,29 @@ final class PersonalService[F[_]](
   override def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): F[Boolean] =
     keyStore.changePassphrase(address, oldPassphrase, newPassphrase)
 
-  override def getAccountTransactions(address: Address, fromBlock: BlockParam, toBlock: BlockParam): F[List[SignedTransaction]] = {
-    def collectTxs: PartialFunction[SignedTransaction, SignedTransaction] = {
-      case stx if stx.senderAddress.contains(address) => stx
-      case stx if stx.receivingAddress == address     => stx
-    }
-
-    def resolveNumber(param: BlockParam): F[BigInt] = param match {
-      case BlockParam.Earliest      => BigInt(0).pure[F]
-      case BlockParam.Latest        => history.getBestBlockNumber
-      case BlockParam.WithNumber(n) => n.pure[F]
-    }
-
-    for {
-      sn     <- resolveNumber(fromBlock)
-      en     <- resolveNumber(toBlock)
-      blocks <- (sn to en).toList.filter(_ >= BigInt(0)).traverse(history.getBlockByNumber)
-      stxsFromBlock = blocks.collect {
-        case Some(block) => block.body.transactionList.collect(collectTxs)
-      }.flatten
-      pendingStxs <- txPool.getPendingTransactions
-      stxsFromPool = pendingStxs.keys.toList.collect(collectTxs)
-    } yield stxsFromBlock ++ stxsFromPool
-  }
+//  override def getAccountTransactions(address: Address, fromBlock: BlockParam, toBlock: BlockParam): F[List[SignedTransaction]] = {
+//    def collectTxs: PartialFunction[SignedTransaction, SignedTransaction] = {
+//      case stx if stx.senderAddress.contains(address) => stx
+//      case stx if stx.receivingAddress == address     => stx
+//    }
+//
+//    def resolveNumber(param: BlockParam): F[BigInt] = param match {
+//      case BlockParam.Earliest      => BigInt(0).pure[F]
+//      case BlockParam.Latest        => history.getBestBlockNumber
+//      case BlockParam.WithNumber(n) => n.pure[F]
+//    }
+//
+//    for {
+//      sn     <- resolveNumber(fromBlock)
+//      en     <- resolveNumber(toBlock)
+//      blocks <- (sn to en).toList.filter(_ >= BigInt(0)).traverse(history.getBlockByNumber)
+//      stxsFromBlock = blocks.collect {
+//        case Some(block) => block.body.transactionList.collect(collectTxs)
+//      }.flatten
+//      pendingStxs <- txPool.getPendingTransactions
+//      stxsFromPool = pendingStxs.keys.toList.collect(collectTxs)
+//    } yield stxsFromBlock ++ stxsFromPool
+//  }
 
   private[jbok] def getMessageToSign(message: ByteVector) = {
     val prefixed: Array[Byte] =

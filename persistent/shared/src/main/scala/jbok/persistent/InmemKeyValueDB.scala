@@ -39,9 +39,6 @@ final class InmemKeyValueDB[F[_]: Sync](ref: Ref[F, Map[ByteVector, ByteVector]]
       mapRaw <- toMapRaw.map(_.filterKeys(_.startsWith(namespace)))
       xs     <- mapRaw.toList.traverse { case (k, v) => (decode[Key](k, namespace), decode[Val](v)).tupled }
     } yield xs.toMap
-
-  override protected[jbok] def close: F[Unit] =
-    ref.set(Map.empty)
 }
 
 object InmemKeyValueDB {

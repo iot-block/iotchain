@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2._
 import jbok.common.log.Logger
-import jbok.core.config.Configs.TxPoolConfig
+import jbok.core.config.TxPoolConfig
 import jbok.core.ledger.History
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.SignedTransaction
@@ -91,5 +91,6 @@ final class TxPool[F[_]](
     outbound.produce(PeerSelector.withoutTxs(stxs), stxs)
 
   val stream: Stream[F, Unit] =
-    inbound.consume.evalMap { case (peer, stxs) => receiveTransactions(peer, stxs) }
+    Stream.eval_(log.i(s"starting Core/TxPool")) ++
+      inbound.consume.evalMap { case (peer, stxs) => receiveTransactions(peer, stxs) }
 }

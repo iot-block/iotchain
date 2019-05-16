@@ -19,14 +19,14 @@ final case class TestVote(
     auth: Boolean = false
 )
 
-final case class Test(signers: List[String], votes: List[TestVote], results: List[String], epoch: BigInt = 30000)
+final case class Test(signers: List[String], votes: List[TestVote], results: List[String], epoch: Int = 30000)
 
 trait SnapshotFixture extends CoreSpec {
   def mkHistory(signers: List[Address]) = {
-    val extra            = Clique.fillExtraData(signers)
-    val config           = genesis.copy(extraData = extra)
+    val config           = genesis.copy(miners = signers)
     implicit val chainId = config.chainId
-    val history          = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val db               = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history          = History(db)
     history.initGenesis(config).unsafeRunSync()
     history
   }
@@ -61,9 +61,9 @@ class SnapshotSpec extends CoreSpec {
   def check(test: Test) = new SnapshotFixture {
     val miningConfig  = config.mining.copy(epoch = test.epoch)
     val signers       = test.signers.map(signer => address(signer))
-    val extra         = Clique.fillExtraData(signers)
-    val genesisConfig = genesis.copy(extraData = extra)
-    val history       = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val genesisConfig = genesis.copy(miners = signers)
+    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history       = History(db)
 
     history.initGenesis(genesisConfig).unsafeRunSync()
 
@@ -91,8 +91,9 @@ class SnapshotSpec extends CoreSpec {
 
     val head           = headers.last
     val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
-    val kp = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val clique         = Clique[IO](miningConfig, genesisConfig, history, Some(kp)).unsafeRunSync()
+    val kp             = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+    val mc             = miningConfig.copy(secret = kp.secret.bytes)
+    val clique         = Clique[IO](miningConfig, db, genesisConfig, history).unsafeRunSync()
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd
@@ -413,7 +414,7 @@ class SnapshotSpec extends CoreSpec {
           TestVote("B", "C", true)
         ),
         "A" :: "B" :: Nil,
-        BigInt(3)
+        3
       )
       check(test)
     }

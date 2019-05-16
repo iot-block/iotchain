@@ -50,7 +50,7 @@ final case class AppState(
       simuAccounts <- sc.simulation.getAccounts
       _ = simuAddress.value ++= simuAccounts.map(_._1)
       _ = nodes.foreach(addNodeInfo)
-      jbokClients = nodes.map(node => JbokClient(new URI(node.rpcAddr.toString)))
+      jbokClients = nodes.map(node => JbokClient(new URI(node.addr.toString)))
       _ = clients.value = nodes.map(_.id).zip(jbokClients).toMap
     } yield ()
 

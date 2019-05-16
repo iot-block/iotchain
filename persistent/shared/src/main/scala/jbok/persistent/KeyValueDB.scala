@@ -1,11 +1,15 @@
 package jbok.persistent
 
 import cats.data.OptionT
-import cats.effect.{Sync, Timer}
+import cats.effect.{Resource, Sync, Timer}
 import cats.implicits._
+import io.circe.generic.JsonCodec
 import jbok.codec.rlp.RlpCodec
 import jbok.common.metrics.Metrics
 import scodec.bits.ByteVector
+
+@JsonCodec
+final case class PersistConfig(driver: String, path: String)
 
 object DBErr {
   case object NotFound extends Exception("NotFound")
@@ -27,8 +31,6 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
   protected[jbok] def toMapRaw: F[Map[ByteVector, ByteVector]]
 
   protected[jbok] def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit]
-
-  protected[jbok] def close: F[Unit]
 
   def keys[Key: RlpCodec](namespace: ByteVector): F[List[Key]]
 
@@ -63,9 +65,7 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
   final def has[Key: RlpCodec](key: Key, namespace: ByteVector): F[Boolean] =
     encode[Key](key, namespace) >>= hasRaw
 
-  final def writeBatch[Key: RlpCodec, Val: RlpCodec](put: List[(Key, Val)],
-                                                     del: List[Key],
-                                                     namespace: ByteVector): F[Unit] =
+  final def writeBatch[Key: RlpCodec, Val: RlpCodec](put: List[(Key, Val)], del: List[Key], namespace: ByteVector): F[Unit] =
     for {
       p <- put.traverse { case (k, v) => (encode[Key](k, namespace), encode[Val](v)).tupled }
       d <- del.traverse(k => encode[Key](k, namespace))
@@ -86,12 +86,6 @@ abstract class KeyValueDB[F[_]](implicit F: Sync[F]) {
     F.delay(RlpCodec[A].decode(bytes.drop(prefix.length).bits).require.value)
 }
 
-object KeyValueDB extends KeyValueDBPlatform {
-  val INMEM = "inmem"
-
+object KeyValueDB {
   def inmem[F[_]: Sync]: F[KeyValueDB[F]] = InmemKeyValueDB[F]
-
-  def forBackendAndPath[F[_]: Sync](backend: String, path: String)(implicit T: Timer[F],
-                                                                   M: Metrics[F]): F[KeyValueDB[F]] =
-    _forBackendAndPath[F](backend, path)
 }

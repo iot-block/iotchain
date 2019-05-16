@@ -2,6 +2,7 @@ package jbok.core.models
 
 import cats.effect.Sync
 import io.circe._
+import io.circe.generic.JsonCodec
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.crypto._
@@ -11,6 +12,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("BlockHeader")
 @JSExportAll
+@JsonCodec
 final case class BlockHeader(
     parentHash: ByteVector, // B32 pre
     ommersHash: ByteVector, // B32 body
@@ -34,10 +36,4 @@ final case class BlockHeader(
 
   def extraAs[F[_], A](implicit F: Sync[F], C: RlpCodec[A]): F[A] =
     F.delay(C.decode(extra.bits).require.value)
-}
-
-object BlockHeader {
-  implicit val headerJsonEncoder: Encoder[BlockHeader] = deriveEncoder[BlockHeader]
-
-  implicit val headerJsonDecoder: Decoder[BlockHeader] = deriveDecoder[BlockHeader]
 }

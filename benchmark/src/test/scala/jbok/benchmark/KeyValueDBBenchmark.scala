@@ -3,12 +3,12 @@ package jbok.benchmark
 import better.files._
 import cats.effect.IO
 import jbok.persistent.KeyValueDB
-import jbok.persistent.leveldb.LevelDB
 import jbok.common.testkit._
 import jbok.core.testkit._
-import jbok.persistent.rocksdb.Rocks
+import jbok.persistent.rocksdb.RocksDB
 import org.openjdk.jmh.annotations.{Benchmark, OperationsPerInvocation, TearDown}
 import org.scalacheck.Gen
+import cats.implicits._
 
 class KeyValueDBBenchmark extends JbokBenchmark {
   val size = 10000
@@ -28,57 +28,14 @@ class KeyValueDBBenchmark extends JbokBenchmark {
   val dirJni   = File.newTemporaryDirectory()
   val dirRocks = File.newTemporaryDirectory()
 
-  val dbIq80  = LevelDB.iq80[IO](dirIq80.pathAsString).unsafeRunSync()
-  val dbJni   = LevelDB.jni[IO](dirJni.pathAsString).unsafeRunSync()
-  val dbRocks = Rocks[IO](dirRocks.pathAsString).unsafeRunSync()
-  var dbMem   = KeyValueDB.inmem[IO].unsafeRunSync()
-
-  @Benchmark
-  def putIq80() = {
-    val (k, v) = kvs(i)
-    i = (i + 1) % kvs.length
-    dbIq80.putRaw(k, v).unsafeRunSync()
-  }
-
-  @Benchmark
-  def putJni() = {
-    val (k, v) = kvs(i)
-    i = (i + 1) % kvs.length
-    dbJni.putRaw(k, v).unsafeRunSync()
-  }
+  val (dbRocks, close) = RocksDB.resource[IO](dirRocks.path).allocated.unsafeRunSync()
+  var dbMem            = KeyValueDB.inmem[IO].unsafeRunSync()
 
   @Benchmark
   def putRocks() = {
     val (k, v) = kvs(i)
     i = (i + 1) % kvs.length
     dbRocks.putRaw(k, v).unsafeRunSync()
-  }
-
-  @Benchmark
-  def putMem() = {
-    val (k, v) = kvs(i)
-    i = (i + 1) % kvs.length
-    dbMem.putRaw(k, v).unsafeRunSync()
-  }
-
-  @Benchmark
-  @OperationsPerInvocation(100)
-  def putBatchIq80() = {
-    i = (i + 1) % (kvs.length / 100)
-    val put = (i * 100 until (i + 1) * 100)
-      .map(i => kvs(i))
-      .toList
-    dbIq80.writeBatchRaw(put, Nil).unsafeRunSync()
-  }
-
-  @Benchmark
-  @OperationsPerInvocation(100)
-  def putBatchJni() = {
-    i = (i + 1) % (kvs.length / 100)
-    val put = (i * 100 until (i + 1) * 100)
-      .map(i => kvs(i))
-      .toList
-    dbJni.writeBatchRaw(put, Nil).unsafeRunSync()
   }
 
   @Benchmark
@@ -93,22 +50,18 @@ class KeyValueDBBenchmark extends JbokBenchmark {
 
   @Benchmark
   @OperationsPerInvocation(100)
-  def putBatchMem() = {
+  def putBatchRocksPar() = {
     i = (i + 1) % (kvs.length / 100)
     val put = (i * 100 until (i + 1) * 100)
       .map(i => kvs(i))
       .toList
-    dbMem.writeBatchRaw(put, Nil).unsafeRunSync()
+    put.parTraverse { case (k, v) => dbRocks.putRaw(k, v) }.unsafeRunSync()
   }
 
   @TearDown
   def tearDown(): Unit = {
-    dbIq80.close.unsafeRunSync()
-    dbJni.close.unsafeRunSync()
-    dbRocks.close.unsafeRunSync()
+    close.unsafeRunSync()
     dbMem = KeyValueDB.inmem[IO].unsafeRunSync()
-    LevelDB.destroy[IO](dirIq80.pathAsString, useJni = false).unsafeRunSync()
-    LevelDB.destroy[IO](dirJni.pathAsString, useJni = true).unsafeRunSync()
-    Rocks.destroy[IO](dirRocks.pathAsString).unsafeToFuture()
+    RocksDB.destroy[IO](dirRocks.path).unsafeToFuture()
   }
 }

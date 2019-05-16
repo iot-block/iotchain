@@ -1,193 +1,120 @@
 package jbok.app
 
-import java.nio.file.{Path, Paths}
+import java.net.InetSocketAddress
+import java.nio.file.Paths
 
-import _root_.io.circe.generic.auto._
-import jbok.codec.json.implicits._
-import _root_.io.circe.syntax._
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
-import io.circe.Json
-import jbok.app.NetworkBuilder.Topology
-import jbok.app.config.AppConfig
-import jbok.common.FileUtil
+import io.circe.syntax._
+import jbok.app.config.FullConfig
 import jbok.common.config.Config
 import jbok.core.config.GenesisConfig
-import jbok.core.consensus.poa.clique.Clique
-import jbok.core.keystore.KeyStorePlatform
 import jbok.core.models.Address
 import jbok.core.peer.PeerUri
-import jbok.crypto.signature.KeyPair
+import jbok.crypto.signature.KeyPair.Secret
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import monocle.macros.syntax.lens._
 import scodec.bits.ByteVector
 
-import scala.collection.immutable.ListMap
-
-sealed trait Action
-object Action {
-  final case class WriteJson(json: Json, path: Path)                     extends Action
-  final case class ImportSecret(secret: ByteVector, keystoreDir: String) extends Action
-  final case class SaveText(text: String, path: Path)                    extends Action
-}
+import scala.concurrent.duration._
 
 final case class NetworkBuilder(
-    numOfNodes: Int = 0,
-    configs: List[AppConfig] = Nil,
-    miners: List[Address] = Nil,
-    keyPairs: List[KeyPair] = Nil,
-    nodeKeyPairs: List[KeyPair] = Nil,
-    chainId: BigInt = 0,
-    alloc: ListMap[Address, BigInt] = ListMap.empty
+    base: FullConfig,
+    configs: List[FullConfig] = Nil,
 ) {
-  def check(): Unit = {
-    require(numOfNodes > 0)
-    require(configs.length == numOfNodes)
-    require(miners.nonEmpty)
-    require(keyPairs.length == numOfNodes)
-    require(nodeKeyPairs.length == numOfNodes)
-    require(chainId > 0)
+  def withBlockPeriod(n: Int): NetworkBuilder =
+    copy(base = base.lens(_.core.mining.period).set(n.seconds))
+
+  def withTrustStorePath(path: String): NetworkBuilder =
+    copy(base = base.lens(_.core.ssl.trustStorePath).set(path))
+
+  def addPeerNode(port: Int, host: String = "localhost"): NetworkBuilder = {
+    val config =
+      base
+        .lens(_.core.peer.host).set(host)
+        .lens(_.core.peer.port).set(port)
+        .lens(_.app.service.host).set(host)
+        .lens(_.app.service.port).set(port + 1)
+    copy(configs = config :: configs)
   }
 
-  def dryRun: IO[Unit] =
-    printActions(actions)
+  def addMinerNode(secret: Secret, coinbase: Address, port: Int, host: String = "localhost", sslKeyStorePath: String = "/server.jks"): NetworkBuilder = {
+    val config = base
+      .lens(_.core.peer.host).set(host)
+      .lens(_.core.peer.port).set(port)
+      .lens(_.app.service.host).set(host)
+      .lens(_.app.service.port).set(port + 1)
+      .lens(_.core.mining.enabled).set(true)
+      .lens(_.core.mining.secret).set(secret.bytes)
+      .lens(_.core.mining.coinbase).set(coinbase)
+      .lens(_.core.ssl.enabled).set(true)
+      .lens(_.core.ssl.keyStorePath).set(sslKeyStorePath)
 
-  def build: IO[Unit] =
-    actions.traverse_ {
-      case Action.WriteJson(json, path) =>
-        Config[IO].dump(json, path)
+    copy(configs = config :: configs)
+  }
 
-      case Action.ImportSecret(secret, dir) =>
-        KeyStorePlatform[IO](dir).flatMap(_.importPrivateKey(secret, "").void)
-
-      case Action.SaveText(text, path) =>
-        FileUtil[IO].dump(text, path)
+  def build: List[FullConfig] = {
+    val reversed = configs.reverse
+    val seeds = reversed.map(_.core.peer).map { peer =>
+      PeerUri.fromTcpAddr(new InetSocketAddress(peer.host, peer.port)).uri
     }
 
-  def printActions(actions: List[Action]): IO[Unit] = IO {
-    println(actions.mkString("\n"))
+    reversed.map(config => config.lens(_.core.peer.seeds).set(seeds))
   }
 
-  def actions: List[Action] = {
-    val writeConfigsActions: List[Action] =
-      configs.map(config => Action.WriteJson(config.asJson, Paths.get(s"${config.core.dataDir}/app.json")))
-
-    val writeGenesisActions: List[Action] = {
-      val genesisTemplate = GenesisConfig.generate(chainId, alloc)
-      val genesis         = Clique.generateGenesisConfig(genesisTemplate, miners)
-      configs.map(config => Action.WriteJson(genesis.asJson, Paths.get(s"${config.core.genesisPath}")))
-    }
-
-    val writeKeystoreActions: List[Action] =
-      configs
-        .zip(keyPairs)
-        .map { case (config, kp) => Action.ImportSecret(kp.secret.bytes, config.core.keystoreDir) }
-
-    val writeNodeKeys: List[Action] =
-      configs.zip(keyPairs).map { case (config, kp) => Action.SaveText(kp.secret.bytes.toHex, Paths.get(config.core.nodeKeyPath)) }
-
-    writeConfigsActions ++ writeGenesisActions ++ writeKeystoreActions ++ writeNodeKeys
-  }
-
-  def withNumOfNodes(n: Int): NetworkBuilder =
-    ???
-//    val keyPairs     = (0 until n).toList.map(_ => Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
-//    val nodeKeyPairs = (0 until n).toList.map(_ => Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
-//    val configs = (0 until n).toList.map { i =>
-//      val port = 20000 + (i * 4)
-//      val core = CoreConfig.reference
-//        .withIdentityAndPort(s"test-${i}", 20000 + (i * 4))
-//        .withMining(_.copy(minerAddress = Address(keyPairs(i))))
-//      val service =
-//        ServiceConfig(
-//          enabled = true,
-//          "localhost",
-//          port + 3,
-//          s"jdbc:sqlite:${core.dataDir}/serviceData/jbok.sqlite",
-//          "JBOK",
-//          1000
-//        )
-//      PeerNodeConfig(s"test-${i}", core, service)
-//    }
-//    copy(numOfNodes = numOfNodes, configs = configs, keyPairs = keyPairs, nodeKeyPairs = nodeKeyPairs)
-
-  def withTopology(topology: Topology): NetworkBuilder = {
-    val xs: List[AppConfig] = topology match {
-      case Topology.Star =>
-        configs
-          .zip(nodeKeyPairs)
-          .take(1)
-          .flatMap {
-            case (config, nodeKeyPair) =>
-              val kp    = nodeKeyPair
-              val seeds = List(PeerUri.fromTcpAddr(kp.public, config.core.peer.bindAddr).uri.toString)
-              val tails = configs.tail.map(_.lens(_.core.peer.seeds).set(seeds))
-              config :: tails
-          }
-
-      case Topology.Ring =>
-        val xs = configs.zip(nodeKeyPairs)
-        (xs ++ xs.take(1))
-          .sliding(2)
-          .toList
-          .map {
-            case a :: b :: Nil =>
-              val kp    = b._2
-              val seeds = List(PeerUri.fromTcpAddr(kp.public, b._1.core.peer.bindAddr).uri.toString)
-              (a._1.lens(_.core.peer.seeds).set(seeds), a._2)
-            case _ => ???
-          }
-          .map(_._1)
-
-      case Topology.Mesh =>
-        val seeds = configs.zip(nodeKeyPairs).map {
-          case (config, kp) => PeerUri.fromTcpAddr(kp.public, config.core.peer.bindAddr).uri.toString
-        }
-        configs.map(_.lens(_.core.peer.seeds).set(seeds))
-    }
-
-    copy(configs = xs)
-  }
-
-  def withChainId(bigInt: BigInt): NetworkBuilder =
-    copy(chainId = bigInt)
-
-  def withAlloc(addresses: List[Address], bigInt: BigInt): NetworkBuilder =
-    copy(alloc = ListMap((keyPairs.map(kp => Address(kp)) ++ addresses).map(_ -> bigInt): _*))
-
-  def withMiners(m: Int): NetworkBuilder =
-    copy(
-      configs = configs
-        .take(m)
-        .map(_.lens(_.core.mining.enabled).set(true).lens(_.service.enabled).set(true)) ++ configs
-        .drop(m),
-      miners = keyPairs.take(m).map(kp => Address(kp)),
-    )
+  def dump: IO[Unit] =
+    build.zipWithIndex.traverse_ { case (config, i) => Config[IO].dump(config.asJson, Paths.get(s"config-${i}.yaml")) }
 }
 
 object NetworkBuilder extends IOApp {
-  sealed trait Topology
-  object Topology {
-    case object Star extends Topology
-    case object Ring extends Topology
-    case object Mesh extends Topology
-  }
+  override def run(args: List[String]): IO[ExitCode] = {
+    val base = GenesisConfig(
+      difficulty = BigInt("1024"),
+      extraData = ByteVector.empty,
+      gasLimit = BigInt("16716680"),
+      coinbase = ByteVector.empty,
+      alloc = Map.empty,
+      chainId = BigInt(0),
+      timestamp = 0
+    )
 
-  override def run(args: List[String]): IO[ExitCode] =
-    for {
-      addresses <- args.tail
-        .map(hex => ByteVector.fromHex(hex.toLowerCase))
-        .filter(_.exists(_.length <= 20))
-        .traverse[Option, Address](_.map(Address.apply))
-        .getOrElse(List.empty)
-        .distinct
-        .pure[IO]
-      _ = println(addresses)
-      _ <- NetworkBuilder()
-        .withNumOfNodes(4)
-        .withMiners(1)
-        .withAlloc(addresses, BigInt("1" + "0" * 28))
-        .withChainId(1)
-        .withTopology(Topology.Star)
-        .build
-    } yield ExitCode.Success
+    def randomKP: KeyPair =
+      Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+
+    val miner1 = randomKP.secret
+    val miner2 = randomKP.secret
+    val miner3 = randomKP.secret
+    val miner4 = randomKP.secret
+
+    val coinbase1 = Address(randomKP)
+    val coinbase2 = Address(randomKP)
+    val coinbase3 = Address(randomKP)
+    val coinbase4 = Address(randomKP)
+
+    val genesis = GenesisBuilder(base)
+      .withAlloc(Address(randomKP), BigInt("1" + "0" * 30))
+      .withChainId(10)
+      .withMiner(miner1)
+      .withMiner(miner2)
+      //        .withMiner(miner3)
+      //        .withMiner(miner4)
+      .build
+
+    AppModule.resource[IO]().use { locator =>
+      val config = locator
+        .get[FullConfig]
+        .lens(_.core.genesis)
+        .set(genesis)
+
+      val builder = NetworkBuilder(config)
+        .withBlockPeriod(15)
+        .withTrustStorePath("/Users/xsy/dbj/jbok/bin/generated/ca/cacert.jks")
+        .addMinerNode(miner1, coinbase1, 20000, "127.0.0.2", "/Users/xsy/dbj/jbok/bin/generated/certs/certs1/server.jks")
+        .addMinerNode(miner2, coinbase2, 20000, "127.0.0.3", "/Users/xsy/dbj/jbok/bin/generated/certs/certs2/server.jks")
+        .addPeerNode(20000, "127.0.0.4")
+        .addPeerNode(20000, "127.0.0.5")
+
+      builder.dump.as(ExitCode.Success)
+    }
+  }
 }

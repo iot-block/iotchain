@@ -1,5 +1,6 @@
 package jbok.core.models
 
+import io.circe.generic.JsonCodec
 import io.circe.{Decoder, Encoder}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
@@ -8,6 +9,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("Transaction")
 @JSExportAll
+@JsonCodec
 final case class Transaction(
     nonce: BigInt,
     gasPrice: BigInt,
@@ -18,12 +20,6 @@ final case class Transaction(
 )
 
 object Transaction {
-  implicit val txJsonEncoder: Encoder[Transaction] =
-    deriveEncoder[Transaction]
-
-  implicit val txJsonDecoder: Decoder[Transaction] =
-    deriveDecoder[Transaction]
-
   def apply(
       nonce: BigInt,
       gasPrice: BigInt,

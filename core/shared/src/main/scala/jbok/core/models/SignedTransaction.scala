@@ -2,6 +2,7 @@ package jbok.core.models
 
 import cats.effect.Sync
 import cats.implicits._
+import io.circe.generic.JsonCodec
 import io.circe.{Decoder, Encoder}
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
@@ -14,6 +15,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("SignedTransaction")
 @JSExportAll
+@JsonCodec
 final case class SignedTransaction(
     nonce: BigInt,
     gasPrice: BigInt,
@@ -41,12 +43,6 @@ final case class SignedTransaction(
 }
 
 object SignedTransaction {
-  implicit val txJsonEncoder: Encoder[SignedTransaction] =
-    deriveEncoder[SignedTransaction]
-
-  implicit val txJsonDecoder: Decoder[SignedTransaction] =
-    deriveDecoder[SignedTransaction]
-
   def apply(
       tx: Transaction,
       v: BigInt,

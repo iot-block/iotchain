@@ -1,5 +1,6 @@
 package jbok.core.keystore
 
+import java.nio.file.{Path, Paths}
 import java.security.SecureRandom
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneOffset, ZonedDateTime}
@@ -9,15 +10,15 @@ import cats.effect.Async
 import cats.implicits._
 import io.circe.parser._
 import io.circe.syntax._
+import jbok.common.{FileUtil, Terminal}
+import jbok.common.log.Logger
 import jbok.core.keystore.KeyStoreError.KeyNotFound
 import jbok.core.models.Address
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
-import jbok.codec.json.implicits._
-import jbok.common.Terminal
-import jbok.common.log.Logger
+import cats.effect.Resource
 
-class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
+final class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
   private[this] val log = Logger[F]
 
   private val keyLength = 32
@@ -76,9 +77,6 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
       newEncKey <- EncryptedKey(prvKey, newPassphrase, secureRandom)
       _         <- overwrite(keyFile, newEncKey)
     } yield true
-
-  override def clear: F[Unit] =
-    F.delay(keyStoreDir.delete()) >> F.delay(keyStoreDir.createIfNotExists(asDirectory = true))
 
   private def save(encryptedKey: EncryptedKey): F[Unit] = {
     val json = encryptedKey.asJson.spaces2
@@ -155,9 +153,12 @@ class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(impl
 }
 
 object KeyStorePlatform {
-  def apply[F[_]](keyStoreDir: String)(implicit F: Async[F]): F[KeyStorePlatform[F]] =
-    for {
-      secureRandom <- F.delay(new SecureRandom())
-      dir          <- F.delay(File(keyStoreDir))
-    } yield new KeyStorePlatform[F](dir, secureRandom)
+  def resource[F[_]](dir: String)(implicit F: Async[F]): Resource[F, KeyStorePlatform[F]] =
+    (dir match {
+      case "temp" => FileUtil[F].temporaryDir()
+      case path   => FileUtil[F].open(Paths.get(path))
+    }).map { dir =>
+      val secureRandom = new SecureRandom()
+      new KeyStorePlatform[F](dir, secureRandom)
+    }
 }

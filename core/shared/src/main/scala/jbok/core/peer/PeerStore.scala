@@ -26,11 +26,8 @@ final class PeerStore[F[_]](db: KeyValueDB[F], queue: Queue[F, PeerUri])(implici
   def getAll: F[List[PeerUri]] =
     db.toMap[String, PeerUri](namespace).map(_.values.toList)
 
-  def getSeeds: F[List[PeerUri]] =
-    getAll.map(_.filter(_.source == PeerSource.Seed))
-
   def subscribe: Stream[F, PeerUri] =
-    Stream.eval_(getSeeds.flatMap(_.traverse(queue.enqueue1))) ++ queue.dequeue
+    queue.dequeue
 }
 
 object PeerStore {

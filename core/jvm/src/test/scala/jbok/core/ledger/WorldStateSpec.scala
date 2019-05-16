@@ -11,7 +11,8 @@ import scodec.bits._
 
 class WorldStateSpec extends CoreSpec {
   trait Fixture {
-    val history = History.forBackendAndPath[IO](KeyValueDB.INMEM, "").unsafeRunSync()
+    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history       = History(db)
 
     val world = history
       .getWorldState(noEmptyAccounts = false)

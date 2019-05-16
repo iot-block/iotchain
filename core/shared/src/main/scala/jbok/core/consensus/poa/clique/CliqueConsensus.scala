@@ -5,7 +5,10 @@ import cats.effect.{Sync, Timer}
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common._
+import jbok.common.log.Logger
+import jbok.core.config.MiningConfig
 import jbok.core.consensus.Consensus
+import jbok.core.ledger.History
 import jbok.core.ledger.TypedBlock._
 import jbok.core.models.{Address, Block, BlockHeader, Receipt}
 import jbok.core.pool.BlockPool
@@ -18,17 +21,17 @@ import scodec.bits.ByteVector
 import scala.concurrent.duration._
 import scala.util.Random
 
-final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
+final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], clique: Clique[F], pool: BlockPool[F])(
     implicit F: Sync[F],
     T: Timer[F]
-) extends Consensus[F](clique.history, pool) {
-  private[this] val log = jbok.common.log.getLogger("CliqueConsensus")
+) extends Consensus[F] {
+  private[this] val log = Logger[F]
 
   override def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader]): F[BlockHeader] =
     for {
       parent <- parentOpt.fold(history.getBestBlock)(_.pure[F])
       blockNumber = parent.header.number + 1
-      timestamp   = parent.header.unixTimestamp + clique.config.period.toMillis
+      timestamp   = parent.header.unixTimestamp + config.period.toMillis
       snap <- clique.applyHeaders(parent.header.number, parent.header.hash, Nil)
     } yield
       BlockHeader(
@@ -53,27 +56,25 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
   override def postProcess(executed: ExecutedBlock[F]): F[ExecutedBlock[F]] =
     F.pure(executed)
 
-  override def mine(executed: ExecutedBlock[F]): F[MinedBlock] = {
-    log.trace(s"${clique.signer} start mining ${executed.block.tag}")
+  override def mine(executed: ExecutedBlock[F]): F[Either[String, MinedBlock]] =
     if (executed.block.header.number == 0) {
-      F.raiseError(new Exception("mining the genesis block is not supported"))
+      F.pure(Left("mining the genesis block is not supported"))
     } else {
       for {
         snap <- clique.applyHeaders(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
         mined <- if (!snap.signers.contains(clique.signer)) {
-          F.raiseError(new Exception("unauthorized"))
+          Left("unauthorized").pure[F]
         } else {
           snap.recents.find(_._2 == clique.signer) match {
             case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.signers.size) =>
               // If we're amongst the recent signers, wait for the next block
               val wait = (snap.signers.size / 2 + 1 - (executed.block.header.number - seen).toInt)
-                .max(0) * clique.config.period.toMillis
+                .max(0) * config.period.toMillis
               val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
-              log.trace(s"signed recently, sleep (${delay}) seconds")
 
-              T.sleep(delay.millis) >>
-                F.raiseError(new Exception(
-                  s"${clique.signer} signed recently, must wait for others: ${executed.block.header.number}, ${seen}, ${snap.signers.size / 2 + 1}, ${snap.recents}"))
+              log.trace(s"signed recently, sleep (${delay}) seconds") >>
+                T.sleep(delay.millis) >>
+              Left(s"${clique.signer} signed recently, must wait for others: ${executed.block.header.number}, ${seen}, ${snap.signers.size / 2 + 1}, ${snap.recents}").pure[F]
 
             case _ =>
               val wait = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis())
@@ -93,16 +94,15 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
                 _      <- T.sleep(delay.millis)
                 bytes  <- Clique.sigHash[F](executed.block.header)
                 signed <- clique.sign(bytes)
-                _     = log.trace(s"${clique.signer} mined block(${executed.block.header.number})")
+                _      <- log.trace(s"${clique.signer} mined block(${executed.block.header.number})")
                 extra = CliqueExtra(Nil, signed)
                 extraBytes <- extra.asBytes[F]
                 header = executed.block.header.copy(extra = extraBytes)
-              } yield MinedBlock(executed.block.copy(header = header), executed.receipts)
+              } yield Right(MinedBlock(executed.block.copy(header = header), executed.receipts))
           }
         }
       } yield mined
     }
-  }
 
   override def verify(block: Block): F[Unit] =
     for {
@@ -112,8 +112,7 @@ final class CliqueConsensus[F[_]](clique: Clique[F], pool: BlockPool[F])(
         case Some(parent) =>
           val result = for {
             _ <- check(calcGasLimit(parent.gasLimit) == block.header.gasLimit, "wrong gasLimit")
-            _ <- check(block.header.unixTimestamp == parent.unixTimestamp + clique.config.period.toMillis,
-                       "wrong timestamp")
+            _ <- check(block.header.unixTimestamp == parent.unixTimestamp + config.period.toMillis, "wrong timestamp")
           } yield ()
           result match {
             case Left(e)  => F.raiseError(new Exception(s"block verified invalid because ${e}"))

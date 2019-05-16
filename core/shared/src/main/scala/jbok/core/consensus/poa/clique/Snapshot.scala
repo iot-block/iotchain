@@ -1,7 +1,6 @@
 package jbok.core.consensus.poa.clique
 
 import cats.effect.{Async, IO, Sync}
-import _root_.io.circe._
 import _root_.io.circe.generic.JsonCodec
 import _root_.io.circe.parser._
 import _root_.io.circe.syntax._
@@ -15,10 +14,8 @@ import jbok.persistent.KeyValueDB
 import scodec.bits._
 import scalacache.Cache
 import cats.implicits._
-import jbok.core.config.Configs.MiningConfig
-import jbok.crypto.signature.KeyPair
+import jbok.core.config.MiningConfig
 import scalacache.CatsEffect.modes._
-import scodec.Codec
 
 @JsonCodec
 final case class Vote(
@@ -35,9 +32,10 @@ final case class Tally(
 )
 
 /**
-  * [[Snapshot]] is the state of the authorization voting at a given point(block hash and number).
-  * the snapshot should be `immutable` once it has been created
+  * `Snapshot` is the state of the authorization voting at a given point(block hash and number).
+  * the snapshot should be *immutable* once it has been created
   */
+@JsonCodec
 final case class Snapshot(
     config: MiningConfig,
     number: BigInt, // Block number where the snapshot was created
@@ -145,46 +143,18 @@ final case class Snapshot(
 object Snapshot {
   val namespace = ByteVector("clique".getBytes)
 
-  implicit val addressKeyEncoder =
-    KeyEncoder.instance[Address](_.bytes.asJson.noSpaces)
-
-  implicit val addressKeyDecoder =
-    KeyDecoder.instance[Address](s => decode[ByteVector](s).map(bytes => Address(bytes)).right.toOption)
-
-  implicit val bigIntKeyEncoder =
-    KeyEncoder.instance[BigInt](_.asJson.noSpaces)
-
-  implicit val bigIntKeyDecoder =
-    KeyDecoder.instance[BigInt](s => decode[BigInt](s).right.toOption)
-
-  implicit val ee: Encoder[Either[Address, KeyPair]] =
-    Encoder.encodeEither[Address, KeyPair]("left", "right")
-
-  implicit val ed: Decoder[Either[Address, KeyPair]] =
-    Decoder.decodeEither[Address, KeyPair]("left", "right")
-
-  implicit val miningConfigJsonEncoder: Encoder[MiningConfig] = deriveEncoder[MiningConfig]
-
-  implicit val miningConfigJsonDecoder: Decoder[MiningConfig] = deriveDecoder[MiningConfig]
-
-  implicit val snapshotJsonEncoder: Encoder[Snapshot] = deriveEncoder[Snapshot]
-
-  implicit val snapshotJsonDecoder: Decoder[Snapshot] = deriveDecoder[Snapshot]
-
   implicit val byteArrayOrd: Ordering[Array[Byte]] = Ordering.by((_: Array[Byte]).toIterable)
 
   implicit val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
-  def storeSnapshot[F[_]: Async](snapshot: Snapshot, db: KeyValueDB[F], checkpointInterval: Int)(
-      implicit C: Cache[Snapshot]): F[Unit] =
+  def storeSnapshot[F[_]: Async](snapshot: Snapshot, db: KeyValueDB[F], checkpointInterval: Int)(implicit C: Cache[Snapshot]): F[Unit] =
     if (snapshot.number % checkpointInterval == 0) {
       db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace) <* C.put[F](snapshot.hash)(snapshot)
     } else {
       C.put[F](snapshot.hash)(snapshot).void
     }
 
-  def loadSnapshot[F[_]](db: KeyValueDB[F], hash: ByteVector)(implicit F: Async[F],
-                                                              C: Cache[Snapshot]): F[Option[Snapshot]] =
+  def loadSnapshot[F[_]](db: KeyValueDB[F], hash: ByteVector)(implicit F: Async[F], C: Cache[Snapshot]): F[Option[Snapshot]] =
     C.get[F](hash).flatMap {
       case Some(snap) => Sync[F].pure(snap.some)
       case None =>

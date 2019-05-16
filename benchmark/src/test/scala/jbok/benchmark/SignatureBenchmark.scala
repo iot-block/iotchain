@@ -5,6 +5,7 @@ import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, Signature}
 import org.openjdk.jmh.annotations.{Benchmark, OperationsPerInvocation}
 import fs2._
+import cats.implicits._
 
 class SignatureBenchmark extends JbokBenchmark {
   val s               = "hash benchmark"

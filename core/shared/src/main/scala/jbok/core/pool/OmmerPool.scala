@@ -3,7 +3,7 @@ package jbok.core.pool
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import jbok.core.config.Configs.OmmerPoolConfig
+import jbok.core.config.OmmerPoolConfig
 import jbok.core.models.BlockHeader
 
 final class OmmerPool[F[_]: Sync](config: OmmerPoolConfig) {

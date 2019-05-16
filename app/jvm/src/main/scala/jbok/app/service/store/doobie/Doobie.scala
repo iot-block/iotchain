@@ -64,9 +64,4 @@ object Doobie {
         te // execute JDBC operations here
       )
     } yield xa
-
-  def main(args: Array[String]): Unit = {
-    println(Write[BlockHeader])
-    println(Read[BlockHeader])
-  }
 }

@@ -17,7 +17,8 @@ lazy val jbok = project
     core.jvm,
     sdk.jvm,
     app.js,
-    app.jvm
+    app.jvm,
+    benchmark
   )
   .settings(Publish.noPublishSettings)
 
@@ -53,10 +54,11 @@ lazy val codec = crossProject(JSPlatform, JVMPlatform)
 lazy val app = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin, WebScalaJSBundlerPlugin, DockerComposePlugin))
-  .settings(Settings.common ++ DockerSettings.settings ++ DockerSettings.composeSettings ++ Libs.terminal)
+  .settings(Settings.common)
   .settings(name := "jbok-app")
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
   .jsSettings(ScalaJS.common ++ ScalaJS.webpackSettings)
+  .jvmSettings(DockerSettings.settings ++ DockerSettings.composeSettings ++ Libs.terminal)
   .dependsOn(core % CompileAndTest, common % CompileAndTest, sdk % CompileAndTest)
 
 // for integrating with sbt-web
@@ -64,9 +66,9 @@ lazy val appJS = app.js.settings(
   scalaJSUseMainModuleInitializer := true
 )
 lazy val appJVM = app.jvm.settings(
-  scalaJSProjects := Seq(appJS, sdk.js),
-  pipelineStages in Assets := Seq(scalaJSPipeline),
-  isDevMode in scalaJSPipeline := true,
+//  scalaJSProjects := Seq(appJS, sdk.js),
+//  pipelineStages in Assets := Seq(scalaJSPipeline),
+//  isDevMode in scalaJSPipeline := true,
   javaOptions in Universal ++= Seq(
     "-J-Xms2g",
     "-J-Xmx4g",

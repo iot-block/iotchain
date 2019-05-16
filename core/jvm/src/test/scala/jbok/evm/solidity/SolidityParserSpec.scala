@@ -1,11 +1,11 @@
 package jbok.evm.solidity
 
-import jbok.JbokSpec
+import jbok.common.CommonSpec
 import scodec.bits._
 import io.circe.Json
 import io.circe.syntax._
 
-class SolidityParserSpec extends JbokSpec {
+class SolidityParserSpec extends CommonSpec {
   val code =
     """contract TokenERC20 {
       |    event LogNote(

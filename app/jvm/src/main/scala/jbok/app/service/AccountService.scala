@@ -1,0 +1,58 @@
+package jbok.app.service
+
+import cats.effect.Sync
+import cats.implicits._
+import jbok.core.config.HistoryConfig
+import jbok.core.config.HistoryConfig
+import jbok.core.ledger.History
+import jbok.core.models.{Account, Address, SignedTransaction}
+import jbok.core.pool.TxPool
+import jbok.core.api.{AccountAPI, BlockTag}
+import scodec.bits.ByteVector
+
+final class AccountService[F[_]](config: HistoryConfig, history: History[F], txPool: TxPool[F], helper: ServiceHelper[F])(implicit F: Sync[F]) extends AccountAPI[F] {
+
+  override def getCode(address: Address, tag: BlockTag): F[ByteVector] =
+    for {
+      block <- helper.resolveBlock(tag)
+      world <- history.getWorldState(config.accountStartNonce, block.map(_.header.stateRoot))
+      code  <- world.getCode(address)
+    } yield code
+
+  override def getAccount(address: Address, tag: BlockTag): F[Account] =
+    for {
+      account <- helper.resolveAccount(address, tag)
+    } yield account
+
+  override def getBalance(address: Address, tag: BlockTag): F[BigInt] =
+    for {
+      account <- helper.resolveAccount(address, tag)
+    } yield account.balance.toBigInt
+
+  override def getStorageAt(address: Address, position: BigInt, tag: BlockTag): F[ByteVector] =
+    for {
+      account <- helper.resolveAccount(address, tag)
+      storage <- history.getStorage(account.storageRoot, position)
+    } yield storage
+
+  override def getTransactions(address: Address): F[List[SignedTransaction]] = ???
+
+  override def getTokenTransactions(address: Address, contract: Option[Address]): F[List[SignedTransaction]] = ???
+
+  override def getPendingTxs(address: Address): F[List[SignedTransaction]] =
+    txPool.getPendingTransactions.map(_.keys.toList.filter(_.senderAddress.exists(_ == address)))
+
+  override def getEstimatedNonce(address: Address): F[BigInt] =
+    for {
+      pending <- txPool.getPendingTransactions
+      latestNonceOpt = scala.util
+        .Try(pending.collect {
+          case (stx, _) if stx.senderAddress contains address => stx.nonce
+        }.max)
+        .toOption
+      bn              <- history.getBestBlockNumber
+      currentNonceOpt <- history.getAccount(address, bn).map(_.map(_.nonce.toBigInt))
+      defaultNonce     = config.accountStartNonce.toBigInt
+      maybeNextTxNonce = latestNonceOpt.map(_ + 1).getOrElse(defaultNonce) max currentNonceOpt.getOrElse(defaultNonce)
+    } yield maybeNextTxNonce
+}

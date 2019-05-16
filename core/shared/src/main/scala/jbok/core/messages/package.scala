@@ -8,7 +8,7 @@ package object messages {
   import jbok.codec.rlp.implicits._
   import jbok.codec.json.implicits._
 
-  @JsonCodec final case class Status(chainId: BigInt, genesisHash: ByteVector, bestNumber: BigInt) {
+  @JsonCodec final case class Status(chainId: BigInt, genesisHash: ByteVector, bestNumber: BigInt, td: BigInt, service: String) {
     def isCompatible(other: Status): Boolean =
       chainId == other.chainId && genesisHash == other.genesisHash
   }
@@ -19,39 +19,39 @@ package object messages {
     implicit val rlpCodec: RlpCodec[Status] = RlpCodec.gen[Status]
   }
 
-  @JsonCodec final case class GetBlockHeadersByNumber(start: BigInt, limit: Int)
-  object GetBlockHeadersByNumber {
-    val name = "GetBlockHeadersByNumber"
-
-    implicit val rlpCodec: RlpCodec[GetBlockHeadersByNumber] = RlpCodec.gen[GetBlockHeadersByNumber]
-  }
-
-  @JsonCodec final case class GetBlockHeadersByHash(start: ByteVector, limit: Int)
-  object GetBlockHeadersByHash {
-    val name = "GetBlockHeadersByNumber"
-
-    implicit val rlpCodec: RlpCodec[GetBlockHeadersByHash] = RlpCodec.gen[GetBlockHeadersByHash]
-  }
-
-  @JsonCodec final case class BlockHeaders(headers: List[BlockHeader])
-  object BlockHeaders {
-    val name = "BlockHeaders"
-
-    implicit val rlpCodec: RlpCodec[BlockHeaders] = RlpCodec.gen[BlockHeaders]
-  }
-
-  @JsonCodec final case class GetBlockBodies(hashes: List[ByteVector])
-  object GetBlockBodies {
-    val name = "GetBlockBodies"
-
-    implicit val rlpCodec: RlpCodec[GetBlockBodies] = RlpCodec.gen[GetBlockBodies]
-  }
-  @JsonCodec final case class BlockBodies(bodies: List[BlockBody])
-  object BlockBodies {
-    val name = "BlockBodies"
-
-    implicit val rlpCodec: RlpCodec[BlockBodies] = RlpCodec.gen[BlockBodies]
-  }
+//  @JsonCodec final case class GetBlockHeadersByNumber(start: BigInt, limit: Int)
+//  object GetBlockHeadersByNumber {
+//    val name = "GetBlockHeadersByNumber"
+//
+//    implicit val rlpCodec: RlpCodec[GetBlockHeadersByNumber] = RlpCodec.gen[GetBlockHeadersByNumber]
+//  }
+//
+//  @JsonCodec final case class GetBlockHeadersByHash(start: ByteVector, limit: Int)
+//  object GetBlockHeadersByHash {
+//    val name = "GetBlockHeadersByNumber"
+//
+//    implicit val rlpCodec: RlpCodec[GetBlockHeadersByHash] = RlpCodec.gen[GetBlockHeadersByHash]
+//  }
+//
+//  @JsonCodec final case class BlockHeaders(headers: List[BlockHeader])
+//  object BlockHeaders {
+//    val name = "BlockHeaders"
+//
+//    implicit val rlpCodec: RlpCodec[BlockHeaders] = RlpCodec.gen[BlockHeaders]
+//  }
+//
+//  @JsonCodec final case class GetBlockBodies(hashes: List[ByteVector])
+//  object GetBlockBodies {
+//    val name = "GetBlockBodies"
+//
+//    implicit val rlpCodec: RlpCodec[GetBlockBodies] = RlpCodec.gen[GetBlockBodies]
+//  }
+//  @JsonCodec final case class BlockBodies(bodies: List[BlockBody])
+//  object BlockBodies {
+//    val name = "BlockBodies"
+//
+//    implicit val rlpCodec: RlpCodec[BlockBodies] = RlpCodec.gen[BlockBodies]
+//  }
 
   @JsonCodec final case class BlockHash(hash: ByteVector, number: BigInt)
   object BlockHash {

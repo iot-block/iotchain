@@ -1,15 +1,23 @@
 package jbok.common
 
+import java.io.InputStream
 import java.nio.channels.{FileLock, OverlappingFileLockException}
+import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Path, StandardOpenOption}
 
 import better.files.File
-import cats.effect.{IO, Resource, Sync}
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import jbok.common.log.Logger
 
 trait FileUtil[F[_]] {
   def read(path: Path): F[String]
+
+  def readResource(path: String): F[String]
+
+  def open(path: Path, create: Boolean = true): Resource[F, File]
+
+  def inputStream(path: Path): Resource[F, InputStream]
 
   def dump(text: String, path: Path, create: Boolean = true): F[Unit]
 
@@ -20,9 +28,13 @@ trait FileUtil[F[_]] {
   def remove(path: Path): F[Unit]
 
   def temporaryFile(prefix: String = "", suffix: String = ""): Resource[F, File]
+
+  def temporaryDir(prefix: String = ""): Resource[F, File]
 }
 
 object FileUtil {
+  implicit val defaultCharset: Charset = StandardCharsets.UTF_8
+
   final case class FileLockErr(path: Path) extends Exception(s"path=${path.toAbsolutePath} is already locked")
 
   def apply[F[_]](implicit ev: FileUtil[F]): FileUtil[F] = ev
@@ -34,13 +46,31 @@ object FileUtil {
       log.i(s"reading text from path=${path.toAbsolutePath}") >>
         F.delay(File(path).lines.mkString("\n"))
 
+    override def readResource(path: String) =
+      log.i(s"reading text from resource=${path}") >>
+        F.delay(better.files.Resource.getAsString(path))
+
+    override def open(path: Path, create: Boolean): Resource[F, File] = Resource {
+      for {
+        file <- if (create) F.delay(File(path).createIfNotExists(createParents = true)) else F.delay(File(path))
+      } yield file -> F.unit
+    }
+
+    override def inputStream(path: Path): Resource[F, InputStream] =
+      open(path, create = false).flatMap(file =>
+        Resource {
+          for {
+            is <- F.delay(file.newInputStream)
+          } yield is -> F.delay(is.close())
+      })
+
     override def dump(text: String, path: Path, create: Boolean): F[Unit] =
       log.i(s"writing text to path=${path.toAbsolutePath}") >>
-        F.delay(File(path).createIfNotExists(createParents = true).overwrite(text))
+        open(path, create).use(file => F.delay(file.overwrite(text)).void)
 
     override def append(text: String, path: Path, create: Boolean): F[Unit] =
       log.i(s"append text to path=${path.toAbsolutePath}") >>
-        F.delay(File(path).createIfNotExists(createParents = true).append(text))
+        open(path, create).use(file => F.delay(file.append(text)).void)
 
     override def lock(path: Path, content: String): Resource[F, FileLock] =
       Resource
@@ -68,6 +98,13 @@ object FileUtil {
         file <- F.delay(File.newTemporaryFile(prefix, suffix))
         _    <- log.i(s"creating temporary file path=${file.path}")
       } yield (file, F.delay(file.delete()) >> log.i(s"deleted temporary file path=${file.path}"))
+    }
+
+    override def temporaryDir(prefix: String): Resource[F, File] = Resource {
+      for {
+        file <- F.delay(File.newTemporaryDirectory(prefix))
+        _    <- log.i(s"creating temporary dir path=${file.path}")
+      } yield (file, F.delay(file.delete()) >> log.i(s"deleted temporary dir path=${file.path}"))
     }
   }
 }

@@ -15,8 +15,8 @@ class FullNodeSpec extends AppSpec {
   "FullNode" should {
     "create a bunch of nodes and connect with ring" in {
       val configs = fillConfigs(10)(config)
-      val locators = configs.map(config => AppModule.withConfig[IO](config).allocated.unsafeRunSync()._1)
-      val nodes = locators.map(_.get[FullNode[IO]])
+//      val locators = configs.map(config => AppModule.withConfig[IO](config).allocated.unsafeRunSync()._1)
+//      val nodes = locators.map(_.get[FullNode[IO]])
 
 //      val p = for {
 //        fiber <- Stream.emits(nodes).map(_.stream).parJoinUnbounded.compile.drain.start
@@ -55,7 +55,7 @@ class FullNodeSpec extends AppSpec {
     }
 
     "create a bunch of nodes and connect with star and broadcast some blocks" in {
-      val N       = 4
+      val N = 4
 //      val configs = fillFullNodeConfigs(N)
 //      val nodes   = configs.map(config => FullNode.forConfig(config).unsafeRunSync())
 //

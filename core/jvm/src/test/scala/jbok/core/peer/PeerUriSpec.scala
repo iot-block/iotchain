@@ -17,7 +17,7 @@ class PeerUriSpec extends CommonSpec {
     "round trip" in {
       val node1 = node.right.get
       val uri   = node1.uri
-      val node2 = PeerUri.fromUri(uri)
+      val Right(node2) = PeerUri.fromStr(uri)
       node2 shouldBe node1
     }
 

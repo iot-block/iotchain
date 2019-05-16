@@ -2,6 +2,7 @@ package jbok.crypto.signature
 
 import java.math.BigInteger
 
+import cats.effect.IO
 import jbok.codec.json.implicits._
 import io.circe.generic.JsonCodec
 import scodec.bits.ByteVector
@@ -28,5 +29,11 @@ object KeyPair {
     def apply(hex: String): Secret        = apply(ByteVector.fromValidHex(hex))
     def apply(bytes: Array[Byte]): Secret = apply(ByteVector(bytes))
     def apply(bv: ByteVector): Secret     = new Secret(bv.takeRight(32).padLeft(32))
+  }
+
+  def fromSecret(secret: ByteVector): KeyPair = {
+    val sec = KeyPair.Secret(secret)
+    val pub = Signature[ECDSA].generatePublicKey[IO](sec).unsafeRunSync()
+    KeyPair(pub, sec)
   }
 }

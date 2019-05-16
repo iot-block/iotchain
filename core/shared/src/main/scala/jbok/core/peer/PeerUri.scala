@@ -9,29 +9,27 @@ import jbok.crypto.signature.KeyPair
 import jbok.crypto._
 import scodec.bits.ByteVector
 
-sealed trait PeerSource extends EnumEntry
-object PeerSource extends Enum[PeerSource] {
-  val values = findValues
+//sealed trait PeerSource extends EnumEntry
+//object PeerSource extends Enum[PeerSource] {
+//  val values = findValues
+//
+//  case object Discovery extends PeerSource
+//  case object Seed      extends PeerSource
+//  case object Admin     extends PeerSource
+//}
 
-  case object Discovery extends PeerSource
-  case object Seed      extends PeerSource
-  case object Admin     extends PeerSource
-}
-
+@JsonCodec
 final case class PeerUri(
     scheme: String,
-    pk: KeyPair.Public,
+//    pk: KeyPair.Public,
     host: String,
-    port: Int,
-    source: PeerSource
+    port: Int
 ) {
-  lazy val id: ByteVector = pk.bytes.kec256
+//  lazy val id: ByteVector = pk.bytes.kec256
 
-  lazy val uri: URI = new URI(scheme, pk.bytes.toHex, host, port, "", "", "")
+  lazy val uri: String = s"${scheme}://${host}:${port}"
 
-  lazy val address: InetSocketAddress = new InetSocketAddress(uri.getHost, uri.getPort)
-
-  override def toString: String = s"uri=${uri},source=${source}"
+  lazy val address: InetSocketAddress = new InetSocketAddress(host, port)
 }
 
 object PeerUri {
@@ -39,14 +37,8 @@ object PeerUri {
 
   val PublicLength = 64
 
-  def fromTcpAddr(pk: KeyPair.Public, addr: InetSocketAddress): PeerUri =
-    PeerUri("tcp", pk, addr.getHostName, addr.getPort, PeerSource.Seed)
-
-  def fromUri(uri: URI): PeerUri = {
-    val pk   = KeyPair.Public(uri.getUserInfo)
-    val addr = new InetSocketAddress(uri.getHost, uri.getPort)
-    fromTcpAddr(pk, addr)
-  }
+  def fromTcpAddr(addr: InetSocketAddress): PeerUri =
+    PeerUri("tcp", addr.getHostString, addr.getPort)
 
   /**
     * Parse a node string, for it to be valid it should have the format:
@@ -60,14 +52,14 @@ object PeerUri {
       case None         => Left(new Exception(s"invalid scheme"))
     }
 
-    def checkPk(uri: URI) =
-      ByteVector
-        .fromHex(uri.getUserInfo)
-        .map(hex => {
-          if (hex.length == PublicLength) Right(KeyPair.Public(hex))
-          else Left(new Exception("invalid pk length"))
-        })
-        .getOrElse(Left(new Exception("invalid pk")))
+//    def checkPk(uri: URI) =
+//      ByteVector
+//        .fromHex(uri.getUserInfo)
+//        .map(hex => {
+//          if (hex.length == PublicLength) Right(KeyPair.Public(hex))
+//          else Left(new Exception("invalid pk length"))
+//        })
+//        .getOrElse(Left(new Exception("invalid pk")))
 
     def checkAddress(uri: URI) =
       for {
@@ -83,8 +75,8 @@ object PeerUri {
     for {
       uri  <- checkURI(str)
       _    <- checkScheme(uri)
-      pk   <- checkPk(uri)
+//      pk   <- checkPk(uri)
       addr <- checkAddress(uri)
-    } yield PeerUri.fromTcpAddr(pk, addr)
+    } yield PeerUri.fromTcpAddr(addr)
   }
 }

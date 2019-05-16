@@ -4,7 +4,5 @@ import io.circe.generic.JsonCodec
 @JsonCodec
 final case class LogConfig(
     logDir: String,
-    prefix: String,
-    level: String,
-    handler: String
+    level: String
 )

@@ -2,7 +2,10 @@ package jbok.benchmark
 
 import java.util.concurrent.TimeUnit
 
+import cats.effect.IO
 import org.openjdk.jmh.annotations._
+
+import scala.concurrent.ExecutionContext
 
 @State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
@@ -21,4 +24,8 @@ import org.openjdk.jmh.annotations._
   "-XX:-UseBiasedLocking",
   "-XX:+AlwaysPreTouch"
 ))
-abstract class JbokBenchmark
+abstract class JbokBenchmark {
+  implicit val cs = IO.contextShift(ExecutionContext.global)
+
+  implicit val timer = IO.timer(ExecutionContext.global)
+}

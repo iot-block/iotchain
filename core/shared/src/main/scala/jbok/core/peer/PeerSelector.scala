@@ -25,29 +25,29 @@ object PeerSelector {
   def withoutBlock[F[_]: Sync](block: Block): PeerSelector[F] = PeerSelector { peers =>
     peers
       .traverse[F, Option[Peer[F]]] { peer =>
-      peer.hasBlock(block.header.hash).map {
-        case true  => None
-        case false => Some(peer)
+        peer.hasBlock(block.header.hash).map {
+          case true  => None
+          case false => Some(peer)
+        }
       }
-    }
       .map(_.flatten)
   }
 
   def withoutTxs[F[_]: Sync](stxs: SignedTransactions): PeerSelector[F] = PeerSelector { peers =>
     peers
       .traverse[F, Option[Peer[F]]] { peer =>
-      peer.hasTxs(stxs).map {
-        case true  => None
-        case false => Some(peer)
+        peer.hasTxs(stxs).map {
+          case true  => None
+          case false => Some(peer)
+        }
       }
-    }
       .map(_.flatten)
   }
 
-  def bestPeer[F[_]: Sync](minNumber: BigInt): PeerSelector[F] = PeerSelector { peers =>
+  def bestPeer[F[_]: Sync](minTD: BigInt): PeerSelector[F] = PeerSelector { peers =>
     peers
-      .traverse(p => p.status.get.map(_.bestNumber).map(bn => bn -> p))
-      .map(_.filter(_._1 >= minNumber).sortBy(-_._1).map(_._2))
+      .traverse(p => p.status.get.map(_.td).map(td => td -> p))
+      .map(_.filter(_._1 > minTD).sortBy(-_._1).map(_._2))
   }
 
   def randomSelectSqrt[F[_]: Sync](min: Int): PeerSelector[F] = PeerSelector { peers =>

@@ -1,14 +1,17 @@
 package jbok.core
 
 import java.nio.channels.AsynchronousChannelGroup
+import java.nio.file.Paths
 
 import better.files.File
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
 import distage.{Producer => _, _}
+import jbok.common.config.Config
+import jbok.common.log.{Level, Logger, LoggerPlatform}
 import jbok.common.metrics.Metrics
 import jbok.common.thread.ThreadUtil
-import jbok.core.config.Configs._
+import jbok.core.config._
 import jbok.core.consensus.Consensus
 import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus}
 import jbok.core.keystore.{KeyStore, KeyStorePlatform}
@@ -19,16 +22,16 @@ import jbok.core.models.Block
 import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.core.peer._
 import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
-import jbok.core.queue.{Consumer, Producer, Queue}
 import jbok.core.queue.memory.MemoryQueue
-import jbok.core.sync.{HttpSyncService, SyncClient, SyncService, SyncStatus}
+import jbok.core.queue.{Consumer, Producer, Queue}
+import jbok.core.sync.SyncClient
 import jbok.core.validators.TxValidator
 import jbok.network.Message
 import jbok.network.http.HttpClients
-import jbok.persistent.KeyValueDB
+import jbok.persistent.{KeyValueDB, KeyValueDBPlatform, PersistConfig}
 import org.http4s.client.Client
 
-class CoreModule[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
+class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
   implicit lazy val acg: AsynchronousChannelGroup = ThreadUtil.acgGlobal
 
   addImplicit[Bracket[F, Throwable]]
@@ -38,7 +41,10 @@ class CoreModule[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F
   addImplicit[Concurrent[F]]
   addImplicit[ConcurrentEffect[F]]
   addImplicit[AsynchronousChannelGroup]
+  make[CoreConfig].from(config)
   make[BigInt].from((config: CoreConfig) => config.genesis.chainId)
+
+  LoggerPlatform.initConfig[IO](config.log).unsafeRunSync()
 
   make[HistoryConfig].from((config: CoreConfig) => config.history)
   make[TxPoolConfig].from((config: CoreConfig) => config.txPool)
@@ -48,11 +54,11 @@ class CoreModule[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F
   make[SyncConfig].from((config: CoreConfig) => config.sync)
   make[PeerConfig].from((config: CoreConfig) => config.peer)
 
+  make[KeyValueDB[F]].fromResource(KeyValueDBPlatform.resource[F](config.persist))
   make[Metrics[F]].fromEffect(Metrics.default[F])
-  make[KeyValueDB[F]].fromEffect(KeyValueDB.inmem[F])
   make[History[F]].from[HistoryImpl[F]]
-  make[KeyStore[F]].fromEffect(KeyStorePlatform[F](File.newTemporaryDirectory().pathAsString))
-  make[Clique[F]].fromEffect((config: CoreConfig, history: History[F]) => Clique[F](config.mining, config.genesis, history, config.mining.minerKeyPair))
+  make[KeyStore[F]].fromResource(KeyStorePlatform.resource[F](config.keystore.dir))
+  make[Clique[F]].fromEffect((config: CoreConfig, db: KeyValueDB[F], history: History[F]) => Clique[F](config.mining, db, config.genesis, history))
   make[Consensus[F]].from[CliqueConsensus[F]]
 
   // peer
@@ -85,30 +91,20 @@ class CoreModule[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F
   make[TxPool[F]]
   make[OmmerPool[F]]
 
-  make[Ref[F, SyncStatus]].fromEffect(Ref.of[F, SyncStatus](SyncStatus.Booting))
+  make[Ref[F, NodeStatus]].fromEffect(Ref.of[F, NodeStatus](NodeStatus.WaitForPeers))
 
   make[TxValidator[F]]
   make[Semaphore[F]].fromEffect(Semaphore[F](1))
   make[BlockExecutor[F]]
   make[BlockMiner[F]]
-
-  // sync
-  make[SyncService[F]]
-  make[HttpSyncService[F]]
-  make[Client[F]].fromResource(HttpClients.okHttp[F])
   make[SyncClient[F]]
 
   make[CoreNode[F]]
 }
 
 object CoreModule {
-  def configModule(config: CoreConfig): ModuleDef = new ModuleDef {
-    make[CoreConfig].from(config)
-  }
+  val coreConfig: CoreConfig = Config[IO].readResource[CoreConfig]("config.test.yaml").unsafeRunSync()
 
-  def locator[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] =
-    Injector().produceF[F](new CoreModule[F]()).toCats
-
-  def withConfig[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] =
-    Injector().produceF[F](new CoreModule[F]().overridenBy(configModule(config))).toCats
+  def resource[F[_]: TagK](config: CoreConfig = coreConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] =
+    Injector().produceF[F](new CoreModule[F](config)).toCats
 }

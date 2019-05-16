@@ -1,7 +1,7 @@
 package jbok.core.validators
 
 import cats.effect.Sync
-import jbok.core.config.Configs.HistoryConfig
+import jbok.core.config.HistoryConfig
 import jbok.core.models._
 import jbok.core.validators.TxInvalid._
 import jbok.evm.EvmConfig
@@ -28,7 +28,7 @@ object TxInvalid {
       )
 }
 
-final class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[F], chainId: BigInt) {
+final class TxValidator[F[_]](historyConfig: HistoryConfig)(implicit F: Sync[F], chainId: BigInt) {
   import TxValidator._
 
   def validate(
@@ -76,7 +76,7 @@ final class TxValidator[F[_]](blockChainConfig: HistoryConfig)(implicit F: Sync[
     */
   private def validateGasLimitEnoughForIntrinsicGas(stx: SignedTransaction,
                                                     blockHeaderNumber: BigInt): F[SignedTransaction] = {
-    val config         = EvmConfig.forBlock(blockHeaderNumber, blockChainConfig)
+    val config         = EvmConfig.forBlock(blockHeaderNumber, historyConfig)
     val txIntrinsicGas = config.calcTransactionIntrinsicGas(stx.payload, stx.isContractInit)
     if (stx.gasLimit >= txIntrinsicGas) F.pure(stx)
     else F.raiseError(TxNotEnoughGasForIntrinsicInvalid(stx.gasLimit, txIntrinsicGas))

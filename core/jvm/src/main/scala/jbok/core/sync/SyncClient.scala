@@ -1,64 +1,73 @@
 package jbok.core.sync
 
-import cats.data.OptionT
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.{ConcurrentEffect, ContextShift, Resource, Timer}
 import cats.implicits._
 import fs2._
-import jbok.codec.rlp.implicits._
+import javax.net.ssl.SSLContext
 import jbok.common.log.Logger
-import jbok.core.config.Configs.SyncConfig
+import jbok.core.NodeStatus
+import jbok.core.api.{JbokClient, JbokClientPlatform}
+import jbok.core.config.SyncConfig
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock.SyncBlocks
 import jbok.core.ledger.{BlockExecutor, History}
-import jbok.core.messages._
 import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager, PeerSelector}
-import jbok.network.{Request, Response}
-import org.http4s.client.Client
 
 final class SyncClient[F[_]](
     config: SyncConfig,
     history: History[F],
     consensus: Consensus[F],
     executor: BlockExecutor[F],
-    syncStatus: Ref[F, SyncStatus],
+    status: Ref[F, NodeStatus],
     peerManager: PeerManager[F],
-    client: Client[F]
-)(implicit F: ConcurrentEffect[F], T: Timer[F]) {
+    ssl: Option[SSLContext]
+)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) {
   private[this] val log = Logger[F]
 
-  def choosePeer: F[Option[Peer[F]]] =
-    (for {
-      connected <- OptionT.liftF(peerManager.connected)
-      current   <- OptionT.liftF(history.getBestBlockNumber)
-      bestPeer  <- OptionT(PeerSelector.bestPeer[F](current + 1).run(connected).map(_.headOption))
-    } yield bestPeer).value
+  def checkStatus: F[NodeStatus] =
+    peerManager.connected.flatMap {
+      case Nil => F.pure(NodeStatus.WaitForPeers)
+      case xs =>
+        for {
+          current <- history.getBestBlockNumber
+          td      <- history.getTotalDifficultyByNumber(current).map(_.getOrElse(BigInt(0)))
+          peerOpt <- PeerSelector.bestPeer[F](td).run(xs).map(_.headOption)
+          status = peerOpt match {
+            case Some(peer) => NodeStatus.Syncing(peer)
+            case None       => NodeStatus.Done
+          }
+        } yield status
+    }
 
-  val stream: Stream[F, Block] = {
-    Stream
-      .eval(choosePeer)
-      .flatMap {
-        case Some(peer) => Stream.eval(requestHeaders(peer)).flatMap(Stream.emits)
-        case None       => Stream.sleep_(config.checkForNewBlockInterval)
-      }
-      .repeat
-  }
+  val stream: Stream[F, Block] =
+    Stream.eval_(log.i(s"starting Core/SyncClient")) ++
+      Stream
+        .eval(checkStatus)
+        .evalTap(status.set)
+        .flatMap {
+          case NodeStatus.WaitForPeers        => Stream.sleep_(config.checkInterval)
+          case NodeStatus.Done                => Stream.sleep_(config.checkInterval)
+          case syncing: NodeStatus.Syncing[F] => Stream.eval(requestHeaders(syncing.peer)).flatMap(Stream.emits)
+        }
+        .repeat
 
-  def requestHeaders(peer: Peer[F]): F[List[Block]] =
+  def mkClient(peer: Peer[F]): Resource[F, JbokClient[F]] =
+    Resource.liftF(peer.status.get.map(_.service)).flatMap(uri => JbokClientPlatform.resource[F](uri, ssl))
+
+  def requestHeaders(peer: Peer[F]): F[List[Block]] = mkClient(peer).use { client =>
     for {
       current <- history.getBestBlockNumber
-      start = BigInt(1).max(current + 1 - config.fullSyncOffset)
-      _ <- log.debug(s"request BlockHeader from number=$start")
-      request = Request.binary[F, GetBlockHeadersByNumber](GetBlockHeadersByNumber.name, GetBlockHeadersByNumber(start, config.maxBlockHeadersPerRequest).asValidBytes)
-      response <- client.fetch(Request.toHttp4s(request))(resp => Response.fromHttp4s(resp))
-      headers  <- response.as[BlockHeaders]
-      imported <- handleBlockHeaders(peer, start, headers.headers)
+      start = BigInt(1).max(current + 1 - config.offset)
+      headers  <- client.block.getBlockHeadersByNumber(start, config.maxBlockHeadersPerRequest)
+      imported <- handleBlockHeaders(peer, start, headers)
     } yield imported
+  }
 
   private def handleBlockHeaders(peer: Peer[F], startNumber: BigInt, headers: List[BlockHeader]): F[List[Block]] =
     if (headers.isEmpty) {
-      log.debug(s"got empty headers from ${peer.id}, retry in ${config.checkForNewBlockInterval}").as(Nil)
+      log.debug(s"got empty headers from ${peer.uri}, retry in ${config.checkInterval}").as(Nil)
     } else if (headers.headOption.map(_.number).contains(startNumber)) {
       consensus.resolveBranch(headers).flatMap {
         case Consensus.BetterBranch(newBranch) =>
@@ -75,17 +84,12 @@ final class SyncClient[F[_]](
   private def handleBetterBranch(peer: Peer[F], betterBranch: List[BlockHeader]): F[List[Block]] = {
     val hashes = betterBranch.take(config.maxBlockBodiesPerRequest).map(_.hash)
 
-    betterBranch match {
-      case head :: _ => log.debug(s"request BlockBody [${head.number}, ${head.number + hashes.length})")
-      case Nil       => ()
+    mkClient(peer).use { client =>
+      for {
+        bodies   <- client.block.getBlockBodies(hashes)
+        imported <- handleBlockBodies(peer, betterBranch, bodies)
+      } yield imported
     }
-
-    for {
-      request     <- Request.binary[F, GetBlockBodies](GetBlockBodies.name, GetBlockBodies(hashes).asValidBytes).pure[F]
-      response    <- client.fetch(Request.toHttp4s(request))(resp => Response.fromHttp4s(resp))
-      blockBodies <- response.as[BlockBodies]
-      imported    <- handleBlockBodies(peer, betterBranch, blockBodies.bodies)
-    } yield imported
   }
 
   private def handleBlockBodies(peer: Peer[F], headers: List[BlockHeader], bodies: List[BlockBody]): F[List[Block]] = {

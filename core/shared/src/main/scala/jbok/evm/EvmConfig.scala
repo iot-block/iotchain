@@ -1,6 +1,6 @@
 package jbok.evm
 
-import jbok.core.config.Configs.HistoryConfig
+import jbok.core.config.HistoryConfig
 import jbok.core.models.UInt256
 import jbok.evm.PrecompiledContracts.PrecompiledContract
 import scodec.bits.ByteVector

@@ -5,7 +5,7 @@ import cats.effect.ConcurrentEffect
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common._
-import jbok.core.config.Configs.BlockPoolConfig
+import jbok.core.config.BlockPoolConfig
 import jbok.core.ledger.History
 import jbok.core.models.Block
 import jbok.core.pool.BlockPool._

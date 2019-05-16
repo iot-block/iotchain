@@ -1,8 +1,6 @@
 package jbok.core.sync
 
-import cats.effect.IO
 import jbok.core.CoreSpec
-import jbok.core.ledger.History
 import jbok.core.testkit._
 
 class SyncClientSpec extends CoreSpec {

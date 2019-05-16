@@ -1,8 +1,10 @@
 package jbok.crypto.signature
 
+import io.circe.generic.JsonCodec
 import jbok.codec.json.implicits._
 import scodec.bits.ByteVector
 
+@JsonCodec
 final case class CryptoSignature(r: BigInt, s: BigInt, v: BigInt) {
   def bytes: Array[Byte] =
     CryptoSignature.unsignedPadding(r) ++ CryptoSignature.unsignedPadding(s) ++ CryptoSignature.unsigned(v)
@@ -30,8 +32,4 @@ object CryptoSignature {
 
   def apply(r: ByteVector, s: ByteVector, v: ByteVector): CryptoSignature =
     CryptoSignature(BigInt(1, r.toArray), BigInt(1, s.toArray), BigInt(1, v.toArray))
-
-  implicit val signatureJsonEncoder = deriveEncoder[CryptoSignature]
-
-  implicit val signatureJsonDecoder = deriveDecoder[CryptoSignature]
 }

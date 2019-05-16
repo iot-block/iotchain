@@ -3,6 +3,7 @@ package jbok.core.peer
 import cats.effect._
 import cats.implicits._
 import fs2._
+import jbok.common.log.Logger
 import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.network.Message
 
@@ -10,8 +11,12 @@ final class PeerManager[F[_]](
     val incoming: IncomingManager[F],
     val outgoing: OutgoingManager[F],
 )(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) {
+  private[this] val log = Logger[F]
+
   val inbound: Stream[F, (Peer[F], Message[F])] =
-    incoming.inbound.consume merge outgoing.inbound.consume
+    incoming.inbound.consume
+      .merge(outgoing.inbound.consume)
+      .evalTap { case (peer, message) => log.i(s"received ${message} from ${peer.uri.address}") }
 
   val outbound: Pipe[F, (PeerSelector[F], Message[F]), Unit] =
     _.evalMap { case (selector, message) => distribute(selector, message) }
@@ -26,6 +31,7 @@ final class PeerManager[F[_]](
     for {
       peers    <- connected
       selected <- selector.run(peers)
+      _        <- log.i(s"broadcasting ${message} to ${selected.map(_.uri.address).mkString(",")} peers")
       _        <- selected.traverse(_.queue.enqueue1(message))
     } yield ()
 
@@ -33,10 +39,11 @@ final class PeerManager[F[_]](
     (incoming.close(uri), outgoing.close(uri)).tupled.void
 
   val stream: Stream[F, Unit] =
-    Stream(
-      incoming.serve,
-      outgoing.connects,
-    ).parJoinUnbounded
+    Stream.eval_(log.i(s"starting Core/PeerManager")) ++
+      Stream(
+        incoming.serve,
+        outgoing.connects,
+      ).parJoinUnbounded
 
   val resource: Resource[F, PeerUri] = {
     for {

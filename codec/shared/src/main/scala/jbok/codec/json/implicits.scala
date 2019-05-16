@@ -3,7 +3,7 @@ package jbok.codec.json
 import io.circe._
 import io.circe.derivation.DerivationMacros
 import io.circe.syntax._
-import scodec.bits.{BitVector, ByteVector}
+import scodec.bits.ByteVector
 import shapeless._
 import shapeless.labelled._
 
@@ -12,12 +12,6 @@ import scala.language.experimental.macros
 
 @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
 object implicits {
-  final def deriveDecoder[A]: Decoder[A] =
-    macro DerivationMacros.materializeDecoder[A]
-
-  final def deriveEncoder[A]: ObjectEncoder[A] =
-    macro DerivationMacros.materializeEncoder[A]
-
   implicit val bytesDecoder: Decoder[ByteVector] = Decoder[String].emap(ByteVector.fromHexDescriptive(_))
 
   implicit val bytesEncoder: Encoder[ByteVector] = Encoder.instance(bv => Json.fromString(bv.toHex))
@@ -36,14 +30,15 @@ object implicits {
   implicit val durationDecoder: Decoder[Duration] = Decoder[String].map(s => Duration.apply(s))
 
   implicit val finiteDurationEncoder: Encoder[FiniteDuration] =
-    Encoder.instance[FiniteDuration](d => s"${d.length}${d.unit.toString.toLowerCase}".asJson)
+    Encoder.instance[FiniteDuration](d => s"${d.length} ${d.unit.toString.toLowerCase}".asJson)
 
   implicit val finiteDurationDecoder: Decoder[FiniteDuration] =
     Decoder[String].map(s => Duration.apply(s).asInstanceOf[FiniteDuration])
 
-//  implicit final val decodeBitVector: Decoder[BitVector] = decodeBitVectorWithNames("bits", "length")
-//
-//  implicit final val encodeBitVector: Encoder[BitVector] = encodeBitVectorWithNames("bits", "length")
+  // key codecs
+  implicit val bigIntKeyEncoder: KeyEncoder[BigInt] = KeyEncoder.encodeKeyString.contramap[BigInt](_.toString(10))
+
+  implicit val bigIntKeyDecoder: KeyDecoder[BigInt] = KeyDecoder.decodeKeyString.map[BigInt](BigInt.apply)
 
   // codec for value classes
   implicit def decoderValueClass[T <: AnyVal, V](
@@ -91,36 +86,10 @@ object implicits {
       }
   }
 
-  implicit def encodeEnum[A, C <: Coproduct](implicit
-                                             gen: LabelledGeneric.Aux[A, C],
-                                             rie: IsEnum[C]): Encoder[A] =
+  implicit def encodeEnum[A, C <: Coproduct](implicit gen: LabelledGeneric.Aux[A, C], rie: IsEnum[C]): Encoder[A] =
     Encoder[String].contramap[A](a => rie.to(gen.to(a)))
 
-  implicit def decodeEnum[A, C <: Coproduct](implicit
-                                             gen: LabelledGeneric.Aux[A, C],
-                                             rie: IsEnum[C]): Decoder[A] = Decoder[String].emap { s =>
+  implicit def decodeEnum[A, C <: Coproduct](implicit gen: LabelledGeneric.Aux[A, C], rie: IsEnum[C]): Decoder[A] = Decoder[String].emap { s =>
     rie.from(s).map(gen.from).toRight("enum")
   }
-
-//  private def decodeBitVectorWithNames(bitsName: String, lengthName: String): Decoder[BitVector] =
-//    Decoder.instance { c =>
-//      val bits: Decoder.Result[BitVector] = c.get[String](bitsName).right.flatMap { bs =>
-//        BitVector.fromBase64Descriptive(bs) match {
-//          case r @ Right(_)  => r.asInstanceOf[Decoder.Result[BitVector]]
-//          case Left(message) => Left(DecodingFailure(message, c.history))
-//        }
-//      }
-//
-//      Decoder.resultInstance.map2(bits, c.get[Long](lengthName))(_.take(_))
-//    }
-//
-//  private def encodeBitVectorWithNames(bitsName: String, lengthName: String): ObjectEncoder[BitVector] =
-//    ObjectEncoder.instance { bv =>
-//      JsonObject
-//        .singleton(bitsName, Json.fromString(bv.toBase64))
-//        .add(
-//          lengthName,
-//          Json.fromLong(bv.size)
-//        )
-//    }
 }

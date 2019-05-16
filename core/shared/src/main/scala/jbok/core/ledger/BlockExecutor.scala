@@ -6,7 +6,7 @@ import cats.effect.{Resource, Sync, Timer}
 import cats.implicits._
 import fs2._
 import jbok.common.ByteUtils
-import jbok.core.config.Configs.HistoryConfig
+import jbok.core.config.HistoryConfig
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
 import jbok.core.messages.SignedTransactions
@@ -22,6 +22,7 @@ import jbok.evm._
 import jbok.persistent.DBErr
 import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
+import jbok.common.log.Logger
 
 import scala.concurrent.duration._
 
@@ -37,7 +38,7 @@ final class BlockExecutor[F[_]](
     inbound: Consumer[F, Peer[F], Block],
     outbound: Producer[F, PeerSelector[F], Block],
 )(implicit F: Sync[F], T: Timer[F]) {
-  private[this] val log = jbok.common.log.getLogger("BlockExecutor")
+  private[this] val log = Logger[F]
 
   import BlockExecutor._
 
@@ -124,13 +125,17 @@ final class BlockExecutor[F[_]](
   }
 
   val stream: Stream[F, Unit] =
-    inbound.consume
-      .evalMap { case (peer, block) => handleReceivedBlock(ReceivedBlock(block, peer)) }
-      .map {
-        case block :: _ =>
-          PeerSelector.withoutBlock(block).andThen(PeerSelector.randomSelectSqrt(4)) -> block
-      }
-      .through(outbound.sink)
+    Stream.eval_(log.i(s"starting Core/BlockExecutor")) ++
+      inbound.consume
+        .evalMap { case (peer, block) => handleReceivedBlock(ReceivedBlock(block, peer)) }
+        .map {
+          case block :: _ =>
+            Some(PeerSelector.withoutBlock(block).andThen(PeerSelector.randomSelectSqrt(4)) -> block)
+          case _ =>
+            None
+        }
+        .unNone
+        .through(outbound.sink)
 
   ////////////////////////////////
   ////////////////////////////////
@@ -204,7 +209,7 @@ final class BlockExecutor[F[_]](
       for {
         result <- executeTransaction(stx, header, world, accGas).attempt.flatMap {
           case Left(e) =>
-            log.warn(s"execute ${stx} error", e)
+            log.warn(s"execute ${stx} error, ${e.getMessage}")
             if (shortCircuit) {
               F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
             } else {

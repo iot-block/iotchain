@@ -1,26 +1,21 @@
 package jbok.core.peer
 
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import fs2.concurrent.Queue
 import jbok.core.messages.{SignedTransactions, Status}
-import jbok.crypto._
-import jbok.crypto.signature.KeyPair
 import jbok.network.Message
 import scodec.bits.ByteVector
 
 final case class Peer[F[_]](
     uri: PeerUri,
-    pk: KeyPair.Public,
     queue: Queue[F, Message[F]],
     status: Ref[F, Status],
     knownBlocks: Ref[F, Set[ByteVector]],
     knownTxs: Ref[F, Set[SignedTransactions]]
 )(implicit F: Sync[F]) {
   import Peer._
-
-  val id: String = s"Peer(${pk.bytes.kec256.toHex.take(7)})"
 
   def hasBlock(blockHash: ByteVector): F[Boolean] =
     knownBlocks.get.map(_.contains(blockHash))
@@ -46,5 +41,5 @@ object Peer {
       status      <- Ref.of[F, Status](status)
       knownBlocks <- Ref.of[F, Set[ByteVector]](Set.empty)
       knownTxs    <- Ref.of[F, Set[SignedTransactions]](Set.empty)
-    } yield Peer[F](uri, uri.pk, queue, status, knownBlocks, knownTxs)
+    } yield Peer[F](uri, queue, status, knownBlocks, knownTxs)
 }

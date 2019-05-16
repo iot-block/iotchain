@@ -1,13 +1,16 @@
 package jbok.core.models
 
+import io.circe.generic.JsonCodec
 import jbok.codec.json.implicits._
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits.ByteVector
+
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("Account")
 @JSExportAll
+@JsonCodec
 final case class Account(
     nonce: UInt256 = 0,
     balance: UInt256 = 0,
@@ -47,8 +50,4 @@ object Account {
 
   def empty(startNonce: UInt256 = UInt256.Zero): Account =
     Account(nonce = startNonce, storageRoot = EmptyStorageRootHash, codeHash = EmptyCodeHash)
-
-  implicit val accountJsonEncoder = deriveEncoder[Account]
-
-  implicit val accountJsonDecoder = deriveDecoder[Account]
 }

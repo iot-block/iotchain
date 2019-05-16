@@ -45,7 +45,7 @@ object Libs {
 
   lazy val terminal = libraryDependencies ++= Seq(
     "net.team2xh" %% "onions"  % "1.0.1",
-    "net.team2xh" %% "Scurses" % "1.0.1"
+    "net.team2xh" %% "scurses" % "1.0.1"
   )
 
   lazy val circe = libraryDependencies ++= Seq(
@@ -100,8 +100,7 @@ object Libs {
     "org.http4s" %% "http4s-dsl",
     "org.http4s" %% "http4s-dropwizard-metrics",
     "org.http4s" %% "http4s-prometheus-metrics",
-    "org.http4s" %% "http4s-okhttp-client",
-    "org.http4s" %% "http4s-async-http-client"
+    "org.http4s" %% "http4s-okhttp-client"
   ).map(_        % Versions.http4s) ++ Seq(
     "org.http4s" %% "rho-swagger" % "0.19.0-M6"
   )
@@ -127,14 +126,12 @@ object Libs {
   ).map(_ % Versions.doobie)
 
   private lazy val drivers = libraryDependencies ++= Seq(
-    "org.iq80.leveldb"          % "leveldb"              % "0.10",
-    "org.fusesource.leveldbjni" % "leveldbjni-all"       % "1.8",
-    "org.rocksdb"               % "rocksdbjni"           % "5.17.2",
-    "io.lettuce"                % "lettuce-core"         % "5.1.3.RELEASE",
-    "org.xerial"                % "sqlite-jdbc"          % "3.25.2",
-    "org.flywaydb"              % "flyway-core"          % "5.0.5",
-    "mysql"                     % "mysql-connector-java" % "8.0.15",
-    "org.postgresql"            % "postgresql"           % "42.2.5"
+    "org.rocksdb"    % "rocksdbjni"           % "6.0.1",
+    "io.lettuce"     % "lettuce-core"         % "5.1.3.RELEASE",
+    "org.xerial"     % "sqlite-jdbc"          % "3.25.2",
+    "org.flywaydb"   % "flyway-core"          % "5.0.5",
+    "mysql"          % "mysql-connector-java" % "8.0.15",
+    "org.postgresql" % "postgresql"           % "42.2.5"
   )
 
   private lazy val scalacache = libraryDependencies ++= Seq(

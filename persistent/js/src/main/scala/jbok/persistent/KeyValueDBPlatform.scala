@@ -1,10 +1,11 @@
 package jbok.persistent
-import cats.effect.Sync
 
-trait KeyValueDBPlatform {
-  def _forBackendAndPath[F[_]: Sync](backend: String, path: String): F[KeyValueDB[F]] =
-    backend match {
-      case "inmem" => KeyValueDB.inmem[F]
-      case x       => throw new Exception(s"backend ${x} is not supported")
+import cats.effect.{ContextShift, Resource, Sync, Timer}
+
+object KeyValueDBPlatform {
+  def resource[F[_]](config: PersistConfig)(implicit F: Sync[F]): Resource[F, KeyValueDB[F]] =
+    config.driver match {
+      case "inmem" => Resource.liftF(KeyValueDB.inmem[F])
+      case driver  => Resource.liftF(F.raiseError(new IllegalArgumentException(s"database driver=${driver} is not supported")))
     }
 }

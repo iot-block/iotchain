@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 
 import cats.effect.IO
 import jbok.common.testkit._
-import jbok.core.config.Configs._
+import jbok.core.config._
 import jbok.core.messages._
 import jbok.core.mining.{BlockMiner, TxGen}
 import jbok.core.models._
@@ -20,13 +20,7 @@ object testkit {
   import CoreSpec._
 
   def fillConfigs(n: Int)(config: CoreConfig): List[CoreConfig] =
-    (0 until n).toList.map { i =>
-      config
-        .lens(_.identity)
-        .set(s"test-node-${i}")
-        .lens(_.peer.secret)
-        .set(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync().secret.bytes.toHex)
-    }
+    List.fill(n)(config)
 
   def uint256Gen(min: UInt256 = UInt256.Zero, max: UInt256 = UInt256.MaxValue): Gen[UInt256] =
     for {
@@ -153,8 +147,8 @@ object testkit {
       )
   }
 
-  def genStatus(number: BigInt = 0)(implicit config: CoreConfig): Gen[Status] =
-    Gen.delay(Status(config.genesis.chainId, config.genesis.header.hash, number))
+  def genStatus(number: BigInt = 0, td: BigInt = 0)(implicit config: CoreConfig): Gen[Status] =
+    Gen.delay(Status(config.genesis.chainId, config.genesis.header.hash, number, td, ""))
 
   def genPeer(implicit config: CoreConfig): Gen[Peer[IO]] =
     for {
@@ -188,7 +182,7 @@ object testkit {
   def genTxs(min: Int = 0, max: Int = 1024)(implicit config: CoreConfig): Gen[List[SignedTransaction]] =
     for {
       size <- Gen.chooseNum(min, max)
-      (_, txs) = TxGen.genTxs(size, List(config.mining.minerKeyPair.get -> Account.empty()).toMap).unsafeRunSync()
+      (_, txs) = TxGen.genTxs(size, List(KeyPair.fromSecret(config.mining.secret) -> Account.empty()).toMap).unsafeRunSync()
     } yield txs
 
   implicit def arbTxs(implicit config: CoreConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
@@ -210,13 +204,12 @@ object testkit {
   )(implicit config: CoreConfig): Gen[Block] = {
     val miner = CoreSpec.withConfig(config).unsafeRunSync().get[BlockMiner[IO]]
     val mined = miner.mine1(parentOpt, stxsOpt, ommersOpt).unsafeRunSync()
-    mined.block
+    mined.right.get.block
   }
 
   implicit def arbPeerUri: Arbitrary[PeerUri] = Arbitrary {
     for {
       port <- Gen.chooseNum(10000, 65535)
-      kp = random[KeyPair]
-    } yield PeerUri.fromTcpAddr(kp.public, new InetSocketAddress("localhost", port))
+    } yield PeerUri.fromTcpAddr(new InetSocketAddress("localhost", port))
   }
 }
