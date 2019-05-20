@@ -1,16 +1,7 @@
 [req]
 distinguished_name          = req_distinguished_name
 req_extensions              = v3_req
-
-[req_distinguished_name]
-countryName                 = Country Name (2 letter code)
-countryName_default         = CN
-stateOrProvinceName         = State or Province Name (full name)
-stateOrProvinceName_default = Shanghai
-organizationName            = Organization Name (eg, company)
-organizationName_default    = IoT.Chain
-commonName                  = Common Name (eg, YOUR name)
-commonName_default          = IoT.Chain
+prompt = no
 
 [v3_req]
 authorityKeyIdentifier      = keyid,issuer

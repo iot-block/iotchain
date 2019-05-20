@@ -1,0 +1,6 @@
+[req_distinguished_name]
+C=CN
+ST=Shanghai
+L=Shanghai
+O=IoT.Chain
+OU=Jbok
