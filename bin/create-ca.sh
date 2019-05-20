@@ -1,32 +1,30 @@
 #!/usr/bin/env bash
 
-rootDir=`pwd`/bin
-generatedDir=${rootDir}/generated
-caDir=${generatedDir}/ca
-certsDir=${generatedDir}/certs
+root_dir=`pwd`/bin
+generated_dir=${root_dir}/generated
+ca_dir=${generated_dir}/ca
+certs_dir=${generated_dir}/certs
 
-rm -rf ${generatedDir} && mkdir -p ${generatedDir}
+rm -rf ${generated_dir} && mkdir -p ${generated_dir}
 
-mkdir -p ${caDir}/private
-mkdir -p ${certsDir}/private
+mkdir -p ${ca_dir}/private
 
 common_name_defualt="JBOK"
 child_cert_cn_prefix="Node"
+ca_keystore_pass="changeit"
+server_keystore_pass="changeit"
 
 # create ca private key and ca certificate
-cp ${rootDir}/ca-openssl.cnf ${caDir}/ca-openssl.cnf && cat ${rootDir}/distinguished_name.cnf >> ${caDir}/ca-openssl.cnf \
-&& echo "CN=${common_name_defualt}" >> ${caDir}/ca-openssl.cnf
+cp ${root_dir}/ca-openssl.cnf ${ca_dir}/ca-openssl.cnf && cat ${root_dir}/distinguished_name.cnf >> ${ca_dir}/ca-openssl.cnf \
+&& echo "CN=${common_name_defualt}" >> ${ca_dir}/ca-openssl.cnf
 
-openssl ecparam -genkey -name secp521r1 -out ${caDir}/private/cakey.pem
-openssl req -x509 -new -sha256 -key ${caDir}/private/cakey.pem -out ${caDir}/ca.pem -config ${caDir}/ca-openssl.cnf -extensions v3_req -days 3650 -outform PEM
+openssl ecparam -genkey -name secp521r1 -out ${ca_dir}/private/cakey.pem
+openssl req -x509 -new -sha256 -key ${ca_dir}/private/cakey.pem -out ${ca_dir}/ca.pem -config ${ca_dir}/ca-openssl.cnf -extensions v3_req -days 3650 -outform PEM
 
-# import to local ca/keystore.jks
-echo "openssl export to pkcs12: "
-openssl pkcs12 -export -out ${caDir}/certificate.pfx -inkey ${caDir}/private/caKey.pem -in ${caDir}/ca.pem
-read -p 'keytool keystore password: ' -s password && echo
-keytool -importkeystore -trustcacerts -deststorepass ${password} -destkeystore ${caDir}/keystore.jks -srckeystore ${caDir}/certificate.pfx -srcstoretype PKCS12
+# import to local ca/cacerts.jks
+ca_alias=JBOK
+keytool -import -trustcacerts -file ${ca_dir}/ca.pem -alias ${ca_alias} -storepass "${ca_keystore_pass}" -keystore ${ca_dir}/cacert.jks -noprompt
 
-#ca_alias=IoT.Chain
 #default_pass=changeit
 #trustedCAStore=${JAVA_HOME}/jre/lib/security/cacerts
 ## delete/import/list  $JAVA_HOME/jre/lib/security/cacerts trusted certs
@@ -37,14 +35,21 @@ keytool -importkeystore -trustcacerts -deststorepass ${password} -destkeystore $
 
 read -p 'how many certs: ' nodeCount
 for i in `seq 1 ${nodeCount}`; do
-    read -p 'node ip: ' ip
-    conf_file=${certsDir}/server-openssl-${i}.cnf
+    server_dir=${certs_dir}/certs${i}
+    mkdir -p ${server_dir}/private
+    conf_file=${server_dir}/server-openssl.cnf
     common_name=${child_cert_cn_prefix}${i}.${common_name_defualt}
-    cp ${rootDir}/server-openssl.cnf ${conf_file} && echo "IP.1 = ${ip}" >> ${conf_file}
-    cat ${rootDir}/distinguished_name.cnf >> ${conf_file} && echo "CN=${common_name}" >> ${conf_file}
+    read -p 'node ip: ' ip
+    cp ${root_dir}/server-openssl.cnf ${conf_file} && echo "IP.1 = ${ip}" >> ${conf_file}
+    cat ${root_dir}/distinguished_name.cnf >> ${conf_file} && echo "CN=${common_name}" >> ${conf_file}
 
-    openssl ecparam -genkey -name secp521r1 -out ${certsDir}/private/certkey${i}.pem
-    openssl req -new -sha256 -key ${certsDir}/private/certkey${i}.pem -out ${certsDir}/cert${i}.csr -config ${conf_file}
-    openssl x509 -req -in ${certsDir}/cert${i}.csr -CA ${caDir}/ca.pem -CAkey ${caDir}/private/cakey.pem -CAcreateserial -out ${certsDir}/cert${i}.crt -days 356 -sha256 -outform PEM
+    # create server cert
+    openssl ecparam -genkey -name secp521r1 -out ${server_dir}/private/certkey.pem
+    openssl req -new -sha256 -key ${server_dir}/private/certkey.pem -out ${server_dir}/cert.csr -config ${conf_file}
+    openssl x509 -req -in ${server_dir}/cert.csr -CA ${ca_dir}/ca.pem -CAkey ${ca_dir}/private/cakey.pem -CAcreateserial -out ${server_dir}/cert.pem -days 356 -sha256 -outform PEM
+
+    # export to server.jks
+    openssl pkcs12 -export -out ${server_dir}/certificate.pfx -inkey ${server_dir}/private/certKey.pem -in ${server_dir}/cert.pem -password pass:"${server_keystore_pass}"
+    keytool -importkeystore -trustcacerts -storepass "${server_keystore_pass}" -destkeystore ${server_dir}/server.jks -srckeystore ${server_dir}/certificate.pfx -srcstoretype PKCS12 -srcstorepass "${server_keystore_pass}"
 done
 
