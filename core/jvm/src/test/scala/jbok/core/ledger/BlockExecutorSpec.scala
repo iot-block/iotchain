@@ -25,7 +25,7 @@ class BlockExecutorSpec extends CoreSpec {
       val stx      = txs.head
       val sender   = stx.senderAddress.get
       val parent   = history.getBestBlock.unsafeRunSync()
-      val header   = consensus.prepareHeader(Some(parent), Nil).unsafeRunSync()
+      val header   = consensus.prepareHeader(Some(parent)).unsafeRunSync()
       val world = history
         .getWorldState(UInt256.Zero, Some(parent.header.stateRoot))
         .unsafeRunSync()
@@ -53,7 +53,7 @@ class BlockExecutorSpec extends CoreSpec {
       val stx      = txs.head
       val sender   = stx.senderAddress.get
       val parent   = history.getBestBlock.unsafeRunSync()
-      val header   = consensus.prepareHeader(Some(parent), Nil).unsafeRunSync()
+      val header   = consensus.prepareHeader(Some(parent)).unsafeRunSync()
       val world = history
         .getWorldState(UInt256.Zero, Some(parent.header.stateRoot))
         .unsafeRunSync()

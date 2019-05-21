@@ -4,6 +4,7 @@ import io.circe.generic.JsonCodec
 import jbok.common.log.LogConfig
 import monocle.macros.Lenses
 import jbok.codec.json.implicits._
+import jbok.crypto.ssl.SSLConfig
 import jbok.persistent.PersistConfig
 
 @Lenses
@@ -17,9 +18,9 @@ final case class CoreConfig(
     sync: SyncConfig,
     txPool: TxPoolConfig,
     blockPool: BlockPoolConfig,
-    ommerPool: OmmerPoolConfig,
     mining: MiningConfig,
-    persist: PersistConfig
+    persist: PersistConfig,
+    ssl: SSLConfig
 ) {
 //  val dataDir: String = {
 //    val home = System.getProperty("user.home")

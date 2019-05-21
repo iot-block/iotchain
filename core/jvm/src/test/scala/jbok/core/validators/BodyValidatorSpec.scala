@@ -3,14 +3,13 @@ package jbok.core.validators
 import cats.effect.IO
 import jbok.common.CommonSpec
 import jbok.core.models._
-import jbok.core.validators.BodyInvalid.{BodyOmmersHashInvalid, BodyTransactionsHashInvalid}
+import jbok.core.validators.BodyInvalid.BodyTransactionsHashInvalid
 import scodec.bits._
 import jbok.codec.rlp.implicits._
 
 class BodyValidatorSpec extends CommonSpec {
   val validBlockHeader = BlockHeader(
     parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
-    ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
     beneficiary = hex"df7d7e053933b5cc24372f878c90e62dadad5d42",
     stateRoot = hex"087f96537eba43885ab563227262580b27fc5e6516db79a6fc4d3bcd241dda67",
     transactionsRoot = hex"0x8ae451039a8bf403b899dcd23252d94761ddd23b88c769d9b7996546edc47fac",
@@ -22,9 +21,6 @@ class BodyValidatorSpec extends CommonSpec {
     gasUsed = 84000,
     unixTimestamp = 1486131165,
     extra = ByteVector.empty
-//    extraData = hex"d5830104098650617269747986312e31332e30826c69",
-//    mixHash = hex"be90ac33b3f6d0316e60eef505ff5ec7333c9f3c85c1a36fc2523cd6b75ddb8a",
-//    nonce = hex"2b0fb0c002946392"
   )
 
   val txs = List[SignedTransaction](
@@ -83,8 +79,7 @@ class BodyValidatorSpec extends CommonSpec {
   )
 
   val validBlockBody = BlockBody(
-    transactionList = txs,
-    ommerList = List[BlockHeader]()
+    transactionList = txs
   )
 
   val validReceipts = List(
@@ -135,13 +130,6 @@ class BodyValidatorSpec extends CommonSpec {
           Block(validBlockHeader, validBlockBody.copy(transactionList = validBlockBody.transactionList.reverse)))
         .attempt
         .unsafeRunSync() shouldBe Left(BodyTransactionsHashInvalid)
-    }
-
-    "return a failure if a block body doesn't corresponds to a block header due to wrong ommers hash" ignore {
-      BodyValidator
-        .validate[IO](Block(validBlockHeader, validBlockBody.copy(ommerList = List(validBlockHeader))))
-        .attempt
-        .unsafeRunSync() shouldBe Left(BodyOmmersHashInvalid)
     }
   }
 }

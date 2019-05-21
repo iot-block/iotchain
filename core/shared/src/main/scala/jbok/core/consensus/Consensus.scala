@@ -21,7 +21,7 @@ import jbok.core.pool.BlockPool
   *   - resolveBranch: resolve a list of headers
   */
 trait Consensus[F[_]] {
-  def prepareHeader(parentOpt: Option[Block], ommers: List[BlockHeader] = Nil): F[BlockHeader]
+  def prepareHeader(parentOpt: Option[Block]): F[BlockHeader]
 
   def postProcess(executed: ExecutedBlock[F]): F[ExecutedBlock[F]]
 

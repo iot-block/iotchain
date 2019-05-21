@@ -4,7 +4,6 @@ package object models {
   final case class Block(
       blockHash: String,
       parentHash: String, // B32 pre
-      ommersHash: String, // B32 body
       beneficiary: String, // B20 pre
       stateRoot: String, // B32 exec
       transactionsRoot: String, // B32 body

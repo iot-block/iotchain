@@ -39,14 +39,13 @@ final class BlockMiner[F[_]](
 
   def prepare(
       parentOpt: Option[Block] = None,
-      stxsOpt: Option[List[SignedTransaction]] = None,
-      ommersOpt: Option[List[BlockHeader]] = None
+      stxsOpt: Option[List[SignedTransaction]] = None
   ): F[PendingBlock] =
     for {
       header <- consensus.prepareHeader(parentOpt)
       stxs   <- stxsOpt.fold(txPool.getPendingTransactions.map(_.keys.toList))(F.pure)
       txs    <- prepareTransactions(stxs, header.gasLimit)
-    } yield PendingBlock(Block(header, BlockBody(txs, Nil)))
+    } yield PendingBlock(Block(header, BlockBody(txs)))
 
   def execute(pending: PendingBlock): F[ExecutedBlock[F]] =
     executor.handlePendingBlock(pending)
@@ -59,11 +58,10 @@ final class BlockMiner[F[_]](
 
   def mine1(
       parentOpt: Option[Block] = None,
-      stxsOpt: Option[List[SignedTransaction]] = None,
-      ommersOpt: Option[List[BlockHeader]] = None
+      stxsOpt: Option[List[SignedTransaction]] = None
   ): F[Either[String, MinedBlock]] =
     for {
-      prepared <- prepare(parentOpt, stxsOpt, ommersOpt)
+      prepared <- prepare(parentOpt, stxsOpt)
       executed <- execute(prepared)
       mined    <- mine(executed)
       _ <- mined match {

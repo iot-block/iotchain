@@ -1,14 +1,13 @@
 package jbok.core
 
 import java.nio.channels.AsynchronousChannelGroup
-import java.nio.file.Paths
 
-import better.files.File
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
 import distage.{Producer => _, _}
+import javax.net.ssl.SSLContext
 import jbok.common.config.Config
-import jbok.common.log.{Level, Logger, LoggerPlatform}
+import jbok.common.log.LoggerPlatform
 import jbok.common.metrics.Metrics
 import jbok.common.thread.ThreadUtil
 import jbok.core.config._
@@ -21,15 +20,14 @@ import jbok.core.mining.BlockMiner
 import jbok.core.models.Block
 import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.core.peer._
-import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
+import jbok.core.pool.{BlockPool, TxPool}
 import jbok.core.queue.memory.MemoryQueue
 import jbok.core.queue.{Consumer, Producer, Queue}
 import jbok.core.sync.SyncClient
 import jbok.core.validators.TxValidator
+import jbok.crypto.ssl.SSLContextHelper
 import jbok.network.Message
-import jbok.network.http.HttpClients
-import jbok.persistent.{KeyValueDB, KeyValueDBPlatform, PersistConfig}
-import org.http4s.client.Client
+import jbok.persistent.{KeyValueDB, KeyValueDBPlatform}
 
 class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
   implicit lazy val acg: AsynchronousChannelGroup = ThreadUtil.acgGlobal
@@ -49,7 +47,6 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   make[HistoryConfig].from((config: CoreConfig) => config.history)
   make[TxPoolConfig].from((config: CoreConfig) => config.txPool)
   make[BlockPoolConfig].from((config: CoreConfig) => config.blockPool)
-  make[OmmerPoolConfig].from((config: CoreConfig) => config.ommerPool)
   make[MiningConfig].from((config: CoreConfig) => config.mining)
   make[SyncConfig].from((config: CoreConfig) => config.sync)
   make[PeerConfig].from((config: CoreConfig) => config.peer)
@@ -80,6 +77,7 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   make[Consumer[F, PeerSelector[F], Block]].from((queue: Queue[F, PeerSelector[F], Block]) => queue)
   make[Producer[F, PeerSelector[F], Block]].from((queue: Queue[F, PeerSelector[F], Block]) => queue)
 
+  make[Option[SSLContext]].fromEffect(SSLContextHelper[F](config.ssl))
   make[IncomingManager[F]]
   make[OutgoingManager[F]]
   make[PeerStore[F]].fromEffect((db: KeyValueDB[F]) => PeerStore[F](db))
@@ -89,8 +87,6 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   // executor & miner
   make[BlockPool[F]]
   make[TxPool[F]]
-  make[OmmerPool[F]]
-
   make[Ref[F, NodeStatus]].fromEffect(Ref.of[F, NodeStatus](NodeStatus.WaitForPeers))
 
   make[TxValidator[F]]

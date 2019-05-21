@@ -133,7 +133,6 @@ class VMTest extends CoreSpec {
       val postState = loadMockWorldState(vmJson.post, vmJson.env.currentNumber)
       val currentBlockHeader = BlockHeader(
         ByteVector.empty,
-        ByteVector.empty,
         vmJson.env.currentCoinbase.bytes,
         ByteVector.empty,
         ByteVector.empty,

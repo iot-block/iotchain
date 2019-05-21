@@ -8,4 +8,4 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 @JSExportTopLevel("BlockBody")
 @JSExportAll
 @JsonCodec
-final case class BlockBody(transactionList: List[SignedTransaction], ommerList: List[BlockHeader])
+final case class BlockBody(transactionList: List[SignedTransaction])

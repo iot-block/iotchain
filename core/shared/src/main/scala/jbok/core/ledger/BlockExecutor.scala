@@ -14,7 +14,7 @@ import jbok.core.models.UInt256._
 import jbok.core.models._
 import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.core.peer.{Peer, PeerSelector}
-import jbok.core.pool.{BlockPool, OmmerPool, TxPool}
+import jbok.core.pool.{BlockPool, TxPool}
 import jbok.core.queue.{Consumer, Producer}
 import jbok.core.validators.{HeaderValidator, TxValidator}
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
@@ -33,7 +33,6 @@ final class BlockExecutor[F[_]](
     txValidator: TxValidator[F],
     txPool: TxPool[F],
     blockPool: BlockPool[F],
-    ommerPool: OmmerPool[F],
     semaphore: Semaphore[F],
     inbound: Consumer[F, Peer[F], Block],
     outbound: Producer[F, PeerSelector[F], Block],
@@ -164,13 +163,13 @@ final class BlockExecutor[F[_]](
     greenLight.use { _ =>
       consensus.run(block).flatMap[List[Block]] {
         case Consensus.Forward(blocks) =>
-          blocks.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(Nil, blocks)
+          blocks.traverse(executeBlock).map(_.map(_.block)) <* updateTxs(Nil, blocks)
 
         case Consensus.Fork(oldBranch, newBranch) =>
-          newBranch.traverse(executeBlock).map(_.map(_.block)) <* updateTxAndOmmerPools(oldBranch, newBranch)
+          newBranch.traverse(executeBlock).map(_.map(_.block)) <* updateTxs(oldBranch, newBranch)
 
         case Consensus.Stash(block) =>
-          blockPool.addBlock(block) >> ommerPool.addOmmers(List(block.header)) as Nil
+          blockPool.addBlock(block).as(Nil)
 
         case Consensus.Discard(e) =>
           log.warn(s"discard ${block.tag} because ${e}")
@@ -407,14 +406,10 @@ final class BlockExecutor[F[_]](
     }
   }
 
-  private def updateTxAndOmmerPools(blocksRemoved: List[Block], blocksAdded: List[Block]): F[Unit] =
+  private def updateTxs(blocksRemoved: List[Block], blocksAdded: List[Block]): F[Unit] =
     for {
-      _ <- ommerPool.addOmmers(blocksRemoved.headOption.toList.map(_.header))
       _ <- blocksRemoved.map(_.body.transactionList).traverse(txs => txPool.addTransactions(SignedTransactions(txs)))
-      _ <- blocksAdded.map { block =>
-        ommerPool.removeOmmers(block.header :: block.body.ommerList) >>
-          txPool.removeTransactions(block.body.transactionList)
-      }.sequence
+      _ <- blocksAdded.traverse(block => txPool.removeTransactions(block.body.transactionList))
     } yield ()
 }
 

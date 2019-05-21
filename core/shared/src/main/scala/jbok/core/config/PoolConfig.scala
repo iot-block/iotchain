@@ -11,13 +11,6 @@ final case class TxPoolConfig(
 )
 
 @JsonCodec
-final case class OmmerPoolConfig(
-    poolSize: Int,
-    ommerGenerationLimit: Int,
-    ommerSizeLimit: Int
-)
-
-@JsonCodec
 final case class BlockPoolConfig(
     maxBlockAhead: Int,
     maxBlockBehind: Int

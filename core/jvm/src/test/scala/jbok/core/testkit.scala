@@ -74,7 +74,6 @@ object testkit {
   implicit def arbBlockHeader: Arbitrary[BlockHeader] = Arbitrary {
     for {
       parentHash       <- genBoundedByteVector(32, 32)
-      ommersHash       <- genBoundedByteVector(32, 32)
       beneficiary      <- genBoundedByteVector(20, 20)
       stateRoot        <- genBoundedByteVector(32, 32)
       transactionsRoot <- genBoundedByteVector(32, 32)
@@ -91,7 +90,6 @@ object testkit {
     } yield
       BlockHeader(
         parentHash = parentHash,
-        ommersHash = ommersHash,
         beneficiary = beneficiary,
         stateRoot = stateRoot,
         transactionsRoot = transactionsRoot,
@@ -112,7 +110,7 @@ object testkit {
   implicit def arbBlockBody(implicit chainId: BigInt): Arbitrary[BlockBody] = Arbitrary {
     for {
       stxs <- arbTxs.arbitrary
-    } yield BlockBody(stxs, Nil)
+    } yield BlockBody(stxs)
   }
 
   implicit def arbSignedTransactions(implicit chainId: BigInt): Arbitrary[SignedTransactions] = Arbitrary {
@@ -199,11 +197,10 @@ object testkit {
 
   def genBlock(
       parentOpt: Option[Block] = None,
-      stxsOpt: Option[List[SignedTransaction]] = None,
-      ommersOpt: Option[List[BlockHeader]] = None
+      stxsOpt: Option[List[SignedTransaction]] = None
   )(implicit config: CoreConfig): Gen[Block] = {
     val miner = CoreSpec.withConfig(config).unsafeRunSync().get[BlockMiner[IO]]
-    val mined = miner.mine1(parentOpt, stxsOpt, ommersOpt).unsafeRunSync()
+    val mined = miner.mine1(parentOpt, stxsOpt).unsafeRunSync()
     mined.right.get.block
   }
 

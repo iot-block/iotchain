@@ -12,7 +12,7 @@ final class DoobieBlockStore[F[_]](xa: Transactor[F])(implicit F: Sync[F]) exten
 
   def findAllBlocks(page: Int, size: Int): F[List[Block]] =
     (sql"""
-       select blockHash, parentHash, ommersHash, beneficiary, stateRoot, transactionsRoot, receiptsRoot, logsBloom, difficulty, blockNumber, gasLimit, gasUsed, unixTimestamp, extra
+       select blockHash, parentHash, beneficiary, stateRoot, transactionsRoot, receiptsRoot, logsBloom, difficulty, blockNumber, gasLimit, gasUsed, unixTimestamp, extra
        from blocks
        order by blockNumber desc
        """ ++ Doobie.limit(page, size))
@@ -22,7 +22,7 @@ final class DoobieBlockStore[F[_]](xa: Transactor[F])(implicit F: Sync[F]) exten
 
   def findBlockByNumber(number: Long): F[Option[Block]] =
     sql"""
-         select blockHash, parentHash, ommersHash, beneficiary, stateRoot, transactionsRoot, receiptsRoot, logsBloom, difficulty, blockNumber, gasLimit, gasUsed, unixTimestamp, extra
+         select blockHash, parentHash, beneficiary, stateRoot, transactionsRoot, receiptsRoot, logsBloom, difficulty, blockNumber, gasLimit, gasUsed, unixTimestamp, extra
          from blocks
          where blockNumber = ${number}
        """
@@ -32,7 +32,7 @@ final class DoobieBlockStore[F[_]](xa: Transactor[F])(implicit F: Sync[F]) exten
 
   def findBlockByHash(hash: String): F[Option[Block]] =
     sql"""
-         select blockHash, parentHash, ommersHash, beneficiary, stateRoot, transactionsRoot, receiptsRoot, logsBloom, difficulty, blockNumber, gasLimit, gasUsed, unixTimestamp, extra
+         select blockHash, parentHash, beneficiary, stateRoot, transactionsRoot, receiptsRoot, logsBloom, difficulty, blockNumber, gasLimit, gasUsed, unixTimestamp, extra
          from blocks
          where blockHash = ${hash}
        """
@@ -43,7 +43,6 @@ final class DoobieBlockStore[F[_]](xa: Transactor[F])(implicit F: Sync[F]) exten
   def insertBlock(block: CoreBlock): F[Unit] = {
     val hash             = block.header.hash.toHex
     val parentHash       = block.header.parentHash.toHex
-    val ommersHash       = block.header.ommersHash.toHex
     val beneficiary      = block.header.beneficiary.toHex
     val stateRoot        = block.header.stateRoot.toHex
     val transactionsRoot = block.header.transactionsRoot.toHex
@@ -57,8 +56,8 @@ final class DoobieBlockStore[F[_]](xa: Transactor[F])(implicit F: Sync[F]) exten
     val extra            = block.header.extra.toHex
 
     sql"""
-         insert ignore into blocks (blockHash, parentHash, ommersHash, beneficiary, stateRoot, transactionsRoot, receiptsRoot, logsBloom, difficulty, blockNumber, gasLimit, gasUsed, unixTimestamp, extra)
-         values ($hash, $parentHash, $ommersHash, $beneficiary, $stateRoot, $transactionsRoot, $receiptsRoot, $logsBloom, $difficulty, $number, $gasLimit, $gasUsed, $unixTimestamp, $extra)
+         insert ignore into blocks (blockHash, parentHash, beneficiary, stateRoot, transactionsRoot, receiptsRoot, logsBloom, difficulty, blockNumber, gasLimit, gasUsed, unixTimestamp, extra)
+         values ($hash, $parentHash, $beneficiary, $stateRoot, $transactionsRoot, $receiptsRoot, $logsBloom, $difficulty, $number, $gasLimit, $gasUsed, $unixTimestamp, $extra)
        """.update.run
       .transact(xa)
       .void

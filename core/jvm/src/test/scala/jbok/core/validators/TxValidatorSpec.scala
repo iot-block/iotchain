@@ -31,7 +31,6 @@ class TxValidatorSpec extends CoreSpec {
   val header: BlockHeader =
     BlockHeader(
       parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
-      ommersHash = hex"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
       beneficiary = hex"df7d7e053933b5cc24372f878c90e62dadad5d42",
       stateRoot = hex"087f96537eba43885ab563227262580b27fc5e6516db79a6fc4d3bcd241dda67",
       transactionsRoot = hex"8ae451039a8bf403b899dcd23252d94761ddd23b88c769d9b7996546edc47fac",
