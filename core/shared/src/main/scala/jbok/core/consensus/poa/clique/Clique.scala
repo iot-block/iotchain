@@ -83,7 +83,7 @@ final class Clique[F[_]](
       extra   <- genesis.extraAs[F, CliqueExtra]
       snap = Snapshot(config, 0, genesis.hash, extra.miners.toSet)
       _ <- Snapshot.storeSnapshot[F](snap, db, checkpointInterval)
-      _ <- log.i(s"stored genesis with ${extra.miners.size} signers")
+      _ <- log.i(s"stored genesis with ${extra.miners.size} miners")
     } yield snap
 }
 

@@ -47,20 +47,17 @@ final class IncomingManager[F[_]](history: History[F], config: PeerConfig, val i
 
   def handshake(socket: Socket[F]): F[Peer[F]] =
     for {
-//      handshaker  <- AuthHandshaker[F](keyPair)
-//      result      <- handshaker.accept(socket)
       localStatus <- localStatus
       request = Request.binary[F, Status](Status.name, localStatus.asValidBytes)
       _            <- socket.writeMessage(request)
       remoteStatus <- socket.readMessage.flatMap(_.as[Status])
       remote       <- socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
       uri = PeerUri.fromTcpAddr(remote)
-      //      uri = PeerUri.fromTcpAddr(KeyPair.Public(result.remotePubKey), remote)
-//      _ <- if (!localStatus.isCompatible(remoteStatus)) {
-//        F.raiseError(PeerErr.Incompatible(localStatus, remoteStatus))
-//      } else {
-//        F.unit
-//      }
+      _ <- if (!localStatus.isCompatible(remoteStatus)) {
+        F.raiseError(new Exception("incompatible peer"))
+      } else {
+        F.unit
+      }
       peer <- Peer[F](uri, remoteStatus)
       _    <- log.i(s"accepted incoming peer=${peer.uri}")
     } yield peer
@@ -84,8 +81,7 @@ final class IncomingManager[F[_]](history: History[F], config: PeerConfig, val i
               socket    <- res
               tlsSocket <- Resource.liftF(socket.toTLSSocket(ssl, client = false))
               peer      <- Resource.liftF(handshake(socket))
-              _ <- Resource.make(connected.update(_ + (peer.uri.uri.toString -> (peer -> socket))).as(peer))(peer =>
-                log.i("close incoming") >> connected.update(_ - peer.uri.uri.toString))
+              _ <- Resource.make(connected.update(_ + (peer.uri.uri.toString -> (peer -> socket))).as(peer))(peer => connected.update(_ - peer.uri.uri.toString))
             } yield (peer, tlsSocket)
           }
       }

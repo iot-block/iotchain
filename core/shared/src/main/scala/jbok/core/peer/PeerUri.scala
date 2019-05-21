@@ -3,30 +3,14 @@ package jbok.core.peer
 import java.net._
 
 import cats.implicits._
-import enumeratum._
 import io.circe.generic.JsonCodec
-import jbok.crypto.signature.KeyPair
-import jbok.crypto._
-import scodec.bits.ByteVector
-
-//sealed trait PeerSource extends EnumEntry
-//object PeerSource extends Enum[PeerSource] {
-//  val values = findValues
-//
-//  case object Discovery extends PeerSource
-//  case object Seed      extends PeerSource
-//  case object Admin     extends PeerSource
-//}
 
 @JsonCodec
 final case class PeerUri(
     scheme: String,
-//    pk: KeyPair.Public,
     host: String,
     port: Int
 ) {
-//  lazy val id: ByteVector = pk.bytes.kec256
-
   lazy val uri: String = s"${scheme}://${host}:${port}"
 
   lazy val address: InetSocketAddress = new InetSocketAddress(host, port)
@@ -34,8 +18,6 @@ final case class PeerUri(
 
 object PeerUri {
   val schemes = List("tcp", "http", "https")
-
-  val PublicLength = 64
 
   def fromTcpAddr(addr: InetSocketAddress): PeerUri =
     PeerUri("tcp", addr.getHostString, addr.getPort)
@@ -52,15 +34,6 @@ object PeerUri {
       case None         => Left(new Exception(s"invalid scheme"))
     }
 
-//    def checkPk(uri: URI) =
-//      ByteVector
-//        .fromHex(uri.getUserInfo)
-//        .map(hex => {
-//          if (hex.length == PublicLength) Right(KeyPair.Public(hex))
-//          else Left(new Exception("invalid pk length"))
-//        })
-//        .getOrElse(Left(new Exception("invalid pk")))
-
     def checkAddress(uri: URI) =
       for {
         (host, port) <- Either.catchNonFatal(InetAddress.getByName(uri.getHost) -> uri.getPort)
@@ -75,7 +48,6 @@ object PeerUri {
     for {
       uri  <- checkURI(str)
       _    <- checkScheme(uri)
-//      pk   <- checkPk(uri)
       addr <- checkAddress(uri)
     } yield PeerUri.fromTcpAddr(addr)
   }

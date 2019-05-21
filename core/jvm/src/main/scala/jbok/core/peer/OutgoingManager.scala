@@ -47,11 +47,11 @@ final class OutgoingManager[F[_]](config: PeerConfig, history: History[F], val s
       remoteStatus <- socket.readMessage.flatMap(_.as[Status])
       remote       <- socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
       uri = PeerUri.fromTcpAddr(remote)
-//                _ <- if (!localStatus.isCompatible(remoteStatus)) {
-//                  F.raiseError(PeerErr.Incompatible(localStatus, remoteStatus))
-//                } else {
-//                  F.unit
-//                }
+      _ <- if (!localStatus.isCompatible(remoteStatus)) {
+        F.raiseError(new Exception("incompatible peer"))
+      } else {
+        F.unit
+      }
       peer <- Peer[F](uri, remoteStatus)
       _    <- log.i(s"connected outgoing peer=${peer.uri}")
     } yield peer

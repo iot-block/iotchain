@@ -11,16 +11,9 @@ class KeyStoreSpec extends CoreSpec {
   val key1  = hex"7a44789ed3cd85861c0bbf9693c7e1de1862dd4396c390147ecf1275099c6e6f"
   val addr1 = Address(hex"aa6826f00d01fe4085f0c3dd12778e206ce4e2ac")
 
-  def check(f: KeyStore[IO] => IO[Unit]): Unit = {
-    val p = CoreModule.resource[IO]().use { objects =>
-      val keyStore = objects.get[KeyStore[IO]]
-      f(keyStore)
-    }
-    p.unsafeRunSync()
-  }
-
   "KeyStore" should {
-    "import and list accounts" in check { keyStore =>
+    "import and list accounts" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         listBeforeImport <- keyStore.listAccounts
         _ = listBeforeImport shouldBe Nil
@@ -33,7 +26,8 @@ class KeyStoreSpec extends CoreSpec {
       } yield ()
     }
 
-    "create new accounts" in check { keyStore =>
+    "create new accounts" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         newAddr1          <- keyStore.newAccount("aaa")
         newAddr2          <- keyStore.newAccount("bbb")
@@ -43,7 +37,8 @@ class KeyStoreSpec extends CoreSpec {
       } yield ()
     }
 
-    "unlock an account provided a correct passphrase" in check { keyStore =>
+    "unlock an account provided a correct passphrase" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       val passphrase = "aaa"
       for {
         _      <- keyStore.importPrivateKey(key1, passphrase)
@@ -53,7 +48,8 @@ class KeyStoreSpec extends CoreSpec {
       } yield ()
     }
 
-    "return an error when unlocking an account with a wrong passphrase" in check { keyStore =>
+    "return an error when unlocking an account with a wrong passphrase" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         _   <- keyStore.importPrivateKey(key1, "aaa")
         res <- keyStore.unlockAccount(addr1, "bbb").attempt
@@ -61,21 +57,24 @@ class KeyStoreSpec extends CoreSpec {
       } yield ()
     }
 
-    "return an error when trying to unlock an unknown account" in check { keyStore =>
+    "return an error when trying to unlock an unknown account" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         res <- keyStore.unlockAccount(addr1, "bbb").attempt
         _ = res shouldBe Left(KeyNotFound)
       } yield ()
     }
 
-    "return an error deleting not existing wallet" in check { keyStore =>
+    "return an error deleting not existing wallet" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         res <- keyStore.deleteAccount(addr1).attempt
         _ = res shouldBe Left(KeyNotFound)
       } yield ()
     }
 
-    "delete existing wallet " in check { keyStore =>
+    "delete existing wallet " in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         newAddr1          <- keyStore.newAccount("aaa")
         listOfNewAccounts <- keyStore.listAccounts
@@ -87,7 +86,8 @@ class KeyStoreSpec extends CoreSpec {
       } yield ()
     }
 
-    "change passphrase of an existing wallet" in check { keyStore =>
+    "change passphrase of an existing wallet" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       val oldPassphrase = "weakpass"
       val newPassphrase = "very5tr0ng&l0ngp4s5phr4s3"
       for {
@@ -100,14 +100,16 @@ class KeyStoreSpec extends CoreSpec {
       } yield ()
     }
 
-    "return an error when changing passphrase of an non-existent wallet" in check { keyStore =>
+    "return an error when changing passphrase of an non-existent wallet" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         res <- keyStore.changePassphrase(addr1, "oldpass", "newpass").attempt
         _ = res shouldBe Left(KeyNotFound)
       } yield ()
     }
 
-    "return an error when changing passphrase and provided with invalid old passphrase" in check { keyStore =>
+    "return an error when changing passphrase and provided with invalid old passphrase" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         _   <- keyStore.importPrivateKey(key1, "oldpass")
         res <- keyStore.changePassphrase(addr1, "wrongpass", "newpass").attempt
@@ -115,7 +117,8 @@ class KeyStoreSpec extends CoreSpec {
       } yield ()
     }
 
-    "import private key with empty passphrase and unlock account" in check { keyStore =>
+    "import private key with empty passphrase and unlock account" in check { objects =>
+      val keyStore = objects.get[KeyStore[IO]]
       for {
         _   <- keyStore.importPrivateKey(key1, "")
         res <- keyStore.unlockAccount(addr1, "").attempt

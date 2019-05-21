@@ -3,6 +3,7 @@ package jbok.core
 import java.net.InetSocketAddress
 
 import cats.effect.IO
+import cats.effect.concurrent.Ref
 import jbok.common.testkit._
 import jbok.core.config._
 import jbok.core.messages._
@@ -188,7 +189,10 @@ object testkit {
   }
 
   def genBlocks(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Block]] = {
-    val miner = CoreSpec.withConfig(config).unsafeRunSync().get[BlockMiner[IO]]
+    val objects = CoreSpec.withConfig(config).unsafeRunSync()
+    val miner = objects.get[BlockMiner[IO]]
+    val status = objects.get[Ref[IO, NodeStatus]]
+    status.set(NodeStatus.Done).unsafeRunSync()
     for {
       size <- Gen.chooseNum(min, max)
       blocks = miner.stream.take(size).compile.toList.unsafeRunSync()
@@ -199,7 +203,10 @@ object testkit {
       parentOpt: Option[Block] = None,
       stxsOpt: Option[List[SignedTransaction]] = None
   )(implicit config: CoreConfig): Gen[Block] = {
-    val miner = CoreSpec.withConfig(config).unsafeRunSync().get[BlockMiner[IO]]
+    val objects = CoreSpec.withConfig(config).unsafeRunSync()
+    val miner = objects.get[BlockMiner[IO]]
+    val status = objects.get[Ref[IO, NodeStatus]]
+    status.set(NodeStatus.Done).unsafeRunSync()
     val mined = miner.mine1(parentOpt, stxsOpt).unsafeRunSync()
     mined.right.get.block
   }

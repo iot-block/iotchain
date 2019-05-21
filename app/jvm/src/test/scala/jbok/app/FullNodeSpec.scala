@@ -3,7 +3,7 @@ package jbok.app
 import cats.effect.IO
 import cats.implicits._
 import fs2._
-import jbok.app.config.{ServiceConfig}
+import jbok.core.config.ServiceConfig
 import jbok.core.testkit._
 
 import scala.concurrent.duration._

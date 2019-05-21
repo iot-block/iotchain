@@ -68,7 +68,7 @@ class BlockPoolSpec extends CoreSpec {
       pool.addBlock(block2a).unsafeRunSync()
       pool.addBlock(block2b).unsafeRunSync()
 
-      val expectedTd = 1024 + List(block1, block2a, block3).map(_.header.difficulty).sum
+      val expectedTd = List(block1, block2a, block3).map(_.header.difficulty).sum
       pool.addBlock(block3).unsafeRunSync() shouldBe Some(Leaf(block3.header.hash, expectedTd))
     }
 

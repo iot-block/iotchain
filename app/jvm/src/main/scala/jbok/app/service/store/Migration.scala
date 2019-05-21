@@ -1,7 +1,7 @@
 package jbok.app.service.store
 
 import cats.effect.Sync
-import jbok.app.config.DatabaseConfig
+import jbok.core.config.DatabaseConfig
 import org.flywaydb.core.Flyway
 
 object Migration {

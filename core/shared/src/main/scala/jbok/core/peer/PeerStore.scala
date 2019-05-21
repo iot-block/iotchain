@@ -15,7 +15,7 @@ final class PeerStore[F[_]](db: KeyValueDB[F], queue: Queue[F, PeerUri])(implici
     db.get[String, PeerUri](uri, namespace)
 
   def put(uri: PeerUri): F[Unit] =
-    db.put[String, PeerUri](uri.uri.toString, uri, namespace) >> queue.enqueue1(uri)
+    db.put[String, PeerUri](uri.uri, uri, namespace) >> queue.enqueue1(uri)
 
   def add(uris: PeerUri*): F[Unit] =
     uris.toList.traverse_(put)

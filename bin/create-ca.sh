@@ -46,7 +46,7 @@ for i in `seq 1 ${nodeCount}`; do
     # create server cert
     openssl ecparam -genkey -name secp521r1 -out ${server_dir}/private/certkey.pem
     openssl req -new -sha256 -key ${server_dir}/private/certkey.pem -out ${server_dir}/cert.csr -config ${conf_file}
-    openssl x509 -req -in ${server_dir}/cert.csr -CA ${ca_dir}/ca.pem -CAkey ${ca_dir}/private/cakey.pem -CAcreateserial -out ${server_dir}/cert.pem -days 356 -sha256 -outform PEM
+    openssl x509 -req -in ${server_dir}/cert.csr -CA ${ca_dir}/ca.pem -CAkey ${ca_dir}/private/cakey.pem -CAcreateserial -out ${server_dir}/cert.pem -extfile ${conf_file} -extensions v3_req -days 356 -sha256 -outform PEM
 
     # export to server.jks
     openssl pkcs12 -export -out ${server_dir}/certificate.pfx -inkey ${server_dir}/private/certKey.pem -in ${server_dir}/cert.pem -password pass:"${server_keystore_pass}"

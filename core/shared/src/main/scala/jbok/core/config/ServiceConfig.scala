@@ -1,4 +1,4 @@
-package jbok.app.config
+package jbok.core.config
 
 import java.net.InetSocketAddress
 import io.circe.generic.JsonCodec

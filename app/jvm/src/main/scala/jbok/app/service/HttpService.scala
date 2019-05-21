@@ -4,7 +4,7 @@ import cats.effect.{ConcurrentEffect, Resource, Timer}
 import io.circe.Json
 import fs2._
 import javax.net.ssl.SSLContext
-import jbok.app.config.ServiceConfig
+import jbok.core.config.ServiceConfig
 import jbok.core.api._
 import jbok.network.rpc.RpcService
 import jbok.network.rpc.http.Http4sRpcServer

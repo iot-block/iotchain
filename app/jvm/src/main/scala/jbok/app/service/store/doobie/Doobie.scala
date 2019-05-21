@@ -1,12 +1,12 @@
 package jbok.app.service.store.doobie
 
-import cats.effect.{Async, ContextShift, Resource, Sync}
+import cats.effect.{Async, ContextShift, Resource}
 import doobie._
 import doobie.h2.H2Transactor
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
-import jbok.app.config.DatabaseConfig
-import jbok.core.models.{Address, BlockHeader}
+import jbok.core.config.DatabaseConfig
+import jbok.core.models.Address
 import scodec.bits.ByteVector
 
 object Doobie {

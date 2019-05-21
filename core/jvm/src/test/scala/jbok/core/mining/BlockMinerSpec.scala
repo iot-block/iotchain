@@ -1,9 +1,10 @@
 package jbok.core.mining
 
 import cats.effect.IO
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common.testkit._
-import jbok.core.CoreSpec
+import jbok.core.{CoreSpec, NodeStatus}
 import jbok.core.ledger.History
 import jbok.core.models.SignedTransaction
 import jbok.core.testkit._
@@ -31,6 +32,8 @@ class BlockMinerSpec extends CoreSpec {
       val N       = 10
       val objects = locator.unsafeRunSync()
       val miner   = objects.get[BlockMiner[IO]]
+      val status  = objects.get[Ref[IO, NodeStatus]]
+      status.set(NodeStatus.Done).unsafeRunSync()
       val history = objects.get[History[IO]]
       miner.stream.take(N).compile.toList.unsafeRunSync()
       history.getBestBlockNumber.unsafeRunSync() shouldBe N

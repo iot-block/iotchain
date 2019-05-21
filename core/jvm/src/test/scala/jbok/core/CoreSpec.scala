@@ -24,7 +24,7 @@ trait CoreSpec extends CommonSpec {
     .addMiner(testMiner.address)
     .build
 
-  implicit val config = CoreModule.coreConfig
+  implicit val config = CoreModule.testConfig
     .lens(_.mining.secret).set(keyPair.secret.bytes)
     .lens(_.genesis).set(genesis)
 
@@ -33,6 +33,13 @@ trait CoreSpec extends CommonSpec {
 
   def withConfig(config: CoreConfig): IO[Locator] =
     CoreModule.resource[IO](config).allocated.map(_._1)
+
+  def check(f: Locator => IO[Unit]): Unit = {
+    val p = CoreModule.resource[IO](config).use { objects =>
+      f(objects)
+    }
+    p.unsafeRunSync()
+  }
 }
 
 object CoreSpec extends CoreSpec

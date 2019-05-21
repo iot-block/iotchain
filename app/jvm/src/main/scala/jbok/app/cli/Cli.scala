@@ -7,7 +7,7 @@ import cats.effect._
 import cats.implicits._
 import fs2._
 import jbok.app.AppModule
-import jbok.app.config.FullConfig
+import jbok.core.config.CoreConfig
 import jbok.common.log.{Level, Logger}
 import jbok.core.api.{JbokClient, JbokClientPlatform}
 import net.team2xh.onions.components._
@@ -122,8 +122,8 @@ object Cli extends IOApp {
       case _         => AppModule.resource[IO]()
     }
     resource.use { objects =>
-      val config = objects.get[FullConfig]
-      JbokClientPlatform.resource[IO](s"https://${config.app.service.host}:${config.app.service.port}").use { client =>
+      val config = objects.get[CoreConfig]
+      JbokClientPlatform.resource[IO](s"https://${config.service.host}:${config.service.port}").use { client =>
         Logger.setRootLevel[IO](Level.Error).unsafeRunSync()
         val cli = new Cli[IO](client)
         cli.loop(5.seconds).compile.drain.as(ExitCode.Success)

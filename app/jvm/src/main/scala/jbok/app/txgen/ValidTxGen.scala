@@ -3,17 +3,17 @@ package jbok.app.txgen
 import cats.effect._
 import cats.implicits._
 import fs2._
-import jbok.app.config.FullConfig
+import jbok.core.config.CoreConfig
 import jbok.common.log.Logger
 import jbok.core.api.JbokClient
 import jbok.core.mining.TxGen
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.crypto.signature.KeyPair
 
-final class ValidTxGen[F[_]](config: FullConfig, client: JbokClient[F], keyPairs: List[KeyPair])(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) {
+final class ValidTxGen[F[_]](config: CoreConfig, client: JbokClient[F], keyPairs: List[KeyPair])(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) {
   private[this] val log = Logger[F]
 
-  implicit val chainId = config.core.genesis.chainId
+  implicit val chainId = config.genesis.chainId
 
   val addresses: List[Address] = keyPairs.map(Address.apply)
 
@@ -37,7 +37,7 @@ final class ValidTxGen[F[_]](config: FullConfig, client: JbokClient[F], keyPairs
   val stream: Stream[F, Unit] =
     Stream.eval(log.i(s"starting TxGen")) ++
       Stream
-        .fixedDelay[F](config.core.mining.period)
+        .fixedDelay[F](config.mining.period)
         .evalMap(_ => submitTransactions())
 }
 //
