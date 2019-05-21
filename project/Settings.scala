@@ -32,15 +32,16 @@ object Settings {
 
   private object ScalacSettings {
     val base = Seq(
-      "-deprecation",
-      "-encoding",
-      "UTF-8",
-      "-feature",
-      "-unchecked",
-      "-Ypartial-unification",
-      "-language:higherKinds",
-      "-language:implicitConversions",
-      "-language:postfixOps"
+      "-deprecation", // Emit warning and location for usages of deprecated APIs.
+      "-encoding", "UTF-8", // Specify character encoding used by source files.
+      "-explaintypes", // Explain type errors in more detail.
+      "-feature", // Emit warning and location for usages of features that should be imported explicitly.
+      "-language:existentials", // Existential types (besides wildcard types) can be written and inferred
+      "-language:higherKinds", // Allow higher-kinded types
+      "-language:implicitConversions", // Allow definition of implicit functions called views
+      "-unchecked", // Enable additional warnings where generated code depends on assumptions.
+      "-Ypartial-unification", // Enable partial unification in type constructor inference
+//      "-language:postfixOps"
     )
 
     def specificFor(scalaVersion: String) = CrossVersion.partialVersion(scalaVersion) match {
@@ -53,9 +54,10 @@ object Settings {
     val strictBase = Seq(
       "-Xfatal-warnings",
       "-Xlint",
-      "-Ywarn-dead-code",
-      "-Ywarn-numeric-widen",
-      "-Ywarn-value-discard",
+      "-Ywarn-dead-code", // Warn when dead code is identified.
+      "-Ywarn-extra-implicit", // Warn when more than one implicit parameter section is defined.
+      "-Ywarn-numeric-widen", // Warn when numerics are widened.
+      "-Ywarn-value-discard", // Warn when non-Unit expression results are unused.
       "-Ywarn-inaccessible",
       "-Ywarn-nullary-override"
     )

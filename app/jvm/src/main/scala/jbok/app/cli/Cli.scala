@@ -1,15 +1,12 @@
 package jbok.app.cli
 
-import java.nio.file.Paths
 import java.time.{Instant, LocalDateTime, ZoneId}
 
 import cats.effect._
 import cats.implicits._
 import fs2._
-import jbok.app.AppModule
-import jbok.core.config.CoreConfig
-import jbok.common.log.{Level, Logger}
-import jbok.core.api.{JbokClient, JbokClientPlatform}
+import jbok.core.api.JbokClient
+import jbok.core.models.Address
 import net.team2xh.onions.components._
 import net.team2xh.onions.components.widgets.Label
 import net.team2xh.scurses.Scurses
@@ -24,12 +21,16 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
   val frame = Frame(Some("JBOK"), debug = true)
   val left  = frame.panel
   left.title = "status"
-  val middle  = left.splitRight
-  val right   = middle.splitRight
-  val middle1 = middle.splitDown
+  val middle1 = left.splitRight
+  val right1  = middle1.splitRight
+  val right2  = right1.splitDown
+  right1.title = "blocks"
+  right2.title = "block"
   val middle2 = middle1.splitDown
+  val middle3 = middle2.splitDown
   middle1.title = "incoming"
   middle2.title = "outgoing"
+  middle3.title = "accounts"
 
   // history
   val bestBlockNumber     = Label(left, "0")
@@ -47,7 +48,7 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
       bestBlockHash.text := s"bestBlockHash: ${bestBlock.header.hash.toHex}"
       totalDifficulty.text := s"totalDifficulty: ${td.getOrElse(BigInt(0))}"
       pendingTransactions.text := s"pendingTxs: ${txs.size}"
-      frame.redraw()
+      ()
     }
 
   // peers
@@ -75,32 +76,83 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
           outgoing += peer.uri.toString -> Label(middle2, text)
         }
       }
+    }
 
-      frame.redraw()
+  // accounts
+  val accountMap = mutable.Map.empty[Address, Label]
+  def renderAccounts =
+    for {
+      addresses <- client.personal.listAccounts
+      accounts  <- addresses.traverse(client.account.getAccount(_))
+    } yield {
+      addresses.zip(accounts).foreach {
+        case (address, account) =>
+          val text = s"${address}: balance=${account.balance} nonce=${account.nonce}"
+          if (accountMap.contains(address)) {
+            accountMap(address).text := text
+          } else {
+            accountMap += address -> Label(middle3, text)
+          }
+      }
+
     }
 
   // blocks
-  val blocks = mutable.ArrayBuffer[Label](List.fill(10)(Label(right, "")): _*)
+  val blocks = mutable.ArrayBuffer[Label](List.fill(10)(Label(right1, "")): _*)
   val renderBlocks = for {
     start   <- client.block.getBestBlockNumber
     headers <- client.block.getBlockHeadersByNumber((start - 10) max 0, 10)
     bodies  <- client.block.getBlockBodies(headers.map(_.hash))
   } yield {
-    headers.zip(bodies).reverse.zipWithIndex.map { case ((header, body), idx) =>
-      val datetime = LocalDateTime.ofInstant(Instant.ofEpochMilli(header.unixTimestamp), ZoneId.systemDefault())
-      val text = s"(${header.number}) #${header.hash.toHex.take(7)} #txs=${body.transactionList.length} state=${header.stateRoot.toHex.take(7)} [${datetime}]"
-      blocks(idx).text := text
+    headers.zip(bodies).reverse.zipWithIndex.map {
+      case ((header, body), idx) =>
+        val datetime = LocalDateTime.ofInstant(Instant.ofEpochMilli(header.unixTimestamp), ZoneId.systemDefault())
+        val text     = s"(${header.number}) #${header.hash.toHex.take(7)} #txs=${body.transactionList.length} state=${header.stateRoot.toHex.take(7)} [${datetime}]"
+        blocks(idx).text := text
     }
+    ()
+  }
 
-    frame.redraw()
+  // block
+  val blockNumber      = Label(right2, "")
+  val blockHash        = Label(right2, "")
+  val parentHash       = Label(right2, "")
+  val beneficiary      = Label(right2, "")
+  val stateRoot        = Label(right2, "")
+  val transactionsRoot = Label(right2, "")
+  val receiptsRoot     = Label(right2, "")
+  val difficulty       = Label(right2, "")
+  val gasLimit         = Label(right2, "")
+  val gasUsed          = Label(right2, "")
+
+  val renderBlock = for {
+    number    <- client.block.getBestBlockNumber
+    headerOpt <- client.block.getBlockHeaderByNumber(number)
+  } yield {
+    headerOpt match {
+      case Some(header) =>
+        blockNumber.text := s"number: ${header.number}"
+        blockHash.text := s"hash: ${header.hash.toHex}"
+        parentHash.text := s"parentHash: ${header.parentHash.toHex}"
+        beneficiary.text := s"beneficiary: ${header.beneficiary.toHex}"
+        stateRoot.text := s"stateRoot: ${header.stateRoot.toHex}"
+        transactionsRoot.text := s"transactionsRoot: ${header.transactionsRoot.toHex}"
+        receiptsRoot.text := s"receiptsRoot: ${header.receiptsRoot.toHex}"
+        difficulty.text := s"difficulty: ${header.difficulty}"
+        gasLimit.text := s"gasLimit: ${header.gasLimit}"
+        gasUsed.text := s"gasUsed: ${header.gasUsed}"
+        ()
+      case None => ()
+    }
   }
 
   // configs
-  val peerService = Label(middle1, "")
+  val bindAddr = Label(middle1, "")
+  val serviceUri = Label(middle1, "")
   def renderConfigs = client.admin.getCoreConfig.map { config =>
-    peerService.text := s"local addr: ${config.peer.bindAddr}"
-//    rpcService.text := s"enabled: ${config.rpc.enabled} addr: ${config.rpc.rpcAddr}"
-    frame.redraw()
+    bindAddr.text := s"bindAddr: ${config.peer.bindAddr}"
+    serviceUri.text := s"service: ${config.service.uri}"
+    ()
   }
 
   // loop
@@ -109,25 +161,10 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
       .eval(F.delay(frame.show))
       .concurrently(
         Stream
-          .eval(renderHistory >> renderPeers >> renderConfigs >> renderBlocks >> T.sleep(interval))
+          .eval(List(renderHistory, renderPeers, renderConfigs, renderBlocks, renderAccounts, renderBlock).sequence_)
+          .evalTap(_ => F.delay(frame.redraw()))
           .repeat
+          .metered(interval)
       )
       .onFinalize(F.delay(screen.close()))
-}
-
-object Cli extends IOApp {
-  override def run(args: List[String]): IO[ExitCode] = {
-    val resource = args match {
-      case path :: _ => AppModule.resource[IO](Paths.get(path))
-      case _         => AppModule.resource[IO]()
-    }
-    resource.use { objects =>
-      val config = objects.get[CoreConfig]
-      JbokClientPlatform.resource[IO](s"https://${config.service.host}:${config.service.port}").use { client =>
-        Logger.setRootLevel[IO](Level.Error).unsafeRunSync()
-        val cli = new Cli[IO](client)
-        cli.loop(5.seconds).compile.drain.as(ExitCode.Success)
-      }
-    }
-  }
 }

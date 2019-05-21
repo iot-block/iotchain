@@ -10,18 +10,22 @@ import jbok.core.testkit._
 
 class AdminAPISpec extends AppSpec {
   "AdminAPI" should {
-    val objects = locator.unsafeRunSync()
-    val admin = objects.get[AdminAPI[IO]]
-
-    "addPeer" in {
+    "addPeer" in check { objects =>
+      val admin       = objects.get[AdminAPI[IO]]
       val peerManager = objects.get[PeerManager[IO]]
-      val uri = random[PeerUri]
-      admin.addPeer(uri.uri.toString).unsafeRunSync()
-      peerManager.outgoing.store.get(uri.uri.toString).unsafeRunSync()
+      val uri         = random[PeerUri]
+      for {
+        _ <- admin.addPeer(uri.uri.toString)
+        _ <- peerManager.outgoing.store.get(uri.uri.toString)
+      } yield ()
     }
 
-    "getCoreConfig" in {
-      admin.getCoreConfig.unsafeRunSync() shouldBe objects.get[CoreConfig]
+    "getCoreConfig" in check { objects =>
+      val admin = objects.get[AdminAPI[IO]]
+      for {
+        res <- admin.getCoreConfig
+        _ = res shouldBe objects.get[CoreConfig]
+      } yield ()
     }
   }
 }

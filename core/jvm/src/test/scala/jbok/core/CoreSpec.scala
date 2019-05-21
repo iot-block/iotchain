@@ -31,10 +31,10 @@ trait CoreSpec extends CommonSpec {
   val locator: IO[Locator] =
     CoreModule.resource[IO](config).allocated.map(_._1)
 
-  def withConfig(config: CoreConfig): IO[Locator] =
-    CoreModule.resource[IO](config).allocated.map(_._1)
+  def check(f: Locator => IO[Unit]): Unit =
+    check(config)(f)
 
-  def check(f: Locator => IO[Unit]): Unit = {
+  def check(config: CoreConfig)(f: Locator => IO[Unit]): Unit = {
     val p = CoreModule.resource[IO](config).use { objects =>
       f(objects)
     }

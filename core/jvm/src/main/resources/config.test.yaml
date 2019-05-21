@@ -22,7 +22,7 @@ history:
   difficultyBombContinueBlockNumber: "5000000"
 
 keystore:
-  dir: "temp"
+  dir: "temporary"
 
 peer:
   host: localhost
@@ -31,7 +31,7 @@ peer:
   updatePeersInterval: "10 seconds"
   maxOutgoingPeers: 10
   maxIncomingPeers: 10
-  maxBufferSize: 4194304 # 4 MiB
+  bufferSize: 4194304 # 4 MiB
   timeout: "10 seconds"
 
 sync:
@@ -53,7 +53,7 @@ blockPool:
 mining:
   enabled: false
   secret: "1a3c21bb6e303a384154a56a882f5b760a2d166161f6ccff15fc70e147161788"
-  coinbase: "0000000000000000000000000000000000000042"
+  coinbase: "0000000000000000000000000000000000000000"
   period: "100 millis"
   epoch: "30000"
   checkpointInterval: 1024
@@ -80,7 +80,7 @@ service:
   enable: true
   enableHttp2: true
   enableWebsockets: false
-  secure: true
+  secure: false
   host: localhost
   port: 30315
   apis:

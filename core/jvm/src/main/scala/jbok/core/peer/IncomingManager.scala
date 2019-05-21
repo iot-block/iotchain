@@ -4,73 +4,38 @@ import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 
 import cats.effect._
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.concurrent.Deferred
 import cats.effect.implicits._
 import cats.implicits._
 import fs2._
 import fs2.io.tcp.Socket
 import javax.net.ssl.SSLContext
-import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
-import jbok.core.config.PeerConfig
+import jbok.core.config.CoreConfig
 import jbok.core.ledger.History
-import jbok.core.messages.Status
 import jbok.core.queue.Queue
+import jbok.network.Message
 import jbok.network.tcp.implicits._
-import jbok.network.{Message, Request}
 
-final class IncomingManager[F[_]](history: History[F], config: PeerConfig, val inbound: Queue[F, Peer[F], Message[F]], ssl: Option[SSLContext])(
+final class IncomingManager[F[_]](config: CoreConfig, history: History[F], ssl: Option[SSLContext], val inbound: Queue[F, Peer[F], Message[F]])(
     implicit F: ConcurrentEffect[F],
     cs: ContextShift[F],
     T: Timer[F],
     acg: AsynchronousChannelGroup
-) {
+) extends BaseManager[F](config, history, ssl) {
   private val log = Logger[F]
 
-  val connected: Ref[F, Map[String, (Peer[F], Socket[F])]] = Ref.unsafe(Map.empty)
-
-  def close(uri: PeerUri): F[Unit] =
-    connected.get.map(_.get(uri.toString)).flatMap {
-      case Some((_, socket)) => socket.endOfOutput >> socket.close
-      case _                 => F.unit
-    }
-
   val localBindAddress: Deferred[F, InetSocketAddress] = Deferred.unsafe[F, InetSocketAddress]
-
-  val localStatus: F[Status] =
-    for {
-      genesis <- history.genesisHeader
-      number  <- history.getBestBlockNumber
-      td      <- history.getTotalDifficultyByNumber(number).map(_.getOrElse(BigInt(0)))
-      service = s"https://${config.host}:${config.port + 1}"
-    } yield Status(history.chainId, genesis.hash, number, td, service)
-
-  def handshake(socket: Socket[F]): F[Peer[F]] =
-    for {
-      localStatus <- localStatus
-      request = Request.binary[F, Status](Status.name, localStatus.asValidBytes)
-      _            <- socket.writeMessage(request)
-      remoteStatus <- socket.readMessage.flatMap(_.as[Status])
-      remote       <- socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
-      uri = PeerUri.fromTcpAddr(remote)
-      _ <- if (!localStatus.isCompatible(remoteStatus)) {
-        F.raiseError(new Exception("incompatible peer"))
-      } else {
-        F.unit
-      }
-      peer <- Peer[F](uri, remoteStatus)
-      _    <- log.i(s"accepted incoming peer=${peer.uri}")
-    } yield peer
 
   val localPeerUri: F[PeerUri] = localBindAddress.get.map(addr => PeerUri.fromTcpAddr(addr))
 
   val peers: Stream[F, Resource[F, (Peer[F], Socket[F])]] =
     Socket
       .serverWithLocalAddress[F](
-        address = config.bindAddr,
+        address = config.peer.bindAddr,
         maxQueued = 10,
         reuseAddress = true,
-        receiveBufferSize = config.maxBufferSize
+        receiveBufferSize = config.peer.bufferSize
       )
       .flatMap {
         case Left(bound) =>
@@ -81,7 +46,7 @@ final class IncomingManager[F[_]](history: History[F], config: PeerConfig, val i
               socket    <- res
               tlsSocket <- Resource.liftF(socket.toTLSSocket(ssl, client = false))
               peer      <- Resource.liftF(handshake(socket))
-              _ <- Resource.make(connected.update(_ + (peer.uri.uri.toString -> (peer -> socket))).as(peer))(peer => connected.update(_ - peer.uri.uri.toString))
+              _         <- Resource.make(connected.update(_ + (peer.uri -> (peer -> socket))).as(peer))(peer => connected.update(_ - peer.uri))
             } yield (peer, tlsSocket)
           }
       }
@@ -95,17 +60,17 @@ final class IncomingManager[F[_]](history: History[F], config: PeerConfig, val i
             case (peer, socket) =>
               Stream(
                 socket
-                  .reads(config.maxBufferSize, None)
+                  .reads(config.peer.bufferSize, None)
                   .through(Message.decodePipe[F])
                   .map(m => peer -> m)
                   .through(inbound.sink)
-                  .onFinalize(log.i(s"finalize ${peer.uri.address}") >> connected.update(_ - peer.uri.uri.toString)),
+                  .onFinalize(log.i(s"disconnected incoming ${peer.uri}") >> connected.update(_ - peer.uri)),
                 peer.queue.dequeue.through(Message.encodePipe[F]).through(socket.writes(None))
               ).parJoinUnbounded
           }
           .handleErrorWith(e => Stream.eval(log.w("", e)))
       }
-      .parJoin(config.maxIncomingPeers)
+      .parJoin(config.peer.maxIncomingPeers)
 
   val resource: Resource[F, PeerUri] = Resource {
     for {

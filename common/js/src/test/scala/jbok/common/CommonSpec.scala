@@ -10,6 +10,8 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 trait CommonSpec extends AsyncWordSpec with Matchers with AsyncTimeLimitedTests {
+  implicit override def executionContext = ExecutionContext.global
+
   implicit val cs = IO.contextShift(ExecutionContext.global)
 
   implicit val timer = IO.timer(ExecutionContext.global)

@@ -1,7 +1,7 @@
 package jbok.core.keystore
 
 import cats.effect.IO
-import jbok.core.{CoreModule, CoreSpec}
+import jbok.core.CoreSpec
 import jbok.core.keystore.KeyStoreError._
 import jbok.core.models.Address
 import jbok.crypto.signature.KeyPair
@@ -17,11 +17,9 @@ class KeyStoreSpec extends CoreSpec {
       for {
         listBeforeImport <- keyStore.listAccounts
         _ = listBeforeImport shouldBe Nil
-        // We sleep between imports so that dates of key files' names are different
         res1 <- keyStore.importPrivateKey(key1, "aaa")
         _ = res1 shouldBe addr1
         listAfterImport <- keyStore.listAccounts
-        // result should be ordered by creation date
         _ = listAfterImport shouldBe List(addr1)
       } yield ()
     }
@@ -38,7 +36,7 @@ class KeyStoreSpec extends CoreSpec {
     }
 
     "unlock an account provided a correct passphrase" in check { objects =>
-      val keyStore = objects.get[KeyStore[IO]]
+      val keyStore   = objects.get[KeyStore[IO]]
       val passphrase = "aaa"
       for {
         _      <- keyStore.importPrivateKey(key1, passphrase)
@@ -87,7 +85,7 @@ class KeyStoreSpec extends CoreSpec {
     }
 
     "change passphrase of an existing wallet" in check { objects =>
-      val keyStore = objects.get[KeyStore[IO]]
+      val keyStore      = objects.get[KeyStore[IO]]
       val oldPassphrase = "weakpass"
       val newPassphrase = "very5tr0ng&l0ngp4s5phr4s3"
       for {

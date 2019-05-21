@@ -15,7 +15,7 @@ final case class PeerConfig(
     updatePeersInterval: FiniteDuration,
     maxOutgoingPeers: Int,
     maxIncomingPeers: Int,
-    maxBufferSize: Int,
+    bufferSize: Int,
     timeout: FiniteDuration
 ) {
   val bindAddr: InetSocketAddress = new InetSocketAddress(host, port)

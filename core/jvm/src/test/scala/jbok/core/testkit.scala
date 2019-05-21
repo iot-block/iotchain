@@ -189,13 +189,14 @@ object testkit {
   }
 
   def genBlocks(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Block]] = {
-    val objects = CoreSpec.withConfig(config).unsafeRunSync()
-    val miner = objects.get[BlockMiner[IO]]
-    val status = objects.get[Ref[IO, NodeStatus]]
+    val (objects, close) = CoreModule.resource[IO](config).allocated.unsafeRunSync()
+    val miner            = objects.get[BlockMiner[IO]]
+    val status           = objects.get[Ref[IO, NodeStatus]]
     status.set(NodeStatus.Done).unsafeRunSync()
     for {
       size <- Gen.chooseNum(min, max)
       blocks = miner.stream.take(size).compile.toList.unsafeRunSync()
+      _      = close.unsafeRunSync()
     } yield blocks.map(_.block)
   }
 
@@ -203,11 +204,12 @@ object testkit {
       parentOpt: Option[Block] = None,
       stxsOpt: Option[List[SignedTransaction]] = None
   )(implicit config: CoreConfig): Gen[Block] = {
-    val objects = CoreSpec.withConfig(config).unsafeRunSync()
-    val miner = objects.get[BlockMiner[IO]]
-    val status = objects.get[Ref[IO, NodeStatus]]
+    val (objects, close) = CoreModule.resource[IO](config).allocated.unsafeRunSync()
+    val miner   = objects.get[BlockMiner[IO]]
+    val status  = objects.get[Ref[IO, NodeStatus]]
     status.set(NodeStatus.Done).unsafeRunSync()
     val mined = miner.mine1(parentOpt, stxsOpt).unsafeRunSync()
+    close.unsafeRunSync()
     mined.right.get.block
   }
 

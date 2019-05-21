@@ -6,19 +6,20 @@ import java.time.format.DateTimeFormatter
 import java.time.{ZoneOffset, ZonedDateTime}
 
 import better.files._
-import cats.effect.Async
+import cats.effect.Sync
 import cats.implicits._
 import io.circe.parser._
 import io.circe.syntax._
-import jbok.common.{FileUtil, Terminal}
 import jbok.common.log.Logger
+import jbok.common.{FileUtil, Terminal}
+import jbok.core.config.KeyStoreConfig
 import jbok.core.keystore.KeyStoreError.KeyNotFound
 import jbok.core.models.Address
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import cats.effect.Resource
 
-final class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom)(implicit F: Async[F]) extends KeyStore[F] {
+final class KeyStorePlatform[F[_]](keyStoreDir: Path, secureRandom: SecureRandom)(implicit F: Sync[F]) extends KeyStore[F] {
   private[this] val log = Logger[F]
 
   private val keyLength = 32
@@ -81,18 +82,18 @@ final class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom
   private def save(encryptedKey: EncryptedKey): F[Unit] = {
     val json = encryptedKey.asJson.spaces2
     val name = fileName(encryptedKey)
-    val file = keyStoreDir / name
+    val path = keyStoreDir.resolve(name)
 
     for {
       alreadyInKeyStore <- containsAccount(encryptedKey)
       _ <- if (alreadyInKeyStore) {
         F.raiseError(KeyStoreError.KeyAlreadyExist)
       } else {
-        log.info(s"saving key into ${file.pathAsString}")
-        F.delay(file.createIfNotExists(createParents = true).writeText(json)).attempt.flatMap {
-          case Left(e)  => F.raiseError[Unit](KeyStoreError.IOError(e.toString))
-          case Right(_) => F.unit
-        }
+        log.info(s"saving key into ${path.toAbsolutePath}") >>
+          FileUtil[F].dump(json, path).attempt.flatMap {
+            case Left(e)  => F.raiseError[Unit](KeyStoreError.IOError(e.toString))
+            case Right(_) => F.unit
+          }
       }
     } yield ()
   }
@@ -133,10 +134,12 @@ final class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom
   }
 
   private def listFiles(): F[List[File]] =
-    if (!keyStoreDir.exists || !keyStoreDir.isDirectory) {
-      F.pure(Nil)
-    } else {
-      F.pure(keyStoreDir.list.toList)
+    FileUtil[F].open(keyStoreDir, asDirectory = true).flatMap { file =>
+      if (!file.exists || !file.isDirectory) {
+        F.pure(Nil)
+      } else {
+        F.delay(file.list.toList)
+      }
     }
 
   private def containsAccount(encKey: EncryptedKey): F[Boolean] =
@@ -153,10 +156,10 @@ final class KeyStorePlatform[F[_]](keyStoreDir: File, secureRandom: SecureRandom
 }
 
 object KeyStorePlatform {
-  def resource[F[_]](dir: String)(implicit F: Async[F]): Resource[F, KeyStorePlatform[F]] =
-    (dir match {
-      case "temp" => FileUtil[F].temporaryDir()
-      case path   => FileUtil[F].open(Paths.get(path))
+  def resource[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]): Resource[F, KeyStorePlatform[F]] =
+    (config.dir match {
+      case "temporary" => FileUtil[F].temporaryDir().map(_.path)
+      case path        => Resource.liftF(Paths.get(path).pure[F])
     }).map { dir =>
       val secureRandom = new SecureRandom()
       new KeyStorePlatform[F](dir, secureRandom)

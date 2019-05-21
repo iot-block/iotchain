@@ -101,7 +101,7 @@ object Logger {
 
   def fileFormatter: Formatter = {
     import scribe.format._
-    formatter"$dateFull $levelPaddedRight [$threadName] - $message$mdc$newLine"
+    formatter"$dateFull $levelPaddedRight - $message$mdc [$className]"
   }
 
   private[log] def fromJbokLevel(level: Level): SL = level match {

@@ -1,6 +1,7 @@
 package jbok.app.store
 
 import cats.effect.IO
+import cats.implicits._
 import jbok.app.AppSpec
 import jbok.app.service.store.{BlockStore, TransactionStore}
 import jbok.common.testkit._
@@ -9,46 +10,49 @@ import jbok.core.models.{Block, SignedTransaction}
 import jbok.core.testkit._
 
 class ServiceStoreSpec extends AppSpec {
-  val objects  = locator.unsafeRunSync()
-  val history  = objects.get[History[IO]]
-  val executor = objects.get[BlockExecutor[IO]]
+  "insert and query blocks" in check { objects =>
+    val history    = objects.get[History[IO]]
+    val executor   = objects.get[BlockExecutor[IO]]
+    val blockStore = objects.get[BlockStore[IO]]
 
-  val txs      = random[List[SignedTransaction]](genTxs(min = 10, max = 10))
-  val block    = random[Block](genBlock(stxsOpt = Some(txs)))
-  val executed = executor.executeBlock(block).unsafeRunSync()
+    val txs   = random[List[SignedTransaction]](genTxs(min = 10, max = 10))
+    val block = random[Block](genBlock(stxsOpt = Some(txs)))
 
-  val blockStore = objects.get[BlockStore[IO]]
-  val txStore    = objects.get[TransactionStore[IO]]
+    for {
+      executed <- executor.executeBlock(block)
+      _        <- history.getBlockByNumber(0).map(_.get) >>= blockStore.insertBlock
+      _        <- blockStore.insertBlock(executed.block)
+      blocks   <- blockStore.findAllBlocks(1, 5)
+      _ = blocks.length shouldBe 2
+      genesis  <- blockStore.findBlockByNumber(0L)
+      byHash   <- blockStore.findBlockByHash(executed.block.header.hash.toHex)
+      byNumber <- blockStore.findBlockByNumber(1L)
 
-  "insert and query blocks" in {
-    blockStore.insertBlock(history.getBlockByNumber(0).unsafeRunSync().get).unsafeRunSync()
-    blockStore.insertBlock(executed.block).unsafeRunSync()
-    val blocks = blockStore.findAllBlocks(1, 5).unsafeRunSync()
-    blocks.length shouldBe 2
-
-    val genesis  = blockStore.findBlockByNumber(0L).unsafeRunSync()
-    val byHash   = blockStore.findBlockByHash(executed.block.header.hash.toHex).unsafeRunSync()
-    val byNumber = blockStore.findBlockByNumber(1L).unsafeRunSync()
-
-    genesis.isDefined shouldBe true
-    byHash.isDefined shouldBe true
-    byNumber.isDefined shouldBe true
-    byNumber shouldBe byHash
+      _ = genesis.isDefined shouldBe true
+      _ = byHash.isDefined shouldBe true
+      _ = byNumber.isDefined shouldBe true
+      _ = byNumber shouldBe byHash
+    } yield ()
   }
 
-  "insert and query transactions" in {
-    txStore.insertBlockTransactions(executed.block, executed.receipts).unsafeRunSync()
-    val result1 = txStore
-      .findTransactionsByAddress(txs.head.senderAddress.get.toString, 1, 5)
-      .unsafeRunSync()
+  "insert and query transactions" in check { objects =>
+    val executor = objects.get[BlockExecutor[IO]]
+    val txStore  = objects.get[TransactionStore[IO]]
 
-    result1.length shouldBe 5
+    val txs      = random[List[SignedTransaction]](genTxs(min = 10, max = 10))
+    val block    = random[Block](genBlock(stxsOpt = Some(txs)))
+    val executed = executor.executeBlock(block).unsafeRunSync()
 
-    val result2 = txStore
-      .findTransactionsByAddress(txs.head.senderAddress.get.toString, 2, 5)
-      .unsafeRunSync()
+    for {
+      _ <- txStore.insertBlockTransactions(executed.block, executed.receipts)
+      result1 <- txStore
+        .findTransactionsByAddress(txs.head.senderAddress.get.toString, 1, 5)
+      _ = result1.length shouldBe 5
+      result2 <- txStore
+        .findTransactionsByAddress(txs.head.senderAddress.get.toString, 2, 5)
 
-    result1.length shouldBe 5
-    result2.length shouldBe 5
+      _ = result1.length shouldBe 5
+      _ = result2.length shouldBe 5
+    } yield ()
   }
 }

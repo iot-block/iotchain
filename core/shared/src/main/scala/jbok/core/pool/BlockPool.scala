@@ -12,7 +12,7 @@ import jbok.core.pool.BlockPool._
 import scodec.bits.ByteVector
 
 /**
-  * [[BlockPool]] is responsible for stashing blocks with unknown ancestors
+  * `BlockPool` is responsible for stashing blocks with unknown ancestors
   * or candidate branches of blocks in consensus protocols with some finality criteria
   */
 final class BlockPool[F[_]](

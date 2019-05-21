@@ -8,40 +8,34 @@ import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.core.api.PersonalAPI
 
 class PersonalAPISpec extends AppSpec {
-  val objects = locator.unsafeRunSync()
-  val personal = objects.get[PersonalAPI[IO]]
-  val keystore = objects.get[KeyStore[IO]]
-
-  "importRawKey" in {
-    val kp = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+  "importRawKey" in check { objects =>
+    val personal   = objects.get[PersonalAPI[IO]]
+    val keystore   = objects.get[KeyStore[IO]]
+    val kp         = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
     val passphrase = "oho"
-    personal.importRawKey(kp.secret.bytes, passphrase).unsafeRunSync()
-    keystore.listAccounts.unsafeRunSync() shouldBe List(Address(kp))
+    for {
+      _   <- personal.importRawKey(kp.secret.bytes, passphrase)
+      res <- keystore.listAccounts
+      _ = res shouldBe List(Address(kp))
+    } yield ()
   }
 
-  "newAccount" in {
-    val addr = personal.newAccount("oho").unsafeRunSync()
-    keystore.unlockAccount(addr, "oho").unsafeRunSync()
+  "newAccount" in check { objects =>
+    val personal = objects.get[PersonalAPI[IO]]
+    val keystore = objects.get[KeyStore[IO]]
+    for {
+      addr <- personal.newAccount("oho")
+      _    <- keystore.unlockAccount(addr, "oho")
+    } yield ()
   }
 
-//  def delAccount(address: Address): F[Boolean]
-//
-//  def listAccounts: F[List[Address]]
-  "listAccounts" in {
-    personal.listAccounts.unsafeRunSync() should contain theSameElementsAs keystore.listAccounts.unsafeRunSync()
+  "listAccounts" in check { objects =>
+    val personal = objects.get[PersonalAPI[IO]]
+    val keystore = objects.get[KeyStore[IO]]
+    for {
+      res1 <- personal.listAccounts
+      res2 <- keystore.listAccounts
+      _ = res1 should contain theSameElementsAs res2
+    } yield ()
   }
-//
-//  def unlockAccount(address: Address, passphrase: String, duration: Option[Duration]): F[Boolean]
-//
-//  def lockAccount(address: Address): F[Boolean]
-//
-//  def sign(message: ByteVector, address: Address, passphrase: Option[String]): F[CryptoSignature]
-//
-//  def ecRecover(message: ByteVector, signature: CryptoSignature): F[Address]
-//
-//  def sendTransaction(tx: TransactionRequest, passphrase: Option[String]): F[ByteVector]
-//
-//  def deleteWallet(address: Address): F[Boolean]
-//
-//  def changePassphrase(address: Address, oldPassphrase: String, newPassphrase: String): F[Boolean]
 }

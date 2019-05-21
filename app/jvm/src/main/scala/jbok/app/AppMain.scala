@@ -6,7 +6,7 @@ import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import jbok.common.log.Logger
 
-object MainApp extends IOApp {
+object AppMain extends IOApp {
   private[this] val log = Logger[IO]
 
   private val buildVersion: String = getClass.getPackage.getImplementationVersion

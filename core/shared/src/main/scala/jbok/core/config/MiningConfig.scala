@@ -1,4 +1,5 @@
 package jbok.core.config
+
 import io.circe.generic.JsonCodec
 import jbok.core.models.Address
 import scodec.bits.ByteVector

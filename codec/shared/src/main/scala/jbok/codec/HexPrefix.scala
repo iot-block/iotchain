@@ -4,7 +4,7 @@ import scodec.Attempt
 import scodec.Attempt.Successful
 import scodec.bits._
 
-package object HexPrefix {
+object HexPrefix {
   type Nibbles = String
 
   def bytesToNibbles(bytes: ByteVector): Nibbles =

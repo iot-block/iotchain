@@ -1,18 +1,15 @@
-package jbok.network.client
+package jbok.network.http
 
-import jbok.JbokAsyncSpec
-
-import scala.concurrent.ExecutionContext
-import jbok.common.execution._
+import cats.effect.IO
+import jbok.common.CommonSpec
 import jbok.network.facade.Config
 
-class HttpClientSpec extends JbokAsyncSpec {
-  implicit override def executionContext: ExecutionContext = EC
+class HttpClientSpec extends CommonSpec {
 
   "HttpClient" should {
     "get" in {
       for {
-        resp <- HttpClient.get("http://www.baidu.com")
+        resp <- HttpClient.get[IO]("http://www.baidu.com")
         _ = println(resp.status)
         _ = println(resp.statusText)
         _ = println(resp.data.length)
@@ -25,10 +22,17 @@ class HttpClientSpec extends JbokAsyncSpec {
       }
 
       for {
-        resp <- HttpClient.request(config)
+        resp <- HttpClient.request[IO](config)
         _ = println(resp.status)
         _ = println(resp.statusText)
         _ = println(resp.data.length)
+      } yield ()
+    }
+
+    "post" in {
+      for {
+        resp <- HttpClient.post[IO]("https://127.0.0.2:30315", "")
+        _ = println(resp.status)
       } yield ()
     }
   }

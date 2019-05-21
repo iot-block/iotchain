@@ -69,9 +69,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
               val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
 
               log.trace(s"signed recently, sleep (${delay}) seconds") >>
-                T.sleep(delay.millis) >>
-                Left(s"${clique.minerAddress} signed recently, must wait for others: ${executed.block.header.number}, ${seen}, ${snap.signers.size / 2 + 1}, ${snap.recents}")
-                  .pure[F]
+                T.sleep(delay.millis) >> Left(s"${clique.minerAddress} signed recently, must wait for others").pure[F]
 
             case _ =>
               val wait = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis())

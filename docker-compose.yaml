@@ -57,4 +57,7 @@ services:
       - ./var/lib/jbok:/var/lib/jbok
       - ./var/log/jbok:/var/log/jbok
     ports:
-      - 10087:10087
+      - 30314:30314
+      - 30315:30315
+    depends_on:
+      - mysql

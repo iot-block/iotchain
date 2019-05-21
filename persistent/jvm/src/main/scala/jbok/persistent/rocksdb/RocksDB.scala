@@ -6,10 +6,11 @@ import cats.effect.{ContextShift, Resource, Sync, Timer}
 import cats.implicits._
 import fs2._
 import jbok.codec.rlp.RlpCodec
+import jbok.common.FileUtil
 import jbok.common.log.Logger
 import jbok.common.thread.ThreadUtil
 import jbok.persistent.KeyValueDB
-import org.rocksdb.{Logger => _, RocksDB => Underlying, _}
+import org.rocksdb.{RocksDB => Underlying, Logger => _, _}
 import scodec.bits.ByteVector
 
 import scala.concurrent.ExecutionContext
@@ -122,6 +123,7 @@ object RocksDB {
     ThreadUtil.blockingThreadPool[F]("jbok-rocksdb").flatMap { ec =>
       Resource {
         for {
+          _          <- FileUtil[F].open(path, create = true, asDirectory = true)
           underlying <- F.delay(Underlying.open(options, path.toString))
           _          <- Logger[F].i(s"open rocksdb at path=${path}")
           db = new RocksDB[F](underlying, readOptions, writeOptions, ec)

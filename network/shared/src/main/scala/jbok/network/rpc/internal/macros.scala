@@ -32,7 +32,6 @@ class Translator[C <: blackbox.Context](val c: C) {
       case (lefts, _)    => Left(lefts.collect { case Left(l)    => l })
     }
 
-  //TODO rename overloaded methods to fun1, fun2, fun3 or append TypeSignature instead of number?
   private def validateAllMethods(methods: List[(MethodSymbol, Type)]): List[Either[String, (MethodSymbol, Type)]] =
     methods
       .groupBy(m => methodPathPart(m._1))
@@ -69,7 +68,6 @@ class Translator[C <: blackbox.Context](val c: C) {
     }
   }
 
-  //TODO what about fqn for trait to not have overlaps?
   def traitPathPart(tpe: Type): String =
     findPathName(tpe.typeSymbol.annotations).getOrElse(tpe.typeSymbol.name.toString)
 
@@ -136,7 +134,7 @@ object RpcServiceMacro {
           val path                        = traitPathPart :: methodPathPart :: Nil
           val paramsObject                = t.paramsAsObject(method, path)
           val argParams: List[List[Tree]] = t.objectToParams(method, TermName("args"))
-          val innerReturnType             = method.finalResultType.typeArgs.head
+          val innerReturnType             = method.finalResultType.typeArgs.headOption.getOrElse(???)
           val payloadFunction =
             q"""(payload: ${payloadTag.tpe}) => impl.execute[${paramsObject.tpe}, $innerReturnType]($path, payload) { args =>
           value.${symbol.name.toTermName}(...$argParams)
@@ -168,7 +166,7 @@ object RpcClientMacro {
         val parameters      = t.paramsAsValDefs(method)
         val paramsObject    = t.paramsAsObject(method, path)
         val paramListValue  = t.newParamsObject(method, path)
-        val innerReturnType = method.finalResultType.typeArgs.head
+        val innerReturnType = method.finalResultType.typeArgs.headOption.getOrElse(???)
 
         (q"""
         override def ${symbol.name}(...$parameters): ${method.finalResultType} = {

@@ -1,11 +1,10 @@
 package jbok.persistent
 
 import cats.data.OptionT
-import cats.effect.{Resource, Sync, Timer}
+import cats.effect.Sync
 import cats.implicits._
 import io.circe.generic.JsonCodec
 import jbok.codec.rlp.RlpCodec
-import jbok.common.metrics.Metrics
 import scodec.bits.ByteVector
 
 @JsonCodec

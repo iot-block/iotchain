@@ -15,7 +15,7 @@ trait FileUtil[F[_]] {
 
   def readResource(path: String): F[String]
 
-  def open(path: Path, create: Boolean = true): Resource[F, File]
+  def open(path: Path, create: Boolean = true, asDirectory: Boolean = false): F[File]
 
   def inputStream(path: Path): Resource[F, InputStream]
 
@@ -50,27 +50,28 @@ object FileUtil {
       log.i(s"reading text from resource=${path}") >>
         F.delay(better.files.Resource.getAsString(path))
 
-    override def open(path: Path, create: Boolean): Resource[F, File] = Resource {
-      for {
-        file <- if (create) F.delay(File(path).createIfNotExists(createParents = true)) else F.delay(File(path))
-      } yield file -> F.unit
-    }
+    override def open(path: Path, create: Boolean, asDirectory: Boolean): F[File] =
+      if (create) {
+        F.delay(File(path).createIfNotExists(createParents = true, asDirectory = asDirectory))
+      } else {
+        F.delay(File(path))
+      }
 
     override def inputStream(path: Path): Resource[F, InputStream] =
-      open(path, create = false).flatMap(file =>
-        Resource {
-          for {
-            is <- F.delay(file.newInputStream)
-          } yield is -> F.delay(is.close())
-      })
+      Resource {
+        for {
+          file <- open(path, create = false)
+          is   <- F.delay(file.newInputStream)
+        } yield is -> F.delay(is.close())
+      }
 
     override def dump(text: String, path: Path, create: Boolean): F[Unit] =
       log.i(s"writing text to path=${path.toAbsolutePath}") >>
-        open(path, create).use(file => F.delay(file.overwrite(text)).void)
+        open(path, create, asDirectory = false).flatMap(file => F.delay(file.overwrite(text)).void)
 
     override def append(text: String, path: Path, create: Boolean): F[Unit] =
       log.i(s"append text to path=${path.toAbsolutePath}") >>
-        open(path, create).use(file => F.delay(file.append(text)).void)
+        open(path, create, asDirectory = false).flatMap(file => F.delay(file.append(text)).void)
 
     override def lock(path: Path, content: String): Resource[F, FileLock] =
       Resource

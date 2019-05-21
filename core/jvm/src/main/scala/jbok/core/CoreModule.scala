@@ -50,11 +50,14 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   make[MiningConfig].from((config: CoreConfig) => config.mining)
   make[SyncConfig].from((config: CoreConfig) => config.sync)
   make[PeerConfig].from((config: CoreConfig) => config.peer)
+  make[DatabaseConfig].from((config: CoreConfig) => config.db)
+  make[ServiceConfig].from((config: CoreConfig) => config.service)
+  make[KeyStoreConfig].from((config: CoreConfig) => config.keystore)
 
   make[KeyValueDB[F]].fromResource(KeyValueDBPlatform.resource[F](config.persist))
   make[Metrics[F]].fromEffect(Metrics.default[F])
   make[History[F]].from[HistoryImpl[F]]
-  make[KeyStore[F]].fromResource(KeyStorePlatform.resource[F](config.keystore.dir))
+  make[KeyStore[F]].fromResource((config: KeyStoreConfig) => KeyStorePlatform.resource[F](config))
   make[Clique[F]].fromEffect((config: CoreConfig, db: KeyValueDB[F], history: History[F]) => Clique[F](config.mining, db, config.genesis, history))
   make[Consensus[F]].from[CliqueConsensus[F]]
 

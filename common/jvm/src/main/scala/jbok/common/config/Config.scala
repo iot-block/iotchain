@@ -53,7 +53,7 @@ object Config {
           case Some(".json") =>
             FileUtil[F].dump(json.spaces2, path)
           case Some(".yml") | Some(".yaml") =>
-            FileUtil[F].dump(circe.yaml.Printer.spaces2.copy(preserveOrder = true).pretty(json), path)
+            FileUtil[F].dump(circe.yaml.Printer.spaces2.copy(preserveOrder = true, indicatorIndent = 2).pretty(json), path)
           case Some(ext) =>
             F.raiseError(new Exception(s"Unknown extension path=${path},ext=${ext}"))
           case None =>

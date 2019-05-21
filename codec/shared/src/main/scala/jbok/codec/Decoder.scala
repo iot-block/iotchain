@@ -13,5 +13,5 @@ trait Decoder[A, P] { self =>
 }
 
 object Decoder {
-  def apply[Type, Payload](implicit ev: Decoder[Type, Payload]): Decoder[Type, Payload] = ev
+  def apply[A, P](implicit ev: Decoder[A, P]): Decoder[A, P] = ev
 }

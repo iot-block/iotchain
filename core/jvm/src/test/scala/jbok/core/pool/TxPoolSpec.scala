@@ -14,32 +14,39 @@ import scala.concurrent.duration._
 
 class TxPoolSpec extends CoreSpec {
   "TxPool" should {
-    "store pending transactions" in {
-      val txPool = locator.unsafeRunSync().get[TxPool[IO]]
+    "store pending transactions" in check { objects =>
+      val txPool = objects.get[TxPool[IO]]
       val txs    = random[List[SignedTransaction]](genTxs(1, 10))
-      txPool.addTransactions(SignedTransactions(txs)).unsafeRunSync()
-      txPool.getPendingTransactions.unsafeRunSync().keys should contain theSameElementsAs txs
+      for {
+        _   <- txPool.addTransactions(SignedTransactions(txs))
+        res <- txPool.getPendingTransactions.map(_.keys)
+        _ = res should contain theSameElementsAs txs
+      } yield ()
     }
 
-    "ignore known transactions" in {
-      val txPool = locator.unsafeRunSync().get[TxPool[IO]]
+    "ignore known transactions" in check { objects =>
+      val txPool = objects.get[TxPool[IO]]
       val txs    = random[List[SignedTransaction]](genTxs(1, 10))
       val stxs   = SignedTransactions(txs)
-      txPool.addTransactions(stxs).unsafeRunSync()
-      txPool.addTransactions(stxs).unsafeRunSync()
-      txPool.getPendingTransactions.unsafeRunSync().keys should contain theSameElementsAs txs
+      for {
+        _   <- txPool.addTransactions(stxs)
+        _   <- txPool.addTransactions(stxs)
+        res <- txPool.getPendingTransactions.map(_.keys)
+        _ = res should contain theSameElementsAs txs
+      } yield ()
     }
+//
+//    "broadcast received pending transactions to other peers" in check { objects =>
+//      val txPool = objects.get[TxPool[IO]]
+//      val txs    = random[List[SignedTransaction]](genTxs(1, 10))
+////      val peerSet = genPeerSet(1, 10).sample.get
+//      val output = txPool.addTransactions(SignedTransactions(txs)).unsafeRunSync()
+//      ???
+////      output.length shouldBe peerSet.connected.map(_.length).unsafeRunSync()
+//    }
 
-    "broadcast received pending transactions to other peers" in {
-      val txPool = locator.unsafeRunSync().get[TxPool[IO]]
-      val txs    = random[List[SignedTransaction]](genTxs(1, 10))
-//      val peerSet = genPeerSet(1, 10).sample.get
-      val output = txPool.addTransactions(SignedTransactions(txs)).unsafeRunSync()
-//      output.length shouldBe peerSet.connected.map(_.length).unsafeRunSync()
-    }
-
-    "override transactions with the same sender and nonce" in {
-      val txPool = locator.unsafeRunSync().get[TxPool[IO]]
+    "override transactions with the same sender and nonce" in check { objects =>
+      val txPool = objects.get[TxPool[IO]]
       val tx1    = genTx.sample.get
       val tx2    = genTx.sample.get
       val tx3    = genTx.sample.get
@@ -51,29 +58,25 @@ class TxPoolSpec extends CoreSpec {
       val second = SignedTransaction.sign[IO](tx2.copy(nonce = tx1.nonce), kp1).unsafeRunSync()
       val other  = SignedTransaction.sign[IO](tx3, kp2).unsafeRunSync()
 
-      val p = for {
+      for {
         _ <- txPool.addOrUpdateTransaction(first)
         _ <- txPool.addOrUpdateTransaction(second)
         _ <- txPool.addOrUpdateTransaction(other)
         x <- txPool.getPendingTransactions
         _ = x.keys should contain theSameElementsAs List(other, second)
       } yield ()
-
-      p.unsafeRunSync()
     }
 
-    "remove transaction on timeout" in {
-      val config2 = config.lens(_.txPool.transactionTimeout).set(100.millis)
-      val txPool = withConfig(config2).unsafeRunSync().get[TxPool[IO]]
+    "remove transaction on timeout" in check(config.lens(_.txPool.transactionTimeout).set(100.millis)) { objects =>
+      val txPool = objects.get[TxPool[IO]]
       val stx    = random[List[SignedTransaction]](genTxs(1, 1)).head
-      val p = for {
+      for {
         _  <- txPool.addTransactions(SignedTransactions(stx :: Nil))
         p1 <- txPool.getPendingTransactions
         _ = p1.size shouldBe 1
         p2 <- timer.sleep(2.seconds) >> txPool.getPendingTransactions
         _ = p2.size shouldBe 0
       } yield ()
-      p.unsafeRunSync()
     }
   }
 }

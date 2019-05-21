@@ -16,7 +16,7 @@ final class PeerManager[F[_]](
   val inbound: Stream[F, (Peer[F], Message[F])] =
     incoming.inbound.consume
       .merge(outgoing.inbound.consume)
-      .evalTap { case (peer, message) => log.i(s"received ${message} from ${peer.uri.address}") }
+      .evalTap { case (peer, message) => log.i(s"received ${message} from ${peer.uri}") }
 
   val outbound: Pipe[F, (PeerSelector[F], Message[F]), Unit] =
     _.evalMap { case (selector, message) => distribute(selector, message) }
@@ -31,7 +31,7 @@ final class PeerManager[F[_]](
     for {
       peers    <- connected
       selected <- selector.run(peers)
-      _        <- log.i(s"broadcasting ${message} to ${selected.map(_.uri.address).mkString(",")} peers")
+      _        <- log.i(s"broadcasting ${message} to ${selected.map(_.uri).mkString(",")} peers")
       _        <- selected.traverse(_.queue.enqueue1(message))
     } yield ()
 

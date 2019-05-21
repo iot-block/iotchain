@@ -33,9 +33,9 @@ keytool -import -trustcacerts -file ${ca_dir}/ca.pem -alias ${ca_alias} -storepa
 #keytool -list -v -alias ${ca_alias} -keystore ${trustedCAStore} -storepass "${default_pass}"
 
 
-read -p 'how many certs: ' nodeCount
-for i in `seq 1 ${nodeCount}`; do
-    server_dir=${certs_dir}/certs${i}
+read -p 'how many certs: ' count
+for ((i = 0; i < ${count}; i++)); do
+    server_dir=${certs_dir}/cert${i}
     mkdir -p ${server_dir}/private
     conf_file=${server_dir}/server-openssl.cnf
     common_name=${child_cert_cn_prefix}${i}.${common_name_defualt}
@@ -46,10 +46,10 @@ for i in `seq 1 ${nodeCount}`; do
     # create server cert
     openssl ecparam -genkey -name secp521r1 -out ${server_dir}/private/certkey.pem
     openssl req -new -sha256 -key ${server_dir}/private/certkey.pem -out ${server_dir}/cert.csr -config ${conf_file}
-    openssl x509 -req -in ${server_dir}/cert.csr -CA ${ca_dir}/ca.pem -CAkey ${ca_dir}/private/cakey.pem -CAcreateserial -out ${server_dir}/cert.pem -extfile ${conf_file} -extensions v3_req -days 356 -sha256 -outform PEM
+    openssl x509 -req -in ${server_dir}/cert.csr -CA ${ca_dir}/ca.pem -CAkey ${ca_dir}/private/cakey.pem -CAcreateserial -out ${server_dir}/cert.pem -extfile ${conf_file} -extensions v3_req -days 3560 -sha256 -outform PEM
 
     # export to server.jks
     openssl pkcs12 -export -out ${server_dir}/certificate.pfx -inkey ${server_dir}/private/certKey.pem -in ${server_dir}/cert.pem -password pass:"${server_keystore_pass}"
-    keytool -importkeystore -trustcacerts -storepass "${server_keystore_pass}" -destkeystore ${server_dir}/server.jks -srckeystore ${server_dir}/certificate.pfx -srcstoretype PKCS12 -srcstorepass "${server_keystore_pass}"
+    keytool -importkeystore -trustcacerts -storepass "${server_keystore_pass}" -destkeystore ${server_dir}/server.jks -srckeystore ${server_dir}/certificate.pfx -srcstoretype PKCS12 -deststoretype PKCS12 -srcstorepass "${server_keystore_pass}"
 done
 
