@@ -7,8 +7,8 @@ import cats.effect.concurrent.Ref
 import distage._
 import doobie.util.transactor.Transactor
 import jbok.app.service._
-import jbok.app.service.store.doobie.{Doobie, DoobieBlockStore, DoobieTransactionStore}
-import jbok.app.service.store.{BlockStore, Migration, TransactionStore}
+import jbok.app.service.store.doobie.{Doobie, DoobieTransactionStore}
+import jbok.app.service.store.{Migration, TransactionStore}
 import jbok.common.config.Config
 import jbok.core.CoreModule
 import jbok.core.api._
@@ -19,9 +19,8 @@ import jbok.core.models.Address
 class AppModule[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
   addImplicit[Bracket[F, Throwable]]
 
-  make[Transactor[F]].fromResource((config: CoreConfig) => Doobie.fromConfig[F](config.db))
+  make[Transactor[F]].fromResource((config: CoreConfig) => Doobie.xa[F](config.db))
   make[Unit].fromEffect((config: CoreConfig) => Migration.migrate[F](config.db))
-  make[BlockStore[F]].from[DoobieBlockStore[F]]
   make[TransactionStore[F]].from[DoobieTransactionStore[F]]
   make[Ref[F, Map[Address, Wallet]]].fromEffect(Ref.of[F, Map[Address, Wallet]](Map.empty))
 

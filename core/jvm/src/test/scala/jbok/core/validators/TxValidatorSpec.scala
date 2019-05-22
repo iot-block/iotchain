@@ -1,6 +1,7 @@
 package jbok.core.validators
 
 import cats.effect.IO
+import cats.implicits._
 import jbok.common.testkit._
 import jbok.core.CoreSpec
 import jbok.core.models._
@@ -17,7 +18,7 @@ class TxValidatorSpec extends CoreSpec {
     nonce = 12345,
     gasPrice = BigInt("30000000000"),
     gasLimit = 21000,
-    receivingAddress = Address(hex"1e0cf4971f42462823b122a9a0a2206902b51132"),
+    receivingAddress = Address(hex"1e0cf4971f42462823b122a9a0a2206902b51132").some,
     value = BigInt("1050230460000000000"),
     payload = ByteVector.empty
   )

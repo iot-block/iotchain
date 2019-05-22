@@ -4,14 +4,13 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.models.{Address, Block, SignedTransaction, Transaction}
-import jbok.evm.solidity.Ast
 import jbok.core.api.{BlockTag, CallTx, ContractAPI}
 import scodec.bits.ByteVector
 
 final class ContractService[F[_]](history: History[F], executor: BlockExecutor[F], helper: ServiceHelper[F])(implicit F: Sync[F]) extends ContractAPI[F] {
-  override def getABI(address: Address): F[Option[Ast.ContractDef]] = ???
-
-  override def getSourceCode(address: Address): F[Option[String]] = ???
+//  override def getABI(address: Address): F[Option[Ast.ContractDef]] = ???
+//
+//  override def getSourceCode(address: Address): F[Option[String]] = ???
 
   override def call(callTx: CallTx, tag: BlockTag): F[ByteVector] =
     for {

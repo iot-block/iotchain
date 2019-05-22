@@ -6,10 +6,8 @@ import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
 object Libs {
   lazy val typelevel = libraryDependencies ++= Seq(
     "org.typelevel"    %%% "cats-effect"            % Versions.catsEffect,
-    "org.typelevel"    %% "cats-collections-core"   % Versions.catsCollections,
     "co.fs2"           %%% "fs2-core"               % Versions.fs2,
     "co.fs2"           %% "fs2-io"                  % Versions.fs2,
-    "org.typelevel"    %%% "spire"                  % Versions.spire,
     "org.typelevel"    %% "kittens"                 % "1.2.1",
     "com.github.cb372" %%% "cats-retry-cats-effect" % "0.2.5"
   )
@@ -26,8 +24,7 @@ object Libs {
     "com.github.julien-truffaut" %% "monocle-macro" % Versions.monocle,
   )
 
-  lazy val common
-    : Seq[Setting[_]] = di ++ logging ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ typelevel ++ enumeratum ++ monocle ++ (libraryDependencies ++= Seq(
+  lazy val common: Seq[Setting[_]] = di ++ logging ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ typelevel ++ enumeratum ++ monocle ++ (libraryDependencies ++= Seq(
     // files
     "com.github.pathikrit" %% "better-files" % "3.5.0",
     // macro
@@ -128,7 +125,6 @@ object Libs {
 
   lazy val network = libraryDependencies ++=
     Seq(
-      "com.spinoco"              %% "fs2-http"   % "0.4.1",
       "com.spinoco"              %% "fs2-crypto" % "0.4.0",
       "com.offbynull.portmapper" % "portmapper"  % "2.0.5",
       "org.bitlet"               % "weupnp"      % "0.1.4"

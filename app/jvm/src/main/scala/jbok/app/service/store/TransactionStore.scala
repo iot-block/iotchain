@@ -1,14 +1,12 @@
 package jbok.app.service.store
 
-import jbok.app.service.models.Transaction
-import jbok.core.models.{Receipt, Block => CoreBlock}
+import jbok.core.api.HistoryTransaction
+import jbok.core.models.{Block, Receipt}
 
 trait TransactionStore[F[_]] {
-  def findAllTxs(page: Int, size: Int): F[List[Transaction]]
+  def findTransactionsByAddress(address: String, page: Int, size: Int): F[List[HistoryTransaction]]
 
-  def findTransactionsByAddress(address: String, page: Int, size: Int): F[List[Transaction]]
+  def findTransactionByHash(txHash: String): F[Option[HistoryTransaction]]
 
-  def findTransactionByHash(txHash: String): F[Option[Transaction]]
-
-  def insertBlockTransactions(block: CoreBlock, receipts: List[Receipt]): F[Unit]
+  def insertBlockTransactions(block: Block, receipts: List[Receipt]): F[Unit]
 }

@@ -1,7 +1,5 @@
 package jbok.common.log
 
-import java.nio.file.Paths
-
 import cats.effect.IO
 import jbok.common.CommonSpec
 import jbok.common.FileUtil
@@ -15,15 +13,19 @@ class LoggerSpec extends CommonSpec {
     }
 
     "set file sink" in {
-      Logger.setRootHandlers(LoggerPlatform.fileHandler("logs", Some(Level.Info))).unsafeRunSync()
-      Logger[IO].i("should be written into file").unsafeRunSync()
-      Logger[IO].t("should not be written into file").unsafeRunSync()
+      val p = FileUtil[IO].temporaryDir().use { file =>
+        for {
+          _    <- Logger.setRootLevel[IO](Level.Info)
+          _    <- Logger.setRootHandlers[IO](Logger.consoleHandler(Some(Level.Info)), LoggerPlatform.fileHandler(file.path, Some(Level.Info)))
+          _    <- Logger[IO].i("should be written into file")
+          _    <- Logger[IO].t("should not be written into file")
+          text <- FileUtil[IO].read(file.path.resolve("jbok.log"))
+          _ = text.contains("should be written into file") shouldBe true
+          _ = text.contains("should not be written into file") shouldBe false
+        } yield ()
+      }
 
-      val path = Paths.get("logs/jbok.log")
-      val text = FileUtil[IO].read(path).unsafeRunSync()
-      text.contains("should be written into file") shouldBe true
-      text.contains("should not be written into file") shouldBe false
-      FileUtil[IO].remove(path).unsafeRunSync()
+      p.unsafeRunSync()
     }
 
     "level1" ignore {

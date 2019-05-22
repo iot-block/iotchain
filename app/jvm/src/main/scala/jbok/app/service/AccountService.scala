@@ -2,15 +2,16 @@ package jbok.app.service
 
 import cats.effect.Sync
 import cats.implicits._
-import jbok.core.config.HistoryConfig
+import jbok.app.service.store.TransactionStore
 import jbok.core.config.HistoryConfig
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, SignedTransaction}
 import jbok.core.pool.TxPool
-import jbok.core.api.{AccountAPI, BlockTag}
+import jbok.core.api.{AccountAPI, BlockTag, HistoryTransaction}
 import scodec.bits.ByteVector
 
-final class AccountService[F[_]](config: HistoryConfig, history: History[F], txPool: TxPool[F], helper: ServiceHelper[F])(implicit F: Sync[F]) extends AccountAPI[F] {
+final class AccountService[F[_]](config: HistoryConfig, history: History[F], txPool: TxPool[F], helper: ServiceHelper[F], txStore: TransactionStore[F])(implicit F: Sync[F])
+    extends AccountAPI[F] {
 
   override def getCode(address: Address, tag: BlockTag): F[ByteVector] =
     for {
@@ -35,9 +36,8 @@ final class AccountService[F[_]](config: HistoryConfig, history: History[F], txP
       storage <- history.getStorage(account.storageRoot, position)
     } yield storage
 
-  override def getTransactions(address: Address): F[List[SignedTransaction]] = ???
-
-  override def getTokenTransactions(address: Address, contract: Option[Address]): F[List[SignedTransaction]] = ???
+  override def getTransactions(address: Address): F[List[HistoryTransaction]] =
+    txStore.findTransactionsByAddress(address.toString, 1, 1000)
 
   override def getPendingTxs(address: Address): F[List[SignedTransaction]] =
     txPool.getPendingTransactions.map(_.keys.toList.filter(_.senderAddress.exists(_ == address)))

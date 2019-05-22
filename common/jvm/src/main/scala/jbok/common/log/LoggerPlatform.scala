@@ -1,6 +1,6 @@
 package jbok.common.log
 
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths}
 
 import cats.effect.Sync
 import scribe.handler.LogHandler
@@ -18,16 +18,16 @@ object LoggerPlatform {
         case dir =>
           Logger.setRootHandlers(
             Logger.consoleHandler(level.some),
-            fileHandler(dir, level.some)
+            fileHandler(Paths.get(dir), level.some)
           )
       })
   }
 
-  def fileHandler(directory: String, minimumLevel: Option[Level] = None): LogHandler = LogHandler(
+  def fileHandler(directory: Path, minimumLevel: Option[Level] = None): LogHandler = LogHandler(
     Logger.fileFormatter,
     FileWriter().nio
-      .path(LogPath.simple("jbok.log", directory = Paths.get(directory)))
-      .rolling(LogPath.daily(prefix = "jbok", directory = Paths.get(directory))),
+      .path(LogPath.simple("jbok.log", directory = directory))
+      .rolling(LogPath.daily(prefix = "jbok", directory = directory)),
     minimumLevel.map(Logger.fromJbokLevel)
   )
 }

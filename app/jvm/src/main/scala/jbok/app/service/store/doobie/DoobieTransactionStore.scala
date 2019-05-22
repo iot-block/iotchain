@@ -6,40 +6,38 @@ import doobie._
 import doobie.implicits._
 import doobie.util.transactor.Transactor
 import doobie.util.update.Update
-import jbok.app.service.models.Transaction
 import jbok.app.service.store.TransactionStore
-import jbok.core.models.{Receipt, Block => CoreBlock}
+import jbok.core.api.HistoryTransaction
+import jbok.core.models.{Address, Receipt, Block => CoreBlock}
+import scodec.bits.ByteVector
 
 final class DoobieTransactionStore[F[_]](xa: Transactor[F])(implicit F: Sync[F]) extends TransactionStore[F] {
+  // meta mappings
+  implicit val metaByteVector: Meta[ByteVector] = Meta.StringMeta.imap[ByteVector](ByteVector.fromValidHex(_))(_.toHex)
 
-  def findAllTxs(page: Int, size: Int): F[List[Transaction]] =
-    (sql"""
-       SELECT txHash, nonce, fromAddress, toAddress, value, payload, v, r, s, gasUsed, gasPrice, blockNumber, blockHash, location
-       FROM transactions
-       ORDER BY blockNumber, location DESC
-    """ ++ Doobie.limit(page, size))
-      .query[Transaction]
-      .to[List]
-      .transact(xa)
+  implicit val metaBigInt: Meta[BigInt] = Meta.StringMeta.imap[BigInt](BigInt.apply)(_.toString(10))
 
-  def findTransactionsByAddress(address: String, page: Int, size: Int): F[List[Transaction]] =
-    (sql"""
+  implicit val metaAddress: Meta[Address] = Meta.StringMeta.imap[Address](Address.fromHex)(_.toString)
+
+  def findTransactionsByAddress(address: String, page: Int, size: Int): F[List[HistoryTransaction]] =
+    sql"""
        SELECT txHash, nonce, fromAddress, toAddress, value, payload, v, r, s, gasUsed, gasPrice, blockNumber, blockHash, location
        FROM transactions
        WHERE (fromAddress = ${address.toString} OR toAddress = ${address.toString})
        ORDER BY blockNumber, location DESC
-      """ ++ Doobie.limit(page, size))
-      .query[Transaction]
+       limit ${size} offset ${(page - 1) * size}
+      """
+      .query[HistoryTransaction]
       .to[List]
       .transact(xa)
 
-  def findTransactionByHash(txHash: String): F[Option[Transaction]] =
+  def findTransactionByHash(txHash: String): F[Option[HistoryTransaction]] =
     sql"""
        SELECT txHash, nonce, fromAddress, toAddress, value, payload, v, r, s, gasUsed, gasPrice, blockNumber, blockHash, location
        FROM transactions
        WHERE txHash = ${txHash}
        """
-      .query[Transaction]
+      .query[HistoryTransaction]
       .option
       .transact(xa)
 

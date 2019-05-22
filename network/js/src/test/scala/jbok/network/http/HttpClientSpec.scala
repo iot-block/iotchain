@@ -28,12 +28,5 @@ class HttpClientSpec extends CommonSpec {
         _ = println(resp.data.length)
       } yield ()
     }
-
-    "post" in {
-      for {
-        resp <- HttpClient.post[IO]("https://127.0.0.2:30315", "")
-        _ = println(resp.status)
-      } yield ()
-    }
   }
 }

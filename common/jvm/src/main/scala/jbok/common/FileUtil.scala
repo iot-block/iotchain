@@ -91,21 +91,20 @@ object FileUtil {
         }
 
     override def remove(path: Path): F[Unit] =
-      log.i(s"removing file at path=${path.toAbsolutePath}") >>
-        F.delay(File(path).delete()).void
+      log.i(s"removing file at path=${path.toAbsolutePath}") >> F.delay(File(path).delete()).void
 
     override def temporaryFile(prefix: String, suffix: String): Resource[F, File] = Resource {
       for {
         file <- F.delay(File.newTemporaryFile(prefix, suffix))
         _    <- log.i(s"creating temporary file path=${file.path}")
-      } yield (file, F.delay(file.delete()) >> log.i(s"deleted temporary file path=${file.path}"))
+      } yield file -> (F.delay(file.delete()) >> log.i(s"deleted temporary file path=${file.path}"))
     }
 
     override def temporaryDir(prefix: String): Resource[F, File] = Resource {
       for {
         file <- F.delay(File.newTemporaryDirectory(prefix))
         _    <- log.i(s"creating temporary dir path=${file.path}")
-      } yield (file, F.delay(file.delete()) >> log.i(s"deleted temporary dir path=${file.path}"))
+      } yield file -> (F.delay(file.delete()) >> log.i(s"deleted temporary dir path=${file.path}"))
     }
   }
 }

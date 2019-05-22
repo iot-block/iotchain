@@ -20,14 +20,6 @@ object Macros {
     }
   }
 
-  def autoLevel0[F[_]](c: blackbox.Context)
-                      (): c.Tree = {
-    import c.universe._
-
-    val level = getLevel(c)
-    log[F, String](c)(level, q"""""""", reify[Option[Throwable]](None))(c.Expr[Loggable[String]](q"scribe.Loggable.StringLoggable"))
-  }
-
   def autoLevel1[F[_]](c: blackbox.Context)
                    (message: c.Tree)
                    (implicit f: c.WeakTypeTag[F[_]]): c.Tree = {
@@ -53,7 +45,6 @@ object Macros {
             (implicit f: c.WeakTypeTag[F[_]], m: c.WeakTypeTag[M]): c.Tree = {
     import c.universe._
 
-    val logger = c.prefix.tree
     val p = position(c)
     val messageFunction = c.typecheck(q"() => $message")
     c.internal.changeOwner(message, c.internal.enclosingOwner, messageFunction.symbol)

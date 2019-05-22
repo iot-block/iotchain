@@ -1,6 +1,7 @@
 package jbok.core.validators
 
 import cats.effect.IO
+import cats.implicits._
 import jbok.common.CommonSpec
 import jbok.core.models._
 import jbok.core.validators.BodyInvalid.BodyTransactionsHashInvalid
@@ -29,7 +30,7 @@ class BodyValidatorSpec extends CommonSpec {
         nonce = BigInt("438550"),
         gasPrice = BigInt("20000000000"),
         gasLimit = BigInt("50000"),
-        receivingAddress = Address(hex"ee4439beb5c71513b080bbf9393441697a29f478"),
+        receivingAddress = Address(hex"ee4439beb5c71513b080bbf9393441697a29f478").some,
         value = BigInt("1265230129703017984"),
         payload = ByteVector.empty
       ),
@@ -42,7 +43,7 @@ class BodyValidatorSpec extends CommonSpec {
         nonce = BigInt("438551"),
         gasPrice = BigInt("20000000000"),
         gasLimit = BigInt("50000"),
-        receivingAddress = Address(hex"c68e9954c7422f479e344faace70c692217ea05b"),
+        receivingAddress = Address(hex"c68e9954c7422f479e344faace70c692217ea05b").some,
         value = BigInt("656010196207162880"),
         payload = ByteVector.empty
       ),
@@ -55,7 +56,7 @@ class BodyValidatorSpec extends CommonSpec {
         nonce = BigInt("438552"),
         gasPrice = BigInt("20000000000"),
         gasLimit = BigInt("50000"),
-        receivingAddress = Address(hex"19c5a95eeae4446c5d24363eab4355157e4f828b"),
+        receivingAddress = Address(hex"19c5a95eeae4446c5d24363eab4355157e4f828b").some,
         value = BigInt("3725976610361427456"),
         payload = ByteVector.empty
       ),
@@ -68,7 +69,7 @@ class BodyValidatorSpec extends CommonSpec {
         nonce = BigInt("438553"),
         gasPrice = BigInt("20000000000"),
         gasLimit = BigInt("50000"),
-        receivingAddress = Address(hex"3435be928d783b7c48a2c3109cba0d97d680747a"),
+        receivingAddress = Address(hex"3435be928d783b7c48a2c3109cba0d97d680747a").some,
         value = BigInt("108516826677274384"),
         payload = ByteVector.empty
       ),

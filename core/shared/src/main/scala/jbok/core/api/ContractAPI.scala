@@ -20,9 +20,9 @@ final case class CallTx(
 )
 
 trait ContractAPI[F[_]] {
-  def getABI(address: Address): F[Option[ContractDef]]
-
-  def getSourceCode(address: Address): F[Option[String]]
+//  def getABI(address: Address): F[Option[ContractDef]]
+//
+//  def getSourceCode(address: Address): F[Option[String]]
 
   def call(callTx: CallTx, tag: BlockTag = BlockTag.latest): F[ByteVector]
 
