@@ -41,7 +41,7 @@ object Settings {
       "-language:implicitConversions", // Allow definition of implicit functions called views
       "-unchecked", // Enable additional warnings where generated code depends on assumptions.
       "-Ypartial-unification", // Enable partial unification in type constructor inference
-//      "-language:postfixOps"
+      "-language:postfixOps"
     )
 
     def specificFor(scalaVersion: String) = CrossVersion.partialVersion(scalaVersion) match {

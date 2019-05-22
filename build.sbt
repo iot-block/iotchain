@@ -24,7 +24,7 @@ lazy val jbok = project
 
 lazy val common = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
-  .settings(Settings.common ++ Libs.common ++ Libs.dropwizard ++ Libs.prometheus)
+  .settings(Settings.common ++ Libs.common ++ Libs.prometheus)
   .settings(name := "jbok-common")
   .jsSettings(ScalaJS.common)
   .dependsOn(macros)
@@ -53,12 +53,12 @@ lazy val codec = crossProject(JSPlatform, JVMPlatform)
 
 lazy val app = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
-  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin, WebScalaJSBundlerPlugin, DockerComposePlugin))
+  .jvmConfigure(_.enablePlugins(JavaAppPackaging, AshScriptPlugin, WebScalaJSBundlerPlugin))
   .settings(Settings.common)
   .settings(name := "jbok-app")
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
   .jsSettings(ScalaJS.common ++ ScalaJS.webpackSettings)
-  .jvmSettings(DockerSettings.settings ++ DockerSettings.composeSettings ++ Libs.terminal)
+  .jvmSettings(DockerSettings.settings ++ Libs.terminal)
   .dependsOn(core % CompileAndTest, common % CompileAndTest, sdk % CompileAndTest)
 
 // for integrating with sbt-web

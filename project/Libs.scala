@@ -27,7 +27,7 @@ object Libs {
   )
 
   lazy val common
-    : Seq[Setting[_]] = di ++ logging ++ dropwizard ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ typelevel ++ enumeratum ++ monocle ++ (libraryDependencies ++= Seq(
+    : Seq[Setting[_]] = di ++ logging ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ typelevel ++ enumeratum ++ monocle ++ (libraryDependencies ++= Seq(
     // files
     "com.github.pathikrit" %% "better-files" % "3.5.0",
     // macro
@@ -95,16 +95,9 @@ object Libs {
     "org.http4s" %% "http4s-blaze-client",
     "org.http4s" %% "http4s-circe",
     "org.http4s" %% "http4s-dsl",
-    "org.http4s" %% "http4s-dropwizard-metrics",
     "org.http4s" %% "http4s-prometheus-metrics",
     "org.http4s" %% "http4s-okhttp-client"
   ).map(_ % Versions.http4s)
-
-  lazy val dropwizard = libraryDependencies ++= Seq(
-    "io.dropwizard.metrics" % "metrics-core",
-    "io.dropwizard.metrics" % "metrics-json",
-    "io.dropwizard.metrics" % "metrics-jmx",
-  ).map(_ % Versions.dropwizard)
 
   lazy val prometheus = libraryDependencies ++= Seq(
     "io.prometheus" % "simpleclient",

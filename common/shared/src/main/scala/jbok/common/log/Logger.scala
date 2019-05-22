@@ -2,7 +2,7 @@ package jbok.common.log
 
 import _root_.scribe.{LogRecord, Level => SL}
 import cats.Monad
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import scribe.format.Formatter
 import scribe.handler.LogHandler
 import scribe.output.{Color, ColoredOutput, LogOutput, TextOutput}
@@ -37,6 +37,9 @@ trait Logger[F[_]] {
 }
 
 object Logger {
+  // default
+  Logger.setRootHandlers[IO](Logger.consoleHandler(minimumLevel = Some(Level.Info))).unsafeRunSync()
+
   def apply[F[_]: Sync]: Logger[F] = new Logger[F] {}
 
   def consoleHandler(minimumLevel: Option[Level] = None): LogHandler = LogHandler(

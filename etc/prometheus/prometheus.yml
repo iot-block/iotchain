@@ -21,4 +21,4 @@ scrape_configs:
   - job_name: 'jbok'
     scrape_interval: 5s
     static_configs:
-      - targets: ['jbok:10087']
+      - targets: ['jbok:30315']

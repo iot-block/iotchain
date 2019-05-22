@@ -9,6 +9,10 @@ import jbok.network.rpc.RpcClient
 import jbok.core.api._
 
 object JbokClientPlatform {
+  import jbok.codec.impl.circe._
+  import io.circe.generic.auto._
+  import jbok.codec.json.implicits._
+
   def apply[F[_]](url: String)(implicit F: ConcurrentEffect[F], clock: Clock[F]): JbokClient[F] = {
     val transport = HttpTransport[F](url)
     val rpc       = RpcClient(transport)

@@ -120,8 +120,8 @@ object Translator {
 }
 
 object RpcServiceMacro {
-  def impl[API, F[_], Payload](c: blackbox.Context)(impl: c.Expr[API])(
-      F: c.Expr[Sync[F]])(implicit apiTag: c.WeakTypeTag[API], payloadTag: c.WeakTypeTag[Payload], effectTag: c.WeakTypeTag[F[_]]): c.Expr[RpcService[F, Payload]] =
+  def impl[API, F[_], P](c: blackbox.Context)(impl: c.Expr[API])(
+      F: c.Expr[Sync[F]])(implicit apiTag: c.WeakTypeTag[API], payloadTag: c.WeakTypeTag[P], effectTag: c.WeakTypeTag[F[_]]): c.Expr[RpcService[F, P]] =
     Translator(c) { t =>
       import c.universe._
 
@@ -153,7 +153,7 @@ object RpcServiceMacro {
 }
 
 object RpcClientMacro {
-  def impl[API, F[_], Payload](c: blackbox.Context)(implicit apiTag: c.WeakTypeTag[API], effectTag: c.WeakTypeTag[F[_]]): c.Expr[API] = Translator(c) { t =>
+  def impl[API, F[_], P](c: blackbox.Context)(implicit apiTag: c.WeakTypeTag[API], effectTag: c.WeakTypeTag[F[_]]): c.Expr[API] = Translator(c) { t =>
     import c.universe._
 
     val validMethods = t.supportedMethodsInType(apiTag.tpe, effectTag.tpe)

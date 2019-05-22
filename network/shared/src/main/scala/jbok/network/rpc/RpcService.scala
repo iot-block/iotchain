@@ -28,17 +28,17 @@ final class RpcService[F[_], P](val apiMap: RpcService.Map[F, P]) {
 }
 
 object RpcService {
-  type MapValue[F[_], Payload] = collection.Map[String, Payload => ServiceResult[F, Payload]]
+  type MapValue[F[_], P] = collection.Map[String, P => ServiceResult[F, P]]
 
-  type Map[F[_], Payload] = collection.Map[String, MapValue[F, Payload]]
+  type Map[F[_], P] = collection.Map[String, MapValue[F, P]]
 
-  def apply[F[_], Payload]: RpcService[F, Payload] = new RpcService[F, Payload](collection.mutable.HashMap.empty)
+  def apply[F[_], P]: RpcService[F, P] = new RpcService[F, P](collection.mutable.HashMap.empty)
 }
 
-sealed trait ServiceResult[F[_], Payload]
+sealed trait ServiceResult[F[_], P]
 
 object ServiceResult {
-  final case class Value[Payload](raw: Any, payload: Payload)
+  final case class Value[P](raw: Any, payload: P)
   final case class Success[F[_], P](argumentObject: Product, result: F[Value[P]])            extends ServiceResult[F, P]
   final case class Failure[F[_], P](argumentObject: Option[Product], failure: ServerFailure) extends ServiceResult[F, P]
 }

@@ -1,11 +1,11 @@
 package jbok.network.rpc
 
-trait RpcTransport[F[_], Payload] { transport =>
-  def fetch(request: RpcRequest[Payload]): F[Payload]
+trait RpcTransport[F[_], P] { transport =>
+  def fetch(request: RpcRequest[P]): F[P]
 
-  final def map[G[_]](f: F[Payload] => G[Payload]): RpcTransport[G, Payload] =
-    new RpcTransport[G, Payload] {
-      def fetch(request: RpcRequest[Payload]): G[Payload] = f(transport.fetch(request))
+  final def mapK[G[_]](f: F[P] => G[P]): RpcTransport[G, P] =
+    new RpcTransport[G, P] {
+      def fetch(request: RpcRequest[P]): G[P] = f(transport.fetch(request))
     }
 }
 

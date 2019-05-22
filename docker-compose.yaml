@@ -50,8 +50,6 @@ services:
   jbok:
     image: jbok:latest
     restart: always
-    environment:
-      - CONFIG_FILE=/etc/jbok/config.yaml
     volumes:
       - ./etc/jbok:/etc/jbok:ro
       - ./var/lib/jbok:/var/lib/jbok
@@ -59,5 +57,3 @@ services:
     ports:
       - 30314:30314
       - 30315:30315
-    depends_on:
-      - mysql

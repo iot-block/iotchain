@@ -2,8 +2,10 @@ package jbok.app.service
 
 import cats.effect.{ConcurrentEffect, Resource, Timer}
 import io.circe.Json
+import cats.implicits._
 import fs2._
 import javax.net.ssl.SSLContext
+import jbok.network.http.server.middleware.{GzipMiddleware, LoggerMiddleware, MetricsMiddleware}
 import jbok.core.config.ServiceConfig
 import jbok.core.api._
 import jbok.network.rpc.RpcService
@@ -38,26 +40,35 @@ final class HttpService[F[_]](
 
   val routes: HttpRoutes[F] = Http4sRpcServer.routes(rpcService)
 
-  private val builder = {
-    val b = BlazeServerBuilder[F]
-      .withHttpApp(routes.orNotFound)
-      .withNio2(true)
-      .enableHttp2(config.enableHttp2)
-      .withWebSockets(config.enableWebsockets)
-      .bindHttp(config.port, config.host)
+  private val builder: F[BlazeServerBuilder[F]] = {
+    val httpApp = for {
+      exportRoute <- MetricsMiddleware.exportService[F]
+      withMetrics <- MetricsMiddleware[F](routes)
+      gzip = GzipMiddleware[F]((withMetrics <+> exportRoute).orNotFound)
+      app = LoggerMiddleware[F](gzip)
+    } yield app
+
+    val builder = httpApp.map { app =>
+      BlazeServerBuilder[F]
+        .withHttpApp(app)
+        .withNio2(true)
+        .enableHttp2(config.enableHttp2)
+        .withWebSockets(config.enableWebsockets)
+        .bindHttp(config.port, config.host)
+    }
 
     sslOpt match {
-      case Some(ssl) => b.withSSLContext(ssl, SSLClientAuthMode.NotRequested)
-      case None      => b.enableHttp2(false)
+      case Some(ssl) => builder.map(_.withSSLContext(ssl, SSLClientAuthMode.NotRequested))
+      case None      => builder.map(_.enableHttp2(false))
     }
   }
 
   val resource: Resource[F, Server[F]] =
-    builder.resource
+    Resource.liftF(builder).flatMap(_.resource)
 
   val stream: Stream[F, Unit] =
     if (config.enable) {
-      builder.serve.drain
+      Stream.eval(builder).flatMap(_.serve).drain
     } else {
       Stream.empty
     }

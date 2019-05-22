@@ -8,15 +8,19 @@ import jbok.network.rpc.internal.RpcClientMacro
 import scala.concurrent.duration._
 import scala.language.experimental.macros
 
-final class RpcClient[F[_], Payload](
-    val transport: RpcTransport[F, Payload],
+final class RpcClient[F[_], P](
+    val transport: RpcTransport[F, P],
     val logger: RpcLogHandler[F]
 )(implicit F: Sync[F]) {
 
-  def use[API]: API = macro RpcClientMacro.impl[API, F, Payload]
+  def use[API]: API = macro RpcClientMacro.impl[API, F, P]
 }
 
 object RpcClient {
+  def noopLogHandler[F[_]]: RpcLogHandler[F] = new RpcLogHandler[F] {
+    override def logRequest[A](path: List[String], arguments: Product, result: F[A]): F[A] = result
+  }
+
   def defaultLogHandler[F[_]](implicit F: Sync[F], clock: Clock[F]): RpcLogHandler[F] = new RpcLogHandler[F] {
     val log = Logger[F]
     override def logRequest[A](path: List[String], arguments: Product, result: F[A]): F[A] =
@@ -29,6 +33,6 @@ object RpcClient {
       } yield r
   }
 
-  def apply[F[_], Payload](transport: RpcTransport[F, Payload])(implicit F: Sync[F], clock: Clock[F]) =
-    new RpcClient[F, Payload](transport, defaultLogHandler[F])
+  def apply[F[_], P](transport: RpcTransport[F, P])(implicit F: Sync[F], clock: Clock[F]) =
+    new RpcClient[F, P](transport, noopLogHandler)
 }

@@ -3,21 +3,11 @@ package jbok.crypto.ssl
 import java.nio.file.Paths
 import java.security.KeyStore
 
-import cats.implicits._
 import cats.effect.Sync
-import io.circe.generic.JsonCodec
+import cats.implicits._
 import javax.net.ssl.{KeyManagerFactory, SSLContext, SSLEngine, TrustManagerFactory}
 import jbok.common.FileUtil
 import jbok.common.log.Logger
-
-@JsonCodec
-final case class SSLConfig(
-    enabled: Boolean,
-    keyStorePath: String,
-    trustStorePath: String,
-    protocol: String,
-    clientAuth: String
-)
 
 final class ClientSSLEngine(val engine: SSLEngine) extends AnyVal
 
@@ -43,7 +33,6 @@ object SSLContextHelper {
                 trustStore.load(trustStoreIS, "changeit".toCharArray)
                 val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm)
                 trustManagerFactory.init(trustStore)
-
 
                 val ctx = SSLContext.getInstance(config.protocol)
                 ctx.init(keyManagerFactory.getKeyManagers, trustManagerFactory.getTrustManagers, null)

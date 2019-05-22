@@ -7,7 +7,7 @@ import jbok.core.api.JbokClientPlatform
 
 class HttpServiceSpec extends AppSpec {
   "HttpService" should {
-    "server & client with SSL" in check { objects =>
+    "server & client with or without SSL" in check { objects =>
       val httpService = objects.get[HttpService[IO]]
       val ssl         = objects.get[Option[SSLContext]]
       httpService.resource.use { server =>

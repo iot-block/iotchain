@@ -5,7 +5,8 @@ import java.net.URI
 import cats.effect._
 import io.circe.Json
 import javax.net.ssl.SSLContext
-import jbok.network.http.{HttpClients, HttpTransport}
+import jbok.network.http.HttpTransport
+import jbok.network.http.client.HttpClients
 import jbok.network.rpc.RpcClient
 
 object JbokClientPlatform {
@@ -13,7 +14,7 @@ object JbokClientPlatform {
   import io.circe.generic.auto._
   import jbok.codec.json.implicits._
 
-  def resource[F[_]](url: String, ssl: Option[SSLContext] = None)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], clock: Clock[F]): Resource[F, JbokClient[F]] =
+  def resource[F[_]](url: String, ssl: Option[SSLContext] = None)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, JbokClient[F]] =
     HttpClients.okHttp[F](ssl).map { client =>
       val transport = new HttpTransport[F](url, client)
       val rpc       = RpcClient(transport)

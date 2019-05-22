@@ -33,3 +33,4 @@ package-lock.json
 sdk/**/*.js
 *.db
 bin/generated
+var/

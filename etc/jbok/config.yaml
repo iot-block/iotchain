@@ -1,0 +1,86 @@
+genesis:
+  chainId: '10'
+  alloc:
+    '0xaa40236f83e948c5551b2d69373bb5a683c36bb8': '1000000000000000000000000000000'
+  miners:
+    - '0x19744f6ff94f86d6976dbf969b0952f12e77618b'
+    - '0xd9b6cac0612033abe5c1b439e74ba438b01c933a'
+    - '0x5310053ea45f2a48c61efb42a45f85126f118a8a'
+  timestamp: 1558496897661
+  coinbase: '0x0000000000000000000000000000000000000000'
+  difficulty: '0'
+  gasLimit: '16716680'
+log:
+  logDir: /var/log/jbok
+  level: INFO
+history:
+  frontierBlockNumber: '0'
+  homesteadBlockNumber: '0'
+  tangerineWhistleBlockNumber: '0'
+  spuriousDragonBlockNumber: '0'
+  byzantiumBlockNumber: '0'
+  constantinopleBlockNumber: '1000000000000000000000'
+  difficultyBombPauseBlockNumber: '3000000'
+  difficultyBombContinueBlockNumber: '5000000'
+keystore:
+  dir: /var/lib/jbok/keystore
+peer:
+  host: 0.0.0.0
+  port: 30314
+  seeds:
+    - tcp://127.0.0.3:30314
+    - tcp://127.0.0.4:30314
+  updatePeersInterval: 10 seconds
+  maxOutgoingPeers: 10
+  maxIncomingPeers: 10
+  bufferSize: 4194304
+  timeout: 10 seconds
+sync:
+  maxBlockHeadersPerRequest: 128
+  maxBlockBodiesPerRequest: 128
+  offset: 10
+  checkInterval: 5 seconds
+  banDuration: 200 seconds
+  requestTimeout: 10 seconds
+txPool:
+  poolSize: 4096
+  transactionTimeout: 10 minutes
+blockPool:
+  maxBlockAhead: 10
+  maxBlockBehind: 10
+mining:
+  enabled: true
+  secret: f8bc17dcec90978fdc85a982438fab310458e03c6622d208b3d176c4b1ff34bb
+  coinbase: '0x410be0ff99e37e82b2593f5ed4bd6316908f2b32'
+  period: 1000 milliseconds
+  epoch: 30000
+  checkpointInterval: 1024
+  minBroadcastPeers: 4
+persist:
+  driver: rocksdb
+  path: /var/lib/jbok/data
+ssl:
+  enabled: false
+  keyStorePath: /etc/jbok/server.jks
+  trustStorePath: /etc/jbok/cacert.jks
+  protocol: TLS
+  clientAuth: NotRequested
+db:
+  driver: com.mysql.cj.jdbc.MysqlDataSource
+  url: jdbc:h2:mem:test;MODE=MYSQL;DB_CLOSE_DELAY=-1
+  user: sa
+  password: ''
+service:
+  enable: true
+  enableHttp2: true
+  enableWebsockets: false
+  secure: true
+  host: 0.0.0.0
+  port: 30315
+  apis:
+    - account
+    - admin
+    - block
+    - contract
+    - personal
+    - transaction

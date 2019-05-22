@@ -12,7 +12,6 @@ object Versions {
   val monocle         = "1.5.0"
 
   val scalacache = "0.26.0"
-  val dropwizard = "4.0.3"
   val prometheus = "0.6.0"
   val fs2redis   = "0.5.1"
   val quill      = "3.1.0"
