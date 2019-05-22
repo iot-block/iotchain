@@ -88,5 +88,6 @@ service:
     - admin
     - block
     - contract
+    - miner
     - personal
     - transaction

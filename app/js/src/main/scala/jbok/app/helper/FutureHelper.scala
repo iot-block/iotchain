@@ -1,9 +1,9 @@
-package jbok.app
+package jbok.app.helper
 
 import scala.concurrent.{Future, Promise}
 import scala.scalajs.js
 
-object FutureUtil {
+object FutureHelper {
   def delay(milliseconds: Int): Future[Unit] = {
     val p = Promise[Unit]()
     js.timers.setTimeout(milliseconds) {

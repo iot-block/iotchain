@@ -1,17 +1,10 @@
 package jbok.app
 
-import java.net.URI
-
-import com.thoughtworks.binding.Binding._
-import com.thoughtworks.binding.Binding.Var
+import com.thoughtworks.binding.Binding.{Var, _}
 import com.thoughtworks.binding._
-import jbok.app.components.{SelectItem, SelectMenu, Spinner}
-import jbok.app.views.Nav.{Tab, TabList}
+import jbok.app.components.{TabList, TabPane, Tabs}
 import jbok.app.views._
 import org.scalajs.dom._
-import jbok.core.models.Address
-import org.scalajs.dom.raw.HTMLAnchorElement
-import scodec.bits.ByteVector
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSImport
@@ -28,116 +21,37 @@ object JbokApp {
   val normalizeCss = NormalizeCss
   val appCss       = AppCss
 
-  val uri = new URI(s"ws://localhost:8888")
-
-  val selectMenu =
-    new SelectMenu("please select max").render(Vars(SelectItem("50", "50"), SelectItem("100", "100")))
-
   val config = AppConfig.default
-  val state  = AppState(Var(config), hrefHandler = (event: Event) => handleHref(event))
+  val state  = AppState(Var(config))
   state.init()
 
-  val nodeSelect       = new NodeSelect(state).render
+  val nodeSelect       = NodeSelect(state).render
   val statusView       = StatusView(state).render
   val accountsView     = AccountsView(state).render
   val blocksView       = BlocksView(state).render
   val transactionsView = TxsView(state).render
-  val simulationsView  = SimulationsView.render()
-  val accountView      = AccountView(state).render
-  val blockView        = BlockView(state).render
+  val simulationsView  = SimulationsView.render
   val contractView     = ContractView(state).render
-  val configView       = ConfigView(state).render()
+  val configView       = ConfigView(state).render
+  val searchView       = SearchView(state).render
 
-  val accountsTab = Tab("Accounts", Var(accountsView), "fa-user-circle")
-  val blocksTab   = Tab("Blocks", Var(blocksView), "fa-th-large")
-  val txsTab      = Tab("Transactions", Var(transactionsView), "fa-arrow-circle-right")
-  val contractTab = Tab("Contract", Var(contractView), "fa-file-contract")
-  val configTab   = Tab("", Var(configView), "fa-cogs")
-  val tabs: Vars[Tab] = Vars(
+  val accountsTab = TabPane("Accounts", accountsView, Some("fa-user-circle"))
+  val blocksTab   = TabPane("Blocks", blocksView, Some("fa-th-large"))
+  val txsTab      = TabPane("Transactions", transactionsView, Some("fa-arrow-circle-right"))
+  val contractTab = TabPane("Contract", contractView, Some("fa-file-contract"))
+  val configTab   = TabPane("", configView, Some("fa-cogs"))
+  val searchTab   = TabPane("Search", searchView, Some("fa-search"))
+  val tabs: Vars[TabPane] = Vars(
     accountsTab,
     blocksTab,
     txsTab,
     contractTab,
-    configTab,
+    searchTab,
+    configTab
   )
 
-  def handleHref: Event => Unit =
-    (event: Event) => {
-      event.target match {
-        case button: Element if button.id == "block-back" =>
-          tabList.selected.value.content.value_=(blocksView)
-        case button: Element if button.id == "account-back" =>
-          tabList.selected.value.content.value_=(accountsView)
-        case link: HTMLAnchorElement if link.`type` == "address" =>
-          println("in address href")
-          val address = Address(ByteVector.fromValidHex(link.text.trim.substring(2)))
-          state.currentId.value
-            .flatMap { id =>
-              state.clients.value.get(id)
-            }
-            .foreach { client =>
-              val p = for {
-                account <- client.public.getAccount(address, BlockParam.Latest)
-                txs     <- client.personal.getAccountTransactions(address, BlockParam.Earliest, BlockParam.Latest)
-                _ = state.selectedAccount.value = Some((address, account, txs))
-                _ = tabList.selected.value.content.value_=(accountView)
-              } yield ()
-              p.unsafeToFuture()
-            }
-        case link: HTMLAnchorElement if link.`type` == "block" =>
-          println("in block href")
-          val hash = ByteVector.fromValidHex(link.text.trim)
-          state.currentId.value
-            .flatMap { id =>
-              state.clients.value.get(id)
-            }
-            .foreach { client =>
-              val p = for {
-                block <- client.public.getBlockByHash(hash)
-                _ = state.selectedBlock.value = block
-                _ = tabList.selected.value.content.value_=(blockView)
-              } yield ()
-
-              p.unsafeToFuture()
-            }
-        case link: HTMLAnchorElement if link.`type` == "tx" =>
-          println("in tx href")
-          val hash = ByteVector.fromValidHex(link.text.trim)
-          state.currentId.value
-            .flatMap { id =>
-              state.clients.value.get(id)
-            }
-            .foreach { client =>
-              val p = for {
-                block <- client.public.getTransactionByHashFromHistory(hash)
-//                _ = state.selectedBlock.value = block
-//                _ = tabList.selected.value = blockTab
-              } yield ()
-
-              p.unsafeToFuture()
-            }
-        case _ =>
-      }
-    }
-
   val tabList   = TabList(tabs, Var(tabs.value.head))
-  val searchBar = SearchBar(state).render
-
-  @dom val left: Binding[Node] =
-    <div class="nav-left">
-    {
-      for {
-        tab <- tabList.tabs
-      } yield {
-        val isSelected = tabList.selected.bind == tab
-        <div class={s"tab ${if (isSelected) "selected" else ""}"}
-             onclick={_: Event => tabList.selected.value = tab}>
-          <i class={s"fas fa-fw fa-lg ${tab.icon}"}></i>
-          { tab.name }
-        </div>
-      }
-    }
-    </div>
+  val searchBar = SearchBar(state, onPressEnter = (e: Event) => tabList.selected.value = searchTab).render
 
   @dom val right: Binding[Node] =
     <div class="nav-right">
@@ -145,7 +59,7 @@ object JbokApp {
       <div class="tab searchbar">{searchBar.bind}</div>
     </div>
 
-  val navBar = Nav.render(left, right)
+  val navBar = Tabs.renderTabBar(tabList, Some(right), onchange = (e: Event) => state.clearSearch())
 
   @dom def render: Binding[BindingSeq[Node]] =
     <header>
@@ -153,16 +67,7 @@ object JbokApp {
       {statusView.bind}
     </header>
     <main>
-    {
-      for {
-        tab <- tabList.tabs
-      } yield {
-        val isSelected = tabList.selected.bind == tab
-        <div class={s"tab-content ${if (isSelected) "selected" else ""}"}>
-          {tab.content.bind.bind}
-        </div>
-      }
-    }
+    {Tabs.renderTabContent(tabList).bind}
     </main>
     <footer>
       {Copyright.render.bind}

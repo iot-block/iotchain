@@ -222,6 +222,10 @@ a:hover {
     margin-right:20px
 }
 
+.modal button {
+    margin: 8px 0;
+}
+
 .modal-close {
     float: right;
     font-size: 28px;
@@ -246,6 +250,28 @@ a:hover {
     padding: 2px 16px;
     background-color: #f1f1f1;
     color: white;
+}
+
+.modal-confirm {
+    background-color: #4CAF50;
+}
+
+.modal-cancel {
+    background-color: #f44336;
+}
+
+.modal-footer button {
+    width: 100px;
+    padding: 10px 18px;
+    display: block;
+    margin-left: 16px;
+}
+
+.modal-info-content {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    font-size: 20px;
 }
 
 /* Forms */
@@ -277,7 +303,7 @@ textarea {
     display: inline-block;
     font-size: 0.85em;
     font-family: monospace;
-    height: 40em;
+    height: 30em;
 }
 
 textarea.invalid, textarea.invalid:focus
@@ -304,19 +330,6 @@ button:hover {
     opacity: 0.8;
 }
 
-.modal-confirm {
-    width: 100%;
-}
-
-.modal-cancel {
-    width: auto;
-    padding: 10px 18px;
-    background-color: #f44336;
-}
-
-.modal button {
-    margin: 8px 0;
-}
 
 /* spinner */
 .spinner {
@@ -327,13 +340,20 @@ button:hover {
 }
 
 .spinner > div {
-    background-color: #333;
     height: 100%;
     width: 6px;
     display: inline-block;
 
     -webkit-animation: sk-stretchdelay 1.2s infinite ease-in-out;
     animation: sk-stretchdelay 1.2s infinite ease-in-out;
+}
+
+.spinner > div.blue {
+    background-color: #2196F3;
+}
+
+.spinner > div.grey {
+    background-color: #333;
 }
 
 .spinner .rect2 {
@@ -502,13 +522,10 @@ input:checked + .slider:before {
 }
 
 .config-row {
-    display: flex;
-    align-items: flex-start;
-    flex-direction: row;
     margin-bottom: 2rem;
 }
 
-.config-row-item {
+.config-item {
     width: 50%;
     align-items: center;
     margin-right: 1rem;
@@ -520,4 +537,119 @@ input:checked + .slider:before {
     font-size: 12px;
     font-weight:bold;
     text-align:left;
+}
+
+.search {
+    padding: 2rem;
+    width: 100%;
+}
+
+/* empty */
+.empty {
+	margin: 20px 20px;
+	font-size: 14px;
+	line-height: 22px;
+	text-align: center
+}
+
+.empty-image {
+	height: 100px;
+	margin-bottom: 8px
+}
+
+.empty-image img {
+	height: 100%
+}
+
+.empty-text{
+	margin: 0
+}
+
+.empty-footer {
+	margin-top: 16px
+}
+
+/* skeleton */
+.skeleton {
+    border: 1px solid lightgrey;
+    width: 100%;
+}
+
+.skeleton-cell {
+    height: 16px;
+    margin: 10px;
+    -webkit-animation: pulse 1s infinite ease-in-out;
+            animation: pulse 1s infinite ease-in-out;
+}
+
+@-webkit-keyframes pulse {
+  0% {
+    background-color: rgba(165, 165, 165, 0.1);
+  }
+  50% {
+    background-color: rgba(165, 165, 165, 0.3);
+  }
+  100% {
+    background-color: rgba(165, 165, 165, 0.1);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    background-color: rgba(165, 165, 165, 0.1);
+  }
+  50% {
+    background-color: rgba(165, 165, 165, 0.3);
+  }
+  100% {
+    background-color: rgba(165, 165, 165, 0.1);
+  }
+}
+
+/* layout */
+
+.row {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: row;
+    width: 100%
+}
+
+.col {
+    align-items: center;
+}
+
+/* notification */
+
+.notification {
+  color: white;
+  opacity: 1;
+  padding: 14px 20px;
+  transition: opacity 0.6s;
+  text-transform: uppercase;
+}
+
+.notification.success {background-color: #4CAF50;}
+.notification.info {background-color: #2196F3;}
+.notification.warning {background-color: #ff9800;}
+.notification.error {background: #f44336}
+
+.notification .content {
+    width: 80%;
+    display: inline-flex;
+}
+
+.notification .close {
+  margin-left: 15px;
+  color: white;
+  font-weight: bold;
+  float: right;
+  font-size: 22px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.notification .close:hover {
+  color: black;
 }

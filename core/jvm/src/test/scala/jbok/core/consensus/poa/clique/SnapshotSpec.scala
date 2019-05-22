@@ -77,14 +77,13 @@ class SnapshotSpec extends CoreSpec {
         val extra = CliqueExtra(
           Nil,
           CryptoSignature(ByteVector.fill(65)(0).toArray),
-          v.auth
+          Some(Proposal(coinbase, v.auth))
         )
         val extraBytes = extra.asValidBytes
         val header = random[BlockHeader]
           .copy(
             number = number,
             unixTimestamp = time,
-            beneficiary = coinbase.bytes,
             extra = extraBytes,
           )
         sign(header, v.signer) // signer vote to authorize/deauthorize the beneficiary
@@ -109,15 +108,12 @@ class SnapshotSpec extends CoreSpec {
       val coinbase = address("B")
       val extra = CliqueExtra(
         Nil,
-        CryptoSignature(ByteVector.fill(65)(0).toArray)
+        CryptoSignature(ByteVector.fill(65)(0).toArray),
+        Some(Proposal(coinbase, true))
       )
       val extraBytes = extra.asValidBytes
-      val header = random[BlockHeader]
-        .copy(
-          beneficiary = coinbase.bytes,
-          extra = extraBytes
-        )
-      val signed = sign(header, "A")(genesis.chainId)
+      val header     = random[BlockHeader].copy(extra = extraBytes)
+      val signed     = sign(header, "A")(genesis.chainId)
       Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get shouldBe signer
     }
 

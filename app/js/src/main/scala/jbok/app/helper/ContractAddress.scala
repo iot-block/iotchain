@@ -1,4 +1,4 @@
-package jbok.app
+package jbok.app.helper
 
 import jbok.codec.rlp.implicits._
 import jbok.core.models.{Address, UInt256}

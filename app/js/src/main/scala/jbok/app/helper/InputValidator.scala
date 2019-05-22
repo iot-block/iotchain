@@ -1,6 +1,7 @@
-package jbok.app.views
+package jbok.app.helper
 
 import jbok.core.models.Account
+import jbok.evm.solidity.SolidityParser
 
 import scala.util.matching.Regex
 
@@ -21,14 +22,14 @@ object InputValidator {
     value.length == 40 && value.forall(hex.contains(_))
   }
 
-  def isValidNumber(n: String): Boolean = n.forall(number.contains(_))
+  def isValidNumber(n: String): Boolean = n.length > 0 && n.forall(number.contains(_))
 
   def isValidValue(value: String, account: Option[Account]): Boolean =
     value.forall(number.contains(_)) && account.forall(_.balance.toBigInt >= BigInt(value))
 
   def isValidData(data: String): Boolean = {
     val value = getHexValue(data)
-    value.length % 2 == 0 && value.forall(hex.contains(_))
+    value.length > 0 && value.length % 2 == 0 && value.forall(hex.contains(_))
   }
 
   def isValidIPv4(data: String): Boolean =
@@ -37,7 +38,7 @@ object InputValidator {
   def isValidPort(data: String): Boolean =
     data.nonEmpty && data.forall(number.contains(_)) && data.length <= 5 && data.toInt > 1000 && data.toInt < 65535
 
-  def isValidCode(data: String): Boolean = true
+  def isValidCode(data: String): Boolean = SolidityParser.parseSource(data).isSuccess
 
   def isValidBool(data: String): Boolean = data == "true" || data == "false"
 

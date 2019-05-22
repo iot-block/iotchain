@@ -13,7 +13,7 @@ object HttpClient {
     request[F](new Config(url))
 
   def post[F[_]](url: String, _data: String)(implicit F: Async[F]): F[Response] =
-    request(new Config(url) {
+    request[F](new Config(url) {
       override val method: String = "post"
       override val data: js.Any   = _data
     })

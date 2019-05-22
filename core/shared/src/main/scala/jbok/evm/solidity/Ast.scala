@@ -53,6 +53,32 @@ object Ast {
       }
     }
 
+    lazy val structDefinitionMap = {
+      val sds = parts.collect {
+        case structDef @ StructDefinition(id, params) =>
+          id -> structDef
+      }
+
+      sds.toMap
+
+      // map -> graph
+      // test no circle
+      // topology sort
+      // have all infos struct map
+      ???
+    }
+
+    def enumSizeToUint(size: Int) = (1 to 16).toList.find(i => BigInt(2).pow(i * 8) > size).getOrElse(16).toString
+
+    lazy val enumDefinitionMap = {
+      val eds = parts.collect {
+        case EnumDefinition(id, values) =>
+          id -> s"uint${enumSizeToUint(values.size)}"
+      }
+
+      eds.toMap
+    }
+
     def variablesABI(contractDescriptions: List[ContractDescription] = List.empty) =
       parts.collect {
         case StateVariableDef(name, typeName, Some(modifiers), expression)
@@ -120,7 +146,8 @@ object Ast {
                                     modifiers: Option[ModifierList],
                                     expression: Option[String])
       extends ContractPart
-  final case class OtherDef(name: String) extends ContractPart
+  final case class EnumDefinition(id: String, values: Set[String]) extends ContractPart
+  final case class OtherDef(name: String)                          extends ContractPart
 
   final case class Parameter(typeName: TypeName, name: Option[String])
 

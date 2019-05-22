@@ -16,7 +16,9 @@ object SolidityParser {
 
   def parseContract(code: String) = parse(code, contractDefinition(_))
 
-  def parseSourceUnit(code: String) = parse(code, sourceUnit(_))
+  def parseSource(code: String) = parse(code, sourceUnit(_))
+
+  def parseString(string: String) = parse(string, stringLiteral(_))
 
   def parseExpr(expr: String, constantMap: Map[String, Int] = Map.empty) =
     parse(expr, constantExpression(constantMap)(_))
@@ -24,7 +26,7 @@ object SolidityParser {
   def sourceUnit[_: P] =
     P(
       Start ~ (pragmaDirective.map(_ => None) | importDirective
-        .map(_ => None) | contractDefinition.map(Some(_))).rep)
+        .map(_ => None) | contractDefinition.map(Some(_))).rep ~ End)
       .map { contractDefOpts =>
         contractDefOpts
           .foldLeft(List.empty[ContractDef]) {
@@ -172,8 +174,10 @@ object SolidityParser {
 
   def enumDefinition[_: P] =
     P(
-      "enum" ~ identifier.! ~ "{" ~ enumValue.? ~ ("," ~ enumValue).rep ~ "}"
-    ).map(OtherDef.apply)
+      "enum" ~ identifier.! ~ "{" ~ enumValue.! ~ ("," ~ enumValue.!).rep ~ "}"
+    ).map {
+      case (id, x, xs) => EnumDefinition(id, (x :: xs.toList).toSet)
+    }
 
   def parameterList[_: P]: P[List[Parameter]] =
     P(
@@ -509,7 +513,7 @@ object SolidityParser {
   )
 
   def functionCall[_: P] = P(
-    expression ~ "(" ~ functionCallArguments ~ ")"
+    Identifier ~ "(" ~ functionCallArguments ~ ")"
   )
 
   def assemblyBlock[_: P]: P[Unit] = P(
@@ -716,8 +720,11 @@ object SolidityParser {
 
   def identifierPart[_: P] = P(CharIn("a-zA-Z0-9$_"))
 
-  def stringLiteral[_: P] =
+  def stringLiteral[_: P] = {
+    import fastparse.NoWhitespace._
+
     P("\"" ~ doubleQuotedStringCharacter.rep ~ "\"" | "'" ~ singleQuotedStringCharacter.rep ~ "'")
+  }
 
   def doubleQuotedStringCharacter[_: P] = P(CharPred(c => c != '"' && c != '\r' && c != '\n') | ("\\" ~ AnyChar))
 

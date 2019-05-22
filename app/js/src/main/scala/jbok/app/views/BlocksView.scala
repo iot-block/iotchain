@@ -1,57 +1,60 @@
 package jbok.app.views
 
-import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
-import com.thoughtworks.binding.Binding.Constants
-import jbok.app.{AppState, BlockHistory}
-import jbok.app.components.Modal
+import com.thoughtworks.binding.Binding.{Constants, Vars}
+import jbok.app.AppState
+import jbok.app.helper.TableRenderHelper
+import jbok.core.models.Block
 import org.scalajs.dom._
 
 final case class BlocksView(state: AppState) {
+  val header: List[String] = List("Number", "Hash", "Timestamp", "Gas Used", "Transactions")
+  val tableRenderHelper    = TableRenderHelper(header)
+
+  @binding.dom
+  def renderTable(blocks: Vars[Block]): Binding[Element] =
+    <table class="table-view">
+      {tableRenderHelper.renderTableHeader.bind}
+      <tbody>
+        {Constants(blocks.all.bind.sortBy(_.header.number).reverse: _*).map { block =>
+        <tr>
+          <td>
+            <a onclick={(e: Event) => state.searchBlockNumber(block.header.number.toString)}>
+              {block.header.number.toString}
+            </a>
+          </td>
+          <td>
+            <a onclick={(e: Event) => state.searchBlockHash(block.header.hash.toHex)}>
+              {block.header.hash.toHex}
+            </a>
+          </td>
+          <td>
+            {block.header.unixTimestamp.toString}
+          </td>
+          <td>
+            {block.header.gasUsed.toString}
+          </td>
+          <td>
+            {block.body.transactionList.length.toString}
+          </td>
+        </tr>
+      }}
+      </tbody>
+    </table>
+
   @binding.dom
   def render: Binding[Element] =
     <div>
       {
-        val history = state.currentId.bind match {
-          case Some(id) => state.blocks.value.getOrElse(id, BlockHistory())
-          case _ => BlockHistory()
+        if (state.isLoading.loadingBlocks.bind) {
+          tableRenderHelper.renderTableSkeleton.bind
+        } else {
+          state.activeNode.bind.flatMap(id => state.nodes.value.get(id).map(_.blocks)) match {
+            case Some(blocks) => renderTable(blocks.history).bind
+            case _ => tableRenderHelper.renderEmptyTable.bind
+          }
         }
-        <table class="table-view">
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Hash</th>
-              <th>Timestamp</th>
-              <th>Gas Used</th>
-              <th>Transactions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {for (block <- Constants(history.history.all.bind.toList.sortBy(_.header.number).reverse: _*)) yield {
-            <tr>
-              <td>
-                {block.header.number.toString}
-              </td>
-              <td>
-                <a onclick={state.hrefHandler} type="block">
-                  {block.header.hash.toHex}
-                </a>
-              </td>
-              <td>
-                {block.header.unixTimestamp.toString}
-              </td>
-              <td>
-                {block.header.gasUsed.toString}
-              </td>
-              <td>
-                {block.body.transactionList.length.toString}
-              </td>
-            </tr>
-          }}
-          </tbody>
-        </table>
       }
     </div>
-
 }

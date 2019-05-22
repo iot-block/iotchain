@@ -2,31 +2,22 @@ package jbok.app.views
 
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
-import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.AppState
-import jbok.app.views.Nav.Tab
-import jbok.core.models.{Account, Address, SignedTransaction}
+import jbok.app.components.{TabPane, Tabs}
+import jbok.core.models.{Account, Address}
 import org.scalajs.dom._
 
-final case class AccountView(state: AppState) {
-  val address: Var[Address] = Var(Address(0))
-  val account: Var[Account] = Var(Account())
-
-  val stxs: Vars[SignedTransaction] = Vars.empty
+final case class AccountView(state: AppState, address: Address, account: Account) {
+  val stxsView = StxsView(state, List.empty)
 
 
   @binding.dom
   val overview: Binding[Element] =
     <div>
       <table class="table-view">
-        {
-          val (address, account): (Address, Account) = state.selectedAccount.bind match {
-            case Some((a, b, _)) => (a, b)
-            case _ => (Address.empty, Account.empty())
-          }
         <tr>
           <th>address</th>
-          <td>{address.toString}</td>
+          <td><a onclick={(_: Event) => state.searchAccount(address.toString)}>{address.toString}</a></td>
         </tr>
         <tr>
           <th>nonce</th>
@@ -43,31 +34,24 @@ final case class AccountView(state: AppState) {
         <tr>
           <th>code</th>
           <td>{account.codeHash.toString}</td>
-        </tr>}
+        </tr>
       </table>
     </div>
 
   @binding.dom
   val txsView: Binding[Element] =
     <div>
-      {
-        val stxs: List[SignedTransaction] = state.selectedAccount.bind match {
-          case Some((_, _, a)) => a
-          case _ => List.empty[SignedTransaction]
-          }
-        StxsView.render(stxs, state.hrefHandler).bind
-      }
+      {stxsView.render.bind}
     </div>
 
-  val tabView = new TabsView(
-    Tab("Overview", Var(overview), ""),
-    Tab("Transactions", Var(txsView), "")
+  val tabView = Tabs(
+    List(TabPane("Overview", overview), TabPane("Transactions", txsView)),
+    className = "tab-small"
   )
 
   @binding.dom
   def render: Binding[Element] =
     <div>
-      <button id="account-back"  class="btn-back" onclick={state.hrefHandler}>back</button>
       {tabView.render.bind}
     </div>
 

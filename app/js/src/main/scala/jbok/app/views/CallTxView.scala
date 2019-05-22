@@ -4,15 +4,16 @@ import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var, Vars}
-import jbok.app.AppState
-import jbok.sdk.api.{BlockParam, CallTx}
+import jbok.app.{AppState, Contract}
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom.raw._
 import org.scalajs.dom.{Element, _}
 import org.scalajs.dom
 import scodec.bits.ByteVector
 import io.circe.parser._
-import jbok.sdk.api.{BlockParam, CallTx, TransactionRequest}
+import jbok.app.components.{AddressOptionInput, Input, Notification}
+import jbok.app.helper.InputValidator
+import jbok.core.api.{BlockTag, CallTx, TransactionRequest}
 import jbok.evm.solidity.ABIDescription.FunctionDescription
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
@@ -20,7 +21,7 @@ final case class CallTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]
   val contracts    = Vars.empty[Address]
 
-  val currentId                                           = state.currentId.value
+  val currentId                                           = state.activeNode.value
   val client                                              = currentId.flatMap(state.clients.value.get(_))
   val account: Var[Option[Account]]                       = Var(None)
   val to: Var[String]                                     = Var("")
@@ -32,9 +33,9 @@ final case class CallTxView(state: AppState) {
   val contractSelected: Var[Boolean]                      = Var(false)
   val function: Var[Option[FunctionDescription]]          = Var(None)
   val txType: Var[String]                                 = Var("Send")
-  val txStatus: Var[String]                               = Var("")
+  val txStatus: Var[Option[String]]                       = Var(None)
 
-  val paramInputs: Vars[CustomInput] = Vars.empty[CustomInput]
+  val paramInputs: Vars[Input] = Vars.empty[Input]
 
   private def fetch() = {
     val p = for {
@@ -49,7 +50,6 @@ final case class CallTxView(state: AppState) {
   private def reset() = {
     rawResult.value = ByteVector.empty
     result.value = ""
-    txStatus.value = ""
 
     val element = dom.document.getElementById("decodeSelect")
     element match {
@@ -70,9 +70,12 @@ final case class CallTxView(state: AppState) {
           to.value = v.substring(2)
           toSyntax.value = InputValidator.isValidAddress(to.value)
           contractSelected.value = true
-          contractAbi.value = state.contractInfo.value.find(_.address.toString == v).map {
-            _.abi
-          }
+          contractAbi.value = state.nodes.value
+            .get(state.activeNode.value.getOrElse(""))
+            .flatMap {
+              _.contractsABI.value.find(_.address.toString == v)
+            }
+            .map(_.abi)
           function.value = None
         }
       case _ =>
@@ -99,7 +102,7 @@ final case class CallTxView(state: AppState) {
                 val json = parse(s"[${value}]")
                 json.isRight
               }
-              CustomInput(p.name.getOrElse(""), p.parameterType.typeString, None, validator)
+              Input(p.name.getOrElse(""), p.parameterType.typeString, validator = validator)
             }
             paramInputs.value.clear()
             paramInputs.value ++= t
@@ -137,65 +140,59 @@ final case class CallTxView(state: AppState) {
     }
   }
 
-  def allReady: Boolean =
-    addressOptionInput.isValid &&
-      toSyntax.value &&
-      client.nonEmpty &&
-      function.value.nonEmpty &&
-      paramInputs.value.toList.forall(_.isValid)
+  def checkAndGenerateInput() = {
+    txStatus.value = None
+    for {
+      from    <- if (addressOptionInput.isValid) Right(addressOptionInput.value) else Left("not valid from address.")
+      to      <- if (toSyntax.value) Right(to.value) else Left("not valid to address.")
+      _       <- if (paramInputs.value.toList.forall(_.isValid)) Right(()) else Left("no valid params input.")
+      _       <- if (client.nonEmpty) Right(()) else Left("no connect client.")
+      abiFunc <- Either.fromOption(function.value, "error contract abi function.")
+    } yield execute(from, to, abiFunc)
+  }
 
-  val executeOnClick = (_: Event) => {
-    if (allReady) {
-      val fromSubmit = Some(Address(ByteVector.fromValidHex(addressOptionInput.address.value)))
-      val toSubmit   = Some(Address(ByteVector.fromValidHex(to.value)))
-      val f          = function.value.get
-      val data =
-        if (f.inputs.isEmpty) f.methodID
-        else {
-          f.encode(paramInputs.value.toList.map(_.value).mkString("[", ",", "]")).right.get
-        }
-      val callTx = CallTx(fromSubmit, toSubmit, None, 1, 0, data)
-      if (txType.value == "Call") {
-        reset()
-        val p = for {
-          ret <- client.get.public.call(callTx, BlockParam.Latest)
-          _ = rawResult.value = ret
-          _ = result.value = ret.toHex
-          _ = txStatus.value = "call succcess"
-        } yield ()
-        txStatus.value = "wait for result..."
-        p.unsafeToFuture()
-      } else {
-        val txRequest =
-          TransactionRequest(fromSubmit.get, toSubmit, None, None, None, None, Some(data))
-        val password = if (passphase.value.isEmpty) Some("") else Some(passphase.value)
-        val p = for {
-          account  <- client.get.public.getAccount(fromSubmit.get, BlockParam.Latest)
-          gasLimit <- client.get.public.getEstimatedGas(callTx, BlockParam.Latest)
-          gasPrice <- client.get.public.getGasPrice
-          _ = txStatus.value = s"gas limit: $gasLimit, gas price: $gasPrice"
-          txHash <- client.get.personal
-            .sendTransaction(
-              txRequest.copy(nonce = Some(account.nonce), gasLimit = Some(gasLimit), gasPrice = Some(gasPrice)),
-              password)
-          stx <- client.get.public.getTransactionByHashFromHistory(txHash)
-          _ = stx.map(state.stxs.value(currentId.get).value += _)
-          _ = state.receipts.value(currentId.get).value += (txHash -> Var(None))
-          _ = txStatus.value = s"send transaction success: ${txHash}"
-        } yield ()
-        txStatus.value = "estimate gas..."
-        p.unsafeToFuture()
+  def execute(from: String, to: String, functionDescription: FunctionDescription) = {
+    val fromSubmit = Some(Address(ByteVector.fromValidHex(from)))
+    val toSubmit   = Some(Address(ByteVector.fromValidHex(to)))
+    val data =
+      if (functionDescription.inputs.isEmpty) functionDescription.methodID
+      else {
+        functionDescription.encode(paramInputs.value.toList.map(_.value).mkString("[", ",", "]")).right.get
       }
+    val callTx = CallTx(fromSubmit, toSubmit, None, 1, 0, data)
+    if (txType.value == "Call") {
+      reset()
+      val p = for {
+        ret <- client.get.contract.call(callTx, BlockTag.latest)
+        _ = rawResult.value = ret
+        _ = result.value = ret.toHex
+        _ = txStatus.value = Some("call succcess")
+      } yield ()
+      txStatus.value = Some("wait for result...")
+      p.unsafeToFuture()
     } else {
-      println(s"addressOptionInput.isValid: ${addressOptionInput.isValid}")
-      println(s"toSyntax.value: ${toSyntax.value}")
-      println(s"client.nonEmpty: ${client.nonEmpty}")
-      println(s"function.value.nonEmpty: ${function.value.nonEmpty}")
-      println(s"paramInputs.value.toList.forall(_.isValid): ${paramInputs.value.toList.forall(_.isValid)}")
+      val txRequest =
+        TransactionRequest(fromSubmit.get, toSubmit, None, None, None, None, Some(data))
+      val password = if (passphase.value.isEmpty) Some("") else Some(passphase.value)
+      val p = for {
+        account <- client.get.account.getAccount(fromSubmit.get, BlockTag.latest)
+        _ = txStatus.value = Some("estimate gas...")
+        gasLimit <- client.get.contract.getEstimatedGas(callTx, BlockTag.latest)
+        gasPrice <- client.get.contract.getGasPrice
+        _ = txStatus.value = Some(s"gas limit: $gasLimit, gas price: $gasPrice")
+        txHash <- client.get.personal
+          .sendTransaction(txRequest.copy(nonce = Some(account.nonce), gasLimit = Some(gasLimit), gasPrice = Some(gasPrice)), password)
+        stx <- client.get.transaction.getTx(txHash)
+        _ = stx.foreach(state.addStx(currentId.get, _))
+        _ = txStatus.value = Some(s"send transaction success: ${txHash}")
+      } yield ()
+      p.unsafeToFuture()
     }
   }
 
-  val addressOptionInput = new AddressOptionInput(nodeAccounts)
+  val executeOnClick = (_: Event) => checkAndGenerateInput().leftMap(error => txStatus.value = Some(error))
+
+  val addressOptionInput = AddressOptionInput(nodeAccounts)
 
   @binding.dom
   def render: Binding[Element] =
@@ -211,7 +208,7 @@ final case class CallTxView(state: AppState) {
         </label>
         <select name="to" class="autocomplete" onchange={toOnChange}>
           {
-            val contractList = state.contractInfo.all.bind
+            val contractList = state.nodes.value.get(currentId.getOrElse("")).map(_.contractsABI).getOrElse(Vars.empty[Contract]).bind
             for (account <- Constants(contractList.map(_.address): _*)) yield {
               <option value={account.toString}>{account.toString}</option>
             }
@@ -288,12 +285,24 @@ final case class CallTxView(state: AppState) {
         }
       }
 
-      <div>
-        status: {txStatus.bind}
-      </div>
+      {
+        val onclose = (_: Event) => txStatus.value = None
+        @binding.dom def content(status: String):Binding[Element] =
+          <div style="padding-left: 10px">{status}</div>
+        txStatus.bind match {
+          case None => <div/>
+//          case Some(status) if status == "sending" =>
+//            Notification.renderInfo(content(status), onclose).bind
+//          case Some(status) if status == "send success." =>
+//            Notification.renderSuccess(content(status), (_: Event) => onclose).bind
+          case Some(status) =>
+            Notification.renderInfo(content(status), onclose).bind
+        }
+      }
+
 
       <div>
-        <button id="call" class="modal-confirm" onclick={executeOnClick} disabled={state.currentId.bind.isEmpty || function.bind.isEmpty}>{txType.bind}</button>
+        <button id="call" class="modal-confirm" style={"width: 100%"} onclick={executeOnClick} disabled={state.activeNode.bind.isEmpty || function.bind.isEmpty}>{txType.bind}</button>
       </div>
     </div>
 }

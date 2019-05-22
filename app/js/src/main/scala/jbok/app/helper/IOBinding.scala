@@ -1,4 +1,4 @@
-package jbok.app
+package jbok.app.helper
 
 import cats.effect.IO
 import com.thoughtworks.binding.{Binding, FutureBinding}

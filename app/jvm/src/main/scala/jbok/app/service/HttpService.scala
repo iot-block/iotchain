@@ -21,6 +21,7 @@ final class HttpService[F[_]](
     admin: AdminAPI[F],
     block: BlockAPI[F],
     contract: ContractAPI[F],
+    miner: MinerAPI[F],
     personal: PersonalAPI[F],
     transaction: TransactionAPI[F],
     sslOpt: Option[SSLContext]
@@ -35,6 +36,7 @@ final class HttpService[F[_]](
       .mount(admin)
       .mount(block)
       .mount(contract)
+      .mount(miner)
       .mount(personal)
       .mount(transaction)
 

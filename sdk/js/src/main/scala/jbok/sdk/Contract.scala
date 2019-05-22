@@ -49,7 +49,7 @@ final case class ParsedResult(contracts: Option[Contracts], error: String)
 @JSExportAll
 object ContractParser {
   def parse(code: String): String = {
-    val result = SolidityParser.parseSourceUnit(code)
+    val result = SolidityParser.parseSource(code)
 
     if (result.isSuccess) {
       ParsedResult(Some(Contracts(result.get.value.ABI)), "").asJson.noSpaces

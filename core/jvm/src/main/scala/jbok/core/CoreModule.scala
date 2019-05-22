@@ -80,7 +80,8 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   make[Consumer[F, PeerSelector[F], Block]].from((queue: Queue[F, PeerSelector[F], Block]) => queue)
   make[Producer[F, PeerSelector[F], Block]].from((queue: Queue[F, PeerSelector[F], Block]) => queue)
 
-  make[Option[SSLContext]].fromEffect(SSLContextHelper[F](config.ssl))
+//  make[Option[SSLContext]].fromEffect(SSLContextHelper[F](config.ssl))
+  make[Option[SSLContext]].from(None)
   make[IncomingManager[F]]
   make[OutgoingManager[F]]
   make[PeerStore[F]].fromEffect((db: KeyValueDB[F]) => PeerStore[F](db))

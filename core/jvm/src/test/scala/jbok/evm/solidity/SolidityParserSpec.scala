@@ -2056,9 +2056,7 @@ class SolidityParserSpec extends CommonSpec {
       val contractABI = contract.get.value.toABI()
       println(contractABI)
       println(fastparse.parse("addr := mload(bytePos)", SolidityParser.assemblyAssignment(_)))
-      println(
-        fastparse.parse("(, uint256 retAmount) = convertByPath(_path, _amount, _minReturn, _path[0], this);",
-                        SolidityParser.simpleStatement(_)))
+      println(fastparse.parse("(, uint256 retAmount) = convertByPath(_path, _amount, _minReturn, _path[0], this);", SolidityParser.simpleStatement(_)))
     }
 
     "parse function" in {
@@ -2070,6 +2068,7 @@ class SolidityParserSpec extends CommonSpec {
           |    allowance[_from][msg.sender] -= _value;             // Subtract from the sender's allowance
           |    totalSupply -= _value;                              // Update totalSupply
           |    Burn(_from, _value);
+          |    emit Burn(_from, _value);
           |    return true;
           |}
         """.stripMargin
@@ -2128,8 +2127,7 @@ class SolidityParserSpec extends CommonSpec {
       transfer.right.get shouldBe hex"0xa9059cbb00000000000000000000000012345678901234567890123456789012345678900000000000000000000000000000000000000000000000000000000000038f75"
 
       val transferFrom = erc20Methods("transferFrom")
-        .encode(
-          "[\"0x1234567890123456789012345678901234567890\", \"0x0987654321098765432109876543210987654321\", 233333]")
+        .encode("[\"0x1234567890123456789012345678901234567890\", \"0x0987654321098765432109876543210987654321\", 233333]")
       transferFrom.isRight shouldBe true
       transferFrom.right.get shouldBe hex"0x23b872dd000000000000000000000000123456789012345678901234567890123456789000000000000000000000000009876543210987654321098765432109876543210000000000000000000000000000000000000000000000000000000000038f75"
 
@@ -2187,18 +2185,39 @@ class SolidityParserSpec extends CommonSpec {
     }
 
     "parse EOS contract" in {
-      val parseResult = SolidityParser.parseSourceUnit(eosCode)
-      val sources     = parseResult.get.value
-      val dsToken     = sources.ABI.find(_.name == "DSToken")
+      val parseResult = SolidityParser.parseSource(eosCode)
+
+      parseResult.isSuccess shouldBe true
+
+      val sources = parseResult.get.value
+      val dsToken = sources.ABI.find(_.name == "DSToken")
 
       println(dsToken.get.methods)
     }
 
     "parse code3" in {
-      val parseResult = SolidityParser.parseSourceUnit(code3)
-      val sources     = parseResult.get.value
+      val parseResult = SolidityParser.parseSource(code3)
 
-      println(sources)
+      println(parseResult.get.value)
+      parseResult.isSuccess shouldBe true
+    }
+
+    "parse error code" in {
+      val parseResult = SolidityParser.parseSource("""pragma solidity 0.4.24;
+          |
+          |contract SimpleStorage {
+          |    uint storedData;
+          |
+          |    function set(uint x) public {
+          |        storedData = x;
+          |    }
+          |
+          |    function get() public view returns (uint) {
+          |        return storedData;
+          |    }
+        """.stripMargin)
+
+      parseResult.isSuccess shouldBe false
     }
   }
 }

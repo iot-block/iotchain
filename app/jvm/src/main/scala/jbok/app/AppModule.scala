@@ -29,6 +29,7 @@ class AppModule[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F]
   make[AdminAPI[F]].from[AdminService[F]]
   make[BlockAPI[F]].from[BlockService[F]]
   make[ContractAPI[F]].from[ContractService[F]]
+  make[MinerAPI[F]].from[MinerService[F]]
   make[PersonalAPI[F]].from[PersonalService[F]]
   make[TransactionAPI[F]].from[TransactionService[F]]
   make[HttpService[F]]
@@ -40,9 +41,6 @@ object AppModule {
   def resource[F[_]: TagK](config: CoreConfig = CoreModule.testConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] =
     Injector().produceF[F](new CoreModule[F](config) ++ new AppModule[F]).toCats
 
-  def resource[F[_]: TagK](path: Path)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] = {
-    Resource.liftF(Config[F].read[CoreConfig](path)).flatMap(config =>
-      Injector().produceF[F](new CoreModule[F](config) ++ new AppModule[F]).toCats
-    )
-  }
+  def resource[F[_]: TagK](path: Path)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] =
+    Resource.liftF(Config[F].read[CoreConfig](path)).flatMap(config => Injector().produceF[F](new CoreModule[F](config) ++ new AppModule[F]).toCats)
 }
