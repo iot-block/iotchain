@@ -1,6 +1,7 @@
 package jbok.core.ledger
 
 import cats.effect.IO
+import jbok.common.metrics.Metrics
 import jbok.common.testkit._
 import jbok.core.CoreSpec
 import jbok.core.models.{Account, Address, UInt256}

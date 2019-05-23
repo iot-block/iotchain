@@ -27,7 +27,8 @@ object LoggerPlatform {
     Logger.fileFormatter,
     FileWriter().nio
       .path(LogPath.simple("jbok.log", directory = directory))
-      .rolling(LogPath.daily(prefix = "jbok", directory = directory)),
+      .rolling(LogPath.daily(prefix = "jbok", directory = directory))
+      .maxLogs(15),
     minimumLevel.map(Logger.fromJbokLevel)
   )
 }

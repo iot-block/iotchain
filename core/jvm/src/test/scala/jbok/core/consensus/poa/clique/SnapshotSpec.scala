@@ -2,6 +2,7 @@ package jbok.core.consensus.poa.clique
 
 import cats.effect.IO
 import jbok.codec.rlp.implicits._
+import jbok.common.metrics.Metrics
 import jbok.common.testkit._
 import jbok.core.CoreSpec
 import jbok.core.ledger.History

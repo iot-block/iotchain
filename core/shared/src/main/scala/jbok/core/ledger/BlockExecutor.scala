@@ -154,7 +154,7 @@ final class BlockExecutor[F[_]](
         postProcessed.receipts,
         postProcessed.gasUsed
       )
-      _ <- history.putBlockAndReceipts(postProcessed.block, postProcessed.receipts, postProcessed.td, true)
+      _ <- history.putBlockAndReceipts(postProcessed.block, postProcessed.receipts, postProcessed.td)
     } yield postProcessed
 
   private def importBlock(block: Block): F[List[Block]] = {

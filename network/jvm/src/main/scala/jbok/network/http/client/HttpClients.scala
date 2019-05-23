@@ -1,4 +1,5 @@
 package jbok.network.http.client
+
 import cats.effect._
 import javax.net.ssl.SSLContext
 import jbok.common.thread.ThreadUtil
@@ -20,7 +21,7 @@ object HttpClients {
         case None      => new OkHttpClient.Builder()
       }
 
-      OkHttpBuilder[F](builder.build(), blockEC).resource.evalMap(withMiddlewares[F])
+      OkHttpBuilder[F](builder.build(), blockEC).resource
     }
 
   def blaze[F[_]](sslContext: Option[SSLContext] = None)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Client[F]] =
@@ -28,6 +29,5 @@ object HttpClients {
       BlazeClientBuilder[F](blockEC)
         .withSslContextOption(sslContext)
         .resource
-        .evalMap(withMiddlewares[F])
     }
 }

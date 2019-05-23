@@ -1,13 +1,13 @@
 package jbok.common.metrics
 
-import cats.effect.{ExitCase, Sync, Timer}
+import cats.effect.{Concurrent, Resource, Sync, Timer}
 import fs2._
-import cats.implicits._
 
 import scala.concurrent.duration._
+import cats.implicits._
 
 trait EffectMetrics[F[_]] { self: Metrics[F] =>
-  def timeF[A](name: String, labels: String*)(fa: F[A])(implicit F: Sync[F], T: Timer[F]): F[A] =
+  def observed[A](name: String, labels: String*)(fa: F[A])(implicit F: Sync[F], T: Timer[F]): F[A] =
     for {
       start   <- T.clock.monotonic(NANOSECONDS)
       attempt <- fa.attempt
@@ -15,46 +15,30 @@ trait EffectMetrics[F[_]] { self: Metrics[F] =>
       elapsed = end - start
       a <- attempt match {
         case Left(e) =>
-          self.time(name, "failure" :: labels.toList)(elapsed) >> F.raiseError(e)
+          self.observe(name, "failure" :: labels.toList: _*)(elapsed) >> F.raiseError(e)
         case Right(a) =>
-          self.time(name, "success" :: labels.toList)(elapsed).as(a)
+          self.observe(name, "success" :: labels.toList: _*)(elapsed).as(a)
       }
     } yield a
 
-  def gaugeF[A](name: String, labels: String*)(fa: F[A])(implicit F: Sync[F]): F[A] =
-    for {
-      _       <- self.gauge(name, labels.toList)(1.0)
-      attempt <- fa.attempt
-      a <- attempt match {
-        case Left(e) =>
-          self.gauge(name, labels.toList)(-1.0) >> F.raiseError(e)
-        case Right(a) =>
-          self.gauge(name, labels.toList)(-1.0).as(a)
-      }
-    } yield a
+  def monitored[A](name: String, labels: String*)(res: Resource[F, A])(implicit F: Sync[F]): Resource[F, A] = {
+    val r = Resource {
+      for {
+        _ <- self.inc(name, labels: _*)(1.0)
+      } yield () -> self.dec(name, labels: _*)(1.0)
+    }
+
+    r.flatMap(_ => res)
+  }
 }
 
 trait StreamMetrics[F[_]] { self: Metrics[F] =>
-  def timeStream[A](name: String, labels: String*)(
-      stream: Stream[F, A])(implicit F: Sync[F], T: Timer[F]): Stream[F, A] =
-    for {
-      start <- Stream.eval(T.clock.monotonic(NANOSECONDS))
-      a <- stream.onFinalizeCase {
-        case ExitCase.Completed =>
-          T.clock.monotonic(NANOSECONDS).flatMap(end => self.time(name, "complete" :: labels.toList)(end - start))
-        case ExitCase.Canceled =>
-          T.clock.monotonic(NANOSECONDS).flatMap(end => self.time(name, "canceled" :: labels.toList)(end - start))
-        case ExitCase.Error(_) =>
-          T.clock.monotonic(NANOSECONDS).flatMap(end => self.time(name, "error" :: labels.toList)(end - start))
-      }
-    } yield a
+  // observe events occur in the stream
+  def observePipe[A](name: String, labels: String*)(implicit F: Concurrent[F]): Pipe[F, A, Unit] =
+    _.chunks.through(observeChunkPipe[A](name, labels: _*))
 
-  def gaugeStream[A](name: String, labels: String*)(stream: Stream[F, A])(implicit F: Sync[F]): Stream[F, A] =
-    Stream.eval_(self.gauge(name, labels.toList)(1.0)) ++ stream.onFinalizeCase {
-      case ExitCase.Completed => self.gauge(name, labels.toList)(-1)
-      case ExitCase.Canceled  => self.gauge(name, labels.toList)(-1)
-      case ExitCase.Error(_)  => self.gauge(name, labels.toList)(-1)
-    }
+  def observeChunkPipe[A](name: String, labels: String*)(implicit F: Concurrent[F]): Pipe[F, Chunk[A], Unit] =
+    _.evalMap(c => self.observe(name, labels: _*)(c.size))
 }
 
 trait Metrics[F[_]] extends EffectMetrics[F] with StreamMetrics[F] {
@@ -62,31 +46,38 @@ trait Metrics[F[_]] extends EffectMetrics[F] with StreamMetrics[F] {
 
   def registry: Registry
 
-  def time(name: String, labels: List[String])(elapsed: Long): F[Unit]
+  // accumulate, e.g. the number of requests served, tasks completed, or errors.
+  def acc(name: String, labels: String*)(n: Double = 1.0): F[Unit]
 
-  def gauge(name: String, labels: List[String])(delta: Double): F[Unit]
+  // increase, e.g. the current memory usage, queue size, or active requests.
+  def inc(name: String, labels: String*)(n: Double = 1.0): F[Unit]
 
-  def current(name: String, labels: String*)(current: Double): F[Unit]
+  // decrease, e.g. the current memory usage, queue size, or active requests.
+  def dec(name: String, labels: String*)(n: Double = 1.0): F[Unit]
+
+  // equivalent to inc(name, labels)(delta)
+  def set(name: String, labels: String*)(n: Double): F[Unit]
+
+  // e.g. the request response latency, or the size of the response body
+  def observe(name: String, labels: String*)(n: Double): F[Unit]
 }
 
-object Metrics extends MetricsPlatform {
-  def default[F[_]: Sync]: F[Metrics[F]] = _default
+object Metrics {
+  val METRIC_PREFIX = "jbok"
+  val TIMER_SUFFIX  = "seconds"
+  val GAUGE_SUFFIX  = "active"
 
   sealed trait NoopRegistry
 
   object NoopRegistry extends NoopRegistry
 
-  def nop[F[_]: Sync]: F[Metrics[F]] = Sync[F].pure {
-    new Metrics[F] {
-      override type Registry = NoopRegistry
-
-      override def registry: Registry = NoopRegistry
-
-      override def time(name: String, labels: List[String])(elapsed: Long): F[Unit] = Sync[F].unit
-
-      override def gauge(name: String, labels: List[String])(delta: Double): F[Unit] = Sync[F].unit
-
-      override def current(name: String, labels: String*)(current: Double): F[Unit] = Sync[F].unit
-    }
+  def nop[F[_]: Sync]: Metrics[F] = new Metrics[F] {
+    override type Registry = NoopRegistry
+    override def registry: Registry                                         = NoopRegistry
+    override def acc(name: String, labels: String*)(n: Double): F[Unit]     = Sync[F].unit
+    override def inc(name: String, labels: String*)(n: Double): F[Unit]     = Sync[F].unit
+    override def dec(name: String, labels: String*)(n: Double): F[Unit]     = Sync[F].unit
+    override def set(name: String, labels: String*)(n: Double): F[Unit]     = Sync[F].unit
+    override def observe(name: String, labels: String*)(n: Double): F[Unit] = Sync[F].unit
   }
 }

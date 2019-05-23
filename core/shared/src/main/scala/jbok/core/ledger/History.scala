@@ -19,7 +19,7 @@ trait History[F[_]] {
 
   def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]]
 
-  def putBlockHeader(blockHeader: BlockHeader, updateTD: Boolean = false): F[Unit]
+  def putBlockHeader(blockHeader: BlockHeader): F[Unit]
 
   // body
   def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]]
@@ -36,7 +36,7 @@ trait History[F[_]] {
 
   def getBlockByNumber(number: BigInt): F[Option[Block]]
 
-  def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: BigInt, asBestBlock: Boolean): F[Unit]
+  def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: BigInt): F[Unit]
 
   def delBlock(hash: ByteVector, parentAsBestBlock: Boolean): F[Unit]
 
@@ -68,8 +68,6 @@ trait History[F[_]] {
 
   def getBestBlockNumber: F[BigInt]
 
-  def getBestHeader: F[BlockHeader]
-
   def getBestBlock: F[Block]
 
   def putBestBlockNumber(number: BigInt): F[Unit]
@@ -80,6 +78,9 @@ trait History[F[_]] {
 }
 
 object History {
-  def apply[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F], metrics: Metrics[F]): History[F] =
+  def apply[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F]): History[F] =
+    new HistoryImpl[F](db, Metrics.nop[F])
+
+  def apply[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F]): History[F] =
     new HistoryImpl[F](db, metrics)
 }

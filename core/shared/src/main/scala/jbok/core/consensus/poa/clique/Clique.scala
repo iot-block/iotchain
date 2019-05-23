@@ -11,8 +11,7 @@ import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
 import jbok.crypto.signature._
-import jbok.persistent.{CacheBuilder, KeyValueDB}
-import scalacache._
+import jbok.persistent.KeyValueDB
 import scodec.bits._
 
 import scala.concurrent.duration._
@@ -24,7 +23,7 @@ final class Clique[F[_]](
     db: KeyValueDB[F],
     history: History[F],
     proposals: Map[Address, Boolean] = Map.empty
-)(implicit F: ConcurrentEffect[F], C: Cache[Snapshot]) {
+)(implicit F: ConcurrentEffect[F]) {
   private[this] val log = Logger[F]
 
   import config._
@@ -91,8 +90,6 @@ object Clique {
   val diffInTurn = BigInt(11) // Block difficulty for in-turn signatures
   val diffNoTurn = BigInt(10) // Block difficulty for out-of-turn signatures
 
-  val inMemorySnapshots: Int     = 128
-  val inMemorySignatures: Int    = 1024
   val wiggleTime: FiniteDuration = 500.millis
 
   def apply[F[_]](
@@ -108,8 +105,7 @@ object Clique {
       } else {
         F.unit
       }
-      cache <- CacheBuilder.build[F, Snapshot](inMemorySnapshots)
-    } yield new Clique[F](config, db, history, Map.empty)(F, cache)
+    } yield new Clique[F](config, db, history, Map.empty)
 
   def fillExtraData(miners: List[Address]): ByteVector =
     CliqueExtra(miners, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asValidBytes

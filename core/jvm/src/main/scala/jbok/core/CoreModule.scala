@@ -8,7 +8,7 @@ import distage.{Producer => _, _}
 import javax.net.ssl.SSLContext
 import jbok.common.config.Config
 import jbok.common.log.LoggerPlatform
-import jbok.common.metrics.Metrics
+import jbok.common.metrics.{Metrics, PrometheusMetrics}
 import jbok.common.thread.ThreadUtil
 import jbok.core.config._
 import jbok.core.consensus.Consensus
@@ -55,7 +55,7 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   make[KeyStoreConfig].from((config: CoreConfig) => config.keystore)
 
   make[KeyValueDB[F]].fromResource(KeyValueDBPlatform.resource[F](config.persist))
-  make[Metrics[F]].fromEffect(Metrics.default[F])
+  make[Metrics[F]].from(new PrometheusMetrics[F]())
   make[History[F]].from[HistoryImpl[F]]
   make[KeyStore[F]].fromResource((config: KeyStoreConfig) => KeyStorePlatform.resource[F](config))
   make[Clique[F]].fromEffect((config: CoreConfig, db: KeyValueDB[F], history: History[F]) => Clique[F](config.mining, db, config.genesis, history))

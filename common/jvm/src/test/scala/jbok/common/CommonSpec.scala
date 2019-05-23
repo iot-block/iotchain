@@ -22,8 +22,6 @@ trait CommonSpec extends WordSpecLike with Matchers with PropertyChecks with Bef
 
   implicit val acg = ThreadUtil.acgGlobal
 
-  implicit val metrics = Metrics.default[IO].unsafeRunSync()
-
   override def timeLimit: Span = 60.seconds
 
   Logger.setRootHandlers[IO](Logger.consoleHandler(minimumLevel = Some(Level.Info))).unsafeRunSync()

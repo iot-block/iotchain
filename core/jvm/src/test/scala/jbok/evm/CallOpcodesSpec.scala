@@ -1,6 +1,7 @@
 package jbok.evm
 
 import cats.effect.IO
+import jbok.common.metrics.Metrics
 import jbok.common.testkit._
 import jbok.core.CoreSpec
 import jbok.core.ledger.History

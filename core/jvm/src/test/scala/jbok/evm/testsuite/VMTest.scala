@@ -15,7 +15,6 @@ import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits.ByteVector
-import jbok.common.testkit._
 import jbok.core.CoreSpec
 
 import scala.collection.JavaConverters._
@@ -31,7 +30,7 @@ import scala.collection.JavaConverters._
 
 final case class VMJson(
     _info: InfoJson,
-    callcreates: List[CallCreateJson],
+//    callcreates: List[CallCreateJson],
     env: EnvJson,
     exec: ExecJson,
     gas: BigInt,
@@ -102,8 +101,8 @@ class VMTest extends CoreSpec {
       case (addr, account) => (addr, account.code)
     }
 
-    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history       = History(db)
+    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
+    val history = History(db)
 
     val storages = json.map {
       case (addr, account) =>
@@ -165,8 +164,7 @@ class VMTest extends CoreSpec {
 
       val world = if (result.addressesToDelete.nonEmpty) {
         result.world.contractCodes
-          .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.contractCodes.filter(
-          !_._2.isEmpty)
+          .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
         result.world.delAccount(result.addressesToDelete.head)
       } else {
         result.world.contractCodes.filter(!_._2.isEmpty) shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
@@ -188,6 +186,13 @@ class VMTest extends CoreSpec {
       result.logs.asValidBytes.kec256 shouldBe vmJson.logs
     }
 
+  implicit val bigIntDecoder: Decoder[BigInt] = Decoder.decodeString.map[BigInt] { s =>
+    if (s.startsWith("0x"))
+      BigInt(s.substring(2, s.length), 16)
+    else
+      BigInt(s)
+  }
+
   "load and run official json test files" should {
     val file = File(Resource.getUrl("VMTests"))
     val fileList = file.listRecursively
@@ -196,6 +201,8 @@ class VMTest extends CoreSpec {
           f.name.endsWith(".json") &&
             !f.path.toString.contains("vmPerformance"))
       .toList
+
+    println(fileList.length)
 
     val sources = for {
       file <- fileList

@@ -18,12 +18,6 @@ object Settings {
     javacOptions ++= JavacSettings.base ++ JavacSettings.specificFor(scalaVersion.value),
   )
 
-  lazy val commonJs = Seq(
-    resolvers += Resolver.bintrayRepo("oyvindberg", "ScalablyTyped"),
-    coverageEnabled := false, // workaround
-    scalacOptions += "-P:scalajs:sjsDefinedByDefault"
-  )
-
   private lazy val compilerPlugins = Seq(
     addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),
     addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.2.4"),

@@ -47,7 +47,6 @@ object testkit {
   implicit def arbWorldState(env: ExecEnv): Arbitrary[WorldState[IO]] = Arbitrary {
     import CoreSpec.chainId
     import CoreSpec.timer
-    import CoreSpec.metrics
     val db            = KeyValueDB.inmem[IO].unsafeRunSync()
     val history       = History(db)
 

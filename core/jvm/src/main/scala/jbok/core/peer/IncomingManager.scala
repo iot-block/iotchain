@@ -47,6 +47,7 @@ final class IncomingManager[F[_]](config: CoreConfig, history: History[F], ssl: 
               tlsSocket <- Resource.liftF(socket.toTLSSocket(ssl, client = false))
               peer      <- Resource.liftF(handshake(socket))
               _         <- Resource.make(connected.update(_ + (peer.uri -> (peer -> socket))).as(peer))(peer => connected.update(_ - peer.uri))
+              _         <- Resource.liftF(log.i(s"accepted incoming peer ${peer.uri}"))
             } yield (peer, tlsSocket)
           }
       }
@@ -68,7 +69,7 @@ final class IncomingManager[F[_]](config: CoreConfig, history: History[F], ssl: 
                 peer.queue.dequeue.through(Message.encodePipe[F]).through(socket.writes(None))
               ).parJoinUnbounded
           }
-          .handleErrorWith(e => Stream.eval(log.w("", e)))
+          .handleErrorWith(e => Stream.eval(log.w(s"handle incoming peer failure", e)))
       }
       .parJoin(config.peer.maxIncomingPeers)
 

@@ -7,15 +7,12 @@ import _root_.io.circe.syntax._
 import cats.data.OptionT
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
-import jbok.core.consensus.poa.clique.Clique._
 import jbok.core.consensus.poa.clique.Snapshot._
 import jbok.core.models.{Address, BlockHeader}
 import jbok.persistent.KeyValueDB
 import scodec.bits._
-import scalacache.Cache
 import cats.implicits._
 import jbok.core.config.MiningConfig
-import scalacache.CatsEffect.modes._
 
 @JsonCodec
 final case class Vote(
@@ -147,23 +144,14 @@ object Snapshot {
 
   implicit val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
-  def storeSnapshot[F[_]: Async](snapshot: Snapshot, db: KeyValueDB[F], checkpointInterval: Int)(implicit C: Cache[Snapshot]): F[Unit] =
-    if (snapshot.number % checkpointInterval == 0) {
-      db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace) <* C.put[F](snapshot.hash)(snapshot)
-    } else {
-      C.put[F](snapshot.hash)(snapshot).void
-    }
+  def storeSnapshot[F[_]: Async](snapshot: Snapshot, db: KeyValueDB[F], checkpointInterval: Int): F[Unit] =
+    db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace)
 
-  def loadSnapshot[F[_]](db: KeyValueDB[F], hash: ByteVector)(implicit F: Async[F], C: Cache[Snapshot]): F[Option[Snapshot]] =
-    C.get[F](hash).flatMap {
-      case Some(snap) => Sync[F].pure(snap.some)
-      case None =>
-        (for {
-          str  <- db.getOptT[ByteVector, String](hash, namespace)
-          snap <- OptionT.fromOption[F](decode[Snapshot](str).toOption)
-          _    <- OptionT.liftF(C.put[F](hash)(snap))
-        } yield snap).value
-    }
+  def loadSnapshot[F[_]](db: KeyValueDB[F], hash: ByteVector)(implicit F: Sync[F]): F[Option[Snapshot]] =
+    (for {
+      str  <- db.getOptT[ByteVector, String](hash, namespace)
+      snap <- OptionT.fromOption[F](decode[Snapshot](str).toOption)
+    } yield snap).value
 
   /** apply creates a new authorization snapshot by applying the given headers to the original one */
   def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader], chainId: BigInt)(implicit F: Sync[F]): F[Snapshot] =
