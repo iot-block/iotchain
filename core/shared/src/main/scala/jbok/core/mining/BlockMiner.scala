@@ -85,7 +85,6 @@ final class BlockMiner[F[_]](
   /////////////////////////////////////
 
   private[jbok] def prepareTransactions(stxs: List[SignedTransaction], blockGasLimit: BigInt): F[List[SignedTransaction]] = {
-    log.trace(s"prepare transaction, available: ${stxs.length}")
     val sortedByPrice = stxs
       .groupBy(_.senderAddress.getOrElse(Address.empty))
       .values
@@ -116,8 +115,7 @@ final class BlockMiner[F[_]](
       .takeWhile { case (gas, _) => gas <= blockGasLimit }
       .map { case (_, stx) => stx }
 
-    log.trace(s"prepare transaction, truncated: ${transactionsForBlock.length}")
-    F.pure(transactionsForBlock)
+    log.trace(s"prepare transaction, truncated: ${transactionsForBlock.length}").as(transactionsForBlock)
   }
 
   private[jbok] def calcMerkleRoot[V: RlpCodec](entities: List[V]): F[ByteVector] =

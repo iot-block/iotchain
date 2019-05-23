@@ -9,6 +9,7 @@ import com.offbynull.portmapper.gateways.process.ProcessGateway
 import com.offbynull.portmapper.gateways.process.internalmessages.KillProcessRequest
 import com.offbynull.portmapper.mapper.{MappedPort, PortType}
 import com.offbynull.portmapper.mappers.natpmp.NatPmpPortMapper
+import jbok.common.log.Logger
 
 object NatPmpClient {
   def apply[F[_]](implicit F: Sync[F]): F[Nat[F]] =
@@ -24,7 +25,7 @@ object NatPmpClient {
       _           <- F.delay(process.getBus.send(new KillProcessRequest()))
     } yield
       new Nat[F] {
-        private[this] val log = jbok.common.log.getLogger("NatPmpClient")
+        private[this] val log = Logger[F]
 
         override def addMapping(internalPort: Int, externalPort: Int, lifetime: Long): F[Unit] =
           for {
@@ -32,7 +33,7 @@ object NatPmpClient {
             port <- F
               .delay(mapper.mapPort(PortType.TCP, internalPort, externalPort, lifetime))
               .handleErrorWith { e =>
-                log.error(s"add port mapping from ${internalPort} to ${externalPort} failed", e)
+                log.error(s"add port mapping from ${internalPort} to ${externalPort} failed", e) >>
                 F.raiseError(e)
               }
             _ <- mappedPorts.update(_ + (externalPort -> port))

@@ -5,6 +5,7 @@ import cats.effect.ConcurrentEffect
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common._
+import jbok.common.log.Logger
 import jbok.core.config.BlockPoolConfig
 import jbok.core.ledger.History
 import jbok.core.models.Block
@@ -25,7 +26,7 @@ final class BlockPool[F[_]](
   // blockHash -> childrenHashes
   private val parentToChildren: Ref[F, Map[ByteVector, Set[ByteVector]]] = Ref.unsafe[F, Map[ByteVector, Set[ByteVector]]](Map.empty)
 
-  private[this] val log = jbok.common.log.getLogger("BlockPool")
+  private[this] val log = Logger[F]
 
   def contains(blockHash: ByteVector): F[Boolean] =
     blocks.get.map(_.contains(blockHash))
@@ -45,12 +46,10 @@ final class BlockPool[F[_]](
       m               <- blocks.get
       leaf <- m.get(block.header.hash) match {
         case Some(_) =>
-          log.debug(s"${block.tag} already pooled, ignore")
-          F.pure(None)
+          log.debug(s"${block.tag} already pooled, ignore").as(None)
 
         case None if isNumberOutOfRange(block.header.number, bestBlockNumber) =>
-          log.debug(s"${block.tag} is outside accepted range [${bestBlockNumber} - ${config.maxBlockAhead}, ${bestBlockNumber} + ${config.maxBlockBehind}]")
-          F.pure(None)
+          log.debug(s"${block.tag} is outside accepted range [${bestBlockNumber} - ${config.maxBlockAhead}, ${bestBlockNumber} + ${config.maxBlockBehind}]").as(None)
 
         case None =>
           for {
@@ -58,18 +57,17 @@ final class BlockPool[F[_]](
             l <- {
               parentTd match {
                 case Some(_) =>
-                  log.debug(s"${block.tag} will be on the main chain")
+                  log.debug(s"${block.tag} will be on the main chain") >>
                   addBlock(block, parentTd) >> updateTotalDifficulties(block.header.hash)
 
                 case None =>
                   val p: F[Option[Leaf]] = findClosestChainedAncestor(block).flatMap {
                     case Some(ancestor) =>
-                      log.debug(s"${block.tag} will be on a rooted side chain")
+                      log.debug(s"${block.tag} will be on a rooted side chain") >>
                       updateTotalDifficulties(ancestor)
 
                     case None =>
-                      log.debug(s"${block.tag} with unknown relation to the main chain")
-                      none[Leaf].pure[F]
+                      log.debug(s"${block.tag} with unknown relation to the main chain").as(None)
                   }
 
                   addBlock(block, parentTd) >> p
@@ -138,7 +136,7 @@ final class BlockPool[F[_]](
           b.header.hash
       }
       _ <- if (staleHashes.nonEmpty) {
-        log.debug(s"clean up ${staleHashes.length} pooled blocks")
+        log.debug(s"clean up ${staleHashes.length} pooled blocks") >>
         blocks.update(_ -- staleHashes) >> parentToChildren.update(_ -- staleHashes)
       } else {
         F.unit

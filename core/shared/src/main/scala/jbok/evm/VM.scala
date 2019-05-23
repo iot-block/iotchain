@@ -3,13 +3,12 @@ package jbok.evm
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
+import jbok.common.log.Logger
 
 /**
   * Entry point to executing a program.
   */
 object VM {
-  private[this] val log = jbok.common.log.getLogger("VM")
-
   /**
     * Executes a program
     * @param context context to be executed
@@ -40,7 +39,7 @@ object VM {
       case Some(opCode) =>
         for {
           newState <- opCode.execute(state)
-          _ = log.trace(
+          _ <- Logger[F].trace(
             s"$opCode | pc: ${newState.pc} | depth: ${newState.env.callDepth} | gas: ${newState.gas} | stack: ${newState.stack}")
           s <- if (newState.halted || newState.reverted) newState.pure[F] else run(newState)
         } yield s

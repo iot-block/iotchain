@@ -8,6 +8,7 @@ import jbok.codec.HexPrefix
 import jbok.codec.HexPrefix.Nibbles
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
+import jbok.common.log.Logger
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MptNode._
 import jbok.persistent.{DBErr, KeyValueDB}
@@ -19,7 +20,7 @@ final class MerklePatriciaTrie[F[_]](
     val rootHash: Ref[F, Option[ByteVector]]
 )(implicit F: Sync[F])
     extends KeyValueDB[F] {
-  private[this] val log = jbok.common.log.getLogger("MerklePatriciaTrie")
+  private[this] val log = Logger[F]
 
   import MerklePatriciaTrie._
 
@@ -252,8 +253,7 @@ final class MerklePatriciaTrie[F[_]](
   private def longestCommonPrefix(a: Nibbles, b: Nibbles): Int =
     a.zip(b).takeWhile(t => t._1 == t._2).length
 
-  private def getNodeValue(node: MptNode, nibbles: Nibbles): F[Option[ByteVector]] = {
-    log.trace(s"""get nibbles "${nibbles}" in $node""")
+  private def getNodeValue(node: MptNode, nibbles: Nibbles): F[Option[ByteVector]] =
     node match {
       case LeafNode(k, v) => F.pure(if (k == nibbles) Some(v) else None)
 
@@ -280,7 +280,6 @@ final class MerklePatriciaTrie[F[_]](
           v.value
         }
     }
-  }
 
   private def putNode(node: MptNode, key: Nibbles, value: ByteVector): F[NodeInsertResult] = node match {
     case leafNode: LeafNode     => putLeafNode(leafNode, key, value)
@@ -478,15 +477,14 @@ final class MerklePatriciaTrie[F[_]](
     // 2. the key matches and value isDefined, delete the value
     case (BranchNode(_, Some(_)), true) =>
       // We need to remove old node and fix it because we removed the value
-      fix(node.copy(value = None), Nil).map(fixedNode =>
-        NodeRemoveResult(hasChanged = true, newNode = Some(fixedNode), toDel = node :: Nil, toPut = fixedNode :: Nil))
+      fix(node.copy(value = None), Nil).map(fixedNode => NodeRemoveResult(hasChanged = true, newNode = Some(fixedNode), toDel = node :: Nil, toPut = fixedNode :: Nil))
 
     // 3. otherwise
     case (branchNode, false) =>
       // try to remove 1 of the 16 branches
       for {
         child <- getNodeByBranch(branchNode.branchAt(key.head))
-        _ = log.trace(s"should be here, ${child}")
+        _     <- log.trace(s"should be here, ${child}")
         result <- child match {
           case Some(n) =>
             // recursively delete
@@ -563,9 +561,7 @@ final class MerklePatriciaTrie[F[_]](
 }
 
 object MerklePatriciaTrie {
-  def apply[F[_]: Sync](namespace: ByteVector,
-                        db: KeyValueDB[F],
-                        root: Option[ByteVector] = None): F[MerklePatriciaTrie[F]] =
+  def apply[F[_]: Sync](namespace: ByteVector, db: KeyValueDB[F], root: Option[ByteVector] = None): F[MerklePatriciaTrie[F]] =
     for {
       rootHash <- Ref.of[F, Option[ByteVector]](root)
     } yield new MerklePatriciaTrie[F](namespace, db, rootHash)

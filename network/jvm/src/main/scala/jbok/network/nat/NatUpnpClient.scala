@@ -2,6 +2,7 @@ package jbok.network.nat
 
 import cats.effect.Sync
 import cats.implicits._
+import jbok.common.log.Logger
 import org.bitlet.weupnp.GatewayDiscover
 
 object NatUpnpClient {
@@ -12,14 +13,13 @@ object NatUpnpClient {
       device = discover.getValidGateway
     } yield
       new Nat[F] {
-        private[this] val log = jbok.common.log.getLogger("NatUpnpClient")
+        private[this] val log = Logger[F]
 
         override def addMapping(internalPort: Int, externalPort: Int, lifetime: Long): F[Unit] =
           for {
-            _ <- deleteMapping(externalPort)
-            result <- F.delay(
-              device.addPortMapping(externalPort, internalPort, device.getLocalAddress.getHostAddress, "TCP", "jbok"))
-            _ = log.debug(s"add port mapping result ${result}")
+            _      <- deleteMapping(externalPort)
+            result <- F.delay(device.addPortMapping(externalPort, internalPort, device.getLocalAddress.getHostAddress, "TCP", "jbok"))
+            _      <- log.debug(s"add port mapping result ${result}")
           } yield ()
 
         override def deleteMapping(externalPort: Int): F[Unit] =

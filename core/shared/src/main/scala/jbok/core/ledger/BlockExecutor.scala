@@ -102,12 +102,6 @@ final class BlockExecutor[F[_]](
       result  <- runVM(stx, context, vmConfig)
       totalGasToRefund = calcTotalGasToRefund(stx, result)
     } yield {
-      log.trace(
-        s"""SimulateTransaction(${stx.hash.toHex.take(7)}) execution end with ${result.error} error.
-           |result.returnData: ${result.returnData.toHex}
-           |gas refund: ${totalGasToRefund}""".stripMargin
-      )
-
       TxExecResult(result.world, gasLimit - totalGasToRefund, result.logs, result.returnData, result.error, result.contractAddress)
     }
   }
@@ -172,8 +166,7 @@ final class BlockExecutor[F[_]](
           blockPool.addBlock(block).as(Nil)
 
         case Consensus.Discard(e) =>
-          log.warn(s"discard ${block.tag} because ${e}")
-          F.pure(Nil)
+          log.warn(s"discard ${block.tag} because ${e}").as(Nil)
       }
     }
   }
@@ -189,7 +182,7 @@ final class BlockExecutor[F[_]](
       start  <- T.clock.realTime(MILLISECONDS)
       result <- executeTransactions(block.body.transactionList, block.header, world, shortCircuit)
       end    <- T.clock.realTime(MILLISECONDS)
-      _ = log.debug(s"execute ${block.body.transactionList.length} transactions in ${end - start}ms")
+      _      <- log.debug(s"execute ${block.body.transactionList.length} transactions in ${end - start}ms")
     } yield result
 
   private[jbok] def executeTransactions(
@@ -208,21 +201,21 @@ final class BlockExecutor[F[_]](
       for {
         result <- executeTransaction(stx, header, world, accGas).attempt.flatMap {
           case Left(e) =>
-            log.warn(s"execute ${stx} error, ${e.getMessage}")
-            if (shortCircuit) {
-              F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
-            } else {
-              txPool.removeTransactions(stx :: Nil) >>
-                executeTransactions(
-                  tail,
-                  header,
-                  world,
-                  shortCircuit,
-                  accGas,
-                  accReceipts,
-                  accExecuted
-                )
-            }
+            log.warn(s"execute ${stx} error, ${e.getMessage}") >>
+              (if (shortCircuit) {
+                 F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
+               } else {
+                 txPool.removeTransactions(stx :: Nil) >>
+                   executeTransactions(
+                     tail,
+                     header,
+                     world,
+                     shortCircuit,
+                     accGas,
+                     accReceipts,
+                     accExecuted
+                   )
+               })
 
           case Right(txResult) =>
             val stateRootHash = txResult.world.stateRootHash
@@ -284,11 +277,6 @@ final class BlockExecutor[F[_]](
       worldAfterPayments <- refundGasFn(resultWithErrorHandling.world) >>= payMinerForGasFn
       world2             <- (deleteAccountsFn(worldAfterPayments) >>= deleteTouchedAccountsFn).flatMap(_.persisted)
     } yield {
-      log.trace(
-        s"""Transaction(${stx.hash.toHex.take(7)}) execution end with ${result.error} error.
-           |return data: ${result.returnData.toHex}
-           |gas refund: ${totalGasToRefund}, gas paid to miner: ${executionGasToPayToMiner}""".stripMargin
-      )
       TxExecResult(world2, executionGasToPayToMiner, resultWithErrorHandling.logs, result.returnData, result.error, result.contractAddress)
     }
 
@@ -345,7 +333,6 @@ final class BlockExecutor[F[_]](
     val maxCodeSizeExceeded = config.maxCodeSize.exists(codeSizeLimit => contractCode.size > codeSizeLimit)
     val codeStoreOutOfGas   = result.gasRemaining < codeDepositCost
 
-    log.debug(s"codeDepositCost: ${codeDepositCost}, maxCodeSizeExceeded: ${maxCodeSizeExceeded}, codeStoreOutOfGas: ${codeStoreOutOfGas}")
     if (maxCodeSizeExceeded || codeStoreOutOfGas) {
       // Code size too big or code storage causes out-of-gas with exceptionalFailedCodeDeposit enabled
       result.copy(error = Some(OutOfGas))
