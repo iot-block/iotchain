@@ -51,7 +51,7 @@ final class HttpService[F[_]](
       exportRoute <- MetricsMiddleware.exportService[F]
       withMetrics <- MetricsMiddleware[F](routes)
       withLogger = LoggerMiddleware[F]((withMetrics <+> exportRoute).orNotFound)
-      withCORS = CORS(withLogger)
+      withCORS   = CORS(withLogger)
       app        = GzipMiddleware[F](withCORS)
     } yield app
 
