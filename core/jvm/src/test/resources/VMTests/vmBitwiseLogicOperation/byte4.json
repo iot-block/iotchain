@@ -2,10 +2,10 @@
     "byte4" : {
         "_info" : {
             "comment" : "",
-            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
-            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "filledwith" : "testeth 1.5.0.dev2-52+commit.d419e0a2",
+            "lllcversion" : "Version: 0.4.26-develop.2018.9.19+commit.785cbf40.Linux.g++",
             "source" : "src/VMTestsFiller/vmBitwiseLogicOperation/byte4Filler.json",
-            "sourceHash" : "d79870f477b475d6f878076b20631d89ce8831da937252cf6657d935f0ad3482"
+            "sourceHash" : "2ada67be185a5b95ca62844c81c52e64b00614d02b64cbf9253baf2a7566e2ae"
         },
         "callcreates" : [
         ],

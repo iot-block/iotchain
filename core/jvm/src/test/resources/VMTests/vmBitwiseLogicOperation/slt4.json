@@ -2,10 +2,10 @@
     "slt4" : {
         "_info" : {
             "comment" : "",
-            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
-            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "filledwith" : "testeth 1.5.0.dev2-52+commit.d419e0a2",
+            "lllcversion" : "Version: 0.4.26-develop.2018.9.19+commit.785cbf40.Linux.g++",
             "source" : "src/VMTestsFiller/vmBitwiseLogicOperation/slt4Filler.json",
-            "sourceHash" : "d3a476ad08a0873b4910f4aee5dd8857b4aa4e708e1a13e66836d6483a109702"
+            "sourceHash" : "ed936fea46872027bbe365872786c5ab0e1356dfae7bc9c81150fdaa86cb443f"
         },
         "callcreates" : [
         ],
