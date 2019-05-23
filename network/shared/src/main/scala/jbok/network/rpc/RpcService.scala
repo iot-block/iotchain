@@ -5,17 +5,16 @@ import jbok.network.rpc.internal.RpcServiceMacro
 
 import scala.language.experimental.macros
 
-final class RpcService[F[_], P](val apiMap: RpcService.Map[F, P]) {
-  def handle(request: RpcRequest[P]): ServiceResult[F, P] = {
-    def notFoundFailure(path: List[String]): ServiceResult[F, P] =
-      ServiceResult.Failure(None, ServerFailure.PathNotFound(request.path))
+final class RpcService[F[_], P](val apiMap: RpcService.Map[F, P])(implicit F: Sync[F]) {
+  def handle(request: RpcRequest[P]): F[RpcResponse[P]] = {
+    def notFoundFailure(path: List[String]): F[RpcResponse[P]] =
+      F.pure(RpcResponse.Failure[P](404, s"Path ${path.mkString("/")} not found"))
 
     request.path match {
       case apiName :: methodName :: Nil =>
-        val function: Option[P => ServiceResult[F, P]] = apiMap.get(apiName).flatMap(_.get(methodName))
-        function.fold[ServiceResult[F, P]](notFoundFailure(request.path)) { f =>
-          f(request.payload)
-        }
+        val function: Option[P => F[RpcResponse[P]]] = apiMap.get(apiName).flatMap(_.get(methodName))
+        function.fold(notFoundFailure(apiName :: methodName :: Nil))(f => f(request.payload))
+
       case _ => notFoundFailure(request.path)
     }
   }
@@ -28,17 +27,9 @@ final class RpcService[F[_], P](val apiMap: RpcService.Map[F, P]) {
 }
 
 object RpcService {
-  type MapValue[F[_], P] = collection.Map[String, P => ServiceResult[F, P]]
+  type MapValue[F[_], P] = collection.Map[String, P => F[RpcResponse[P]]]
 
   type Map[F[_], P] = collection.Map[String, MapValue[F, P]]
 
-  def apply[F[_], P]: RpcService[F, P] = new RpcService[F, P](collection.mutable.HashMap.empty)
-}
-
-sealed trait ServiceResult[F[_], P]
-
-object ServiceResult {
-  final case class Value[P](raw: Any, payload: P)
-  final case class Success[F[_], P](argumentObject: Product, result: F[Value[P]])            extends ServiceResult[F, P]
-  final case class Failure[F[_], P](argumentObject: Option[Product], failure: ServerFailure) extends ServiceResult[F, P]
+  def apply[F[_], P](implicit F: Sync[F]): RpcService[F, P] = new RpcService[F, P](collection.mutable.HashMap.empty)
 }

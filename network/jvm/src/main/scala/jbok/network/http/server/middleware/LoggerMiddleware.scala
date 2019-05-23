@@ -6,5 +6,5 @@ import org.http4s.server.middleware.Logger
 
 object LoggerMiddleware {
   def apply[F[_]](httpApp: HttpApp[F])(implicit F: Concurrent[F]): HttpApp[F] =
-    Logger.httpApp(logHeaders = true, logBody = false)(httpApp)
+    Logger.httpApp(logHeaders = true, logBody = true)(httpApp)
 }

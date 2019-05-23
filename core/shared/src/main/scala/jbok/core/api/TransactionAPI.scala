@@ -1,8 +1,10 @@
 package jbok.core.api
 
 import jbok.core.models.{Receipt, SignedTransaction}
+import jbok.network.rpc.PathName
 import scodec.bits.ByteVector
 
+@PathName("transaction")
 trait TransactionAPI[F[_]] {
   def getTx(hash: ByteVector): F[Option[SignedTransaction]]
 

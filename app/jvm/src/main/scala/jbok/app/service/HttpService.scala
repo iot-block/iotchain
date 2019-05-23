@@ -44,8 +44,8 @@ final class HttpService[F[_]](
     val httpApp = for {
       exportRoute <- MetricsMiddleware.exportService[F]
       withMetrics <- MetricsMiddleware[F](routes)
-      gzip = GzipMiddleware[F]((withMetrics <+> exportRoute).orNotFound)
-      app = LoggerMiddleware[F](gzip)
+      withLogger = LoggerMiddleware[F]((withMetrics <+> exportRoute).orNotFound)
+      app        = GzipMiddleware[F](withLogger)
     } yield app
 
     val builder = httpApp.map { app =>

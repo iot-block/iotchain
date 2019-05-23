@@ -4,6 +4,7 @@ import io.circe.generic.JsonCodec
 import jbok.core.models.{Account, Address, SignedTransaction}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
+import jbok.network.rpc.PathName
 
 @JsonCodec
 final case class HistoryTransaction(
@@ -23,6 +24,7 @@ final case class HistoryTransaction(
     location: Int
 )
 
+@PathName("account")
 trait AccountAPI[F[_]] {
   def getCode(address: Address, tag: BlockTag = BlockTag.latest): F[ByteVector]
 

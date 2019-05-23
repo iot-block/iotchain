@@ -17,8 +17,8 @@ class PrometheusMetricsSpec extends CommonSpec {
 
       IO.raiseError(new Exception("boom")).observed(name).attempt.unsafeRunSync()
       val report = PrometheusMetrics.textReport[IO]().unsafeRunSync()
-      report.contains(s"""jbok_${name}_seconds_count{result="success",} 1.0""") shouldBe true
-      report.contains(s"""jbok_${name}_seconds_count{result="failure",} 1.0""") shouldBe true
+      report.contains(s"""jbok_${name}_seconds_count{success="success",} 1.0""") shouldBe true
+      report.contains(s"""jbok_${name}_seconds_count{success="failure",} 1.0""") shouldBe true
     }
 
     "monitored" in {

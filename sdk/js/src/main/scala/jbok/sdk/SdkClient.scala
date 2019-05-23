@@ -4,6 +4,7 @@ import java.net.URI
 
 import cats.effect.{Clock, IO}
 import io.circe.Json
+import io.circe.syntax._
 import io.circe.parser._
 import jbok.network.http.HttpTransport
 import jbok.network.rpc.{RpcClient, RpcRequest}
@@ -23,7 +24,7 @@ final class SdkClient(val uri: URI, val client: RpcClient[IO, Json]) {
       case None => Json.Null
     }
     val request = RpcRequest(List(api, method), json)
-    client.transport.fetch(request).map(_.spaces2).unsafeToFuture().toJSPromise
+    client.transport.fetch(request).map(_.asJson.spaces2).unsafeToFuture().toJSPromise
   }
 }
 

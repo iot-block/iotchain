@@ -1,8 +1,10 @@
 package jbok.core.api
 
 import jbok.core.models.Address
+import jbok.network.rpc.PathName
 import scodec.bits.ByteVector
 
+@PathName("personal")
 trait PersonalAPI[F[_]] {
   def importRawKey(privateKey: ByteVector, passphrase: String): F[Address]
 

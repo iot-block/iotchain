@@ -5,6 +5,7 @@ import jbok.core.models.Address
 import jbok.evm.solidity.Ast.ContractDef
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
+import jbok.network.rpc.PathName
 
 import scala.scalajs.js.annotation.JSExportAll
 
@@ -19,6 +20,7 @@ final case class CallTx(
     data: ByteVector
 )
 
+@PathName("contract")
 trait ContractAPI[F[_]] {
 //  def getABI(address: Address): F[Option[ContractDef]]
 //
