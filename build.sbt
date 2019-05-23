@@ -24,7 +24,7 @@ lazy val jbok = project
 
 lazy val common = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
-  .settings(Settings.common ++ Libs.common ++ Libs.prometheus)
+  .settings(Settings.common ++ Libs.common)
   .settings(name := "jbok-common")
   .jsSettings(ScalaJS.common)
   .dependsOn(macros)
@@ -58,13 +58,14 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
   .settings(name := "jbok-app")
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
   .jsSettings(ScalaJS.common ++ ScalaJS.webpackSettings)
-  .jvmSettings(DockerSettings.settings ++ Libs.terminal)
+  .jvmSettings(DockerSettings.settings ++ Libs.sql ++ Libs.terminal)
   .dependsOn(core % CompileAndTest, common % CompileAndTest, sdk % CompileAndTest)
 
 // for integrating with sbt-web
 lazy val appJS = app.js.settings(
   scalaJSUseMainModuleInitializer := true
 )
+
 lazy val appJVM = app.jvm.settings(
 //  scalaJSProjects := Seq(appJS, sdk.js),
 //  pipelineStages in Assets := Seq(scalaJSPipeline),
@@ -104,7 +105,7 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
 
 lazy val persistent = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
-  .settings(Settings.common ++ Libs.persistent)
+  .settings(Settings.common ++ Libs.kv)
   .settings(name := "jbok-persistent")
   .jsSettings(ScalaJS.common ++ Libs.js.common)
   .dependsOn(common % CompileAndTest, codec)

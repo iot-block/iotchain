@@ -1,6 +1,5 @@
 package jbok.benchmark
 
-import better.files._
 import cats.effect.IO
 import jbok.persistent.KeyValueDB
 import jbok.common.testkit._
@@ -9,6 +8,7 @@ import jbok.persistent.rocksdb.RocksDB
 import org.openjdk.jmh.annotations.{Benchmark, OperationsPerInvocation, TearDown}
 import org.scalacheck.Gen
 import cats.implicits._
+import jbok.common.FileUtil
 
 class KeyValueDBBenchmark extends JbokBenchmark {
   val size = 10000
@@ -24,10 +24,7 @@ class KeyValueDBBenchmark extends JbokBenchmark {
   val values = Gen.listOfN(size, valueGen).sample.get
   val kvs    = keys.zip(values).toArray
 
-  val dirIq80  = File.newTemporaryDirectory()
-  val dirJni   = File.newTemporaryDirectory()
-  val dirRocks = File.newTemporaryDirectory()
-
+  val dirRocks = FileUtil[IO].temporaryDir().allocated.unsafeRunSync()._1
   val (dbRocks, close) = RocksDB.resource[IO](dirRocks.path).allocated.unsafeRunSync()
   var dbMem            = KeyValueDB.inmem[IO].unsafeRunSync()
 
