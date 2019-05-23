@@ -15,6 +15,7 @@ import jbok.core.api._
 import jbok.core.config.CoreConfig
 import jbok.core.keystore.Wallet
 import jbok.core.models.Address
+import jbok.crypto.signature.KeyPair
 
 class AppModule[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
   addImplicit[Bracket[F, Throwable]]
@@ -38,8 +39,15 @@ class AppModule[F[_]: TagK](implicit F: ConcurrentEffect[F], cs: ContextShift[F]
 }
 
 object AppModule {
-  def resource[F[_]: TagK](config: CoreConfig = CoreModule.testConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] =
-    Injector().produceF[F](new CoreModule[F](config) ++ new AppModule[F]).toCats
+  def resource[F[_]: TagK](config: CoreConfig = CoreModule.testConfig,
+                           keyPair: Option[KeyPair] = None)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] = {
+    val coreModule = new CoreModule[F](config)
+    val newCore = keyPair.fold[Module](coreModule)(kp =>
+      coreModule.overridenBy(new ModuleDef {
+        make[Option[KeyPair]].from(keyPair)
+      }))
+    Injector().produceF[F](newCore ++ new AppModule[F]).toCats
+  }
 
   def resource[F[_]: TagK](path: Path)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] =
     Resource.liftF(Config[F].read[CoreConfig](path)).flatMap(config => Injector().produceF[F](new CoreModule[F](config) ++ new AppModule[F]).toCats)

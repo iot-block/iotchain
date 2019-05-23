@@ -208,7 +208,7 @@ final case class CallTxView(state: AppState) {
         </label>
         <select name="to" class="autocomplete" onchange={toOnChange}>
           {
-            val contractList = state.nodes.value.get(currentId.getOrElse("")).map(_.contractsABI).getOrElse(Vars.empty[Contract]).bind
+            val contractList = state.nodes.value.get(currentId.getOrElse("")).map(_.contractsABI).getOrElse(Vars.empty[Contract]).all.bind
             for (account <- Constants(contractList.map(_.address): _*)) yield {
               <option value={account.toString}>{account.toString}</option>
             }

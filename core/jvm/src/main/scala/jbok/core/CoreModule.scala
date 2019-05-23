@@ -28,6 +28,7 @@ import jbok.core.validators.TxValidator
 import jbok.crypto.ssl.SSLContextHelper
 import jbok.network.Message
 import jbok.persistent.{KeyValueDB, KeyValueDBPlatform}
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 
 class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
   implicit lazy val acg: AsynchronousChannelGroup = ThreadUtil.acgGlobal
@@ -58,7 +59,9 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   make[Metrics[F]].from(new PrometheusMetrics[F]())
   make[History[F]].from[HistoryImpl[F]]
   make[KeyStore[F]].fromResource((config: KeyStoreConfig) => KeyStorePlatform.resource[F](config))
-  make[Clique[F]].fromEffect((config: CoreConfig, db: KeyValueDB[F], history: History[F]) => Clique[F](config.mining, db, config.genesis, history))
+  make[Option[KeyPair]].fromEffect((mining: MiningConfig, keyStore: KeyStore[F]) => MiningConfig.getKeyPair[F](mining, keyStore))
+  make[Clique[F]].fromEffect((config: CoreConfig, db: KeyValueDB[F], history: History[F], keyPair: Option[KeyPair]) =>
+    Clique[F](config.mining, db, config.genesis, history, keyPair.getOrElse(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())))
   make[Consensus[F]].from[CliqueConsensus[F]]
 
   // peer
@@ -80,8 +83,7 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   make[Consumer[F, PeerSelector[F], Block]].from((queue: Queue[F, PeerSelector[F], Block]) => queue)
   make[Producer[F, PeerSelector[F], Block]].from((queue: Queue[F, PeerSelector[F], Block]) => queue)
 
-//  make[Option[SSLContext]].fromEffect(SSLContextHelper[F](config.ssl))
-  make[Option[SSLContext]].from(None)
+  make[Option[SSLContext]].fromEffect(SSLContextHelper[F](config.ssl))
   make[IncomingManager[F]]
   make[OutgoingManager[F]]
   make[PeerStore[F]].fromEffect((db: KeyValueDB[F]) => PeerStore[F](db))
@@ -105,6 +107,17 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
 object CoreModule {
   val testConfig: CoreConfig = Config[IO].readResource[CoreConfig]("config.test.yaml").unsafeRunSync()
 
-  def resource[F[_]: TagK](config: CoreConfig = testConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] =
-    Injector().produceF[F](new CoreModule[F](config)).toCats
+  def keyPairModule(keyPair: KeyPair): ModuleDef = new ModuleDef {
+    make[Option[KeyPair]].from(Some(keyPair))
+  }
+
+  def resource[F[_]: TagK](config: CoreConfig = testConfig,
+                           keyPair: Option[KeyPair] = None)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] = {
+    val coreModule = new CoreModule[F](config)
+    val newCore = keyPair.fold[Module](coreModule)(kp =>
+      coreModule.overridenBy(new ModuleDef {
+        make[Option[KeyPair]].from(Some(kp))
+      }))
+    Injector().produceF[F](newCore).toCats
+  }
 }

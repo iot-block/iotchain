@@ -156,7 +156,7 @@ final case class SendTxView(state: AppState) {
           case Some(status) if status == "sending" =>
             Notification.renderInfo(content(status), onclose).bind
           case Some(status) if status == "send success." =>
-            Notification.renderSuccess(content(status), (_: Event) => onclose).bind
+            Notification.renderSuccess(content(status), onclose).bind
           case Some(status) =>
             Notification.renderWarning(content(status), onclose).bind
         }

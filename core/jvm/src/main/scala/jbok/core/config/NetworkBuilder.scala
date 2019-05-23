@@ -7,50 +7,152 @@ import cats.effect.IO
 import cats.implicits._
 import io.circe.syntax._
 import jbok.common.config.Config
+import jbok.core.config.NetworkBuilder.Topology
+import jbok.core.keystore.KeyStorePlatform
 import jbok.core.models.Address
 import jbok.core.peer.PeerUri
+import jbok.crypto.signature.KeyPair
 import jbok.crypto.signature.KeyPair.Secret
 import monocle.macros.syntax.lens._
 
+import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 
 final case class NetworkBuilder(
     base: CoreConfig,
     configs: List[CoreConfig] = Nil,
+    miners: List[Address] = Nil,
+    keyPairs: List[KeyPair] = Nil,
+    alloc: ListMap[Address, BigInt] = ListMap.empty
 ) {
+  type Self = NetworkBuilder
+  val homePath   = System.getProperty("user.home")
+  val passphrase = "changeit"
+
+  def getRootPath(i: Int) = Paths.get(s"${homePath}/.jbok/node-${i}")
+
+  def withN(n: Int): Self = {
+    require(n > 0)
+    val keyPairs = (0 until n).toList.map(_ => Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
+    val configs = (0 until n).toList.map { i =>
+      val rootPath = getRootPath(i)
+      base
+        .lens(_.peer.port)
+        .set(20000 + (i * 2))
+        .lens(_.service.port)
+        .set(20001 + (i * 2))
+        .lens(_.persist.path)
+        .set(s"${rootPath.resolve("data").toAbsolutePath}")
+        .lens(_.log.logDir)
+        .set(s"${rootPath.resolve("logs").toAbsolutePath}")
+        .lens(_.keystore.dir)
+        .set(s"${rootPath.resolve("keystore").toAbsolutePath}")
+        .lens(_.persist.driver)
+        .set("rocksdb")
+        .lens(_.ssl.enabled)
+        .set(false)
+//        .lens(_.db.driver)
+//        .set("")
+//        .lens(_.db.url)
+//        .set(s"${rootPath.resolve("service.db").toAbsolutePath}")
+    }
+
+    copy(configs = configs, keyPairs = keyPairs)
+  }
+
+  def withAlloc(addresses: List[Address] = List.empty, bigInt: BigInt = BigInt("1" + "0" * 30)): Self = {
+    val alloc = ListMap((keyPairs.map(kp => Address(kp)) ++ addresses).map(_ -> bigInt): _*)
+    copy(alloc = alloc)
+  }
+
+  def withTopology(topology: Topology): Self = {
+    val xs = topology match {
+      case Topology.Star =>
+        configs.headOption
+          .map { config =>
+            val bootUris = List(PeerUri.fromTcpAddr(config.peer.bindAddr).uri)
+            val tails    = configs.tail.map(_.lens(_.peer.seeds).set(bootUris))
+            config :: tails
+          }
+          .getOrElse(List.empty)
+
+      case Topology.Ring =>
+        (configs ++ configs.take(1)).sliding(2).toList.map {
+          case a :: b :: Nil =>
+            val bootUris = List(PeerUri.fromTcpAddr(b.peer.bindAddr).uri)
+            a.lens(_.peer.seeds).set(bootUris)
+          case _ => ???
+        }
+
+      case Topology.Mesh =>
+        val bootUris = configs.map { config =>
+          PeerUri.fromTcpAddr(config.peer.bindAddr).uri
+        }
+
+        configs.map(_.lens(_.peer.seeds).set(bootUris))
+    }
+
+    copy(configs = xs)
+  }
+
   def withBlockPeriod(n: Int): NetworkBuilder =
     copy(base = base.lens(_.mining.period).set(n.millis))
 
-  def withTrustStorePath(path: String): NetworkBuilder =
-    copy(base = base.lens(_.ssl.trustStorePath).set(path))
-
-  def addMinerNode(secret: Secret, coinbase: Address, rootPath: Path, host: String = "localhost", sslKeyStorePath: String = "/server.jks"): NetworkBuilder = {
-    val config = base
-      .lens(_.peer.host).set(host)
-      .lens(_.service.host).set(host)
-      .lens(_.service.secure).set(true)
-      .lens(_.mining.enabled).set(true)
-      .lens(_.mining.secret).set(secret.bytes)
-      .lens(_.mining.coinbase).set(coinbase)
-      .lens(_.ssl.enabled).set(true)
-      .lens(_.ssl.keyStorePath).set(sslKeyStorePath)
-      .lens(_.persist.driver).set("rocksdb")
-      .lens(_.persist.path).set(s"${rootPath.resolve("data").toAbsolutePath}")
-      .lens(_.log.logDir).set(s"${rootPath.resolve("logs").toAbsolutePath}")
-      .lens(_.keystore.dir).set(s"${rootPath.resolve("keystore").toAbsolutePath}")
-
-    copy(configs = config :: configs)
+  def withMiners(m: Int): Self = {
+    require(m <= configs.length)
+    copy(
+      configs = configs.take(m).zip(keyPairs).map {
+        case (config, keyPair) => config.lens(_.mining.enabled).set(true).lens(_.mining.passphrase).set(passphrase).lens(_.mining.coinbase).set(Address(keyPair))
+      } ++ configs.drop(m),
+      miners = keyPairs.take(m).map(kp => Address(kp))
+    )
   }
 
-  def build: List[CoreConfig] = {
-    val reversed = configs.reverse
-    val seeds = reversed.map(_.peer).map { peer =>
-      PeerUri.fromTcpAddr(new InetSocketAddress(peer.host, peer.port)).uri
+  def build: Self = {
+    check()
+    copy(configs = applyGenesis)
+  }
+
+  def check(): Unit = require(miners.nonEmpty)
+
+  private def applyGenesis: List[CoreConfig] =
+    configs.map(
+      config =>
+        config
+          .lens(_.genesis.alloc)
+          .set(alloc.toMap)
+          .lens(_.genesis.miners)
+          .set(miners))
+
+  private def writeConf: IO[Unit] =
+    configs.zipWithIndex.traverse_ {
+      case (config, i) =>
+        Config[IO].dump(config.asJson, getRootPath(i).resolve(s"config.yaml"))
     }
 
-    reversed.zipWithIndex.map { case (config, i) => config.lens(_.peer.seeds).set(seeds.take(i) ++ seeds.drop(i + 1)) }
-  }
+  private def writeKeyStore: IO[Unit] =
+    configs
+      .zip(keyPairs)
+      .map {
+        case (config, kp) =>
+          KeyStorePlatform.resource[IO](config.keystore).use { keyStore =>
+            keyStore.importPrivateKey(kp.secret.bytes, passphrase)
+          }
+      }
+      .sequence_
 
-  def dump: IO[Unit] =
-    build.zipWithIndex.traverse_ { case (config, i) => Config[IO].dump(config.asJson, Paths.get(s"config-${i}.yaml")) }
+  def dump: IO[Unit] = {
+    val builder = build
+    builder.writeConf >> builder.writeKeyStore
+  }
+}
+
+object NetworkBuilder {
+  sealed trait Topology
+  object Topology {
+    case object Star extends Topology
+    case object Ring extends Topology
+    case object Mesh extends Topology
+  }
 }

@@ -342,7 +342,7 @@ object SolidityParser {
 
   def elementaryTypeName[_: P]: P[SolidityType] =
     P(
-      int | uint | bytes | fixed | ufixed | ("address" | "bool" | "string" | "var" | "byte").!.map {
+      int | uint | bytes | ("address" | "bool" | "string" | "var" | "byte").!.map {
         case "address" => AddressType()
         case "bool"    => BoolType()
         case "string"  => StringType()
@@ -373,22 +373,6 @@ object SolidityParser {
     ).!.map(_.split("bytes")).map {
       case Array(_, bits) => BytesNType(bits.toInt)
       case Array()        => BytesType()
-    }
-
-  def fixed[_: P] =
-    P(
-      "fixed" | ("fixed" ~ Basic.Digits ~ "x" ~ Basic.Digits)
-    ).!.map(_.split("fixed").lift(1).map(_.split("x"))).map {
-      case Some(Array(m, n)) => FixedType(m.toInt, n.toInt)
-      case None              => FixedType(128, 18)
-    }
-
-  def ufixed[_: P] =
-    P(
-      "ufixed" | ("ufixed" ~ Basic.Digits ~ "x" ~ Basic.Digits)
-    ).!.map(_.split("ufixed").lift(1).map(_.split("x"))).map {
-      case Some(Array(m, n)) => UnFixedType(m.toInt, n.toInt)
-      case None              => UnFixedType(128, 18)
     }
 
   def expression[_: P]: P[_] = P(

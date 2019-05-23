@@ -14,6 +14,7 @@ class HistorySpec extends CoreSpec {
   "History" should {
     val objects = locator.unsafeRunSync()
     val history = objects.get[History[IO]]
+    val keyPair = Some(testMiner.keyPair)
 
     "load genesis config" in {
       val addresses = genesis.alloc.keysIterator.toList
@@ -51,8 +52,8 @@ class HistorySpec extends CoreSpec {
     }
 
     "put block body should update tx location mapping" in {
-      val txs   = random[List[SignedTransaction]](genTxs(1, 1))
-      val block = random[Block](genBlock(stxsOpt = txs.some))
+      val txs   = random[List[SignedTransaction]](genTxs(1, 1, keyPair))
+      val block = random[Block](genBlock(stxsOpt = txs.some, keyPair = keyPair))
       history.putBlockBody(block.header.hash, block.body).unsafeRunSync()
       val location = history.getTransactionLocation(txs.head.hash).unsafeRunSync()
       location shouldBe Some(TransactionLocation(block.header.hash, 0))

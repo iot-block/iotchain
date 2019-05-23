@@ -14,6 +14,8 @@ import org.http4s.HttpRoutes
 import org.http4s.implicits._
 import org.http4s.server.{SSLClientAuthMode, Server}
 import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.server.middleware.{CORS, CORSConfig}
+import scala.concurrent.duration._
 
 final class HttpService[F[_]](
     config: ServiceConfig,
@@ -42,12 +44,15 @@ final class HttpService[F[_]](
 
   val routes: HttpRoutes[F] = Http4sRpcServer.routes(rpcService)
 
+  val methodConfig = CORSConfig(anyOrigin = true, anyMethod = false, allowedMethods = Some(Set("GET", "POST")), allowCredentials = true, maxAge = 1.day.toSeconds)
+
   private val builder: F[BlazeServerBuilder[F]] = {
     val httpApp = for {
       exportRoute <- MetricsMiddleware.exportService[F]
       withMetrics <- MetricsMiddleware[F](routes)
       withLogger = LoggerMiddleware[F]((withMetrics <+> exportRoute).orNotFound)
-      app        = GzipMiddleware[F](withLogger)
+      withCORS = CORS(withLogger)
+      app        = GzipMiddleware[F](withCORS)
     } yield app
 
     val builder = httpApp.map { app =>

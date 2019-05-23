@@ -2,9 +2,8 @@ package jbok.core.consensus.poa.clique
 
 import cats.data.OptionT
 import cats.effect.concurrent.Ref
-import cats.effect.{ConcurrentEffect, IO, Sync}
+import cats.effect.{Concurrent, IO, Sync}
 import cats.implicits._
-import io.circe.generic.JsonCodec
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
 import jbok.core.config.MiningConfig
@@ -18,7 +17,6 @@ import scodec.bits._
 
 import scala.concurrent.duration._
 
-@JsonCodec
 final case class Proposal(address: Address, auth: Boolean)
 
 final case class CliqueExtra(miners: List[Address], signature: CryptoSignature, proposal: Option[Proposal] = None)
@@ -27,17 +25,12 @@ final class Clique[F[_]](
     config: MiningConfig,
     db: KeyValueDB[F],
     history: History[F],
-    proposal: Ref[F, Option[Proposal]]
-)(implicit F: ConcurrentEffect[F]) {
+    proposal: Ref[F, Option[Proposal]],
+    keyPair: KeyPair
+)(implicit F: Concurrent[F]) {
   private[this] val log = Logger[F]
 
   import config._
-
-  val keyPair: KeyPair = {
-    val secret = KeyPair.Secret(config.secret)
-    val public = Signature[ECDSA].generatePublicKey[IO](secret).unsafeRunSync()
-    KeyPair(public, secret)
-  }
 
   val minerAddress: Address = Address(keyPair)
 
@@ -129,7 +122,8 @@ object Clique {
       db: KeyValueDB[F],
       genesisConfig: GenesisConfig,
       history: History[F],
-  )(implicit F: ConcurrentEffect[F]): F[Clique[F]] =
+      keyPair: KeyPair
+  )(implicit F: Concurrent[F]): F[Clique[F]] =
     for {
       genesisBlock <- history.getBlockByNumber(0)
       _ <- if (genesisBlock.isEmpty) {
@@ -138,7 +132,7 @@ object Clique {
         F.unit
       }
       proposal <- Ref[F].of(Option.empty[Proposal])
-    } yield new Clique[F](config, db, history, proposal)
+    } yield new Clique[F](config, db, history, proposal, keyPair)
 
   def fillExtraData(miners: List[Address]): ByteVector =
     CliqueExtra(miners, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asValidBytes

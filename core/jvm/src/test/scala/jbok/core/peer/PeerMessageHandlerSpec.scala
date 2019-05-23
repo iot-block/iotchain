@@ -13,14 +13,15 @@ import jbok.network.Request
 
 class PeerMessageHandlerSpec extends CoreSpec {
   "PeerMessageHandler" should {
+    val keyPair = Some(testMiner.keyPair)
     "broadcast NewBlockHashes to all peers and NewBlock to random part of the peers" in {
-      val handler  = locator.unsafeRunSync().get[PeerMessageHandler[IO]]
+      val handler = locator.unsafeRunSync().get[PeerMessageHandler[IO]]
 //      ms.syncStatus.set(SyncStatus.Done).unsafeRunSync()
 
-      val blocks                  = random[List[Block]](genBlocks(1, 1))
-      val peer                    = random[Peer[IO]]
-      val peers                   = random[List[Peer[IO]]](genPeers(1, 10))
-      val msg                     = Request.binary[IO, NewBlock](NewBlock.name, NewBlock(blocks.head).asValidBytes)
+      val blocks = random[List[Block]](genBlocks(1, 1, keyPair))
+      val peer   = random[Peer[IO]]
+      val peers  = random[List[Peer[IO]]](genPeers(1, 10))
+      val msg    = Request.binary[IO, NewBlock](NewBlock.name, NewBlock(blocks.head).asValidBytes)
 //      handler.onNewBlockHashes(peer, )
 //      val request                 = PeerRequest(peer, msg)
 //      val List(newHash, newBlock) = sm.service.run(request).unsafeRunSync()
@@ -36,7 +37,7 @@ class PeerMessageHandlerSpec extends CoreSpec {
       val handler = objects.get[PeerMessageHandler[IO]]
 //      ms.syncStatus.set(SyncStatus.Done).unsafeRunSync()
 
-      val blocks = random[List[Block]](genBlocks(1, 1))
+      val blocks = random[List[Block]](genBlocks(1, 1, keyPair))
       val peer   = random[Peer[IO]]
       val peers  = random[List[Peer[IO]]](genPeers(1, 10))
       peers.traverse(_.markBlock(blocks.head.header.hash, blocks.head.header.number)).unsafeRunSync()
@@ -55,9 +56,9 @@ class PeerMessageHandlerSpec extends CoreSpec {
       val history = objects.get[History[IO]]
       val handler = objects.get[PeerMessageHandler[IO]]
 
-      val txs          = random[List[SignedTransaction]](genTxs(1, 10))
-      val peer         = random[Peer[IO]]
-      val peers        = random[List[Peer[IO]]](genPeers(1, 10))
+      val txs   = random[List[SignedTransaction]](genTxs(1, 10, keyPair))
+      val peer  = random[Peer[IO]]
+      val peers = random[List[Peer[IO]]](genPeers(1, 10))
       //      val msg          = Request.binary[IO, SignedTransactions]("SignedTransactions", SignedTransactions(txs)).unsafeRunSync()
       //      val request      = PeerRequest(peer, msg)
       println(handler.onSignedTransactions(peer, SignedTransactions(txs)).unsafeRunSync())

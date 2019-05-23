@@ -13,10 +13,11 @@ import monocle.macros.syntax.lens._
 import scala.concurrent.duration._
 
 class TxPoolSpec extends CoreSpec {
+  val keyPair = Some(testMiner.keyPair)
   "TxPool" should {
     "store pending transactions" in check { objects =>
       val txPool = objects.get[TxPool[IO]]
-      val txs    = random[List[SignedTransaction]](genTxs(1, 10))
+      val txs    = random[List[SignedTransaction]](genTxs(1, 10, keyPair))
       for {
         _   <- txPool.addTransactions(SignedTransactions(txs))
         res <- txPool.getPendingTransactions.map(_.keys)
@@ -26,7 +27,7 @@ class TxPoolSpec extends CoreSpec {
 
     "ignore known transactions" in check { objects =>
       val txPool = objects.get[TxPool[IO]]
-      val txs    = random[List[SignedTransaction]](genTxs(1, 10))
+      val txs    = random[List[SignedTransaction]](genTxs(1, 10, keyPair))
       val stxs   = SignedTransactions(txs)
       for {
         _   <- txPool.addTransactions(stxs)
@@ -69,7 +70,7 @@ class TxPoolSpec extends CoreSpec {
 
     "remove transaction on timeout" in check(config.lens(_.txPool.transactionTimeout).set(100.millis)) { objects =>
       val txPool = objects.get[TxPool[IO]]
-      val stx    = random[List[SignedTransaction]](genTxs(1, 1)).head
+      val stx    = random[List[SignedTransaction]](genTxs(1, 1, keyPair)).head
       for {
         _  <- txPool.addTransactions(SignedTransactions(stx :: Nil))
         p1 <- txPool.getPendingTransactions

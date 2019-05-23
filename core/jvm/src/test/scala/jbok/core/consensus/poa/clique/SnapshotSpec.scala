@@ -92,8 +92,7 @@ class SnapshotSpec extends CoreSpec {
     val head           = headers.last
     val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
     val kp             = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val mc             = miningConfig.copy(secret = kp.secret.bytes)
-    val clique         = Clique[IO](miningConfig, db, genesisConfig, history).unsafeRunSync()
+    val clique         = Clique[IO](miningConfig, db, genesisConfig, history, kp).unsafeRunSync()
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd

@@ -11,13 +11,14 @@ import jbok.core.api.{AccountAPI, TransactionAPI}
 import scodec.bits.ByteVector
 
 class AccountAPISpec extends AppSpec {
+  val keyPair = Some(testMiner.keyPair)
   "AccountAPI" should {
     "getEstimatedNonce" in check { objects =>
       val history     = objects.get[History[IO]]
       val miner       = objects.get[BlockMiner[IO]]
       val account     = objects.get[AccountAPI[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
-      val txs         = random[List[SignedTransaction]](genTxs(2, 2))
+      val txs         = random[List[SignedTransaction]](genTxs(2, 2, keyPair))
 
       for {
         parent <- history.getBestBlock
@@ -42,7 +43,7 @@ class AccountAPISpec extends AppSpec {
       val miner       = objects.get[BlockMiner[IO]]
       val acc         = objects.get[AccountAPI[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
-      val stx         = random[List[SignedTransaction]](genTxs(1, 1)).head
+      val stx         = random[List[SignedTransaction]](genTxs(1, 1, keyPair)).head
 
       for {
         res <- transaction.sendTx(stx)
@@ -61,7 +62,7 @@ class AccountAPISpec extends AppSpec {
       val miner       = objects.get[BlockMiner[IO]]
       val account     = objects.get[AccountAPI[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
-      val stx         = random[List[SignedTransaction]](genTxs(1, 1)).head
+      val stx         = random[List[SignedTransaction]](genTxs(1, 1, keyPair)).head
 
       for {
         res <- transaction.sendTx(stx)

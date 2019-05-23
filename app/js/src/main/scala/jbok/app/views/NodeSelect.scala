@@ -24,8 +24,8 @@ final case class NodeSelect(state: AppState) {
     }
     {
       <select id="nodeSelect" onchange={onChangeHandler}> {
-        val nodes= state.nodes.bind
         val selected = state.activeNode.bind
+        val nodes= state.nodes.bind
         for {
           node <- Constants(nodes.toList.map(_._2).sortBy(_.port): _*)
           isSelected = if (selected.contains(node.id)) true else false

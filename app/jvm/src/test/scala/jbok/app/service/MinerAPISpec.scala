@@ -4,44 +4,51 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.app.AppSpec
 import jbok.core.api.MinerAPI
-import jbok.core.consensus.poa.clique.{Clique, CliqueConsensus, CliqueExtra, Proposal}
+import jbok.core.consensus.poa.clique.{CliqueExtra, Proposal}
 import jbok.core.mining.BlockMiner
 import jbok.core.models.Address
+import jbok.codec.rlp.implicits._
 
 class MinerAPISpec extends AppSpec {
   "MinerAPI" should {
-    "ballot" in {
-      val objects  = locator.unsafeRunSync()
+    "ballot" in check { objects =>
       val minerAPI = objects.get[MinerAPI[IO]]
       val miner    = objects.get[BlockMiner[IO]]
 
       val address = Address(100)
-      minerAPI.ballot(address, true)
-      val expectedProposal = Some(Proposal(address, true))
-      minerAPI.getBallot.unsafeRunSync() shouldBe expectedProposal
 
-      val minedBlock = miner.stream.take(1).compile.toList.unsafeRunSync().head
-      minedBlock.block.header.extraAs[IO, CliqueExtra].map(_.proposal).unsafeRunSync() shouldBe expectedProposal
+      for {
+        _ <- minerAPI.ballot(address, true)
+        expectedProposal = Some(Proposal(address, true))
+        proposal <- minerAPI.getBallot
+        _ = proposal shouldBe expectedProposal
+        Right(minedBlock) <- miner.mine1()
 
-      miner.mine1(minedBlock.block.some).unsafeRunSync()
-      minerAPI.getBallot.unsafeRunSync() shouldBe None
+        extra <- minedBlock.block.header.extraAs[IO, CliqueExtra]
+        _ = extra.proposal shouldBe expectedProposal
+        _         <- miner.mine1(minedBlock.block.some)
+        proposal2 <- minerAPI.getBallot
+        _ = proposal2 shouldBe None
+      } yield ()
     }
 
-    "cancelBallot" in {
-      val objects  = locator.unsafeRunSync()
+    "cancelBallot" in check { objects =>
       val minerAPI = objects.get[MinerAPI[IO]]
       val miner    = objects.get[BlockMiner[IO]]
 
       val address = Address(100)
-      minerAPI.ballot(address, true)
-      val expectedProposal = Some(Proposal(address, true))
-      minerAPI.getBallot.unsafeRunSync() shouldBe expectedProposal
-
-      minerAPI.cancelBallot.unsafeRunSync()
-      minerAPI.getBallot.unsafeRunSync() shouldBe None
-
-      val minedBlock = miner.stream.take(1).compile.toList.unsafeRunSync().head
-      minedBlock.block.header.extraAs[IO, CliqueExtra].map(_.proposal).unsafeRunSync() shouldBe None
+      for {
+        _ <- minerAPI.ballot(address, true)
+        expectedProposal = Some(Proposal(address, true))
+        proposal <- minerAPI.getBallot
+        _ = proposal shouldBe expectedProposal
+        _         <- minerAPI.cancelBallot
+        proposal2 <- minerAPI.getBallot
+        _ = proposal2 shouldBe None
+        Right(minedBlock) <- miner.mine1()
+        extra             <- minedBlock.block.header.extraAs[IO, CliqueExtra]
+        _ = extra.proposal shouldBe None
+      } yield ()
     }
   }
 

@@ -87,22 +87,6 @@ final case class AddressType() extends SolidityType {
   override val name: String = "address"
 }
 
-final case class FixedType(m: Int, n: Int) extends SolidityType {
-  override def encode(json: Json): Either[AbiError, List[ByteVector]] = ???
-
-  override def decode(bv: ByteVector): Either[AbiError, Json] = ???
-
-  override val name: String = ???
-}
-
-final case class UnFixedType(m: Int, n: Int) extends SolidityType {
-  override def encode(json: Json): Either[AbiError, List[ByteVector]] = ???
-
-  override def decode(bv: ByteVector): Either[AbiError, Json] = ???
-
-  override val name: String = ???
-}
-
 final case class BoolType() extends SolidityType {
   override def encode(json: Json): Either[AbiError, List[ByteVector]] =
     json.asBoolean.map(b => if (b) 1 else 0).map(UInt256(_).bytes) match {
@@ -219,11 +203,9 @@ final case class InvalidSolidityType() extends SolidityType {
 
 object SolidityType {
   def getType(`type`: String): Either[AbiError, SolidityType] = {
-    val uint   = "uint([0-9]*)".r
-    val int    = "int([0-9]*)".r
-    val bytes  = "bytes([0-9]+)".r
-    val fixed  = "fixed([0-9]+)x([0-9]+)".r
-    val ufixed = "ufixed([0-9]+)x([0-9]+)".r
+    val uint  = "uint([0-9]*)".r
+    val int   = "int([0-9]*)".r
+    val bytes = "bytes([0-9]+)".r
 
     def numericType(bit: String): Either[AbiError, Int] =
       if (bit.nonEmpty && (bit.toInt % 8 != 0 || bit.toInt > 256 || bit.toInt == 0)) {
@@ -235,8 +217,6 @@ object SolidityType {
     `type` match {
       case uint(bit)                                         => numericType(bit).map(UIntType)
       case int(bit)                                          => numericType(bit).map(IntType)
-      case fixed(_, _)                                       => InvalidType("fixed type not implement.").asLeft
-      case ufixed(_, _)                                      => InvalidType("ufixed type not implement").asLeft
       case "bool"                                            => BoolType().asRight
       case "address"                                         => AddressType().asRight
       case bytes(size) if size.toInt > 0 && size.toInt <= 32 => BytesNType(size.toInt).asRight

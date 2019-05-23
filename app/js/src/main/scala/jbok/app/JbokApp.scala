@@ -52,6 +52,7 @@ object JbokApp {
 
   val tabList   = TabList(tabs, Var(tabs.value.head))
   val searchBar = SearchBar(state, onPressEnter = (e: Event) => tabList.selected.value = searchTab).render
+  state.activeSearchView(() => tabList.selected.value = searchTab)
 
   @dom val right: Binding[Node] =
     <div class="nav-right">

@@ -81,6 +81,7 @@ final case class AppState(
     clients: Var[Map[String, JbokClient[IO]]] = Var(Map.empty),
     simuAddress: Vars[Address] = Vars.empty[Address],
     isLoading: Loading = Loading(),
+    activeSearchViewFunc: Var[() => Unit] = Var(() => ()),
     update: Var[Boolean] = Var(true)
 ) {
   private val log = Logger[IO]
@@ -111,12 +112,15 @@ final case class AppState(
   def addNode(id: String, interface: String, port: Int): Unit =
     if (!nodes.value.contains(id)) {
       nodes.value += id -> NodeData(id, interface, port)
-      if (activeNode.value === None && nodes.value.nonEmpty) {
+      if (activeNode.value === None) {
         selectNode(Some(id))
       } else {
         None
       }
     } else {}
+
+  def activeSearchView(f: () => Unit): Unit =
+    activeSearchViewFunc.value = f
 
   def addClient(id: String, url: String): Unit =
     clients.value += id -> JbokClientPlatform[IO](url)
@@ -135,14 +139,20 @@ final case class AppState(
   def searchTxHash(hash: String): Unit =
     search.value = Some(Search(BlockTag.latest, "txHash", hash))
 
-  def searchBlockHash(hash: String): Unit =
+  def searchBlockHash(hash: String): Unit = {
+    activeSearchViewFunc.value.apply()
     search.value = Some(Search(BlockTag.latest, "blockHash", hash))
+  }
 
-  def searchBlockNumber(number: String): Unit =
+  def searchBlockNumber(number: String): Unit = {
+    activeSearchViewFunc.value.apply()
     search.value = Some(Search(BlockTag.latest, "blockNumber", number))
+  }
 
-  def searchAccount(account: String): Unit =
+  def searchAccount(account: String): Unit = {
+    activeSearchViewFunc.value.apply()
     search.value = Some(Search(BlockTag.latest, "account", account))
+  }
 
   def clearSearch(): Unit =
     search.value = None

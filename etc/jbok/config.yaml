@@ -50,7 +50,7 @@ blockPool:
   maxBlockBehind: 10
 mining:
   enabled: true
-  secret: f8bc17dcec90978fdc85a982438fab310458e03c6622d208b3d176c4b1ff34bb
+  passphrase: ''
   coinbase: '0x410be0ff99e37e82b2593f5ed4bd6316908f2b32'
   period: 1000 milliseconds
   epoch: 30000
@@ -74,7 +74,7 @@ service:
   enable: true
   enableHttp2: true
   enableWebsockets: false
-  secure: true
+  secure: false
   host: 0.0.0.0
   port: 30315
   apis:
@@ -82,5 +82,6 @@ service:
     - admin
     - block
     - contract
+    - miner
     - personal
     - transaction
