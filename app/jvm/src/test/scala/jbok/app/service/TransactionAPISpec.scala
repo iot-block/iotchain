@@ -17,7 +17,7 @@ class TransactionAPISpec extends AppSpec {
       val history     = objects.get[History[IO]]
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
-      val txs         = random[List[SignedTransaction]](genTxs(10, 10, keyPair))
+      val txs         = random[List[SignedTransaction]](genTxs(10, 10))
       val stx         = txs.head
 
       for {
@@ -74,7 +74,7 @@ class TransactionAPISpec extends AppSpec {
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
 
-      val stx = random[List[SignedTransaction]](genTxs(1, 1, keyPair)).head
+      val stx = random[List[SignedTransaction]](genTxs(1, 1)).head
 
       for {
         res <- transaction.sendTx(stx)
@@ -90,7 +90,7 @@ class TransactionAPISpec extends AppSpec {
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
 
-      val stx = random[List[SignedTransaction]](genTxs(1, 1, keyPair)).head
+      val stx = random[List[SignedTransaction]](genTxs(1, 1)).head
 
       for {
         res <- transaction.sendRawTx(stx.bytes)

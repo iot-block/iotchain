@@ -11,9 +11,7 @@ import jbok.core.mining.{BlockMiner, TxGen}
 import jbok.core.models._
 import jbok.core.peer.{Peer, PeerUri}
 import jbok.crypto._
-import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
-import jbok.crypto.testkit._
-import monocle.macros.syntax.lens._
+import jbok.crypto.signature.{ECDSA, Signature}
 import org.scalacheck._
 import scodec.bits.ByteVector
 
@@ -85,9 +83,6 @@ object testkit {
       gasLimit         <- bigIntGen
       gasUsed          <- bigIntGen
       unixTimestamp    <- Gen.chooseNum(0L, Long.MaxValue)
-//      extraData        <- arbByteVector.arbitrary
-//      mixHash          <- genBoundedByteVector(32, 32)
-//      nonce            <- genBoundedByteVector(8, 8)
     } yield
       BlockHeader(
         parentHash = parentHash,
@@ -102,28 +97,25 @@ object testkit {
         gasUsed = gasUsed,
         unixTimestamp = unixTimestamp,
         extra = ByteVector.empty
-//        extraData = extraData,
-//        mixHash = mixHash,
-//        nonce = nonce
       )
   }
 
-  def arbBlockBody(keyPair: Option[KeyPair])(implicit chainId: BigInt): Arbitrary[BlockBody] = Arbitrary {
+  implicit def arbBlockBody(implicit chainId: BigInt): Arbitrary[BlockBody] = Arbitrary {
     for {
-      stxs <- arbTxs(keyPair).arbitrary
+      stxs <- arbTxs.arbitrary
     } yield BlockBody(stxs)
   }
 
-  def arbSignedTransactions(keyPair: Option[KeyPair])(implicit chainId: BigInt): Arbitrary[SignedTransactions] = Arbitrary {
+  implicit def arbSignedTransactions(implicit chainId: BigInt): Arbitrary[SignedTransactions] = Arbitrary {
     for {
-      txs <- arbTxs(keyPair).arbitrary
+      txs <- arbTxs.arbitrary
     } yield SignedTransactions(txs)
   }
 
-  def arbBlock(keyPair: Option[KeyPair])(implicit chainId: BigInt): Arbitrary[Block] = Arbitrary {
+  implicit def arbBlock(implicit chainId: BigInt): Arbitrary[Block] = Arbitrary {
     for {
       header <- arbBlockHeader.arbitrary
-      body   <- arbBlockBody(keyPair).arbitrary
+      body   <- arbBlockBody.arbitrary
     } yield Block(header, body)
   }
 
@@ -178,39 +170,33 @@ object testkit {
 
   implicit def arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-  def genTxs(min: Int = 0, max: Int = 1024, keyPair: Option[KeyPair] = None)(implicit config: CoreConfig): Gen[List[SignedTransaction]] =
+  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: CoreConfig): Gen[List[SignedTransaction]] =
     for {
       size <- Gen.chooseNum(min, max)
-      (_, txs) = TxGen.genTxs(size, List(keyPair.getOrElse(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()) -> Account.empty()).toMap).unsafeRunSync()
+      (_, txs) = TxGen.genTxs(size, Map(testKeyPair -> Account.empty())).unsafeRunSync()
     } yield txs
 
-  implicit def arbTxs(keyPair: Option[KeyPair])(implicit config: CoreConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
-    genTxs(keyPair = keyPair)
+  implicit def arbTxs(implicit config: CoreConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
+    genTxs()
   }
 
-  def genBlocks(min: Int, max: Int, keyPair: Option[KeyPair])(implicit config: CoreConfig): Gen[List[Block]] = {
-    val (objects, close) = CoreModule.resource[IO](config, keyPair).allocated.unsafeRunSync()
+  def genBlocks(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Block]] = {
+    val objects = locator.unsafeRunSync()
     val miner            = objects.get[BlockMiner[IO]]
     val status           = objects.get[Ref[IO, NodeStatus]]
     status.set(NodeStatus.Done).unsafeRunSync()
     for {
       size <- Gen.chooseNum(min, max)
       blocks = miner.stream.take(size).compile.toList.unsafeRunSync()
-      _      = close.unsafeRunSync()
     } yield blocks.map(_.block)
   }
 
-  def genBlock(
-      parentOpt: Option[Block] = None,
-      stxsOpt: Option[List[SignedTransaction]] = None,
-      keyPair: Option[KeyPair] = None
-  )(implicit config: CoreConfig): Gen[Block] = {
-    val (objects, close) = CoreModule.resource[IO](config, keyPair).allocated.unsafeRunSync()
+  def genBlock(parentOpt: Option[Block] = None, stxsOpt: Option[List[SignedTransaction]] = None)(implicit config: CoreConfig): Gen[Block] = {
+    val objects = locator.unsafeRunSync()
     val miner            = objects.get[BlockMiner[IO]]
     val status           = objects.get[Ref[IO, NodeStatus]]
     status.set(NodeStatus.Done).unsafeRunSync()
     val mined = miner.mine1(parentOpt, stxsOpt).unsafeRunSync()
-    close.unsafeRunSync()
     mined.right.get.block
   }
 

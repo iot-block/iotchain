@@ -16,7 +16,7 @@ lazy val jbok = project
     core.js,
     core.jvm,
     sdk.jvm,
-//    app.js,
+    app.js,
     app.jvm,
     benchmark
   )

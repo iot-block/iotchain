@@ -10,7 +10,7 @@ import jbok.core.NodeStatus
 import jbok.core.config.MiningConfig
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
-import jbok.core.ledger.{BlockExecutor, History, TypedBlock}
+import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.models.{SignedTransaction, _}
 import jbok.core.pool.TxPool
 import jbok.core.store.namespaces
@@ -108,7 +108,7 @@ final class BlockMiner[F[_]](
       .flatMap { case (_, txs) => txs }
 
     val transactionsForBlock = sortedByPrice
-      .scanLeft(BigInt(0), None: Option[SignedTransaction]) {
+      .scanLeft((BigInt(0), None: Option[SignedTransaction])) {
         case ((accGas, _), stx) => (accGas + stx.gasLimit, Some(stx))
       }
       .collect { case (gas, Some(stx)) => (gas, stx) }

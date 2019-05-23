@@ -1,6 +1,5 @@
 package jbok.core.models
 
-import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import scodec.bits.ByteVector

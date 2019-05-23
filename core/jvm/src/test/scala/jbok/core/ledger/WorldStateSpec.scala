@@ -1,7 +1,6 @@
 package jbok.core.ledger
 
 import cats.effect.IO
-import jbok.common.metrics.Metrics
 import jbok.common.testkit._
 import jbok.core.CoreSpec
 import jbok.core.models.{Account, Address, UInt256}
@@ -273,7 +272,6 @@ class WorldStateSpec extends CoreSpec {
     "remove all ether from existing account" in new Fixture {
       val startValue = 100
       val account    = Account(UInt256.One, startValue)
-      val code       = hex"deadbeefdeadbeefdeadbeef"
 
       val initialWorld           = world.putAccount(address1, account).persisted.unsafeRunSync()
       val worldAfterEtherRemoval = initialWorld.removeAllEther(address1).unsafeRunSync()

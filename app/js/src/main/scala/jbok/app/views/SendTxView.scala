@@ -6,14 +6,14 @@ import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.AppState
-import jbok.app.components.{AddressOptionInput, Input, Notification, Spin}
+import jbok.app.components.{AddressOptionInput, Input, Notification}
+import jbok.app.execution._
 import jbok.app.helper.InputValidator
 import jbok.core.api.BlockTag
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom.raw.HTMLButtonElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
-import jbok.app.execution._
 
 final case class SendTxView(state: AppState) {
   val nodeAccounts = Vars.empty[Address]

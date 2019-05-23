@@ -3,7 +3,6 @@ package jbok.core.models
 import cats.effect.Sync
 import cats.implicits._
 import io.circe.generic.JsonCodec
-import io.circe.{Decoder, Encoder}
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.core.validators.TxInvalid.TxSignatureInvalid

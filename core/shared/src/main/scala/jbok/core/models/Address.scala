@@ -1,7 +1,6 @@
 package jbok.core.models
 
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
-import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.crypto._

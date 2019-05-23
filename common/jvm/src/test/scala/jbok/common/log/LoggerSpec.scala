@@ -3,7 +3,6 @@ package jbok.common.log
 import cats.effect.IO
 import jbok.common.CommonSpec
 import jbok.common.FileUtil
-import scala.concurrent.duration._
 
 class LoggerSpec extends CommonSpec {
   "Logger" should {

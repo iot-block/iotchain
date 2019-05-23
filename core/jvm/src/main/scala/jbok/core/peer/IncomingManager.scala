@@ -20,7 +20,6 @@ import jbok.network.tcp.implicits._
 final class IncomingManager[F[_]](config: CoreConfig, history: History[F], ssl: Option[SSLContext], val inbound: Queue[F, Peer[F], Message[F]])(
     implicit F: ConcurrentEffect[F],
     cs: ContextShift[F],
-    T: Timer[F],
     acg: AsynchronousChannelGroup
 ) extends BaseManager[F](config, history, ssl) {
   private val log = Logger[F]

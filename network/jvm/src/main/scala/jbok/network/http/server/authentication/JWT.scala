@@ -1,14 +1,13 @@
 package jbok.network.http.server.authentication
 
-import cats.Id
 import cats.effect.IO
+import io.circe.generic.auto._
 import io.circe.{Decoder, ObjectEncoder}
 import tsec.authentication.{AugmentedJWT, JWTAuthenticator, SecuredRequestHandler}
 import tsec.common.SecureRandomId
+import tsec.jws.mac.JWTMac
 import tsec.jwt.JWTClaims
 import tsec.mac.jca.{HMACSHA256, MacSigningKey}
-import io.circe.generic.auto._
-import tsec.jws.mac.JWTMac
 
 import scala.concurrent.duration._
 

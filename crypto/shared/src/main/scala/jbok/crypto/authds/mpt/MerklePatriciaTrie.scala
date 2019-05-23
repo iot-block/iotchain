@@ -222,11 +222,11 @@ final class MerklePatriciaTrie[F[_]](
     val newRootBytes = newRoot.map(_.capped).getOrElse(ByteVector.empty)
 
     getRootHash.flatMap { previousRootHash =>
-      val delOps = toDel
-        .withFilter { node =>
-          node.entry.isLeft || node.hash == previousRootHash
-        }
-        .map(x => namespace ++ x.hash)
+//      val delOps = toDel
+//        .withFilter { node =>
+//          node.entry.isLeft || node.hash == previousRootHash
+//        }
+//        .map(x => namespace ++ x.hash)
 
       val putOps = toPut
         .withFilter { node =>

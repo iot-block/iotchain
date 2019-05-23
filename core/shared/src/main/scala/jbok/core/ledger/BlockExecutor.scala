@@ -195,7 +195,7 @@ final class BlockExecutor[F[_]](
       accExecuted: List[SignedTransaction] = Nil,
   ): F[(BlockExecResult[F], List[SignedTransaction])] = transactions match {
     case Nil =>
-      F.pure(BlockExecResult(world = world, gasUsed = accGas, receipts = accReceipts), accExecuted)
+      F.pure((BlockExecResult(world = world, gasUsed = accGas, receipts = accReceipts), accExecuted))
 
     case stx :: tail =>
       for {
@@ -382,7 +382,7 @@ final class BlockExecutor[F[_]](
       .map(_.clearTouchedAccounts)
   }
 
-  private def binaryChop[Error](min: BigInt, max: BigInt)(f: BigInt => F[Option[Error]]): F[BigInt] = {
+  private def binaryChop[E](min: BigInt, max: BigInt)(f: BigInt => F[Option[E]]): F[BigInt] = {
     assert(min <= max)
     if (min == max)
       F.pure(max)

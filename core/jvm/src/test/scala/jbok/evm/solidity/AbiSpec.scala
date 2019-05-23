@@ -4,7 +4,6 @@ import io.circe.Json
 import io.circe.parser._
 import jbok.common.CommonSpec
 import scodec.bits._
-import jbok.evm.solidity.Ast._
 import jbok.evm.solidity.ABIDescription._
 
 class AbiSpec extends CommonSpec {

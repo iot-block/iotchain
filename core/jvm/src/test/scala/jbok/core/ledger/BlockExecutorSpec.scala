@@ -15,13 +15,12 @@ import scodec.bits.ByteVector
 
 class BlockExecutorSpec extends CoreSpec {
   "BlockExecutor" should {
-    val keyPair = Some(testMiner.keyPair)
     "calculate the value, gas and reward transfer" in check { objects =>
       val executor  = objects.get[BlockExecutor[IO]]
       val history   = objects.get[History[IO]]
       val consensus = objects.get[Consensus[IO]]
 
-      val txs    = random[List[SignedTransaction]](genTxs(1, 1, keyPair))
+      val txs    = random[List[SignedTransaction]](genTxs(1, 1))
       val stx    = txs.head
       val sender = stx.senderAddress.get
 
@@ -47,7 +46,7 @@ class BlockExecutorSpec extends CoreSpec {
       val executor  = objects.get[BlockExecutor[IO]]
       val history   = objects.get[History[IO]]
       val consensus = objects.get[Consensus[IO]]
-      val txs       = random[List[SignedTransaction]](genTxs(1, 1, keyPair))
+      val txs       = random[List[SignedTransaction]](genTxs(1, 1))
       val stx       = txs.head
       val sender    = stx.senderAddress.get
 
@@ -66,7 +65,7 @@ class BlockExecutorSpec extends CoreSpec {
     "executeBlock for a valid block without txs" in check { objects =>
       val executor = objects.get[BlockExecutor[IO]]
 
-      val block = random[List[Block]](genBlocks(1, 1, keyPair)).head
+      val block = random[List[Block]](genBlocks(1, 1)).head
       executor.handleSyncBlocks(SyncBlocks(block :: Nil, None)).void
     }
 
@@ -74,8 +73,8 @@ class BlockExecutorSpec extends CoreSpec {
       val executor = objects.get[BlockExecutor[IO]]
       val history  = objects.get[History[IO]]
 
-      val txs   = random[List[SignedTransaction]](genTxs(10, 10, keyPair))
-      val block = random[Block](genBlock(stxsOpt = Some(txs), keyPair = keyPair))
+      val txs   = random[List[SignedTransaction]](genTxs(10, 10))
+      val block = random[Block](genBlock(stxsOpt = Some(txs)))
       val peer  = random[Peer[IO]]
       for {
         number <- history.getBestBlockNumber
@@ -105,8 +104,7 @@ class BlockExecutorSpec extends CoreSpec {
 
       for {
         txs <- SignedTransaction.sign[IO](tx, testMiner.keyPair).map(_ :: Nil)
-        block = random[Block](genBlock(stxsOpt = Some(txs), keyPair = Some(testMiner.keyPair)))
-        peer  = random[Peer[IO]]
+        block = random[Block](genBlock(stxsOpt = Some(txs)))
         number <- history.getBestBlockNumber
         _      <- executor.executeBlock(block)
         hash            = (testMiner.address, UInt256(0)).asValidBytes.kec256

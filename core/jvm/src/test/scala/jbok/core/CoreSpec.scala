@@ -1,42 +1,63 @@
 package jbok.core
 
-import cats.effect.IO
-import distage.Locator
+import cats.effect.{IO, Resource}
+import com.github.pshirshov.izumi.distage.model.definition.ModuleDef
+import distage.{Injector, Locator}
 import jbok.common.CommonSpec
 import jbok.core.config.{CoreConfig, GenesisBuilder}
+import jbok.core.keystore.{KeyStore, MockingKeyStore}
 import jbok.core.mining.SimAccount
 import jbok.crypto.signature.KeyPair
 import monocle.macros.syntax.lens._
 
-import scala.collection.immutable.ListMap
+object CoreSpecFixture {
+  val chainId = BigInt(1)
 
-trait CoreSpec extends CommonSpec {
-  implicit val chainId = BigInt(1)
-  private val keyPair = KeyPair(
+  val testKeyPair = KeyPair(
     KeyPair.Public("a4991b82cb3f6b2818ce8fedc00ef919ba505bf9e67d96439b63937d24e4d19d509dd07ac95949e815b307769f4e4d6c3ed5d6bd4883af23cb679b251468a8bc"),
     KeyPair.Secret("1a3c21bb6e303a384154a56a882f5b760a2d166161f6ccff15fc70e147161788")
   )
-  val testMiner = SimAccount(keyPair, BigInt("1000000000000000000000000"), 0)
-  val testAlloc = ListMap(testMiner.address -> testMiner.balance)
-  val genesis = GenesisBuilder()
+
+  val testAccount = SimAccount(testKeyPair, BigInt("1000000000000000000000000"), 0)
+
+  val testGenesis = GenesisBuilder()
     .withChainId(chainId)
-    .addAlloc(testMiner.address, testMiner.balance)
-    .addMiner(testMiner.address)
+    .addAlloc(testAccount.address, testAccount.balance)
+    .addMiner(testAccount.address)
     .build
 
-  implicit val config = CoreModule.testConfig
-//    .lens(_.mining.secret).set(keyPair.secret.bytes)
-    .lens(_.genesis)
-    .set(genesis)
+  val config = CoreModule.testConfig
+    .lens(_.genesis).set(testGenesis)
 
-  val locator: IO[Locator] =
-    CoreModule.resource[IO](config, Some(keyPair)).allocated.map(_._1)
+  val keystoreModule: ModuleDef = new ModuleDef {
+    make[KeyStore[IO]].fromEffect(MockingKeyStore[IO](testKeyPair :: Nil))
+  }
+}
+
+trait CoreSpec extends CommonSpec {
+  implicit val chainId = CoreSpecFixture.chainId
+
+  implicit val config = CoreSpecFixture.config
+
+  val genesis = CoreSpecFixture.testGenesis
+
+  val testKeyPair = CoreSpecFixture.testKeyPair
+
+  val testMiner = CoreSpecFixture.testAccount
+
+  def testCoreModule(config: CoreConfig) =
+    new CoreModule[IO](config).overridenBy(CoreSpecFixture.keystoreModule)
+
+  def testCoreResource(config: CoreConfig): Resource[IO, Locator] =
+    Injector().produceF[IO](testCoreModule(config)).toCats
+
+  val locator: IO[Locator] = testCoreResource(config).allocated.map(_._1)
 
   def check(f: Locator => IO[Unit]): Unit =
     check(config)(f)
 
   def check(config: CoreConfig)(f: Locator => IO[Unit]): Unit = {
-    val p = CoreModule.resource[IO](config, Some(keyPair)).use { objects =>
+    val p = testCoreResource(config).use { objects =>
       f(objects)
     }
     p.unsafeRunSync()

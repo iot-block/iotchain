@@ -1,7 +1,6 @@
 package jbok.app.service.store.doobie
 
 import doobie._
-import io.circe.generic.extras.Configuration.snakeCaseTransformation
 import scala.language.experimental.macros
 import magnolia._
 

@@ -2,10 +2,8 @@ package jbok.core.consensus
 
 import cats.data.NonEmptyList
 import jbok.core.consensus.Consensus._
-import jbok.core.ledger.History
 import jbok.core.ledger.TypedBlock.{ExecutedBlock, MinedBlock}
 import jbok.core.models.{Block, BlockHeader}
-import jbok.core.pool.BlockPool
 
 /**
   * `Consensus` is mainly responsible for

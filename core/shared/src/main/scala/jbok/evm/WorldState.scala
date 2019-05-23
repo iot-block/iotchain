@@ -6,7 +6,6 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common._
-import jbok.common.log.Logger
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.store.namespaces

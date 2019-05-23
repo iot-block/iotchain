@@ -3,7 +3,6 @@ package jbok.core.consensus.poa.clique
 import cats.data.NonEmptyList
 import cats.effect.{Sync, Timer}
 import cats.implicits._
-import jbok.codec.rlp.implicits._
 import jbok.common._
 import jbok.common.log.Logger
 import jbok.core.config.MiningConfig

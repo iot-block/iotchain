@@ -7,6 +7,7 @@ import scribe.handler.LogHandler
 import scribe.writer.FileWriter
 import scribe.writer.file.LogPath
 import cats.implicits._
+import jbok.common.FileUtil
 
 object LoggerPlatform {
   def initConfig[F[_]: Sync](config: LogConfig): F[Unit] = {
@@ -16,10 +17,11 @@ object LoggerPlatform {
         case "/dev/null" =>
           Logger.setRootHandlers(Logger.consoleHandler(level.some))
         case dir =>
-          Logger.setRootHandlers(
-            Logger.consoleHandler(level.some),
-            fileHandler(Paths.get(dir), level.some)
-          )
+          FileUtil[F].open(Paths.get(config.logDir), create = true, asDirectory = true) >>
+            Logger.setRootHandlers(
+              Logger.consoleHandler(level.some),
+              fileHandler(Paths.get(dir), level.some)
+            )
       })
   }
 

@@ -46,14 +46,14 @@ object SSLContextHelper {
   def clientEngine(ctx: SSLContext): ClientSSLEngine = {
     val engine = ctx.createSSLEngine()
     engine.setUseClientMode(true)
-    engine.setNeedClientAuth(false)
+    engine.setNeedClientAuth(true)
     new ClientSSLEngine(engine)
   }
 
   def serverEngine(ctx: SSLContext): ServerSSLEngine = {
     val engine = ctx.createSSLEngine()
     engine.setUseClientMode(false)
-    engine.setNeedClientAuth(false)
+    engine.setNeedClientAuth(true)
     new ServerSSLEngine(engine)
   }
 }

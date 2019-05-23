@@ -14,7 +14,7 @@ object HttpClients {
   def withMiddlewares[F[_]](client: Client[F])(implicit F: Concurrent[F], T: Timer[F]): F[Client[F]] =
     MetricsMiddleware(LoggerMiddleware()(RetryMiddleware()(client)))
 
-  def okHttp[F[_]](sslContext: Option[SSLContext] = None)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Client[F]] =
+  def okHttp[F[_]](sslContext: Option[SSLContext] = None)(implicit F: ConcurrentEffect[F], cs: ContextShift[F]): Resource[F, Client[F]] =
     ThreadUtil.blockingThreadPool[F]("jbok-okhttp-client").flatMap { blockEC =>
       val builder = sslContext match {
         case Some(ctx) => new OkHttpClient.Builder().sslSocketFactory(ctx.getSocketFactory)
@@ -24,7 +24,7 @@ object HttpClients {
       OkHttpBuilder[F](builder.build(), blockEC).resource
     }
 
-  def blaze[F[_]](sslContext: Option[SSLContext] = None)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Client[F]] =
+  def blaze[F[_]](sslContext: Option[SSLContext] = None)(implicit F: ConcurrentEffect[F]): Resource[F, Client[F]] =
     ThreadUtil.blockingThreadPool[F]("jbok-blaze-client").flatMap { blockEC =>
       BlazeClientBuilder[F](blockEC)
         .withSslContextOption(sslContext)

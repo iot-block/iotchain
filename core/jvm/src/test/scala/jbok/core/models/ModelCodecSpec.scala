@@ -5,17 +5,9 @@ import jbok.codec.rlp.implicits._
 import jbok.core.testkit._
 import jbok.codec.testkit._
 import jbok.core.CoreSpec
-import jbok.crypto.signature.KeyPair
-import org.scalacheck.Arbitrary
 
 class ModelCodecSpec extends CoreSpec {
   "model rlp codecs" should {
-    val objects = locator.unsafeRunSync()
-    val keyPair = objects.get[Option[KeyPair]]
-
-    implicit val block: Arbitrary[Block]         = arbBlock(keyPair)
-    implicit val blockBody: Arbitrary[BlockBody] = arbBlockBody(keyPair)
-
     "roundtrip Address" in {
       forAll { address: Address =>
         address.bytes.length shouldBe Address.numBytes

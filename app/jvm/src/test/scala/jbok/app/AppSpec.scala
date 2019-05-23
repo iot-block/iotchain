@@ -1,16 +1,23 @@
 package jbok.app
 
 import cats.effect.IO
-import distage.Locator
+import distage.{Injector, Locator}
 import jbok.core.CoreSpec
 import jbok.core.config.CoreConfig
-import jbok.crypto.signature.KeyPair
 
 trait AppSpec extends CoreSpec {
+
+  val testAppModule =
+    testCoreModule(config) ++ new AppModule[IO]
+
+  val testAppResource =
+    Injector().produceF[IO](testAppModule).toCats
+
   override def check(config: CoreConfig)(f: Locator => IO[Unit]): Unit = {
+
     val objects = locator.unsafeRunSync()
-    val keyPair = objects.get[Option[KeyPair]]
-    val p = AppModule.resource[IO](config, keyPair).use { objects =>
+
+    val p = testAppResource.use { objects =>
       f(objects)
     }
     p.unsafeRunSync()

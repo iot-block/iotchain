@@ -14,8 +14,8 @@ class TransactionStoreSpec extends AppSpec {
     val executor = objects.get[BlockExecutor[IO]]
     val txStore  = objects.get[TransactionStore[IO]]
 
-    val txs      = random[List[SignedTransaction]](genTxs(min = 10, max = 10, keyPair))
-    val block    = random[Block](genBlock(stxsOpt = Some(txs), keyPair = keyPair))
+    val txs      = random[List[SignedTransaction]](genTxs(min = 10, max = 10))
+    val block    = random[Block](genBlock(stxsOpt = Some(txs)))
     val executed = executor.executeBlock(block).unsafeRunSync()
 
     for {

@@ -30,8 +30,6 @@ object TxGen {
       case (keyPair, account) => keyPair -> SimAccount(keyPair, account.balance, account.nonce)
     }: _*)
 
-    val accountsMap: MMap[KeyPair, Account] = MMap(accounts.toSeq: _*)
-
     def genTxMutually: F[SignedTransaction] =
       for {
         List(sender, receiver) <- F.delay(Random.shuffle(simuAccountsMap.values.toList).take(2))

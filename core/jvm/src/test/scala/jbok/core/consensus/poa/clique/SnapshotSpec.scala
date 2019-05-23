@@ -1,8 +1,8 @@
 package jbok.core.consensus.poa.clique
 
 import cats.effect.IO
+import cats.effect.concurrent.Ref
 import jbok.codec.rlp.implicits._
-import jbok.common.metrics.Metrics
 import jbok.common.testkit._
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
@@ -92,7 +92,8 @@ class SnapshotSpec extends CoreSpec {
     val head           = headers.last
     val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
     val kp             = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val clique         = Clique[IO](miningConfig, db, genesisConfig, history, kp).unsafeRunSync()
+    val proposal = Ref.of[IO, Option[Proposal]](None).unsafeRunSync()
+    val clique         = new Clique[IO](miningConfig, db, history, proposal, kp)
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd

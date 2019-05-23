@@ -9,7 +9,6 @@ import io.circe.parser._
 import io.circe.syntax._
 import jbok.core.models.UInt256
 import jbok.codec.json.implicits._
-import jbok.evm.solidity.Ast._
 
 import scala.scalajs.js.annotation.JSExportAll
 

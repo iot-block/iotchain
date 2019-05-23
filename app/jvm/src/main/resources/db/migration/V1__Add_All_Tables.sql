@@ -1,6 +1,6 @@
 CREATE TABLE transactions
 (
-  id          int unsigned primary key auto_increment,
+  id          int unsigned primary key,
   txHash      varchar(255) not null unique,
   nonce       int unsigned not null,
   fromAddress varchar(255) not null,

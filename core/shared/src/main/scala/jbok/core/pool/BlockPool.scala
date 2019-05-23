@@ -46,10 +46,10 @@ final class BlockPool[F[_]](
       m               <- blocks.get
       leaf <- m.get(block.header.hash) match {
         case Some(_) =>
-          log.debug(s"${block.tag} already pooled, ignore").as(None)
+          log.i(s"${block.tag} already pooled, ignore").as(None)
 
         case None if isNumberOutOfRange(block.header.number, bestBlockNumber) =>
-          log.debug(s"${block.tag} is outside accepted range [${bestBlockNumber} - ${config.maxBlockAhead}, ${bestBlockNumber} + ${config.maxBlockBehind}]").as(None)
+          log.i(s"${block.tag} is outside accepted range [${bestBlockNumber} - ${config.maxBlockAhead}, ${bestBlockNumber} + ${config.maxBlockBehind}]").as(None)
 
         case None =>
           for {
@@ -57,17 +57,17 @@ final class BlockPool[F[_]](
             l <- {
               parentTd match {
                 case Some(_) =>
-                  log.debug(s"${block.tag} will be on the main chain") >>
+                  log.i(s"${block.tag} will be on the main chain") >>
                   addBlock(block, parentTd) >> updateTotalDifficulties(block.header.hash)
 
                 case None =>
                   val p: F[Option[Leaf]] = findClosestChainedAncestor(block).flatMap {
                     case Some(ancestor) =>
-                      log.debug(s"${block.tag} will be on a rooted side chain") >>
+                      log.i(s"${block.tag} will be on a rooted side chain") >>
                       updateTotalDifficulties(ancestor)
 
                     case None =>
-                      log.debug(s"${block.tag} with unknown relation to the main chain").as(None)
+                      log.i(s"${block.tag} with unknown relation to the main chain").as(None)
                   }
 
                   addBlock(block, parentTd) >> p

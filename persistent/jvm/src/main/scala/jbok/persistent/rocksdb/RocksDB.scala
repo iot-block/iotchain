@@ -2,7 +2,7 @@ package jbok.persistent.rocksdb
 
 import java.nio.file.Path
 
-import cats.effect.{Resource, Sync, Timer}
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import fs2._
 import jbok.codec.rlp.RlpCodec
@@ -16,8 +16,7 @@ final class RocksDB[F[_]](
     db: Underlying,
     readOptions: ReadOptions,
     writeOptions: WriteOptions
-)(implicit F: Sync[F], T: Timer[F])
-    extends KeyValueDB[F] {
+)(implicit F: Sync[F]) extends KeyValueDB[F] {
   override protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]] =
     F.delay {
       Option(db.get(readOptions, key.toArray)).map(ByteVector.apply)
@@ -86,7 +85,7 @@ final class RocksDB[F[_]](
       )
     }
 
-  private def iterator(start: Option[Array[Byte]] = None): Resource[F, RocksIterator] =
+  private def iterator(start: Option[Array[Byte]]): Resource[F, RocksIterator] =
     Resource {
       for {
         it <- F.delay(db.newIterator())
@@ -110,7 +109,7 @@ object RocksDB {
       options: Options = defaultOptions,
       readOptions: ReadOptions = defaultReadOptions,
       writeOptions: WriteOptions = defaultWriteOptions
-  )(implicit F: Sync[F], T: Timer[F]): Resource[F, KeyValueDB[F]] =
+  )(implicit F: Sync[F]): Resource[F, KeyValueDB[F]] =
     Resource {
       for {
         _          <- FileUtil[F].open(path, create = true, asDirectory = true)

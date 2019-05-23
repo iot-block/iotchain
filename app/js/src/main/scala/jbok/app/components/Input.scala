@@ -74,7 +74,6 @@ final case class AddressOptionInput(candidates: Vars[Address], validator: String
     if (otherAddressDisable.value) {
       validator(address.value)
     } else {
-      println("addressOptionInput", addressInput.value)
       addressInput.isValid
     }
   def value: String = address.value

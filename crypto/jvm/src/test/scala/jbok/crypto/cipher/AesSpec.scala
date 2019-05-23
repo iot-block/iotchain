@@ -40,7 +40,6 @@ class AesSpec extends CommonSpec {
         case (k, i, plaintext, c) =>
           val key = ByteVector.fromValidHex(k)
           val iv = ByteVector.fromValidHex(i)
-          val ciphertext = ByteVector.fromValidHex(c)
           val jcaKey = AES128CBC.buildKey[IO](key.toArray).unsafeRunSync()
           val encrypted =
             AES128CBC.encrypt[IO](PlainText(plaintext.toArray), jcaKey, Iv[AES128CBC](iv.toArray)).unsafeRunSync()
@@ -79,7 +78,6 @@ class AesSpec extends CommonSpec {
         val key = ByteVector.fromValidHex(k)
         val iv = ByteVector.fromValidHex(i)
         val plaintext = ByteVector.fromValidHex(p)
-        val ciphertext = ByteVector.fromValidHex(c)
         val jcaKey = AES128CTR.buildKey[IO](key.toArray).unsafeRunSync()
 
         val encrypted = AES128CTR.encrypt[IO](PlainText(plaintext.toArray), jcaKey ,Iv[AES128CTR](iv.toArray)).unsafeRunSync()

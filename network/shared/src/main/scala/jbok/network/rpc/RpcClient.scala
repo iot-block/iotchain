@@ -11,8 +11,7 @@ import scala.language.experimental.macros
 final class RpcClient[F[_], P](
     val transport: RpcTransport[F, P],
     val logger: RpcLogHandler[F]
-)(implicit F: Sync[F]) {
-
+) {
   def use[API]: API = macro RpcClientMacro.impl[API, F, P]
 }
 
@@ -33,6 +32,5 @@ object RpcClient {
       } yield r
   }
 
-  def apply[F[_], P](transport: RpcTransport[F, P])(implicit F: Sync[F], clock: Clock[F]) =
-    new RpcClient[F, P](transport, noopLogHandler)
+  def apply[F[_], P](transport: RpcTransport[F, P]) = new RpcClient[F, P](transport, noopLogHandler)
 }

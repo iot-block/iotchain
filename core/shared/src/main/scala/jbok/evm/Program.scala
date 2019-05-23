@@ -3,7 +3,6 @@ package jbok.evm
 import scodec.bits.ByteVector
 
 import scala.annotation.tailrec
-import jbok.crypto._
 
 /**
   * Holds a program's code and provides utilities for accessing it (defaulting to zeroes when out of scope)

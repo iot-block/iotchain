@@ -1,7 +1,6 @@
 package jbok.core.models
 
 import io.circe.generic.JsonCodec
-import io.circe.{Decoder, Encoder}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
 

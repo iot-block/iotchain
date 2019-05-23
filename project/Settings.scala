@@ -1,6 +1,5 @@
 import sbt.Keys._
 import sbt._
-import scoverage.ScoverageSbtPlugin.autoImport._
 
 object Settings {
   lazy val common = compilerPlugins ++ WartRemoverPlugin.settings ++ Seq(
@@ -14,20 +13,21 @@ object Settings {
     connectInput in run := true,
     connectInput := true,
     parallelExecution in test := false,
-    scalacOptions ++= ScalacSettings.base ++ ScalacSettings.specificFor(scalaVersion.value),
+    scalacOptions ++= ScalacSettings.base ++ ScalacSettings.specificFor(scalaVersion.value) ++ ScalacSettings.strictBase,
     javacOptions ++= JavacSettings.base ++ JavacSettings.specificFor(scalaVersion.value),
   )
 
   private lazy val compilerPlugins = Seq(
     addCompilerPlugin("org.scalamacros" % "paradise"            % "2.1.0" cross CrossVersion.full),
-    addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.2.4"),
-    addCompilerPlugin("org.spire-math"  %% "kind-projector"     % "0.9.7")
+    addCompilerPlugin("com.olegpy"      %% "better-monadic-for" % "0.3.0"),
+    addCompilerPlugin("org.typelevel"   %% "kind-projector"     % "0.10.1")
   )
 
   private object ScalacSettings {
     val base = Seq(
       "-deprecation", // Emit warning and location for usages of deprecated APIs.
-      "-encoding", "UTF-8", // Specify character encoding used by source files.
+      "-encoding",
+      "UTF-8", // Specify character encoding used by source files.
       "-explaintypes", // Explain type errors in more detail.
       "-feature", // Emit warning and location for usages of features that should be imported explicitly.
       "-language:existentials", // Existential types (besides wildcard types) can be written and inferred
@@ -46,7 +46,6 @@ object Settings {
     }
 
     val strictBase = Seq(
-      "-Xfatal-warnings",
       "-Xlint",
       "-Ywarn-dead-code", // Warn when dead code is identified.
       "-Ywarn-extra-implicit", // Warn when more than one implicit parameter section is defined.

@@ -3,13 +3,11 @@ package jbok.app.views
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Constants, Var}
-import jbok.app.components.{Form, Input, Modal}
-import jbok.app.helper.{InputValidator, TableRenderHelper}
-import jbok.app.{AppState, Contract}
+import jbok.app.AppState
+import jbok.app.components.Modal
+import jbok.app.helper.TableRenderHelper
 import jbok.core.models.{Account, Address}
-import jbok.evm.solidity.SolidityParser
 import org.scalajs.dom._
-import scodec.bits.ByteVector
 
 final case class ContractView(state: AppState) {
   val contractCallVisible: Var[Boolean] = Var(false)

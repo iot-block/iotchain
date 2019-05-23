@@ -22,6 +22,6 @@ final case class GenesisBuilder(
       miners = miners,
       alloc = alloc,
       chainId = this.chainId,
-      timestamp = System.currentTimeMillis()
+      timestamp = 0L
     )
 }

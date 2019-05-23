@@ -4,12 +4,11 @@ import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
+import jbok.app.AppState
 import jbok.app.components.{AddressOptionInput, Input, Notification}
 import jbok.app.helper.{ContractAddress, InputValidator}
-import jbok.app.AppState
 import jbok.core.api.{BlockTag, CallTx}
 import jbok.core.models.{Account, Address}
-import org.scalajs.dom.raw.HTMLInputElement
 import org.scalajs.dom.{Element, _}
 import scodec.bits.ByteVector
 

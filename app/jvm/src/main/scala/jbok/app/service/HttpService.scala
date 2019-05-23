@@ -8,6 +8,7 @@ import javax.net.ssl.SSLContext
 import jbok.network.http.server.middleware.{GzipMiddleware, LoggerMiddleware, MetricsMiddleware}
 import jbok.core.config.ServiceConfig
 import jbok.core.api._
+import jbok.crypto.ssl.SSLConfig
 import jbok.network.rpc.RpcService
 import jbok.network.rpc.http.Http4sRpcServer
 import org.http4s.HttpRoutes
@@ -15,10 +16,12 @@ import org.http4s.implicits._
 import org.http4s.server.{SSLClientAuthMode, Server}
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.{CORS, CORSConfig}
+
 import scala.concurrent.duration._
 
 final class HttpService[F[_]](
     config: ServiceConfig,
+    sslConfig: SSLConfig,
     account: AccountAPI[F],
     admin: AdminAPI[F],
     block: BlockAPI[F],
@@ -64,8 +67,15 @@ final class HttpService[F[_]](
         .bindHttp(config.port, config.host)
     }
 
+    val sslLClientAuthMode = sslConfig.clientAuth match {
+      case "NotRequested" => SSLClientAuthMode.NotRequested
+      case "Requested"    => SSLClientAuthMode.Requested
+      case "Required"     => SSLClientAuthMode.Requested
+      case x              => throw new IllegalArgumentException(s"SSLClientAuthMode ${x} is not supported")
+    }
+
     sslOpt match {
-      case Some(ssl) => builder.map(_.withSSLContext(ssl, SSLClientAuthMode.NotRequested))
+      case Some(ssl) => builder.map(_.withSSLContext(ssl, sslLClientAuthMode))
       case None      => builder.map(_.enableHttp2(false))
     }
   }

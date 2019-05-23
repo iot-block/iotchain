@@ -28,7 +28,6 @@ class SCryptSpec extends CommonSpec {
       )
 
       forAll(testVectors) { case (pass, s, n, r, p, dklen, dk) =>
-        val passStr = pass.getBytes(StandardCharsets.US_ASCII)
         val salt = ByteVector(s.getBytes(StandardCharsets.US_ASCII))
         val derivedKey = ByteVector.fromValidHex(dk)
 

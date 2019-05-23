@@ -2,12 +2,12 @@ package jbok.core.consensus.poa.clique
 
 import cats.data.OptionT
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, IO, Sync}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
-import jbok.core.config.MiningConfig
-import jbok.core.config.GenesisConfig
+import jbok.core.config.{GenesisConfig, MiningConfig}
+import jbok.core.keystore.KeyStore
 import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
@@ -119,12 +119,17 @@ object Clique {
 
   def apply[F[_]](
       config: MiningConfig,
-      db: KeyValueDB[F],
       genesisConfig: GenesisConfig,
+      db: KeyValueDB[F],
       history: History[F],
-      keyPair: KeyPair
+      keystore: KeyStore[F],
   )(implicit F: Concurrent[F]): F[Clique[F]] =
     for {
+      keyPair <- if (config.enabled) {
+        keystore.unlockAccount(config.address, config.passphrase).map(_.keyPair)
+      } else {
+        Signature[ECDSA].generateKeyPair[F]()
+      }
       genesisBlock <- history.getBlockByNumber(0)
       _ <- if (genesisBlock.isEmpty) {
         history.initGenesis(genesisConfig)

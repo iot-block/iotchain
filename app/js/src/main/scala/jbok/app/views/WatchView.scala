@@ -60,7 +60,6 @@ final case class WatchView(state: AppState) {
       },
       (r, i) =>
         currentId.foreach(id => {
-          println(state.nodes.value.get(id).map(_.contractsABI.value))
           state.nodes.value.get(id).foreach(_.contractsABI.value += Contract(contractAddress, r.contractDefs.last.toABI().methods))
         })
     )

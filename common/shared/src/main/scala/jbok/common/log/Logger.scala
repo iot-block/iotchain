@@ -1,8 +1,8 @@
 package jbok.common.log
 
 import _root_.scribe.{LogRecord, Level => SL}
-import cats.Monad
 import cats.effect.{IO, Sync}
+import cats.implicits._
 import scribe.format.Formatter
 import scribe.handler.LogHandler
 import scribe.output.{Color, ColoredOutput, LogOutput, TextOutput}
@@ -47,20 +47,20 @@ object Logger {
     minimumLevel = minimumLevel.map(fromJbokLevel)
   )
 
-  def setRootLevel[F[_]](level: Level)(implicit F: Sync[F]): F[Unit] = F.delay {
-    scribe.Logger.root.withMinimumLevel(fromJbokLevel(level)).replace()
-  }
+  def setRootLevel[F[_]](level: Level)(implicit F: Sync[F]): F[Unit] =
+    F.delay(scribe.Logger.root.withMinimumLevel(fromJbokLevel(level)).replace()).void
 
-  def setRootHandlers[F[_]](handlers: LogHandler*)(implicit F: Sync[F]): F[Unit] = F.delay {
-    handlers.foldLeft(scribe.Logger.root.clearHandlers())(_ withHandler _).replace()
-  }
+
+  def setRootHandlers[F[_]](handlers: LogHandler*)(implicit F: Sync[F]): F[Unit] =
+    F.delay(handlers.foldLeft(scribe.Logger.root.clearHandlers())(_ withHandler _).replace()).void
+
 
   def setRootHandlers[F[_]](writer: Writer)(implicit F: Sync[F]): F[Unit] = F.delay {
     scribe.Logger.root
       .clearHandlers()
       .withHandler(writer = writer)
       .replace()
-  }
+  }.void
 
   def consoleFormatter: Formatter = {
     import scribe.format._

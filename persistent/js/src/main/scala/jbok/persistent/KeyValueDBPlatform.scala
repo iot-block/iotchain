@@ -1,6 +1,6 @@
 package jbok.persistent
 
-import cats.effect.{ContextShift, Resource, Sync, Timer}
+import cats.effect.{Resource, Sync}
 
 object KeyValueDBPlatform {
   def resource[F[_]](config: PersistConfig)(implicit F: Sync[F]): Resource[F, KeyValueDB[F]] =

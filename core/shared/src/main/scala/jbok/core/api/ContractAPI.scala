@@ -2,7 +2,6 @@ package jbok.core.api
 
 import io.circe.generic.JsonCodec
 import jbok.core.models.Address
-import jbok.evm.solidity.Ast.ContractDef
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
 import jbok.network.rpc.PathName

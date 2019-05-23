@@ -30,7 +30,6 @@ object JbokApp {
   val accountsView     = AccountsView(state).render
   val blocksView       = BlocksView(state).render
   val transactionsView = TxsView(state).render
-  val simulationsView  = SimulationsView.render
   val contractView     = ContractView(state).render
   val configView       = ConfigView(state).render
   val searchView       = SearchView(state).render

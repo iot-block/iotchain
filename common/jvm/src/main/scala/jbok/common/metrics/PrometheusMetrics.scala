@@ -2,12 +2,12 @@ package jbok.common.metrics
 
 import java.io.StringWriter
 
-import cats.effect.{Sync, Timer}
+import cats.effect.Sync
 import cats.implicits._
 import io.prometheus.client._
 import io.prometheus.client.exporter.common.TextFormat
 
-final class PrometheusMetrics[F[_]](val registry: CollectorRegistry = PrometheusMetrics.registry)(implicit F: Sync[F], T: Timer[F]) extends Metrics[F] {
+final class PrometheusMetrics[F[_]](val registry: CollectorRegistry = PrometheusMetrics.registry)(implicit F: Sync[F]) extends Metrics[F] {
   import PrometheusMetrics._
 
   override type Registry = CollectorRegistry

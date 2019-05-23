@@ -13,6 +13,7 @@ import scala.concurrent.duration.FiniteDuration
 @JsonCodec
 final case class MiningConfig(
     enabled: Boolean,
+    address: Address,
     passphrase: String,
     coinbase: Address,
     period: FiniteDuration,

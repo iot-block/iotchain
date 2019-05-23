@@ -16,10 +16,7 @@ class JWTSpec extends CommonSpec {
   "JWT" should {
     "build custom claims" in {
       val claims = JWT.withCustomClaims("user", user).unsafeRunSync()
-      println(claims)
       val jwt = JWT.sign(claims, jwtKey).unsafeRunSync()
-      println(jwt.toEncodedString)
-      val jwt2      = JWT.sign(claims, jwtKey2).unsafeRunSync()
       val verified  = JWT.verifyFromString(jwt.toEncodedString, jwtKey).unsafeRunSync()
       val verified2 = JWT.verifyFromString(jwt.toEncodedString, jwtKey2).unsafeRunSync()
       verified shouldBe true

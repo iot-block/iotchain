@@ -10,7 +10,7 @@ import jbok.network.Message
 final class PeerManager[F[_]](
     val incoming: IncomingManager[F],
     val outgoing: OutgoingManager[F],
-)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) {
+)(implicit F: ConcurrentEffect[F]) {
   private[this] val log = Logger[F]
 
   val inbound: Stream[F, (Peer[F], Message[F])] =

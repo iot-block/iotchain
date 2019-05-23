@@ -8,7 +8,7 @@ import scodec.bits.ByteVector
 
 class ProgramSpec extends CommonSpec {
 
-  val CodeSize      = Byte.MaxValue
+  val CodeSize: Int = Byte.MaxValue
   val PositionsSize = 10
 
   val nonPushOp: Byte     = JUMP.code

@@ -19,8 +19,12 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import cats.effect.Resource
 
-final class KeyStorePlatform[F[_]](keyStoreDir: Path, secureRandom: SecureRandom)(implicit F: Sync[F]) extends KeyStore[F] {
+final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) extends KeyStore[F] {
   private[this] val log = Logger[F]
+
+  private val keyStoreDir: Path = Paths.get(config.dir)
+
+  private val secureRandom: SecureRandom = new SecureRandom()
 
   private val keyLength = 32
 
@@ -156,12 +160,8 @@ final class KeyStorePlatform[F[_]](keyStoreDir: Path, secureRandom: SecureRandom
 }
 
 object KeyStorePlatform {
-  def resource[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]): Resource[F, KeyStorePlatform[F]] =
-    (config.dir match {
-      case "temporary" => FileUtil[F].temporaryDir().map(_.path)
-      case path        => Resource.liftF(Paths.get(path).pure[F])
-    }).map { dir =>
-      val secureRandom = new SecureRandom()
-      new KeyStorePlatform[F](dir, secureRandom)
+  def temporary[F[_]](implicit F: Sync[F]): Resource[F, KeyStore[F]] =
+    FileUtil[F].temporaryDir().map { file =>
+      new KeyStorePlatform[F](KeyStoreConfig(file.pathAsString))
     }
 }

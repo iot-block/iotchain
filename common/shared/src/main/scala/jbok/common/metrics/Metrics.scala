@@ -1,10 +1,10 @@
 package jbok.common.metrics
 
-import cats.effect.{Concurrent, Resource, Sync, Timer}
+import cats.effect.{Resource, Sync, Timer}
+import cats.implicits._
 import fs2._
 
 import scala.concurrent.duration._
-import cats.implicits._
 
 trait EffectMetrics[F[_]] { self: Metrics[F] =>
   def observed[A](name: String, labels: String*)(fa: F[A])(implicit F: Sync[F], T: Timer[F]): F[A] =
@@ -15,9 +15,9 @@ trait EffectMetrics[F[_]] { self: Metrics[F] =>
       elapsed = end - start
       a <- attempt match {
         case Left(e) =>
-          self.observe(name, "failure" :: labels.toList: _*)(elapsed) >> F.raiseError(e)
+          self.observe(name, "failure" :: labels.toList: _*)(elapsed.toDouble) >> F.raiseError(e)
         case Right(a) =>
-          self.observe(name, "success" :: labels.toList: _*)(elapsed).as(a)
+          self.observe(name, "success" :: labels.toList: _*)(elapsed.toDouble).as(a)
       }
     } yield a
 
@@ -34,11 +34,11 @@ trait EffectMetrics[F[_]] { self: Metrics[F] =>
 
 trait StreamMetrics[F[_]] { self: Metrics[F] =>
   // observe events occur in the stream
-  def observePipe[A](name: String, labels: String*)(implicit F: Concurrent[F]): Pipe[F, A, Unit] =
+  def observePipe[A](name: String, labels: String*): Pipe[F, A, Unit] =
     _.chunks.through(observeChunkPipe[A](name, labels: _*))
 
-  def observeChunkPipe[A](name: String, labels: String*)(implicit F: Concurrent[F]): Pipe[F, Chunk[A], Unit] =
-    _.evalMap(c => self.observe(name, labels: _*)(c.size))
+  def observeChunkPipe[A](name: String, labels: String*): Pipe[F, Chunk[A], Unit] =
+    _.evalMap(c => self.observe(name, labels: _*)(c.size.toDouble))
 }
 
 trait Metrics[F[_]] extends EffectMetrics[F] with StreamMetrics[F] {
