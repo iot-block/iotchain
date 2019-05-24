@@ -2053,10 +2053,7 @@ class SolidityParserSpec extends CommonSpec {
     "parse contract" in {
       val contract = SolidityParser.parseContract(code)
       contract.isSuccess shouldBe true
-      val contractABI = contract.get.value.toABI()
-      println(contractABI)
-      println(fastparse.parse("addr := mload(bytePos)", SolidityParser.assemblyAssignment(_)))
-      println(fastparse.parse("(, uint256 retAmount) = convertByPath(_path, _amount, _minReturn, _path[0], this);", SolidityParser.simpleStatement(_)))
+      contract.get.value.toABI()
     }
 
     "parse function" in {
@@ -2076,7 +2073,6 @@ class SolidityParserSpec extends CommonSpec {
       val func = SolidityParser.parseFunc(code)
       func.isSuccess shouldBe true
       func.get.value.name shouldBe "burnFrom"
-      println(func.get.value)
     }
 
     "parse expr" in {
@@ -2154,8 +2150,6 @@ class SolidityParserSpec extends CommonSpec {
       val contract       = parseResult.get.value
       val vaccineMethods = contract.toABI().methods.map(method => method.name -> method).toMap
 
-      println(vaccineMethods)
-
       val minter = vaccineMethods("minter")
         .decode(hex"0x0000000000000000000000001234567890123456789012345678901234567890")
       minter.isRight shouldBe true
@@ -2192,13 +2186,12 @@ class SolidityParserSpec extends CommonSpec {
       val sources = parseResult.get.value
       val dsToken = sources.ABI.find(_.name == "DSToken")
 
-      println(dsToken.get.methods)
+      dsToken.nonEmpty shouldBe true
     }
 
     "parse code3" in {
       val parseResult = SolidityParser.parseSource(code3)
 
-      println(parseResult.get.value)
       parseResult.isSuccess shouldBe true
     }
 
