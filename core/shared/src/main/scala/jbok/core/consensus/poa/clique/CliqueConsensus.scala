@@ -33,6 +33,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
       blockNumber = parent.header.number + 1
       timestamp   = parent.header.unixTimestamp + config.period.toMillis
       snap <- clique.applyHeaders(parent.header.number, parent.header.hash, Nil)
+      _    <- clique.clearProposalIfMine(parent.header)
     } yield
       BlockHeader(
         parentHash = parent.header.hash,
@@ -87,12 +88,8 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
 
               for {
                 _      <- T.sleep(delay.millis)
-                bytes  <- Clique.sigHash[F](executed.block.header)
-                signed <- clique.sign(bytes)
                 _      <- log.trace(s"${clique.minerAddress} mined block(${executed.block.header.number})")
-                extra = CliqueExtra(Nil, signed)
-                extraBytes <- extra.asBytes[F]
-                header = executed.block.header.copy(extra = extraBytes)
+                header <- clique.fillExtraData(executed.block.header)
               } yield Right(MinedBlock(executed.block.copy(header = header), executed.receipts))
           }
         }
@@ -245,4 +242,3 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
     currentNumber < limit || seen > currentNumber - limit
   }
 }
-

@@ -52,7 +52,7 @@ blockPool:
 
 mining:
   enabled: false
-  secret: "1a3c21bb6e303a384154a56a882f5b760a2d166161f6ccff15fc70e147161788"
+  passphrase: "changeit"
   coinbase: "0000000000000000000000000000000000000000"
   period: "100 millis"
   epoch: "30000"
@@ -88,5 +88,6 @@ service:
     - admin
     - block
     - contract
+    - miner
     - personal
     - transaction

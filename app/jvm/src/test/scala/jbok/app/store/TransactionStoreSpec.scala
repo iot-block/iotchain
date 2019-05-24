@@ -9,12 +9,13 @@ import jbok.core.models.{Block, SignedTransaction}
 import jbok.core.testkit._
 
 class TransactionStoreSpec extends AppSpec {
+  val keyPair = Some(testMiner.keyPair)
   "insert and query transactions" in check { objects =>
     val executor = objects.get[BlockExecutor[IO]]
     val txStore  = objects.get[TransactionStore[IO]]
 
-    val txs      = random[List[SignedTransaction]](genTxs(min = 10, max = 10))
-    val block    = random[Block](genBlock(stxsOpt = Some(txs)))
+    val txs      = random[List[SignedTransaction]](genTxs(min = 10, max = 10, keyPair))
+    val block    = random[Block](genBlock(stxsOpt = Some(txs), keyPair = keyPair))
     val executed = executor.executeBlock(block).unsafeRunSync()
 
     for {

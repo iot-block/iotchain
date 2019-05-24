@@ -13,7 +13,7 @@ class PeerManagerSpec extends CoreSpec {
     val List(config1, config2, config3) = fillConfigs(3)(config.lens(_.peer.port).set(0))
 
     "keep incoming connections <= maxIncomingPeers" in {
-      val p = List(config1.lens(_.peer.maxIncomingPeers).set(1), config2, config3).traverse(CoreModule.resource[IO]).use {
+      val p = List(config1.lens(_.peer.maxIncomingPeers).set(1), config2, config3).traverse(CoreModule.resource[IO](_)).use {
         case List(obj1, obj2, obj3) =>
           val pm1 = obj1.get[PeerManager[IO]]
           val pm2 = obj2.get[PeerManager[IO]]
@@ -34,7 +34,7 @@ class PeerManagerSpec extends CoreSpec {
     }
 
     "keep outgoing connections <= maxOutgoingPeers" in {
-      val p = List(config1.lens(_.peer.maxOutgoingPeers).set(1), config2, config3).traverse(CoreModule.resource[IO]).use {
+      val p = List(config1.lens(_.peer.maxOutgoingPeers).set(1), config2, config3).traverse(CoreModule.resource[IO](_)).use {
         case List(obj1, obj2, obj3) =>
           val pm1 = obj1.get[PeerManager[IO]]
           val pm2 = obj2.get[PeerManager[IO]]
@@ -54,7 +54,7 @@ class PeerManagerSpec extends CoreSpec {
     }
 
     "fail if peers are incompatible" in {
-      val p = List(config1, config2.lens(_.genesis.chainId).set(2), config3).traverse(CoreModule.resource[IO]).use {
+      val p = List(config1, config2.lens(_.genesis.chainId).set(2), config3).traverse(CoreModule.resource[IO](_)).use {
         case List(obj1, obj2, obj3) =>
           val pm1 = obj1.get[PeerManager[IO]]
           val pm2 = obj2.get[PeerManager[IO]]
@@ -74,7 +74,7 @@ class PeerManagerSpec extends CoreSpec {
     }
 
     "close connection explicitly" in {
-      val p = List(config1, config2, config3).traverse(CoreModule.resource[IO]).use {
+      val p = List(config1, config2, config3).traverse(CoreModule.resource[IO](_)).use {
         case List(obj1, obj2, obj3) =>
           val pm1 = obj1.get[PeerManager[IO]]
           val pm2 = obj2.get[PeerManager[IO]]

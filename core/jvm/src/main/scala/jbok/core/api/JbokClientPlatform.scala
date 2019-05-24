@@ -27,6 +27,7 @@ object JbokClientPlatform {
         override def admin: AdminAPI[F]             = rpc.use[AdminAPI[F]]
         override def block: BlockAPI[F]             = rpc.use[BlockAPI[F]]
         override def contract: ContractAPI[F]       = rpc.use[ContractAPI[F]]
+        override def miner: MinerAPI[F]             = rpc.use[MinerAPI[F]]
         override def personal: PersonalAPI[F]       = rpc.use[PersonalAPI[F]]
         override def transaction: TransactionAPI[F] = rpc.use[TransactionAPI[F]]
       }

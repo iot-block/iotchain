@@ -12,12 +12,15 @@ import jbok.core.testkit._
 
 class BlockPoolSpec extends CoreSpec {
   "BlockPool" should {
-    def randomTx = random[List[SignedTransaction]](genTxs(1, 1)).some
+    val objects = locator.unsafeRunSync()
+    val keyPair = Some(testMiner.keyPair)
+
+    def randomTx = random[List[SignedTransaction]](genTxs(1, 1, keyPair)).some
 
     "ignore block if it's already in" in check { objects =>
       val history = objects.get[History[IO]]
       val pool    = objects.get[BlockPool[IO]]
-      val block   = random[List[Block]](genBlocks(1, 1)).head
+      val block   = random[List[Block]](genBlocks(1, 1, keyPair)).head
 
       for {
         genesisDifficulty <- history.genesisHeader.map(_.difficulty)
@@ -33,7 +36,7 @@ class BlockPoolSpec extends CoreSpec {
     "ignore blocks outside of range" in check { objects =>
       val history = objects.get[History[IO]]
       val pool    = objects.get[BlockPool[IO]]
-      val blocks  = random[List[Block]](genBlocks(30, 30))
+      val blocks  = random[List[Block]](genBlocks(30, 30, keyPair))
       for {
         _   <- history.putBestBlockNumber(15)
         _   <- pool.addBlock(blocks.head)
@@ -48,7 +51,7 @@ class BlockPoolSpec extends CoreSpec {
     "remove the blocks that fall out of range" in check { objects =>
       val history = objects.get[History[IO]]
       val pool    = objects.get[BlockPool[IO]]
-      val blocks  = random[List[Block]](genBlocks(20, 20))
+      val blocks  = random[List[Block]](genBlocks(20, 20, keyPair))
 
       for {
         _   <- pool.addBlock(blocks.head)
@@ -83,7 +86,7 @@ class BlockPoolSpec extends CoreSpec {
 
     "pool an orphaned block" in check { objects =>
       val pool  = objects.get[BlockPool[IO]]
-      val block = random[List[Block]](genBlocks(2, 2)).last
+      val block = random[List[Block]](genBlocks(2, 2, keyPair)).last
 
       for {
         res <- pool.addBlock(block)
@@ -120,7 +123,7 @@ class BlockPoolSpec extends CoreSpec {
       val pool    = objects.get[BlockPool[IO]]
       val miner   = objects.get[BlockMiner[IO]]
       val history = objects.get[History[IO]]
-      val txs     = random[List[SignedTransaction]](genTxs(2, 2))
+      val txs     = random[List[SignedTransaction]](genTxs(2, 2, keyPair))
 
       for {
         genesis <- history.getBestBlock

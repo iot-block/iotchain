@@ -7,7 +7,6 @@ import com.thoughtworks.binding.Binding.Constants
 import org.scalajs.dom._
 import org.scalajs.dom.raw.HTMLSelectElement
 
-@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final case class NodeSelect(state: AppState) {
   @binding.dom
   def render: Binding[Element] = {
@@ -15,20 +14,24 @@ final case class NodeSelect(state: AppState) {
       event.currentTarget match {
         case select: HTMLSelectElement =>
           val v = select.options(select.selectedIndex).value
-          state.currentId.value = state.nodeInfos.value.get(v).map(_.id)
-          println(s"currId: ${state.currentId.value}")
+          if (v == "default") {
+            state.clearSeletedNode()
+          } else {
+            state.selectNode(state.nodes.value.get(v).map(_.id))
+          }
         case _ =>
       }
     }
     {
       <select id="nodeSelect" onchange={onChangeHandler}> {
-        val nodeInfos = state.nodeInfos.bind
+        val selected = state.activeNode.bind
+        val nodes= state.nodes.bind
         for {
-          node <- Constants(nodeInfos.toList.sortBy(_._2.rpcPort): _*)
-          isSelected = if (state.currentId.value.isDefined && state.currentId.value.get == node._1) true else false
+          node <- Constants(nodes.toList.map(_._2).sortBy(_.port): _*)
+          isSelected = if (selected.contains(node.id)) true else false
         } yield {
-          <option value={node._1} selected={isSelected}>
-            {node._2.rpcAddr.toString} {node._1.take(7)}
+          <option value={node.id} selected={isSelected}>
+            {node.addr.toString} 
           </option>
         }}
         <option value="defalut" selected={true}>please select a node.</option>

@@ -11,12 +11,13 @@ import jbok.core.testkit._
 import scodec.bits.ByteVector
 
 class TransactionAPISpec extends AppSpec {
+  val keyPair = Some(testMiner.keyPair)
   "TransactionAPI" should {
     "return tx by hash & number" in check { objects =>
       val history     = objects.get[History[IO]]
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
-      val txs         = random[List[SignedTransaction]](genTxs(10, 10))
+      val txs         = random[List[SignedTransaction]](genTxs(10, 10, keyPair))
       val stx         = txs.head
 
       for {
@@ -73,7 +74,7 @@ class TransactionAPISpec extends AppSpec {
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
 
-      val stx = random[List[SignedTransaction]](genTxs(1, 1)).head
+      val stx = random[List[SignedTransaction]](genTxs(1, 1, keyPair)).head
 
       for {
         res <- transaction.sendTx(stx)
@@ -89,7 +90,7 @@ class TransactionAPISpec extends AppSpec {
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
 
-      val stx = random[List[SignedTransaction]](genTxs(1, 1)).head
+      val stx = random[List[SignedTransaction]](genTxs(1, 1, keyPair)).head
 
       for {
         res <- transaction.sendRawTx(stx.bytes)

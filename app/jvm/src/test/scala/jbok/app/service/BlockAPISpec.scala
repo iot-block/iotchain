@@ -32,7 +32,7 @@ class BlockAPISpec extends AppSpec {
           val history = objects.get[History[IO]]
           val miner   = objects.get[BlockMiner[IO]]
           val block   = objects.get[BlockAPI[IO]]
-          val txs     = random[List[SignedTransaction]](genTxs(txCount, txCount))
+          val txs     = random[List[SignedTransaction]](genTxs(txCount, txCount, Some(testMiner.keyPair)))
 
           for {
             parent    <- history.getBestBlock

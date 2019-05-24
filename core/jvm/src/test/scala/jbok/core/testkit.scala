@@ -108,22 +108,22 @@ object testkit {
       )
   }
 
-  implicit def arbBlockBody(implicit chainId: BigInt): Arbitrary[BlockBody] = Arbitrary {
+  def arbBlockBody(keyPair: Option[KeyPair])(implicit chainId: BigInt): Arbitrary[BlockBody] = Arbitrary {
     for {
-      stxs <- arbTxs.arbitrary
+      stxs <- arbTxs(keyPair).arbitrary
     } yield BlockBody(stxs)
   }
 
-  implicit def arbSignedTransactions(implicit chainId: BigInt): Arbitrary[SignedTransactions] = Arbitrary {
+  def arbSignedTransactions(keyPair: Option[KeyPair])(implicit chainId: BigInt): Arbitrary[SignedTransactions] = Arbitrary {
     for {
-      txs <- arbTxs.arbitrary
+      txs <- arbTxs(keyPair).arbitrary
     } yield SignedTransactions(txs)
   }
 
-  implicit def arbBlock(implicit chainId: BigInt): Arbitrary[Block] = Arbitrary {
+  def arbBlock(keyPair: Option[KeyPair])(implicit chainId: BigInt): Arbitrary[Block] = Arbitrary {
     for {
       header <- arbBlockHeader.arbitrary
-      body   <- arbBlockBody.arbitrary
+      body   <- arbBlockBody(keyPair).arbitrary
     } yield Block(header, body)
   }
 
@@ -178,18 +178,18 @@ object testkit {
 
   implicit def arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: CoreConfig): Gen[List[SignedTransaction]] =
+  def genTxs(min: Int = 0, max: Int = 1024, keyPair: Option[KeyPair] = None)(implicit config: CoreConfig): Gen[List[SignedTransaction]] =
     for {
       size <- Gen.chooseNum(min, max)
-      (_, txs) = TxGen.genTxs(size, List(KeyPair.fromSecret(config.mining.secret) -> Account.empty()).toMap).unsafeRunSync()
+      (_, txs) = TxGen.genTxs(size, List(keyPair.getOrElse(Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()) -> Account.empty()).toMap).unsafeRunSync()
     } yield txs
 
-  implicit def arbTxs(implicit config: CoreConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
-    genTxs()
+  implicit def arbTxs(keyPair: Option[KeyPair])(implicit config: CoreConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
+    genTxs(keyPair = keyPair)
   }
 
-  def genBlocks(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Block]] = {
-    val (objects, close) = CoreModule.resource[IO](config).allocated.unsafeRunSync()
+  def genBlocks(min: Int, max: Int, keyPair: Option[KeyPair])(implicit config: CoreConfig): Gen[List[Block]] = {
+    val (objects, close) = CoreModule.resource[IO](config, keyPair).allocated.unsafeRunSync()
     val miner            = objects.get[BlockMiner[IO]]
     val status           = objects.get[Ref[IO, NodeStatus]]
     status.set(NodeStatus.Done).unsafeRunSync()
@@ -202,11 +202,12 @@ object testkit {
 
   def genBlock(
       parentOpt: Option[Block] = None,
-      stxsOpt: Option[List[SignedTransaction]] = None
+      stxsOpt: Option[List[SignedTransaction]] = None,
+      keyPair: Option[KeyPair] = None
   )(implicit config: CoreConfig): Gen[Block] = {
-    val (objects, close) = CoreModule.resource[IO](config).allocated.unsafeRunSync()
-    val miner   = objects.get[BlockMiner[IO]]
-    val status  = objects.get[Ref[IO, NodeStatus]]
+    val (objects, close) = CoreModule.resource[IO](config, keyPair).allocated.unsafeRunSync()
+    val miner            = objects.get[BlockMiner[IO]]
+    val status           = objects.get[Ref[IO, NodeStatus]]
     status.set(NodeStatus.Done).unsafeRunSync()
     val mined = miner.mine1(parentOpt, stxsOpt).unsafeRunSync()
     close.unsafeRunSync()

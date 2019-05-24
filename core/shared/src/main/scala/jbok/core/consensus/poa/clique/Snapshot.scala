@@ -43,28 +43,28 @@ final case class Snapshot(
     tally: Map[Address, Tally] = Map.empty // Current vote tally to avoid recalculating
 ) {
 
-  /** cast adds a new vote into the tally. should clear previous votes from signer -> beneficiary */
-  def cast(signer: Address, beneficiary: Address, authorize: Boolean): Snapshot = {
+  /** cast adds a new vote into the tally. should clear previous votes from signer -> address */
+  def cast(signer: Address, address: Address, authorize: Boolean): Snapshot = {
     val dedup: Snapshot =
       votes
-        .filter(x => x.signer == signer && x.address == beneficiary)
+        .filter(x => x.signer == signer && x.address == address)
         .foldLeft(this)((snap, v) => snap.uncast(v.address, v.authorize))
-        .copy(votes = votes.filterNot(x => x.signer == signer && x.address == beneficiary))
+        .copy(votes = votes.filterNot(x => x.signer == signer && x.address == address))
 
-    dedup.signers.contains(beneficiary) match {
+    dedup.signers.contains(address) match {
       case true if authorize   => dedup
       case false if !authorize => dedup
       case _ =>
-        val vote = Vote(signer, number, beneficiary, authorize)
-        if (dedup.tally.contains(beneficiary)) {
-          val old = dedup.tally(beneficiary)
+        val vote = Vote(signer, number, address, authorize)
+        if (dedup.tally.contains(address)) {
+          val old = dedup.tally(address)
           dedup.copy(
-            tally = dedup.tally + (beneficiary -> old.copy(votes = old.votes + 1)),
+            tally = dedup.tally + (address -> old.copy(votes = old.votes + 1)),
             votes = dedup.votes ++ List(vote)
           )
         } else {
           dedup.copy(
-            tally = dedup.tally + (beneficiary -> Tally(authorize, 1)),
+            tally = dedup.tally + (address -> Tally(authorize, 1)),
             votes = dedup.votes ++ List(vote)
           )
         }
@@ -113,25 +113,25 @@ final case class Snapshot(
     }
   }
 
-  def authorized(beneficiary: Address): Snapshot =
+  def authorized(address: Address): Snapshot =
     copy(
-      signers = this.signers + beneficiary,
-      tally = this.tally - beneficiary,
-      votes = this.votes.filter(_.address != beneficiary)
+      signers = this.signers + address,
+      tally = this.tally - address,
+      votes = this.votes.filter(_.address != address)
     )
 
-  def deauthorized(beneficiary: Address, number: BigInt): Snapshot = {
+  def deauthorized(address: Address, number: BigInt): Snapshot = {
     // Signer list shrunk, delete any leftover recent caches
     val uncasted =
       votes
-        .filter(_.signer == beneficiary)
+        .filter(_.signer == address)
         .foldLeft(this)((snap, v) => snap.uncast(v.address, v.authorize))
 
     uncasted
       .copy(
-        signers = uncasted.signers - beneficiary,
-        tally = uncasted.tally - beneficiary,
-        votes = uncasted.votes.filter(x => x.address != beneficiary || x.signer != beneficiary)
+        signers = uncasted.signers - address,
+        tally = uncasted.tally - address,
+        votes = uncasted.votes.filter(x => x.address != address || x.signer != address)
       )
       .deleteOldestRecent(number)
   }
@@ -178,14 +178,14 @@ object Snapshot {
 
   /** create a new snapshot by applying a given header */
   private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader, chainId: BigInt)(implicit F: Sync[F]): F[Snapshot] = F.delay {
-    val number      = header.number
-    val extra       = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value
-    val beneficiary = Address(header.beneficiary)
+    val number = header.number
+    val extra  = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value
 
     // Resolve the authorization key and check against signers
     val signerOpt = Clique.ecrecover[IO](header, chainId).unsafeRunSync()
     signerOpt match {
       case None =>
+        throw new Exception("recover none from signature")
       case Some(s) if !snap.signers.contains(s) =>
         throw new Exception("unauthorized signer")
       case _ => ()
@@ -198,17 +198,18 @@ object Snapshot {
     }
 
     // Tally up the new vote from the signer
-    val authorize = extra.auth
+    val authorize = extra.proposal.exists(_.auth == true)
+    val address   = extra.proposal.map(_.address).getOrElse(Address.empty)
 
-    val casted = snap.cast(signer, beneficiary, authorize)
+    val casted = snap.cast(signer, address, authorize)
 
     // If the vote passed, update the list of signers
-    val result = casted.tally.get(beneficiary) match {
+    val result = casted.tally.get(address) match {
       case Some(t) if t.votes > snap.signers.size / 2 && t.authorize =>
-        casted.authorized(beneficiary)
+        casted.authorized(address)
 
       case Some(t) if t.votes > snap.signers.size / 2 =>
-        casted.deauthorized(beneficiary, number)
+        casted.deauthorized(address, number)
 
       case _ =>
         casted

@@ -15,6 +15,7 @@ import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
 import jbok.persistent.{KeyValueDB, StageKeyValueDB}
 import scodec.bits.ByteVector
+import jbok.common.testkit._
 import jbok.core.CoreSpec
 
 import scala.collection.JavaConverters._
@@ -30,14 +31,14 @@ import scala.collection.JavaConverters._
 
 final case class VMJson(
     _info: InfoJson,
-//    callcreates: List[CallCreateJson],
     env: EnvJson,
     exec: ExecJson,
-    gas: BigInt,
-    logs: ByteVector,
-    out: ByteVector,
-    post: Map[Address, PrePostJson],
-    pre: Map[Address, PrePostJson]
+    pre: Map[Address, PrePostJson],
+    callcreates: Option[List[CallCreateJson]],
+    gas: Option[BigInt],
+    logs: Option[ByteVector],
+    out: Option[ByteVector],
+    post: Option[Map[Address, PrePostJson]]
 )
 
 //currentCoinbase: The current block’s coinbase address, to be returned by the COINBASE instruction.
@@ -92,6 +93,15 @@ final case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLi
 final case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
 class VMTest extends CoreSpec {
+  implicit val bigIntDecoder: Decoder[BigInt] = Decoder[String].map[BigInt](
+    x =>
+      if (x.startsWith("0x"))
+        BigInt(x.substring(2, x.length), 16)
+      else
+        BigInt(x))
+
+  implicit val bigIntEncoder: Encoder[BigInt] = Encoder[String].contramap[BigInt](_.toString(10))
+
   def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: BigInt): WorldState[IO] = {
     val accounts = json.map {
       case (addr, account) => (addr, Account(balance = UInt256(account.balance), nonce = UInt256(account.nonce)))
@@ -127,9 +137,8 @@ class VMTest extends CoreSpec {
 
   def check(label: String, vmJson: VMJson) =
     s"pass test suite ${label}" in {
-      val config    = EvmConfig.HomesteadConfigBuilder(None)
-      val preState  = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
-      val postState = loadMockWorldState(vmJson.post, vmJson.env.currentNumber)
+      val config   = EvmConfig.HomesteadConfigBuilder(None)
+      val preState = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
       val currentBlockHeader = BlockHeader(
         ByteVector.empty,
         vmJson.env.currentCoinbase.bytes,
@@ -143,8 +152,6 @@ class VMTest extends CoreSpec {
         BigInt(0),
         vmJson.env.currentTimestamp.toLong,
         ByteVector.empty
-//        ByteVector.empty,
-//        ByteVector.empty
       )
       val env = ExecEnv(
         vmJson.exec.address,
@@ -162,36 +169,41 @@ class VMTest extends CoreSpec {
 
       val result = VM.run(context).unsafeRunSync()
 
-      val world = if (result.addressesToDelete.nonEmpty) {
-        result.world.contractCodes
-          .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
-        result.world.delAccount(result.addressesToDelete.head)
+      vmJson.post.foreach { post =>
+        val postState = loadMockWorldState(post, vmJson.env.currentNumber)
+        val world = if (result.addressesToDelete.nonEmpty) {
+          result.world.contractCodes
+            .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
+          result.world.delAccount(result.addressesToDelete.head)
+        } else {
+          result.world.contractCodes.filter(!_._2.isEmpty) shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
+          result.world
+        }
+
+        world.accountProxy.toMap.unsafeRunSync() shouldEqual postState.accountProxy.toMap.unsafeRunSync()
+        for {
+          contractStorages <- postState.contractStorages
+          address = contractStorages._1
+          storage = contractStorages._2.data.unsafeRunSync()
+          if storage.nonEmpty
+        } {
+          world.contractStorages.get(address).map(_.data.unsafeRunSync()).getOrElse(Map.empty[UInt256, UInt256]) shouldEqual storage
+        }
+      }
+
+      vmJson.gas.foreach(_ shouldBe result.gasRemaining)
+      vmJson.out.foreach(_ shouldBe result.returnData)
+      vmJson.logs.foreach(_ shouldBe result.logs.asValidBytes.kec256)
+
+      if (vmJson.gas.isEmpty) {
+        vmJson.post.isEmpty shouldBe true
+        vmJson.out.isEmpty shouldBe true
+        vmJson.logs.isEmpty shouldBe true
+        result.error.nonEmpty shouldBe true
       } else {
-        result.world.contractCodes.filter(!_._2.isEmpty) shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
-        result.world
+        result.error.isEmpty shouldBe true
       }
-
-      result.gasRemaining shouldEqual vmJson.gas
-      world.accountProxy.toMap.unsafeRunSync() shouldEqual postState.accountProxy.toMap.unsafeRunSync()
-      for {
-        contractStorages <- postState.contractStorages
-        address = contractStorages._1
-        storage = contractStorages._2.data.unsafeRunSync()
-        if storage.nonEmpty
-      } {
-        world.contractStorages.get(address).map(_.data.unsafeRunSync() shouldEqual storage)
-      }
-
-      result.returnData shouldEqual vmJson.out
-      result.logs.asValidBytes.kec256 shouldBe vmJson.logs
     }
-
-  implicit val bigIntDecoder: Decoder[BigInt] = Decoder.decodeString.map[BigInt] { s =>
-    if (s.startsWith("0x"))
-      BigInt(s.substring(2, s.length), 16)
-    else
-      BigInt(s)
-  }
 
   "load and run official json test files" should {
     val file = File(Resource.getUrl("VMTests"))
@@ -202,8 +214,6 @@ class VMTest extends CoreSpec {
             !f.path.toString.contains("vmPerformance"))
       .toList
 
-    println(fileList.length)
-
     val sources = for {
       file <- fileList
       lines = file.lines.mkString("\n")
@@ -212,7 +222,7 @@ class VMTest extends CoreSpec {
     for {
       (name, json) <- sources
       caseJson: Json = parse(json).getOrElse(Json.Null)
-      (label, vmJson) <- caseJson.as[Map[String, VMJson]].getOrElse(Map.empty)
+      (label, vmJson) <- caseJson.as[Map[String, VMJson]].right.get
     } {
       check(s"${name}: ${label}", vmJson)
     }

@@ -12,6 +12,7 @@ trait JbokClient[F[_]] {
   def admin: AdminAPI[F]
   def block: BlockAPI[F]
   def contract: ContractAPI[F]
+  def miner: MinerAPI[F]
   def personal: PersonalAPI[F]
   def transaction: TransactionAPI[F]
 }

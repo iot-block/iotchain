@@ -1,32 +1,26 @@
 package jbok.app.views
 
-import java.net._
-
 import cats.effect.IO
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding.{Var, Vars}
-import com.thoughtworks.binding.{Binding, FutureBinding}
-import jbok.app.api.NodeInfo
-import jbok.app.components.Spinner
-import jbok.app.{AppState, SimuClient}
-import jbok.common.execution._
+import com.thoughtworks.binding.Binding
+import jbok.app.components.{Input, Spin}
+import jbok.app.helper.InputValidator
+import jbok.app.{AppState, JbokClientPlatform}
+import jbok.app.execution._
+//import jbok.sdk.api.NodeInfo
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw._
 
-@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final case class ConfigView(state: AppState) {
   val interfaces: Vars[String]       = Vars.empty[String]
-  val host: Var[String]              = Var("127.0.0.1")
-  val hostIsValid: Var[Boolean]      = Var(true)
-  val port: Var[String]              = Var("8333")
-  val portIsValid: Var[Boolean]      = Var(true)
   val moreOption: Var[Boolean]       = Var(false)
   val httpServerSwitch: Var[Boolean] = Var(false)
-  val httpServerPort: Var[String]    = Var("")
-  val httpPortIsValid: Var[Boolean]  = Var(true)
-  val peerListenPort: Var[String]    = Var("8888")
-  val peerPortIsValid: Var[Boolean]  = Var(true)
   val description: Vars[String]      = Vars.empty[String]
+  val peerListenInput                = Input("peerListenPort", validator = InputValidator.isValidPort)
+  val httpPortInput                  = Input("httpPort", validator = InputValidator.isValidPort)
+  val hostInput                      = Input("hostName", defaultValue = "127.0.0.1", disabled = true)
+  val portInput                      = Input("hostPort", defaultValue = "8888", validator = InputValidator.isValidPort)
 
   def init(): Unit = {
     // get all system interface
@@ -46,16 +40,16 @@ final case class ConfigView(state: AppState) {
   def renderMoreConfig(): Binding[Element] =
     if (moreOption.bind) {
       <div>
-        <div class="config-row">
-          <div class="config-row-item">
+        <div class="row config-row">
+          <div class="config-item">
             <label for="peerListenPort">
               <b>
                 peer listen port
               </b>
             </label>
-            <input name="peerListenPort" type="text" oninput={onInputHandler} value={peerListenPort.bind} class={if(peerPortIsValid.bind) "valid" else "invalid"}/>
+            {peerListenInput.render.bind}
           </div>
-          <div class="config-row-item">
+          <div class="config-item">
             <p>
               <br/><br/>
               {"Must be > 1000 and < 65535."}
@@ -63,31 +57,31 @@ final case class ConfigView(state: AppState) {
           </div>
         </div>
 
-        <div class="config-row">
+        <div class="row config-row">
           <label for="httpServerSwitch"><b>http server</b></label>
-          <div class ="config-row-item">
+          <div class ="config-item">
             <label class="switch">
               <input name ="httpServerSwitch" type="checkbox" checked={httpServerSwitch.bind} onchange={onToggleHandler}></input>
               <span class="slider"></span>
             </label>
           </div>
-          <div class ="config-row-item">
+          <div class ="config-item">
             <p></p>
           </div>
         </div>
 
         {
           if (httpServerSwitch.bind) {
-            <div class="config-row">
-              <div class="config-row-item">
+            <div class="row config-row">
+              <div class="config-item">
                 <label for="httpPort">
                   <b>
                     http server port
                   </b>
                 </label>
-                <input name="httpPort" type="text" oninput={onInputHandler} value={httpServerPort.bind} class={if(httpPortIsValid.bind) "valid" else "invalid"} disabled={!httpServerSwitch.bind}/>
+                {httpPortInput.render.bind}
               </div>
-              <div class="config-row-item">
+              <div class="config-item">
                 <p>
                   <br/><br/>
                   {"Must be > 1000 and < 65535."}
@@ -103,26 +97,6 @@ final case class ConfigView(state: AppState) {
       <div></div>
     }
 
-  private val onInputHandler = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement =>
-        input.name match {
-          case "hostname" => host.value = input.value.trim
-          case "port" =>
-            port.value = input.value.trim
-            portIsValid.value = InputValidator.isValidPort(port.value)
-          case "webSocketPort" =>
-            peerListenPort.value = input.value.trim
-            peerPortIsValid.value = InputValidator.isValidPort(peerListenPort.value)
-          case "httpPort" =>
-            httpServerPort.value = input.value.trim
-            httpPortIsValid.value = InputValidator.isValidPort(httpServerPort.value)
-        }
-        port.value = input.value.trim
-      case _ =>
-    }
-  }
-
   private val onClickAdvance = { event: Event =>
     event.currentTarget match {
       case _: HTMLButtonElement =>
@@ -132,44 +106,44 @@ final case class ConfigView(state: AppState) {
   }
 
   @binding.dom
-  def render(): Binding[Element] =
+  def render: Binding[Element] =
     <div class="config">
       <h1>config</h1>
-      <div class="config-row">
-        <div class ="config-row-item">
+      <div class="row config-row">
+        <div class ="config-item">
           <label for="hostname">
             <b>
               hostname
             </b>
           </label>
-          <input name="hostname" type="text" oninput={onInputHandler} value={host.bind} disabled={true}/>
+          {hostInput.render.bind}
         </div>
-        <div class ="config-row-item">
+        <div class ="config-item">
           <p> <br/><br/>The server will accept RPC connections on the following host. </p>
         </div>
       </div>
 
-      <div class="config-row">
-        <div class ="config-row-item">
+      <div class="row config-row">
+        <div class ="config-item">
           <label for="port">
             <b>
               port
             </b>
           </label>
-          <input name="port" type="text" oninput={onInputHandler} value={port.bind} class={if(portIsValid.bind) "valid" else "invalid"}/>
+          {portInput.render.bind}
         </div>
-        <div class ="config-row-item">
+        <div class ="config-item">
           <p> <br/><br/>The server will accept RPC connections on the port. </p>
         </div>
       </div>
 
-      <div class="config-row">
+      <div class="row config-row">
           <button onclick={onClickAdvance}>Advance</button>
       </div>
 
       {renderMoreConfig().bind}
 
-      <div class="config-row">
+      <div class="row config-row">
         <button>Restart</button>
         <button>Cancel</button>
       </div>
@@ -177,51 +151,27 @@ final case class ConfigView(state: AppState) {
       {renderSimulationAdd.bind}
     </div>
 
-  val addHost: Var[String]                 = Var("127.0.0.1")
-  val addHostIsValid: Var[Boolean]         = Var(true)
-  val addPort: Var[String]                 = Var("30316")
-  val addPortIsValid: Var[Boolean]         = Var(true)
   val connectedStatus: Var[Option[String]] = Var(None)
-
-  private val onInputHandlerAdd = { event: Event =>
-    event.currentTarget match {
-      case input: HTMLInputElement =>
-        input.name match {
-          case "add-hostname" =>
-            addHost.value = input.value.trim
-            addHostIsValid.value = InputValidator.isValidIPv4(addHost.value)
-          case "add-port" =>
-            addPort.value = input.value.trim
-            addPortIsValid.value = InputValidator.isValidPort(addPort.value)
-        }
-        port.value = input.value.trim
-        connectedStatus.value = None
-      case _ =>
-    }
-  }
+  val addHostInput                         = Input("addHostInput", defaultValue = "127.0.0.1", validator = InputValidator.isValidIPv4)
+  val addPortInput                         = Input("addPortInput", defaultValue = "30316", validator = InputValidator.isValidPort)
 
   private val onClickAdd = { event: Event =>
     event.currentTarget match {
       case _: HTMLButtonElement =>
-        if (addHostIsValid.value && addPortIsValid.value) {
-          val rpcAddr = s"${addHost.value}:${addPort.value}"
+        connectedStatus.value = Some("connecting")
+        if (addHostInput.isValid && addPortInput.isValid) {
+          val rpcAddr = s"http://${addHostInput.value}:${addPortInput.value}"
           val p = for {
-            sc             <- SimuClient(state.config.value.uri)
-            peerNodeUriOpt <- sc.simulation.addNode(addHost.value, addPort.value.toInt)
-            tip <- if (peerNodeUriOpt.isEmpty) {
-              IO.pure("connect failed.")
-            } else {
-              val nodeInfo = NodeInfo(peerNodeUriOpt.get, addHost.value, addPort.value.toInt)
-              for {
-                jbokClient <- jbok.app.client.JbokClient(new URI(nodeInfo.rpcAddr))
-                _ = state.clients.value += (peerNodeUriOpt.get -> jbokClient)
-                _ = state.addNodeInfo(nodeInfo)
-              } yield "connected."
-            }
-            _ = connectedStatus.value = Some(tip)
-          } yield tip
+            client      <- IO.delay(JbokClientPlatform.apply[IO](rpcAddr))
+            peerNodeUri <- client.admin.peerUri
+            _ = state.clients.value += (peerNodeUri -> client)
+            _ = state.addNode(addPortInput.value, addHostInput.value, addPortInput.value.toInt)
+            _ = connectedStatus.value = Some("connected.")
+          } yield ()
 
-          p.unsafeToFuture()
+          p.timeout(state.config.value.clientTimeout)
+            .handleErrorWith(e => IO.delay(connectedStatus.value = Some(s"connect failed: ${e}\n ${e.getStackTrace.mkString("\n")}")))
+            .unsafeToFuture()
         }
       case _ =>
     }
@@ -233,30 +183,30 @@ final case class ConfigView(state: AppState) {
     <div>
       <h1>simulation</h1>
   
-      <div class ="config-row">
-        <div class ="config-row-item">
+      <div class ="row config-row">
+        <div class ="config-item">
           <label for="add-hostname">
             <b>
               hostname
             </b>
           </label>
-          <input name="add-hostname" type="text" oninput={onInputHandlerAdd} value={addHost.bind} class={if(addHostIsValid.bind) "valid" else "invalid"} />
+          {addHostInput.render.bind}
         </div>
-        <div class ="config-row-item">
+        <div class ="config-item">
           <p> <br/><br/>The server to connect host. </p>
         </div>
       </div>
   
-      <div class="config-row">
-        <div class ="config-row-item">
+      <div class="row config-row">
+        <div class ="config-item">
           <label for="add-port">
             <b>
               port
             </b>
           </label>
-          <input name="add-port" type="text" oninput={onInputHandlerAdd} value={addPort.bind} class={if(addPortIsValid.bind) "valid" else "invalid"} />
+          {addPortInput.render.bind}
         </div>
-        <div class ="config-row-item">
+        <div class ="config-item">
           <p> <br/><br/>The server to connect port. </p>
         </div>
       </div>
@@ -264,20 +214,29 @@ final case class ConfigView(state: AppState) {
       {
         connectedStatus.bind match {
           case None => <div/>
-          case Some(status) =>
-            <div class="config-row">
-              <div class="config-row-item">
-                <b> status: </b>
+          case Some(status) if status == "connecting" =>
+            <div class="row config-row">
+              <div class="config-item">
+                <label><b> status: </b></label>
               </div>
-              <div class="config-row-item">
+              <div class="config-item">
+                {Spin.render().bind}
+              </div>
+            </div>
+          case Some(status) =>
+            <div class="row config-row">
+              <div class="config-item">
+                <label><b> status: </b></label>
+              </div>
+              <div class="config-item">
               {status}
               </div>
             </div>
         }
       }
       
-      <div class="config-row">
-        <button onclick={onClickAdd} disabled={!(addHostIsValid.bind && addPortIsValid.bind)}>Add</button>
+      <div class="row config-row">
+        <button onclick={onClickAdd} >Add</button>
       </div>
     </div>
 }

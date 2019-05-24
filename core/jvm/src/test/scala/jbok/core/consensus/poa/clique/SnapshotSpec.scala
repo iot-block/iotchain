@@ -77,14 +77,13 @@ class SnapshotSpec extends CoreSpec {
         val extra = CliqueExtra(
           Nil,
           CryptoSignature(ByteVector.fill(65)(0).toArray),
-          v.auth
+          Some(Proposal(coinbase, v.auth))
         )
         val extraBytes = extra.asValidBytes
         val header = random[BlockHeader]
           .copy(
             number = number,
             unixTimestamp = time,
-            beneficiary = coinbase.bytes,
             extra = extraBytes,
           )
         sign(header, v.signer) // signer vote to authorize/deauthorize the beneficiary
@@ -93,8 +92,7 @@ class SnapshotSpec extends CoreSpec {
     val head           = headers.last
     val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
     val kp             = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val mc             = miningConfig.copy(secret = kp.secret.bytes)
-    val clique         = Clique[IO](miningConfig, db, genesisConfig, history).unsafeRunSync()
+    val clique         = Clique[IO](miningConfig, db, genesisConfig, history, kp).unsafeRunSync()
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd
@@ -109,15 +107,12 @@ class SnapshotSpec extends CoreSpec {
       val coinbase = address("B")
       val extra = CliqueExtra(
         Nil,
-        CryptoSignature(ByteVector.fill(65)(0).toArray)
+        CryptoSignature(ByteVector.fill(65)(0).toArray),
+        Some(Proposal(coinbase, true))
       )
       val extraBytes = extra.asValidBytes
-      val header = random[BlockHeader]
-        .copy(
-          beneficiary = coinbase.bytes,
-          extra = extraBytes
-        )
-      val signed = sign(header, "A")(genesis.chainId)
+      val header     = random[BlockHeader].copy(extra = extraBytes)
+      val signed     = sign(header, "A")(genesis.chainId)
       Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get shouldBe signer
     }
 

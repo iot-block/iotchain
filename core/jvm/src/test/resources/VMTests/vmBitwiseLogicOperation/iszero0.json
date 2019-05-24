@@ -2,10 +2,10 @@
     "iszero0" : {
         "_info" : {
             "comment" : "",
-            "filledwith" : "cpp-1.3.0+commit.6e0ce939.Linux.g++",
-            "lllcversion" : "Version: 0.4.18-develop.2017.9.25+commit.a72237f2.Linux.g++",
+            "filledwith" : "testeth 1.5.0.dev2-52+commit.d419e0a2",
+            "lllcversion" : "Version: 0.4.26-develop.2018.9.19+commit.785cbf40.Linux.g++",
             "source" : "src/VMTestsFiller/vmBitwiseLogicOperation/iszero0Filler.json",
-            "sourceHash" : "0535ce2a70ccc8c78f99dd11be51043663ad7bf946daa2e24bd5c76ee1df769e"
+            "sourceHash" : "c7730a4eae5d80429b5e6a822a0c8c4dc6bece946d3d6902a5fddb2fc120fa04"
         },
         "callcreates" : [
         ],

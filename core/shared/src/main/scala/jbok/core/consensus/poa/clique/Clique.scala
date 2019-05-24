@@ -1,7 +1,8 @@
 package jbok.core.consensus.poa.clique
 
 import cats.data.OptionT
-import cats.effect.{ConcurrentEffect, IO, Sync}
+import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, IO, Sync}
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
@@ -16,28 +17,50 @@ import scodec.bits._
 
 import scala.concurrent.duration._
 
-final case class CliqueExtra(miners: List[Address], signature: CryptoSignature, auth: Boolean = false)
+final case class Proposal(address: Address, auth: Boolean)
+
+final case class CliqueExtra(miners: List[Address], signature: CryptoSignature, proposal: Option[Proposal] = None)
 
 final class Clique[F[_]](
     config: MiningConfig,
     db: KeyValueDB[F],
     history: History[F],
-    proposals: Map[Address, Boolean] = Map.empty
-)(implicit F: ConcurrentEffect[F]) {
+    proposal: Ref[F, Option[Proposal]],
+    keyPair: KeyPair
+)(implicit F: Concurrent[F]) {
   private[this] val log = Logger[F]
 
   import config._
-
-  val keyPair: KeyPair = {
-    val secret = KeyPair.Secret(config.secret)
-    val public = Signature[ECDSA].generatePublicKey[IO](secret).unsafeRunSync()
-    KeyPair(public, secret)
-  }
 
   val minerAddress: Address = Address(keyPair)
 
   def sign(bv: ByteVector): F[CryptoSignature] =
     Signature[ECDSA].sign[F](bv.toArray, keyPair, history.chainId)
+
+  def fillExtraData(header: BlockHeader): F[BlockHeader] =
+    for {
+      bytes      <- Clique.sigHash[F](header)
+      signed     <- sign(bytes)
+      extraBytes <- proposal.get.map(CliqueExtra(Nil, signed, _).asValidBytes)
+    } yield header.copy(extra = extraBytes)
+
+  def clearProposalIfMine(header: BlockHeader): F[Unit] =
+    for {
+      extra       <- header.extraAs[F, CliqueExtra]
+      bytes       <- Clique.sigHash[F](header)
+      mySigned    <- sign(bytes)
+      proposalOpt <- proposal.get
+      _ <- if (extra.signature == mySigned && extra.proposal == proposalOpt) {
+        proposal.update(_ => None)
+      } else { F.unit }
+    } yield ()
+
+  def ballot(address: Address, auth: Boolean): F[Unit] =
+    proposal.update(_ => Some(Proposal(address, auth)))
+
+  def cancelBallot: F[Unit] = proposal.update(_ => None)
+
+  def getProposal: F[Option[Proposal]] = proposal.get
 
   def applyHeaders(
       number: BigInt,
@@ -90,6 +113,8 @@ object Clique {
   val diffInTurn = BigInt(11) // Block difficulty for in-turn signatures
   val diffNoTurn = BigInt(10) // Block difficulty for out-of-turn signatures
 
+  val inMemorySnapshots: Int     = 128
+  val inMemorySignatures: Int    = 1024
   val wiggleTime: FiniteDuration = 500.millis
 
   def apply[F[_]](
@@ -97,7 +122,8 @@ object Clique {
       db: KeyValueDB[F],
       genesisConfig: GenesisConfig,
       history: History[F],
-  )(implicit F: ConcurrentEffect[F]): F[Clique[F]] =
+      keyPair: KeyPair
+  )(implicit F: Concurrent[F]): F[Clique[F]] =
     for {
       genesisBlock <- history.getBlockByNumber(0)
       _ <- if (genesisBlock.isEmpty) {
@@ -105,7 +131,8 @@ object Clique {
       } else {
         F.unit
       }
-    } yield new Clique[F](config, db, history, Map.empty)
+      proposal <- Ref[F].of(Option.empty[Proposal])
+    } yield new Clique[F](config, db, history, proposal, keyPair)
 
   def fillExtraData(miners: List[Address]): ByteVector =
     CliqueExtra(miners, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asValidBytes

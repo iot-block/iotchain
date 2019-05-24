@@ -2,13 +2,13 @@ package jbok.app.views
 
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
+import jbok.app.AppState
 import jbok.core.models.SignedTransaction
-import org.scalajs.dom.Element
+import org.scalajs.dom.{Element, Event}
 
-@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 object TxView {
   @binding.dom
-  def render(tx: SignedTransaction): Binding[Element] =
+  def render(state: AppState, tx: SignedTransaction): Binding[Element] =
     <div>
       <h3>{s"Transaction (${tx.hash.toHex})"}</h3>
 
@@ -21,12 +21,17 @@ object TxView {
 
           <tr>
             <th>from</th>
-            <td>{tx.senderAddress.get.toString}</td>
+            <td>
+              {
+                val senderAddress = tx.senderAddress.getOrElse("error address").toString
+                <a onclick={(e: Event) => state.searchAccount(senderAddress)}>{senderAddress}</a>
+              }
+            </td>
           </tr>
 
           <tr>
             <th>to</th>
-            <td>{tx.receivingAddress.toString}</td>
+            <td><a onclick={(e: Event) => state.searchAccount(tx.receivingAddress.toString)}>{tx.receivingAddress.toString}</a></td>
           </tr>
 
           <tr>
