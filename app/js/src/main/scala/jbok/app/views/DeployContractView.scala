@@ -7,7 +7,7 @@ import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.components.{AddressOptionInput, Input, Notification}
 import jbok.app.helper.{ContractAddress, InputValidator}
 import jbok.app.AppState
-import jbok.core.api.{BlockTag, CallTx, TransactionRequest}
+import jbok.core.api.{BlockTag, CallTx}
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom.raw.HTMLInputElement
 import org.scalajs.dom.{Element, _}
@@ -57,8 +57,8 @@ final case class DeployContractView(state: AppState) {
     //      val valueSubmit = if (valueInput.value.isEmpty) None else Some(BigInt(valueInput.value))
     val dataSubmit = Some(ByteVector.fromValidHex(data))
     val passphase  = Some(password)
-    val txRequest  = TransactionRequest(fromSubmit, None, valueSubmit, None, None, None, dataSubmit)
-    val callTx     = CallTx(Some(fromSubmit), None, None, 1, 0, dataSubmit.get)
+//    val txRequest  = TransactionRequest(fromSubmit, None, valueSubmit, None, None, None, dataSubmit)
+    val callTx = CallTx(Some(fromSubmit), None, None, 1, 0, dataSubmit.get)
 
     client.foreach { client =>
       val p = for {
@@ -66,7 +66,7 @@ final case class DeployContractView(state: AppState) {
         gasPrice <- client.contract.getGasPrice
         gasLimit <- client.contract.getEstimatedGas(callTx, BlockTag.latest)
         stx <- client.personal
-          .sendTransaction(txRequest.copy(nonce = Some(account.nonce), gasPrice = Some(gasPrice.max(1)), gasLimit = Some(defaultGasLimit)), passphase) >>= client.transaction.getTx
+          .sendTransaction(fromSubmit, password, None, None, Some(defaultGasLimit), Some(gasPrice.max(1)), Some(account.nonce), dataSubmit) >>= client.transaction.getTx
         address = ContractAddress.getContractAddress(fromSubmit, account.nonce)
         _ = stx.fold(
           statusMessage.value = Some("deploy failed.")

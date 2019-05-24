@@ -8,7 +8,7 @@ import com.thoughtworks.binding.Binding.{Var, Vars}
 import jbok.app.AppState
 import jbok.app.components.{AddressOptionInput, Input, Notification, Spin}
 import jbok.app.helper.InputValidator
-import jbok.core.api.{BlockTag, TransactionRequest}
+import jbok.core.api.BlockTag
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom.raw.HTMLButtonElement
 import org.scalajs.dom.{Element, _}
@@ -75,12 +75,10 @@ final case class SendTxView(state: AppState) {
     val gasLimitSubmit = Some(gasLimit)
     val dataSubmit     = data.map(ByteVector.fromValidHex(_))
 
-    val txRequest = TransactionRequest(fromSubmit, toSubmit, valueSubmit, gasLimitSubmit, None, None, dataSubmit)
-
     client.foreach { client =>
       val p = for {
         gasPrice     <- client.contract.getGasPrice
-        hash         <- client.personal.sendTransaction(txRequest.copy(gasPrice = Some(gasPrice)), Some(password))
+        hash         <- client.personal.sendTransaction(fromSubmit, password, toSubmit, valueSubmit, gasLimitSubmit, Some(1), None, dataSubmit)
         stxInPool    <- client.transaction.getPendingTx(hash)
         stxInHistory <- client.transaction.getTx(hash)
         stx = stxInPool.fold(stxInHistory)(Some(_))

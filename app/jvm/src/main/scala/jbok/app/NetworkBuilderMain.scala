@@ -1,14 +1,9 @@
 package jbok.app
 
-import java.nio.file.Paths
-
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import jbok.core.config.NetworkBuilder.Topology
-import jbok.core.config.{CoreConfig, GenesisBuilder, NetworkBuilder}
-import jbok.core.models.Address
-import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
-import monocle.macros.syntax.lens._
+import jbok.core.config.{CoreConfig, NetworkBuilder}
 
 object NetworkBuilderMain extends IOApp {
   override def run(args: List[String]): IO[ExitCode] =

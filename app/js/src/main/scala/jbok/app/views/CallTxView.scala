@@ -13,7 +13,7 @@ import scodec.bits.ByteVector
 import io.circe.parser._
 import jbok.app.components.{AddressOptionInput, Input, Notification}
 import jbok.app.helper.InputValidator
-import jbok.core.api.{BlockTag, CallTx, TransactionRequest}
+import jbok.core.api.{BlockTag, CallTx}
 import jbok.evm.solidity.ABIDescription.FunctionDescription
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
@@ -152,14 +152,14 @@ final case class CallTxView(state: AppState) {
   }
 
   def execute(from: String, to: String, functionDescription: FunctionDescription) = {
-    val fromSubmit = Some(Address(ByteVector.fromValidHex(from)))
+    val fromSubmit = Address(ByteVector.fromValidHex(from))
     val toSubmit   = Some(Address(ByteVector.fromValidHex(to)))
     val data =
       if (functionDescription.inputs.isEmpty) functionDescription.methodID
       else {
         functionDescription.encode(paramInputs.value.toList.map(_.value).mkString("[", ",", "]")).right.get
       }
-    val callTx = CallTx(fromSubmit, toSubmit, None, 1, 0, data)
+    val callTx = CallTx(Some(fromSubmit), toSubmit, None, 1, 0, data)
     if (txType.value == "Call") {
       reset()
       val p = for {
@@ -171,17 +171,15 @@ final case class CallTxView(state: AppState) {
       txStatus.value = Some("wait for result...")
       p.unsafeToFuture()
     } else {
-      val txRequest =
-        TransactionRequest(fromSubmit.get, toSubmit, None, None, None, None, Some(data))
-      val password = if (passphase.value.isEmpty) Some("") else Some(passphase.value)
+      val password = if (passphase.value.isEmpty) "" else passphase.value
       val p = for {
-        account <- client.get.account.getAccount(fromSubmit.get, BlockTag.latest)
+        account <- client.get.account.getAccount(fromSubmit, BlockTag.latest)
         _ = txStatus.value = Some("estimate gas...")
         gasLimit <- client.get.contract.getEstimatedGas(callTx, BlockTag.latest)
         gasPrice <- client.get.contract.getGasPrice
         _ = txStatus.value = Some(s"gas limit: $gasLimit, gas price: $gasPrice")
         txHash <- client.get.personal
-          .sendTransaction(txRequest.copy(nonce = Some(account.nonce), gasLimit = Some(gasLimit), gasPrice = Some(gasPrice)), password)
+          .sendTransaction(fromSubmit, password, toSubmit, None, Some(gasLimit), Some(gasPrice), Some(account.nonce), Some(data))
         stx <- client.get.transaction.getTx(txHash)
         _ = stx.foreach(state.addStx(currentId.get, _))
         _ = txStatus.value = Some(s"send transaction success: ${txHash}")

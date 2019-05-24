@@ -1,7 +1,6 @@
 package jbok.core.config
 
-import java.net.InetSocketAddress
-import java.nio.file.{Path, Paths}
+import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.implicits._
@@ -11,13 +10,11 @@ import jbok.core.config.NetworkBuilder.Topology
 import jbok.core.keystore.KeyStorePlatform
 import jbok.core.models.Address
 import jbok.core.peer.PeerUri
-import jbok.crypto.signature.KeyPair
-import jbok.crypto.signature.KeyPair.Secret
+import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import monocle.macros.syntax.lens._
 
 import scala.collection.immutable.ListMap
 import scala.concurrent.duration._
-import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 
 final case class NetworkBuilder(
     base: CoreConfig,
@@ -52,10 +49,10 @@ final case class NetworkBuilder(
         .set("rocksdb")
         .lens(_.ssl.enabled)
         .set(false)
-//        .lens(_.db.driver)
-//        .set("")
-//        .lens(_.db.url)
-//        .set(s"${rootPath.resolve("service.db").toAbsolutePath}")
+        .lens(_.db.driver)
+        .set("org.sqlite.JDBC")
+        .lens(_.db.url)
+        .set(s"jdbc:sqlite:${rootPath.resolve("service.db").toAbsolutePath}")
     }
 
     copy(configs = configs, keyPairs = keyPairs)
