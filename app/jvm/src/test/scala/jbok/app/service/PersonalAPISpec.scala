@@ -16,7 +16,7 @@ class PersonalAPISpec extends AppSpec {
     for {
       _   <- personal.importRawKey(kp.secret.bytes, passphrase)
       res <- keystore.listAccounts
-      _ = res shouldBe List(Address(kp))
+      _ = res.contains(Address(kp)) shouldBe true
     } yield ()
   }
 

@@ -350,7 +350,7 @@ class OpCodeGasSpec extends FunSuite with OpCodeTesting with Matchers with Prope
   }
 
   test(MLOAD) { op =>
-    val memSize = 256
+    val memSize = 256L
     val maxGas  = G_verylow + config.calcMemCost(memSize, memSize, memSize)
 
     forAll { (state: ProgramState[IO], memory: Memory) =>

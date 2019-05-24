@@ -28,22 +28,5 @@ class LoggerSpec extends CommonSpec {
 
       p.unsafeRunSync()
     }
-
-    "level1" ignore {
-      Logger[IO].t("hello").unsafeRunSync()
-      Logger[IO].w("hello").unsafeRunSync()
-      Logger[IO].d("hello").unsafeRunSync()
-      Logger[IO].i("hello").unsafeRunSync()
-      Logger[IO].e("hello").unsafeRunSync()
-    }
-
-    "level2" ignore {
-      val t = new Exception("oho")
-      Logger[IO].t("hello", t).unsafeRunSync()
-      Logger[IO].w("hello", t).unsafeRunSync()
-      Logger[IO].d("hello", t).unsafeRunSync()
-      Logger[IO].i("hello", t).unsafeRunSync()
-      Logger[IO].e("hello", t).unsafeRunSync()
-    }
   }
 }

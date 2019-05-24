@@ -14,9 +14,6 @@ trait AppSpec extends CoreSpec {
     Injector().produceF[IO](testAppModule).toCats
 
   override def check(config: CoreConfig)(f: Locator => IO[Unit]): Unit = {
-
-    val objects = locator.unsafeRunSync()
-
     val p = testAppResource.use { objects =>
       f(objects)
     }

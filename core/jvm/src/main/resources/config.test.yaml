@@ -51,7 +51,7 @@ blockPool:
   maxBlockBehind: 10
 
 mining:
-  enabled: false
+  enabled: true
   address: "0x4ab032a020fad1872aae6b036fdcec8a428da570"
   passphrase: "changeit"
   coinbase: "0000000000000000000000000000000000000000"

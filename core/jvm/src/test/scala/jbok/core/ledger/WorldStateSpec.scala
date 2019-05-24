@@ -299,7 +299,10 @@ class WorldStateSpec extends CoreSpec {
           .unsafeRunSync()
           .stateRootHash
 
-      val w3 = history.getWorldState(stateRootHash = Some(root2)).unsafeRunSync()
+      history.getWorldState(stateRootHash = Some(root))
+        .flatMap(_.getAccount(address1))
+        .map(_ shouldBe Account(0, 1000))
+        .unsafeRunSync()
     }
 
     "create contract address" in new Fixture {

@@ -125,11 +125,7 @@ object Clique {
       keystore: KeyStore[F],
   )(implicit F: Concurrent[F]): F[Clique[F]] =
     for {
-      keyPair <- if (config.enabled) {
-        keystore.unlockAccount(config.address, config.passphrase).map(_.keyPair)
-      } else {
-        Signature[ECDSA].generateKeyPair[F]()
-      }
+      keyPair      <- keystore.unlockAccount(config.address, config.passphrase).map(_.keyPair)
       genesisBlock <- history.getBlockByNumber(0)
       _ <- if (genesisBlock.isEmpty) {
         history.initGenesis(genesisConfig)

@@ -1,7 +1,7 @@
 package jbok.core.ledger
 
 import jbok.common.CommonSpec
-import jbok.core.models.{Address, Receipt}
+import jbok.core.models.Receipt
 import scodec.bits._
 
 class BloomFilterSpec extends CommonSpec {

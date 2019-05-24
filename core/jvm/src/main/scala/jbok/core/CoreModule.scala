@@ -104,8 +104,4 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
 
 object CoreModule {
   val testConfig: CoreConfig = Config[IO].readResource[CoreConfig]("config.test.yaml").unsafeRunSync()
-
-  def resource[F[_]: TagK](config: CoreConfig = testConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]): Resource[F, Locator] = {
-    Injector().produceF[F](new CoreModule[F](config)).toCats
-  }
 }

@@ -11,7 +11,6 @@ import jbok.core.testkit._
 import scodec.bits.ByteVector
 
 class TransactionAPISpec extends AppSpec {
-  val keyPair = Some(testMiner.keyPair)
   "TransactionAPI" should {
     "return tx by hash & number" in check { objects =>
       val history     = objects.get[History[IO]]

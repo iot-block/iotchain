@@ -187,7 +187,7 @@ object testkit {
     status.set(NodeStatus.Done).unsafeRunSync()
     for {
       size <- Gen.chooseNum(min, max)
-      blocks = miner.stream.take(size).compile.toList.unsafeRunSync()
+      blocks = miner.stream.take(size.toLong).compile.toList.unsafeRunSync()
     } yield blocks.map(_.block)
   }
 
