@@ -78,7 +78,7 @@ final class MerklePatriciaTrie[F[_]](
       case Some(ExtensionNode(_, child)) => getNodeByEntry(child) >>= size0
       case Some(bn @ BranchNode(_, value)) =>
         for {
-          bn <- bn.activated.traverse { case (i, e) => getNodeByBranch(e) >>= size0 }.map(_.sum)
+          bn <- bn.activated.traverse { case (_, e) => getNodeByBranch(e) >>= size0 }.map(_.sum)
         } yield bn + (if (value.isEmpty) 0 else 1)
     }
 
@@ -140,7 +140,7 @@ final class MerklePatriciaTrie[F[_]](
       case None =>
         F.pure(Map.empty)
 
-      case Some(leaf @ LeafNode(key, value)) =>
+      case Some(leaf @ LeafNode(_, _)) =>
         F.pure(Map(prefix -> leaf))
 
       case Some(ext @ ExtensionNode(key, entry)) =>
@@ -149,7 +149,7 @@ final class MerklePatriciaTrie[F[_]](
           subMap  <- getNodes0(prefix ++ key, decoded)
         } yield subMap + (prefix -> ext)
 
-      case Some(bn @ BranchNode(_, value)) =>
+      case Some(bn @ BranchNode(_, _)) =>
         for {
           xs <- bn.activated.traverse {
             case (i, e) => getNodeByBranch(e).flatMap(node => getNodes0(prefix + MerklePatriciaTrie.alphabet(i), node))
@@ -217,17 +217,11 @@ final class MerklePatriciaTrie[F[_]](
         }
     }
 
-  private def commit(newRoot: Option[MptNode], toDel: List[MptNode], toPut: List[MptNode]): F[ByteVector] = {
+  private def commit(newRoot: Option[MptNode], toPut: List[MptNode]): F[ByteVector] = {
     val newRootHash  = newRoot.map(_.hash).getOrElse(MerklePatriciaTrie.emptyRootHash)
     val newRootBytes = newRoot.map(_.capped).getOrElse(ByteVector.empty)
 
     getRootHash.flatMap { previousRootHash =>
-//      val delOps = toDel
-//        .withFilter { node =>
-//          node.entry.isLeft || node.hash == previousRootHash
-//        }
-//        .map(x => namespace ++ x.hash)
-
       val putOps = toPut
         .withFilter { node =>
           node.entry.isLeft || node.capped == newRootBytes
@@ -239,12 +233,12 @@ final class MerklePatriciaTrie[F[_]](
   }
 
   private def commitPut(nodeInsertResult: NodeInsertResult): F[ByteVector] =
-    commit(Some(nodeInsertResult.newNode), Nil, nodeInsertResult.toPut)
+    commit(Some(nodeInsertResult.newNode), nodeInsertResult.toPut)
 
   private def commitDel(nodeRemoveResult: NodeRemoveResult): F[ByteVector] =
     nodeRemoveResult match {
-      case NodeRemoveResult(true, newRoot, toDel, toPut) =>
-        commit(newRoot, toDel, toPut)
+      case NodeRemoveResult(true, newRoot, _, toPut) =>
+        commit(newRoot, toPut)
 
       case NodeRemoveResult(false, _, _, _) =>
         getRootHash

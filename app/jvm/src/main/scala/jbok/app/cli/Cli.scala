@@ -149,7 +149,7 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
   // configs
   val bindAddr = Label(middle1, "")
   val serviceUri = Label(middle1, "")
-  def renderConfigs = client.admin.getCoreConfig.map { config =>
+  def renderConfigs = client.admin.getConfig.map { config =>
     bindAddr.text := s"bindAddr: ${config.peer.bindAddr}"
     serviceUri.text := s"service: ${config.service.uri}"
     ()

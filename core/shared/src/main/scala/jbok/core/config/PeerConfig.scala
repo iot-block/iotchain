@@ -15,6 +15,7 @@ final case class PeerConfig(
     updatePeersInterval: FiniteDuration,
     maxOutgoingPeers: Int,
     maxIncomingPeers: Int,
+    minPeers: Int,
     bufferSize: Int,
     timeout: FiniteDuration
 ) {

@@ -18,7 +18,7 @@ import scodec.bits.ByteVector
 object testkit {
   import CoreSpec._
 
-  def fillConfigs(n: Int)(config: CoreConfig): List[CoreConfig] =
+  def fillConfigs(n: Int)(config: FullConfig): List[FullConfig] =
     List.fill(n)(config)
 
   def uint256Gen(min: UInt256 = UInt256.Zero, max: UInt256 = UInt256.MaxValue): Gen[UInt256] =
@@ -138,20 +138,20 @@ object testkit {
       )
   }
 
-  def genStatus(number: BigInt = 0, td: BigInt = 0)(implicit config: CoreConfig): Gen[Status] =
+  def genStatus(number: BigInt = 0, td: BigInt = 0)(implicit config: FullConfig): Gen[Status] =
     Gen.delay(Status(config.genesis.chainId, config.genesis.header.hash, number, td, ""))
 
-  def genPeer(implicit config: CoreConfig): Gen[Peer[IO]] =
+  def genPeer(implicit config: FullConfig): Gen[Peer[IO]] =
     for {
       uri    <- arbPeerUri.arbitrary
       status <- genStatus()
     } yield Peer[IO](uri, status).unsafeRunSync()
 
-  implicit def arbPeer(implicit config: CoreConfig): Arbitrary[Peer[IO]] = Arbitrary {
+  implicit def arbPeer(implicit config: FullConfig): Arbitrary[Peer[IO]] = Arbitrary {
     genPeer
   }
 
-  def genPeers(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Peer[IO]]] =
+  def genPeers(min: Int, max: Int)(implicit config: FullConfig): Gen[List[Peer[IO]]] =
     for {
       size  <- Gen.chooseNum(min, max)
       peers <- Gen.listOfN(size, genPeer)
@@ -170,17 +170,17 @@ object testkit {
 
   implicit def arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: CoreConfig): Gen[List[SignedTransaction]] =
+  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: FullConfig): Gen[List[SignedTransaction]] =
     for {
       size <- Gen.chooseNum(min, max)
       (_, txs) = TxGen.genTxs(size, Map(testKeyPair -> Account.empty())).unsafeRunSync()
     } yield txs
 
-  implicit def arbTxs(implicit config: CoreConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
+  implicit def arbTxs(implicit config: FullConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
     genTxs()
   }
 
-  def genBlocks(min: Int, max: Int)(implicit config: CoreConfig): Gen[List[Block]] = {
+  def genBlocks(min: Int, max: Int)(implicit config: FullConfig): Gen[List[Block]] = {
     val objects = locator.unsafeRunSync()
     val miner            = objects.get[BlockMiner[IO]]
     val status           = objects.get[Ref[IO, NodeStatus]]
@@ -191,7 +191,7 @@ object testkit {
     } yield blocks.map(_.block)
   }
 
-  def genBlock(parentOpt: Option[Block] = None, stxsOpt: Option[List[SignedTransaction]] = None)(implicit config: CoreConfig): Gen[Block] = {
+  def genBlock(parentOpt: Option[Block] = None, stxsOpt: Option[List[SignedTransaction]] = None)(implicit config: FullConfig): Gen[Block] = {
     val objects = locator.unsafeRunSync()
     val miner            = objects.get[BlockMiner[IO]]
     val status           = objects.get[Ref[IO, NodeStatus]]

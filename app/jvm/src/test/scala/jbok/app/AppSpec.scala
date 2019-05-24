@@ -3,7 +3,7 @@ package jbok.app
 import cats.effect.IO
 import distage.{Injector, Locator}
 import jbok.core.CoreSpec
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 
 trait AppSpec extends CoreSpec {
 
@@ -13,7 +13,7 @@ trait AppSpec extends CoreSpec {
   val testAppResource =
     Injector().produceF[IO](testAppModule).toCats
 
-  override def check(config: CoreConfig)(f: Locator => IO[Unit]): Unit = {
+  override def check(config: FullConfig)(f: Locator => IO[Unit]): Unit = {
     val p = testAppResource.use { objects =>
       f(objects)
     }

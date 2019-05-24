@@ -8,14 +8,14 @@ import cats.implicits._
 import fs2.io.tcp.Socket
 import javax.net.ssl.SSLContext
 import jbok.codec.rlp.implicits._
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 import jbok.core.ledger.History
 import jbok.core.messages.Status
 import jbok.core.queue.Queue
 import jbok.network.{Message, Request}
 import jbok.network.tcp.implicits._
 
-abstract class BaseManager[F[_]](config: CoreConfig, history: History[F], ssl: Option[SSLContext])(implicit F: Concurrent[F]) {
+abstract class BaseManager[F[_]](config: FullConfig, history: History[F], ssl: Option[SSLContext])(implicit F: Concurrent[F]) {
   def inbound: Queue[F, Peer[F], Message[F]]
 
   val connected: Ref[F, Map[PeerUri, (Peer[F], Socket[F])]] = Ref.unsafe(Map.empty)

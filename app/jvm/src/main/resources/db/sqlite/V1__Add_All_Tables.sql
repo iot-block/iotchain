@@ -1,6 +1,6 @@
 CREATE TABLE transactions
 (
-  id          int unsigned primary key AUTOINCREMENT,
+  id          int unsigned primary key,
   txHash      varchar(255) not null unique,
   nonce       int unsigned not null,
   fromAddress varchar(255) not null,
@@ -20,3 +20,8 @@ CREATE TABLE transactions
 CREATE INDEX `from_address_index` ON transactions (fromAddress);
 CREATE INDEX `to_address_index` ON transactions (toAddress);
 
+CREATE TABLE blocks
+(
+  blockNumber int unsigned not null unique,
+  blockHash varchar(255) not null unique
+);

@@ -16,8 +16,8 @@ import monocle.macros.syntax.lens._
 import scala.concurrent.duration._
 
 final case class NetworkBuilder(
-    base: CoreConfig,
-    configs: List[CoreConfig] = Nil,
+    base: FullConfig,
+    configs: List[FullConfig] = Nil,
 ) {
   def withBlockPeriod(n: Int): NetworkBuilder =
     copy(base = base.lens(_.mining.period).set(n.millis))
@@ -27,6 +27,7 @@ final case class NetworkBuilder(
 
   def addNode(keyPair: KeyPair, coinbase: Address, rootPath: Path, host: String, sslKeyStorePath: Path): NetworkBuilder = {
     val config = base
+      .lens(_.rootPath).set(rootPath.toAbsolutePath.toString)
       .lens(_.peer.host).set(host)
       .lens(_.service.host).set(host)
       .lens(_.service.secure).set(true)
@@ -48,7 +49,7 @@ final case class NetworkBuilder(
     copy(configs = config :: configs)
   }
 
-  def build: List[CoreConfig] = {
+  def build: List[FullConfig] = {
     val reversed = configs.reverse
     val seeds = reversed.map(_.peer).map { peer =>
       PeerUri.fromTcpAddr(new InetSocketAddress(peer.host, peer.port)).uri
@@ -58,5 +59,5 @@ final case class NetworkBuilder(
   }
 
   def dump: IO[Unit] =
-    build.zipWithIndex.traverse_ { case (config, i) => Config[IO].dump(config.asJson, Paths.get(s"config-${i}.yaml")) }
+    build.zipWithIndex.traverse_ { case (config, i) => Config[IO].dump(config.asJson, Paths.get(config.rootPath).resolve(s"config.yaml")) }
 }

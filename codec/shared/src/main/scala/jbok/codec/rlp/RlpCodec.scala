@@ -22,13 +22,13 @@ final case class RlpCodec[A](prefixType: PrefixType, valueCodec: Codec[A]) exten
     Codec[A](
       { a: A =>
         for {
-          bits           <- valueCodec.encode(a)
+          bits           <- codec.encode(a)
           lengthPrefixed <- lengthCodec.encode(bits.bytes)
         } yield lengthPrefixed
       }, { bits: BitVector =>
         for {
           result <- lengthCodec.decode(bits)
-          a      <- valueCodec.decode(result.value.bits)
+          a      <- codec.decode(result.value.bits)
         } yield a.mapRemainder(_ => result.remainder)
       }
     )
@@ -131,7 +131,7 @@ object RlpCodec {
 
       override def sizeBound: SizeBound = {
         ctx.parameters match {
-          case head :: tail =>
+          case head :: _ =>
             ctx.parameters.foldLeft(head.typeclass.sizeBound)((acc, cur) => acc + cur.typeclass.sizeBound)
           case Nil =>
               SizeBound.unknown

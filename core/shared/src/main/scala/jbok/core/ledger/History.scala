@@ -68,6 +68,8 @@ trait History[F[_]] {
 
   def getBestBlockNumber: F[BigInt]
 
+  def getBestBlockHeader: F[BlockHeader]
+
   def getBestBlock: F[Block]
 
   def putBestBlockNumber(number: BigInt): F[Unit]

@@ -201,6 +201,13 @@ final class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F
   override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
     db.getOpt[ByteVector, TransactionLocation](txHash, namespaces.TxLocation).observed("getTransactionLocation")
 
+  override def getBestBlockHeader: F[BlockHeader] =
+    getBestBlockNumber.flatMap(bn =>
+      getBlockHeaderByNumber(bn).flatMap {
+        case Some(header) => F.pure(header)
+        case None         => F.raiseError(new Exception(s"best block header at ${bn} does not exist"))
+    })
+
   override def getBestBlock: F[Block] =
     getBestBlockNumber.flatMap(bn =>
       getBlockByNumber(bn).flatMap {

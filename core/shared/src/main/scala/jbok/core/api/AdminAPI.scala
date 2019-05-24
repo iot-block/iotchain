@@ -1,6 +1,6 @@
 package jbok.core.api
 
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 import jbok.core.models.SignedTransaction
 import jbok.core.peer.PeerUri
 import jbok.network.rpc.PathName
@@ -19,5 +19,5 @@ trait AdminAPI[F[_]] {
 
   def pendingTransactions: F[List[SignedTransaction]]
 
-  def getCoreConfig: F[CoreConfig]
+  def getConfig: F[FullConfig]
 }

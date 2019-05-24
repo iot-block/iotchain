@@ -4,13 +4,13 @@ import cats.effect.IO
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
 import com.thoughtworks.binding.Binding.Var
-import jbok.app.components.{Skeleton, Spin}
+import jbok.app.components.Skeleton
+import jbok.app.execution._
 import jbok.app.{AppState, Search}
+import jbok.common.log.Logger
 import jbok.core.models.{Account, Address, Block, SignedTransaction}
 import org.scalajs.dom._
 import scodec.bits.ByteVector
-import jbok.app.execution._
-import jbok.common.log.Logger
 
 final case class SearchResult(state: AppState, search: Search) {
   private val log = Logger[IO]

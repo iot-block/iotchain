@@ -5,7 +5,7 @@ import jbok.app.AppSpec
 import jbok.core.peer.{PeerManager, PeerUri}
 import jbok.core.api.AdminAPI
 import jbok.common.testkit._
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 import jbok.core.testkit._
 
 class AdminAPISpec extends AppSpec {
@@ -20,11 +20,11 @@ class AdminAPISpec extends AppSpec {
       } yield ()
     }
 
-    "getCoreConfig" in check { objects =>
+    "getConfig" in check { objects =>
       val admin = objects.get[AdminAPI[IO]]
       for {
-        res <- admin.getCoreConfig
-        _ = res shouldBe objects.get[CoreConfig]
+        res <- admin.getConfig
+        _ = res shouldBe objects.get[FullConfig]
       } yield ()
     }
   }

@@ -1,3 +1,5 @@
+rootPath: ""
+
 genesis:
   difficulty: "0"
   gasLimit: "16716680"
@@ -31,6 +33,7 @@ peer:
   updatePeersInterval: "10 seconds"
   maxOutgoingPeers: 10
   maxIncomingPeers: 10
+  minPeers: 0
   bufferSize: 4194304 # 4 MiB
   timeout: "10 seconds"
 

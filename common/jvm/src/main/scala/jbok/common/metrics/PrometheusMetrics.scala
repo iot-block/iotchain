@@ -57,7 +57,7 @@ final class PrometheusMetrics[F[_]](val registry: CollectorRegistry = Prometheus
           F.delay(Histogram.build(metricName, name).labelNames(labels: _*).register(registry))
             .attempt
             .flatMap {
-              case Left(e) =>
+              case Left(_) =>
                 getOrCreateHistogram(name, labels: _*)
               case Right(hist) =>
                 F.delay(histograms += (metricName -> hist)).as(hist)
@@ -74,7 +74,7 @@ final class PrometheusMetrics[F[_]](val registry: CollectorRegistry = Prometheus
           F.delay(Gauge.build(metricName, name).labelNames(labels: _*).register(registry))
             .attempt
             .flatMap {
-              case Left(e) =>
+              case Left(_) =>
                 getOrCreateGauge(name, labels: _*)
               case Right(gauge) =>
                 F.delay(gauges += (metricName -> gauge)).as(gauge)

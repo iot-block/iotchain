@@ -9,7 +9,7 @@ import fs2._
 import fs2.io.tcp.Socket
 import javax.net.ssl.SSLContext
 import jbok.common.log.Logger
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 import jbok.core.ledger.History
 import jbok.core.queue.Queue
 import jbok.network.Message
@@ -17,7 +17,7 @@ import jbok.network.tcp.implicits._
 
 import scala.concurrent.duration._
 
-final class OutgoingManager[F[_]](config: CoreConfig, history: History[F], ssl: Option[SSLContext], val inbound: Queue[F, Peer[F], Message[F]], val store: PeerStore[F])(
+final class OutgoingManager[F[_]](config: FullConfig, history: History[F], ssl: Option[SSLContext], val inbound: Queue[F, Peer[F], Message[F]], val store: PeerStore[F])(
     implicit F: ConcurrentEffect[F],
     cs: ContextShift[F],
     T: Timer[F],

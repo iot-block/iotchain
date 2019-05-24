@@ -4,7 +4,7 @@ import cats.effect.{IO, Resource}
 import com.github.pshirshov.izumi.distage.model.definition.ModuleDef
 import distage.{Injector, Locator}
 import jbok.common.CommonSpec
-import jbok.core.config.{CoreConfig, GenesisBuilder}
+import jbok.core.config.{FullConfig, GenesisBuilder}
 import jbok.core.keystore.{KeyStore, MockingKeyStore}
 import jbok.core.mining.SimAccount
 import jbok.crypto.signature.KeyPair
@@ -45,10 +45,10 @@ trait CoreSpec extends CommonSpec {
 
   val testMiner = CoreSpecFixture.testAccount
 
-  def testCoreModule(config: CoreConfig) =
+  def testCoreModule(config: FullConfig) =
     new CoreModule[IO](config).overridenBy(CoreSpecFixture.keystoreModule)
 
-  def testCoreResource(config: CoreConfig): Resource[IO, Locator] =
+  def testCoreResource(config: FullConfig): Resource[IO, Locator] =
     Injector().produceF[IO](testCoreModule(config)).toCats
 
   val locator: IO[Locator] = testCoreResource(config).allocated.map(_._1)
@@ -56,7 +56,7 @@ trait CoreSpec extends CommonSpec {
   def check(f: Locator => IO[Unit]): Unit =
     check(config)(f)
 
-  def check(config: CoreConfig)(f: Locator => IO[Unit]): Unit = {
+  def check(config: FullConfig)(f: Locator => IO[Unit]): Unit = {
     val p = testCoreResource(config).use { objects =>
       f(objects)
     }

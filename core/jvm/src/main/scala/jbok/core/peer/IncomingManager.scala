@@ -11,13 +11,13 @@ import fs2._
 import fs2.io.tcp.Socket
 import javax.net.ssl.SSLContext
 import jbok.common.log.Logger
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 import jbok.core.ledger.History
 import jbok.core.queue.Queue
 import jbok.network.Message
 import jbok.network.tcp.implicits._
 
-final class IncomingManager[F[_]](config: CoreConfig, history: History[F], ssl: Option[SSLContext], val inbound: Queue[F, Peer[F], Message[F]])(
+final class IncomingManager[F[_]](config: FullConfig, history: History[F], ssl: Option[SSLContext], val inbound: Queue[F, Peer[F], Message[F]])(
     implicit F: ConcurrentEffect[F],
     cs: ContextShift[F],
     acg: AsynchronousChannelGroup

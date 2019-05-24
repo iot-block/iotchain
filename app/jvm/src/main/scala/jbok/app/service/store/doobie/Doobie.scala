@@ -3,13 +3,9 @@ package jbok.app.service.store.doobie
 import cats.effect.{Async, ContextShift, Resource}
 import doobie._
 import doobie.hikari.HikariTransactor
-import doobie.implicits._
 import jbok.core.config.DatabaseConfig
 
 object Doobie {
-  def limit(number: Int, size: Int): Fragment =
-    fr"limit ${size} offset ${(number - 1) * size}"
-
   def xa[F[_]](config: DatabaseConfig)(implicit F: Async[F], cs: ContextShift[F]): Resource[F, Transactor[F]] =
     for {
       ce <- ExecutionContexts.fixedThreadPool[F](32) // our connect EC

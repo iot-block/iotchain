@@ -5,7 +5,7 @@ import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
 import jbok.common.log.Logger
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.mining.BlockMiner
 import jbok.core.peer.{PeerManager, PeerMessageHandler}
@@ -14,7 +14,7 @@ import jbok.core.sync.SyncClient
 import scala.concurrent.duration._
 
 final case class CoreNode[F[_]](
-    config: CoreConfig,
+    config: FullConfig,
     nodeStatus: Ref[F, NodeStatus],
     history: History[F],
     peerManager: PeerManager[F],

@@ -29,7 +29,7 @@ import jbok.crypto.ssl.{SSLConfig, SSLContextHelper}
 import jbok.network.Message
 import jbok.persistent.{KeyValueDB, KeyValueDBPlatform}
 
-class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
+class CoreModule[F[_]: TagK](config: FullConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
   implicit lazy val acg: AsynchronousChannelGroup = ThreadUtil.acgGlobal
 
   addImplicit[Bracket[F, Throwable]]
@@ -39,27 +39,27 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   addImplicit[Concurrent[F]]
   addImplicit[ConcurrentEffect[F]]
   addImplicit[AsynchronousChannelGroup]
-  make[CoreConfig].from(config)
-  make[BigInt].from((config: CoreConfig) => config.genesis.chainId)
+  make[FullConfig].from(config)
+  make[BigInt].from((config: FullConfig) => config.genesis.chainId)
 
   LoggerPlatform.initConfig[IO](config.log).unsafeRunSync()
 
-  make[HistoryConfig].from((config: CoreConfig) => config.history)
-  make[TxPoolConfig].from((config: CoreConfig) => config.txPool)
-  make[BlockPoolConfig].from((config: CoreConfig) => config.blockPool)
-  make[MiningConfig].from((config: CoreConfig) => config.mining)
-  make[SyncConfig].from((config: CoreConfig) => config.sync)
-  make[PeerConfig].from((config: CoreConfig) => config.peer)
-  make[DatabaseConfig].from((config: CoreConfig) => config.db)
-  make[ServiceConfig].from((config: CoreConfig) => config.service)
-  make[KeyStoreConfig].from((config: CoreConfig) => config.keystore)
-  make[SSLConfig].from((config: CoreConfig) => config.ssl)
+  make[HistoryConfig].from((config: FullConfig) => config.history)
+  make[TxPoolConfig].from((config: FullConfig) => config.txPool)
+  make[BlockPoolConfig].from((config: FullConfig) => config.blockPool)
+  make[MiningConfig].from((config: FullConfig) => config.mining)
+  make[SyncConfig].from((config: FullConfig) => config.sync)
+  make[PeerConfig].from((config: FullConfig) => config.peer)
+  make[DatabaseConfig].from((config: FullConfig) => config.db)
+  make[ServiceConfig].from((config: FullConfig) => config.service)
+  make[KeyStoreConfig].from((config: FullConfig) => config.keystore)
+  make[SSLConfig].from((config: FullConfig) => config.ssl)
 
   make[KeyValueDB[F]].fromResource(KeyValueDBPlatform.resource[F](config.persist))
   make[Metrics[F]].from(new PrometheusMetrics[F]())
   make[History[F]].from[HistoryImpl[F]]
   make[KeyStore[F]].from[KeyStorePlatform[F]]
-  make[Clique[F]].fromEffect((config: CoreConfig, db: KeyValueDB[F], history: History[F], keystore: KeyStore[F]) => Clique[F](config.mining, config.genesis, db, history, keystore))
+  make[Clique[F]].fromEffect((config: FullConfig, db: KeyValueDB[F], history: History[F], keystore: KeyStore[F]) => Clique[F](config.mining, config.genesis, db, history, keystore))
   make[Consensus[F]].from[CliqueConsensus[F]]
 
   // peer
@@ -91,7 +91,7 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
   // executor & miner
   make[BlockPool[F]]
   make[TxPool[F]]
-  make[Ref[F, NodeStatus]].fromEffect(Ref.of[F, NodeStatus](NodeStatus.WaitForPeers))
+  make[Ref[F, NodeStatus]].fromEffect((config: PeerConfig) => Ref.of[F, NodeStatus](NodeStatus.WaitForPeers(0, config.minPeers)))
 
   make[TxValidator[F]]
   make[Semaphore[F]].fromEffect(Semaphore[F](1))
@@ -103,5 +103,5 @@ class CoreModule[F[_]: TagK](config: CoreConfig)(implicit F: ConcurrentEffect[F]
 }
 
 object CoreModule {
-  val testConfig: CoreConfig = Config[IO].readResource[CoreConfig]("config.test.yaml").unsafeRunSync()
+  val testConfig: FullConfig = Config[IO].readResource[FullConfig]("config.test.yaml").unsafeRunSync()
 }

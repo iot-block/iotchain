@@ -8,5 +8,7 @@ trait TransactionStore[F[_]] {
 
   def findTransactionByHash(txHash: String): F[Option[HistoryTransaction]]
 
+  def delByBlockNumber(number: BigInt): F[Unit]
+
   def insertBlockTransactions(block: Block, receipts: List[Receipt]): F[Unit]
 }

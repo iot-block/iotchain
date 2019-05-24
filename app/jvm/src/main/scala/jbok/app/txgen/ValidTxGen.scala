@@ -3,14 +3,14 @@ package jbok.app.txgen
 import cats.effect._
 import cats.implicits._
 import fs2._
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 import jbok.common.log.Logger
 import jbok.core.api.JbokClient
 import jbok.core.mining.TxGen
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.crypto.signature.KeyPair
 
-final class ValidTxGen[F[_]](config: CoreConfig, client: JbokClient[F], keyPairs: List[KeyPair])(implicit F: ConcurrentEffect[F], T: Timer[F]) {
+final class ValidTxGen[F[_]](config: FullConfig, client: JbokClient[F], keyPairs: List[KeyPair])(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = Logger[F]
 
   implicit val chainId = config.genesis.chainId

@@ -8,7 +8,7 @@ import javax.net.ssl.SSLContext
 import jbok.common.log.Logger
 import jbok.core.NodeStatus
 import jbok.core.api.{JbokClient, JbokClientPlatform}
-import jbok.core.config.SyncConfig
+import jbok.core.config.{PeerConfig, SyncConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock.SyncBlocks
 import jbok.core.ledger.{BlockExecutor, History}
@@ -16,7 +16,8 @@ import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager, PeerSelector}
 
 final class SyncClient[F[_]](
-    config: SyncConfig,
+    peerConfig: PeerConfig,
+    syncConfig: SyncConfig,
     history: History[F],
     consensus: Consensus[F],
     executor: BlockExecutor[F],
@@ -28,8 +29,8 @@ final class SyncClient[F[_]](
 
   def checkStatus: F[NodeStatus] =
     peerManager.connected.flatMap {
-      case Nil => F.pure(NodeStatus.WaitForPeers)
-      case xs =>
+      case xs if xs.length < peerConfig.minPeers => F.pure(NodeStatus.WaitForPeers(xs.length, peerConfig.minPeers))
+      case xs if xs.length >= peerConfig.minPeers =>
         for {
           current <- history.getBestBlockNumber
           td      <- history.getTotalDifficultyByNumber(current).map(_.getOrElse(BigInt(0)))
@@ -47,8 +48,8 @@ final class SyncClient[F[_]](
         .eval(checkStatus)
         .evalTap(status.set)
         .flatMap {
-          case NodeStatus.WaitForPeers        => Stream.sleep_(config.checkInterval)
-          case NodeStatus.Done                => Stream.sleep_(config.checkInterval)
+          case _: NodeStatus.WaitForPeers     => Stream.sleep_(syncConfig.checkInterval)
+          case NodeStatus.Done                => Stream.sleep_(syncConfig.checkInterval)
           case syncing: NodeStatus.Syncing[F] => Stream.eval(requestHeaders(syncing.peer)).flatMap(Stream.emits)
         }
         .repeat
@@ -59,15 +60,15 @@ final class SyncClient[F[_]](
   def requestHeaders(peer: Peer[F]): F[List[Block]] = mkClient(peer).use { client =>
     for {
       current <- history.getBestBlockNumber
-      start = BigInt(1).max(current + 1 - config.offset)
-      headers  <- client.block.getBlockHeadersByNumber(start, config.maxBlockHeadersPerRequest)
+      start = BigInt(1).max(current + 1 - syncConfig.offset)
+      headers  <- client.block.getBlockHeadersByNumber(start, syncConfig.maxBlockHeadersPerRequest)
       imported <- handleBlockHeaders(peer, start, headers)
     } yield imported
   }
 
   private def handleBlockHeaders(peer: Peer[F], startNumber: BigInt, headers: List[BlockHeader]): F[List[Block]] =
     if (headers.isEmpty) {
-      log.debug(s"got empty headers from ${peer.uri}, retry in ${config.checkInterval}").as(Nil)
+      log.debug(s"got empty headers from ${peer.uri}, retry in ${syncConfig.checkInterval}").as(Nil)
     } else if (headers.headOption.map(_.number).contains(startNumber)) {
       consensus.resolveBranch(headers).flatMap {
         case Consensus.BetterBranch(newBranch) =>
@@ -82,7 +83,7 @@ final class SyncClient[F[_]](
     }
 
   private def handleBetterBranch(peer: Peer[F], betterBranch: List[BlockHeader]): F[List[Block]] = {
-    val hashes = betterBranch.take(config.maxBlockBodiesPerRequest).map(_.hash)
+    val hashes = betterBranch.take(syncConfig.maxBlockBodiesPerRequest).map(_.hash)
 
     mkClient(peer).use { client =>
       for {

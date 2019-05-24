@@ -57,7 +57,7 @@ final class TxPool[F[_]](
       current <- T.clock.realTime(MILLISECONDS)
       _ <- pending.update { txs =>
         val (_, b) = txs.partition {
-          case (tx, time) =>
+          case (tx, _) =>
             tx.senderAddress == newStx.senderAddress && tx.nonce == newStx.nonce
         }
         val updated = b + (newStx -> current)

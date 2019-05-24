@@ -7,7 +7,8 @@ import jbok.crypto.ssl.SSLConfig
 import jbok.persistent.PersistConfig
 
 @JsonCodec
-final case class CoreConfig(
+final case class FullConfig(
+    rootPath: String,
     genesis: GenesisConfig,
     log: LogConfig,
     history: HistoryConfig,
@@ -22,4 +23,3 @@ final case class CoreConfig(
     db: DatabaseConfig,
     service: ServiceConfig
 )
-object CoreConfig {}

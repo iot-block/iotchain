@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.common.log.Logger
 import jbok.core.CoreNode
-import jbok.core.config.CoreConfig
+import jbok.core.config.FullConfig
 import jbok.core.models.SignedTransaction
 import jbok.core.peer.PeerUri
 import jbok.core.api.AdminAPI
@@ -40,6 +40,6 @@ final class AdminService[F[_]](
   override def pendingTransactions: F[List[SignedTransaction]] =
     core.txPool.getPendingTransactions.map(_.keys.toList)
 
-  override def getCoreConfig: F[CoreConfig] =
+  override def getConfig: F[FullConfig] =
     F.pure(core.config)
 }

@@ -28,8 +28,6 @@ import scala.concurrent.duration._
   * 4. submit the `MinedBlock` to `BlockExecutor`
   */
 final class BlockMiner[F[_]](
-    config: MiningConfig,
-    history: History[F],
     consensus: Consensus[F],
     executor: BlockExecutor[F],
     txPool: TxPool[F],

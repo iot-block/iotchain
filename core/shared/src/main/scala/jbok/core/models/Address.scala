@@ -46,7 +46,7 @@ object Address {
   def apply(uint: UInt256): Address = Address.apply(uint.bytes)
 
   @JSExport("fromByteVector")
-  def apply(bytes: ByteVector): Address = new Address(bytes.takeRight(numBytes).padLeft(numBytes))
+  def apply(bytes: ByteVector): Address = new Address(bytes.takeRight(numBytes.toLong).padLeft(numBytes.toLong))
 
   def apply(keyPair: KeyPair): Address = Address(keyPair.public.bytes.kec256)
 }

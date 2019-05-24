@@ -13,7 +13,7 @@ object Settings {
     connectInput in run := true,
     connectInput := true,
     parallelExecution in test := false,
-    scalacOptions ++= ScalacSettings.base ++ ScalacSettings.specificFor(scalaVersion.value) ++ ScalacSettings.strictBase,
+    scalacOptions ++= ScalacSettings.base ++ ScalacSettings.specificFor(scalaVersion.value) ++ ScalacSettings.strictBase ++ ScalacSettings.strictSpecificFor(scalaVersion.value),
     javacOptions ++= JavacSettings.base ++ JavacSettings.specificFor(scalaVersion.value),
   )
 
@@ -49,17 +49,9 @@ object Settings {
       "-Xlint",
       "-Ywarn-dead-code", // Warn when dead code is identified.
       "-Ywarn-extra-implicit", // Warn when more than one implicit parameter section is defined.
-      "-Ywarn-numeric-widen", // Warn when numerics are widened.
       "-Ywarn-value-discard", // Warn when non-Unit expression results are unused.
       "-Ywarn-inaccessible",
       "-Ywarn-nullary-override"
-    )
-
-    val extra = Seq(
-      //  "-P:scalac-profiling:generate-macro-flamegraph",
-      //  "-P:scalac-profiling:no-profiledb"
-      //  "-Yrangepos", // required by SemanticDB compiler plugin
-      //  "-Ywarn-unused-import" // required by `RemoveUnused` rule
     )
 
     def strictSpecificFor(scalaVersion: String) = CrossVersion.partialVersion(scalaVersion) match {
