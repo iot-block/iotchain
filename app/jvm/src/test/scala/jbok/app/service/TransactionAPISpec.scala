@@ -26,8 +26,8 @@ class TransactionAPISpec extends AppSpec {
         _ = res shouldBe None
         res <- transaction.getPendingTx(stx.hash)
         _ = res shouldBe Some(stx)
-        Right(minedBlock) <- miner.mine1()
-        res               <- transaction.getTx(stx.hash)
+        minedBlock <- miner.mine()
+        res        <- transaction.getTx(stx.hash)
         _ = res shouldBe Some(stx)
         res <- transaction.getPendingTx(stx.hash)
         _ = res shouldBe None
@@ -58,7 +58,7 @@ class TransactionAPISpec extends AppSpec {
         _ = res shouldBe None
         res <- transaction.getPendingTx(stx.hash)
         _ = res shouldBe Some(stx)
-        _   <- miner.mine1()
+        _   <- miner.mine()
         res <- transaction.getTx(stx.hash)
         _ = res shouldBe None
         res <- transaction.getPendingTx(stx.hash)
@@ -78,7 +78,7 @@ class TransactionAPISpec extends AppSpec {
       for {
         res <- transaction.sendTx(stx)
         _ = res shouldBe stx.hash
-        _   <- miner.mine1()
+        _   <- miner.mine()
         res <- history.getBestBlock.map(_.body.transactionList.head)
         _ = res shouldBe stx
       } yield ()
@@ -94,7 +94,7 @@ class TransactionAPISpec extends AppSpec {
       for {
         res <- transaction.sendRawTx(stx.bytes)
         _ = res shouldBe stx.hash
-        _   <- miner.mine1()
+        _   <- miner.mine()
         res <- history.getBestBlock.map(_.body.transactionList.head)
         _ = res shouldBe stx
       } yield ()

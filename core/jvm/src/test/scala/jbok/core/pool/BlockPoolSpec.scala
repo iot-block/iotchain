@@ -68,10 +68,10 @@ class BlockPoolSpec extends CoreSpec {
       val miner = objects.get[BlockMiner[IO]]
 
       for {
-        block1  <- miner.mine1().map(_.right.get.block)
-        block2a <- miner.mine1(block1.some, randomTx).map(_.right.get.block)
-        block2b <- miner.mine1(block1.some, randomTx).map(_.right.get.block)
-        block3  <- miner.mine1(block2a.some).map(_.right.get.block)
+        block1  <- miner.mine().map(_.block)
+        block2a <- miner.mine(block1.some, randomTx).map(_.block)
+        block2b <- miner.mine(block1.some, randomTx).map(_.block)
+        block3  <- miner.mine(block2a.some).map(_.block)
         _       <- pool.addBlock(block1)
         _       <- pool.addBlock(block2a)
         _       <- pool.addBlock(block2b)
@@ -98,11 +98,11 @@ class BlockPoolSpec extends CoreSpec {
       val miner = objects.get[BlockMiner[IO]]
 
       for {
-        block1  <- miner.mine1().map(_.right.get.block)
-        block2a <- miner.mine1(block1.some, randomTx).map(_.right.get.block)
-        block2b <- miner.mine1(block1.some, randomTx).map(_.right.get.block)
-        block2c <- miner.mine1(block1.some).map(_.right.get.block)
-        block3  <- miner.mine1(block2a.some).map(_.right.get.block)
+        block1  <- miner.mine().map(_.block)
+        block2a <- miner.mine(block1.some, randomTx).map(_.block)
+        block2b <- miner.mine(block1.some, randomTx).map(_.block)
+        block2c <- miner.mine(block1.some).map(_.block)
+        block3  <- miner.mine(block2a.some).map(_.block)
         _       <- pool.addBlock(block1)
         _       <- pool.addBlock(block2a)
         _       <- pool.addBlock(block2b)
@@ -124,11 +124,11 @@ class BlockPoolSpec extends CoreSpec {
 
       for {
         genesis <- history.getBestBlock
-        block1a <- miner.mine1(genesis.some, txs.take(1).some).map(_.right.get.block)
-        block1b <- miner.mine1(genesis.some).map(_.right.get.block)
-        block2a <- miner.mine1(block1a.some, txs.takeRight(1).some).map(_.right.get.block)
-        block2b <- miner.mine1(block1a.some).map(_.right.get.block)
-        block3  <- miner.mine1(block2a.some).map(_.right.get.block)
+        block1a <- miner.mine(genesis.some, txs.take(1).some).map(_.block)
+        block1b <- miner.mine(genesis.some).map(_.block)
+        block2a <- miner.mine(block1a.some, txs.takeRight(1).some).map(_.block)
+        block2b <- miner.mine(block1a.some).map(_.block)
+        block3  <- miner.mine(block2a.some).map(_.block)
         _       <- pool.addBlock(block1a)
         _       <- pool.addBlock(block1b)
         _       <- pool.addBlock(block2a)

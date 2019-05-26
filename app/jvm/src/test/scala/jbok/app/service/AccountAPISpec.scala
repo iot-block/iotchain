@@ -28,8 +28,8 @@ class AccountAPISpec extends AppSpec {
         _   <- transaction.sendTx(stx1)
         res <- account.getEstimatedNonce(testMiner.address)
         _ = res shouldBe defaultNonce + 1
-        Right(minedBlock) <- miner.mine1()
-        res               <- account.getEstimatedNonce(testMiner.address)
+        _ <- miner.mine()
+        res        <- account.getEstimatedNonce(testMiner.address)
         _ = res shouldBe defaultNonce + 1
         _   <- transaction.sendTx(stx2)
         res <- account.getEstimatedNonce(testMiner.address)
@@ -47,7 +47,7 @@ class AccountAPISpec extends AppSpec {
       for {
         res <- transaction.sendTx(stx)
         _ = res shouldBe stx.hash
-        _       <- miner.mine1()
+        _       <- miner.mine()
         account <- acc.getAccount(stx.receivingAddress)
         _ = account.nonce shouldBe 0
         _ = account.balance shouldBe stx.value
@@ -66,7 +66,7 @@ class AccountAPISpec extends AppSpec {
       for {
         res <- transaction.sendTx(stx)
         _ = res shouldBe stx.hash
-        _   <- miner.mine1()
+        _   <- miner.mine()
         res <- account.getBalance(stx.receivingAddress)
         _ = res shouldBe stx.value
       } yield ()
@@ -92,7 +92,7 @@ class AccountAPISpec extends AppSpec {
         stx <- SignedTransaction.sign[IO](tx, testMiner.keyPair)
         res <- transaction.sendTx(stx)
         _ = res shouldBe stx.hash
-        _               <- miner.mine1()
+        _               <- miner.mine()
         contractAddress <- transaction.getReceipt(stx.hash).map(_.get.contractAddress.get)
         res             <- account.getCode(contractAddress)
         _ = res shouldBe ByteVector.fromValidHex(

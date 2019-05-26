@@ -52,14 +52,14 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
   override def postProcess(executed: ExecutedBlock[F]): F[ExecutedBlock[F]] =
     F.pure(executed)
 
-  override def mine(executed: ExecutedBlock[F]): F[Either[String, MinedBlock]] =
+  override def mine(executed: ExecutedBlock[F]): F[MinedBlock] =
     if (executed.block.header.number == 0) {
-      F.pure(Left("mining the genesis block is not supported"))
+      F.raiseError(new Exception("mining the genesis block is not supported"))
     } else {
       for {
         snap <- clique.applyHeaders(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
         mined <- if (!snap.signers.contains(clique.minerAddress)) {
-          Left("unauthorized").pure[F]
+          F.raiseError(new Exception("unauthorized miner"))
         } else {
           snap.recents.find(_._2 == clique.minerAddress) match {
             case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.signers.size) =>
@@ -68,28 +68,22 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
                 .max(0) * config.period.toMillis
               val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
 
-              log.trace(s"signed recently, sleep (${delay}) seconds") >>
-                T.sleep(delay.millis) >> Left(s"${clique.minerAddress} signed recently, must wait for others").pure[F]
+              log.i(s"mined recently, sleep (${delay}) millis") >> T.sleep(delay.millis) >> mine(executed)
 
             case _ =>
               val wait = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis())
-              log.trace(s"wait: ${wait}")
-              val delay: Long = wait +
-                (if (executed.block.header.difficulty == Clique.diffNoTurn) {
-                   // It's not our turn explicitly to sign, delay it a bit
-                   val wiggle: Long = Random.nextLong().abs % ((snap.signers.size / 2 + 1) * Clique.wiggleTime.toMillis)
-                   log.trace(s"${clique.minerAddress} it is not our turn, delay ${wiggle}")
-                   wiggle
-                 } else {
-                   log.trace(s"${clique.minerAddress} it is our turn, mine immediately")
-                   0
-                 })
-
               for {
+                delay <- if (executed.block.header.difficulty == Clique.diffNoTurn) {
+                  // It's not our turn explicitly to sign, delay it a bit
+                  val wiggle = Random.nextLong().abs % ((snap.signers.size / 2 + 1) * Clique.wiggleTime.toMillis)
+                  log.trace(s"${clique.minerAddress} it is not our turn, delay ${wiggle}").as(wait + wiggle)
+                } else {
+                  log.trace(s"${clique.minerAddress} it is our turn, mine immediately").as(wait)
+                }
                 _      <- T.sleep(delay.millis)
                 _      <- log.trace(s"${clique.minerAddress} mined block(${executed.block.header.number})")
                 header <- clique.fillExtraData(executed.block.header)
-              } yield Right(MinedBlock(executed.block.copy(header = header), executed.receipts))
+              } yield MinedBlock(executed.block.copy(header = header), executed.receipts)
           }
         }
       } yield mined

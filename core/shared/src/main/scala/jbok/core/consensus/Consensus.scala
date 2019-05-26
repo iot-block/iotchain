@@ -23,7 +23,7 @@ trait Consensus[F[_]] {
 
   def postProcess(executed: ExecutedBlock[F]): F[ExecutedBlock[F]]
 
-  def mine(executed: ExecutedBlock[F]): F[Either[String, MinedBlock]]
+  def mine(executed: ExecutedBlock[F]): F[MinedBlock]
 
   def verify(block: Block): F[Unit]
 

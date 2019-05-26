@@ -36,7 +36,7 @@ class BlockAPISpec extends AppSpec {
 
           for {
             parent    <- history.getBestBlock
-            _         <- miner.mine1(Some(parent), Some(txs))
+            _         <- miner.mine(Some(parent), Some(txs))
             bestBlock <- history.getBestBlock
             // gasLimit in blockHeader limit the tx count in block
             _ <- if (txCount > 796) {
@@ -54,7 +54,7 @@ class BlockAPISpec extends AppSpec {
       val block = objects.get[BlockAPI[IO]]
 
       for {
-        Right(minedBlock) <- miner.mine1()
+        minedBlock <- miner.mine()
         res               <- block.getBestBlockNumber
         _ = res shouldBe BigInt(1)
         res <- block.getBlockByNumber(BigInt(1)).map(_.get)

@@ -12,7 +12,6 @@ import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.TypedBlock._
 import jbok.core.models.{SignedTransaction, _}
 import jbok.core.pool.TxPool
-import jbok.core.store.ColumnFamilies
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.persistent.{ColumnFamily, MemoryKVStore}
 import scodec.bits.ByteVector
@@ -34,7 +33,7 @@ final class BlockMiner[F[_]](
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = Logger[F]
 
-  def prepare(
+  private def prepare(
       parentOpt: Option[Block] = None,
       stxsOpt: Option[List[SignedTransaction]] = None
   ): F[PendingBlock] =
@@ -44,38 +43,31 @@ final class BlockMiner[F[_]](
       txs    <- prepareTransactions(stxs, header.gasLimit)
     } yield PendingBlock(Block(header, BlockBody(txs)))
 
-  def execute(pending: PendingBlock): F[ExecutedBlock[F]] =
+  private def execute(pending: PendingBlock): F[ExecutedBlock[F]] =
     executor.handlePendingBlock(pending)
 
-  def mine(executed: ExecutedBlock[F]): F[Either[String, MinedBlock]] =
-    consensus.mine(executed)
-
-  def submit(mined: MinedBlock): F[Unit] =
+  private def submit(mined: MinedBlock): F[Unit] =
     executor.handleMinedBlock(mined).void
 
-  def mine1(
+  def mine(
       parentOpt: Option[Block] = None,
       stxsOpt: Option[List[SignedTransaction]] = None
-  ): F[Either[String, MinedBlock]] =
+  ): F[MinedBlock] =
     for {
       prepared <- prepare(parentOpt, stxsOpt)
       executed <- execute(prepared)
-      mined    <- mine(executed)
-      _ <- mined match {
-        case Left(e)  => log.i(s"mining failure: ${e}")
-        case Right(b) => log.i(s"mining success") >> submit(b)
-      }
+      mined    <- consensus.mine(executed)
+      _        <- submit(mined)
     } yield mined
 
   def stream: Stream[F, MinedBlock] =
     Stream.eval_(log.i(s"starting Core/BlockMiner")) ++
       Stream
         .eval(status.get)
-        .evalMap {
-          case NodeStatus.Done => mine1()
-          case _               => T.sleep(5.seconds).as("Node not ready".asLeft[MinedBlock])
+        .flatMap {
+          case NodeStatus.Done => Stream.eval(mine())
+          case _               => Stream.sleep_(5.seconds)
         }
-        .collect { case Right(x) => x }
         .repeat
 
   /////////////////////////////////////

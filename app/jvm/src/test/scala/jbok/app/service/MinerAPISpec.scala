@@ -22,11 +22,11 @@ class MinerAPISpec extends AppSpec {
         expectedProposal = Some(Proposal(address, true))
         proposal <- minerAPI.getBallot
         _ = proposal shouldBe expectedProposal
-        Right(minedBlock) <- miner.mine1()
+        minedBlock <- miner.mine()
 
         extra <- minedBlock.block.header.extraAs[IO, CliqueExtra]
         _ = extra.proposal shouldBe expectedProposal
-        _         <- miner.mine1(minedBlock.block.some)
+        _         <- miner.mine(minedBlock.block.some)
         proposal2 <- minerAPI.getBallot
         _ = proposal2 shouldBe None
       } yield ()
@@ -45,8 +45,8 @@ class MinerAPISpec extends AppSpec {
         _         <- minerAPI.cancelBallot
         proposal2 <- minerAPI.getBallot
         _ = proposal2 shouldBe None
-        Right(minedBlock) <- miner.mine1()
-        extra             <- minedBlock.block.header.extraAs[IO, CliqueExtra]
+        minedBlock <- miner.mine()
+        extra      <- minedBlock.block.header.extraAs[IO, CliqueExtra]
         _ = extra.proposal shouldBe None
       } yield ()
     }

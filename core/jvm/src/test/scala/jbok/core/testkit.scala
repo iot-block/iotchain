@@ -196,8 +196,8 @@ object testkit {
     val miner            = objects.get[BlockMiner[IO]]
     val status           = objects.get[Ref[IO, NodeStatus]]
     status.set(NodeStatus.Done).unsafeRunSync()
-    val mined = miner.mine1(parentOpt, stxsOpt).unsafeRunSync()
-    mined.right.get.block
+    val mined = miner.mine(parentOpt, stxsOpt).unsafeRunSync()
+    mined.block
   }
 
   implicit def arbPeerUri: Arbitrary[PeerUri] = Arbitrary {
