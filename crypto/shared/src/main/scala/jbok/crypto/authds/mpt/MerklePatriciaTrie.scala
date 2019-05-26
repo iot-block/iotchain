@@ -2,59 +2,55 @@ package jbok.crypto.authds.mpt
 
 import cats.data.OptionT
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
+import cats.effect.concurrent.Ref
 import jbok.codec.HexPrefix
 import jbok.codec.HexPrefix.Nibbles
-import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
-import jbok.common.log.Logger
-import jbok.crypto._
-import jbok.crypto.authds.mpt.MptNode._
-import jbok.persistent.{DBErr, KeyValueDB}
+import jbok.codec.rlp.implicits.RlpCodec
+import jbok.persistent._
 import scodec.bits.ByteVector
+import jbok.crypto.authds.mpt.MptNode._
+import MerklePatriciaTrie._
+import jbok.codec.rlp.implicits._
+import fs2._
+import jbok.crypto._
 
-final class MerklePatriciaTrie[F[_]](
-    val namespace: ByteVector,
-    val db: KeyValueDB[F],
-    val rootHash: Ref[F, Option[ByteVector]]
-)(implicit F: Sync[F])
-    extends KeyValueDB[F] {
-  private[this] val log = Logger[F]
-
-  import MerklePatriciaTrie._
-
-  override protected[jbok] def getRaw(key: ByteVector): F[Option[ByteVector]] =
-    (for {
-      root <- OptionT(getRootOpt)
-      nibbles = HexPrefix.bytesToNibbles(key)
-      v <- OptionT(getNodeValue(root, nibbles))
-    } yield v).value
-
-  override protected[jbok] def putRaw(key: ByteVector, newVal: ByteVector): F[Unit] =
+final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFamily, store: KVStore[F], rootHash: Ref[F, Option[ByteVector]])(implicit F: Sync[F])
+    extends SingleColumnKVStore[F, K, V] {
+  override def put(key: K, value: V): F[Unit] =
     for {
+      k       <- key.asValidBytes.pure[F]
+      v       <- value.asValidBytes.pure[F]
       hashOpt <- rootHash.get
-      nibbles = HexPrefix.bytesToNibbles(key)
+      nibbles = HexPrefix.bytesToNibbles(k)
       _ <- hashOpt match {
         case Some(hash) if hash != MerklePatriciaTrie.emptyRootHash =>
           for {
             root        <- getRootOpt.flatMap(opt => F.fromOption(opt, DBErr.NotFound))
-            newRootHash <- putNode(root, nibbles, newVal) >>= commitPut
+            newRootHash <- putNode(root, nibbles, v) >>= commitPut
             _           <- rootHash.set(Some(newRootHash))
           } yield ()
 
         case _ =>
-          val newRoot = LeafNode(nibbles, newVal)
+          val newRoot = LeafNode(nibbles, v)
           commitPut(NodeInsertResult(newRoot, newRoot :: Nil)).flatMap(newRootHash => rootHash.set(Some(newRootHash)))
       }
     } yield ()
 
-  override protected[jbok] def delRaw(key: ByteVector): F[Unit] =
+  override def get(key: K): F[Option[V]] =
+    (for {
+      root <- OptionT(getRootOpt)
+      nibbles = HexPrefix.bytesToNibbles(key.asValidBytes)
+      v     <- OptionT(getNodeValue(root, nibbles))
+      value <- OptionT.liftF(F.fromEither(v.asEither[V]))
+    } yield value).value
+
+  override def del(key: K): F[Unit] =
     for {
       hashOpt <- rootHash.get
       _ <- hashOpt match {
         case Some(hash) if hash != MerklePatriciaTrie.emptyRootHash =>
-          val nibbles = HexPrefix.bytesToNibbles(key)
+          val nibbles = HexPrefix.bytesToNibbles(key.asValidBytes)
           for {
             root        <- getRootOpt.flatMap(opt => F.fromOption(opt, DBErr.NotFound))
             newRootHash <- delNode(root, nibbles) >>= commitDel
@@ -65,27 +61,21 @@ final class MerklePatriciaTrie[F[_]](
       }
     } yield ()
 
-  override protected[jbok] def hasRaw(key: ByteVector): F[Boolean] =
-    getRaw(key).map(_.isDefined)
+  override def writeBatch(puts: List[(K, V)], dels: List[K]): F[Unit] =
+    dels.traverse(del) >> puts.traverse { case (k, v) => put(k, v) }.void
 
-  override protected[jbok] def keysRaw: F[List[ByteVector]] =
-    toMapRaw.map(_.keys.toList)
-
-  override protected[jbok] def size: F[Int] = {
-    def size0(node: Option[MptNode]): F[Int] = node match {
-      case None                          => 0.pure[F]
-      case Some(LeafNode(_, _))          => 1.pure[F]
-      case Some(ExtensionNode(_, child)) => getNodeByEntry(child) >>= size0
-      case Some(bn @ BranchNode(_, value)) =>
-        for {
-          bn <- bn.activated.traverse { case (_, e) => getNodeByBranch(e) >>= size0 }.map(_.sum)
-        } yield bn + (if (value.isEmpty) 0 else 1)
-    }
-
-    getRootOpt >>= size0
+  override def writeBatch(ops: List[(K, Option[V])]): F[Unit] = {
+    val (puts, dels) = ops.partition(_._2.isDefined)
+    writeBatch(puts.collect { case (key, Some(value)) => key -> value }, dels.collect { case (key, None) => key })
   }
 
-  override protected[jbok] def toMapRaw: F[Map[ByteVector, ByteVector]] = {
+  override def toStream: Stream[F, (K, V)] =
+    Stream.eval(toList).flatMap(Stream.emits)
+
+  override def toList: F[List[(K, V)]] =
+    toMap.map(_.toList)
+
+  override def toMap: F[Map[K, V]] = {
     def toMap0(node: Option[MptNode]): F[Map[String, ByteVector]] = node match {
       case None =>
         F.pure(Map.empty)
@@ -108,32 +98,31 @@ final class MerklePatriciaTrie[F[_]](
     for {
       root <- getRootOpt
       m    <- toMap0(root)
-    } yield m.map { case (k, v) => ByteVector.fromValidHex(k) -> v }
+      res  <- m.map { case (k, v) => ByteVector.fromValidHex(k) -> v }.toList.traverse(decodeTuple)
+    } yield res.toMap
   }
 
-  override def keys[Key: RlpCodec](namespace: ByteVector): F[List[Key]] =
-    keysRaw.flatMap(_.traverse(k => decode[Key](k, namespace)))
+  override def size: F[Int] = {
+    def size0(node: Option[MptNode]): F[Int] = node match {
+      case None                          => 0.pure[F]
+      case Some(LeafNode(_, _))          => 1.pure[F]
+      case Some(ExtensionNode(_, child)) => getNodeByEntry(child) >>= size0
+      case Some(bn @ BranchNode(_, value)) =>
+        for {
+          bn <- bn.activated.traverse { case (_, e) => getNodeByBranch(e) >>= size0 }.map(_.sum)
+        } yield bn + (if (value.isEmpty) 0 else 1)
+    }
+    getRootOpt >>= size0
+  }
 
-  override def toMap[Key: RlpCodec, Val: RlpCodec](namespace: ByteVector): F[Map[Key, Val]] =
+  override def encodeTuple(kv: (K, V)): (ByteVector, ByteVector) =
+    (kv._1.asValidBytes, kv._2.asValidBytes)
+
+  override def decodeTuple(kv: (ByteVector, ByteVector)): F[(K, V)] =
     for {
-      mapRaw <- toMapRaw
-      xs     <- mapRaw.toList.traverse { case (k, v) => (decode[Key](k, namespace), decode[Val](v)).tupled }
-    } yield xs.toMap
-
-  override protected[jbok] def writeBatchRaw(put: List[(ByteVector, ByteVector)], del: List[ByteVector]): F[Unit] =
-    del.traverse(delRaw) >> put.traverse { case (k, v) => putRaw(k, v) }.void
-
-  // note: since merkle trie only use key as tree path, we do not need
-  // prefix key by namespace. we only need prefix node bytes hash when
-  // we read or write the underlying db
-  override def encode[A: RlpCodec](a: A, prefix: ByteVector): F[ByteVector] =
-    F.delay(RlpCodec[A].encode(a).require.bytes)
-
-  override def decode[A: RlpCodec](bytes: ByteVector, prefix: ByteVector): F[A] =
-    F.delay(RlpCodec[A].decode(bytes.bits).require.value)
-
-  ////////////////////////
-  ////////////////////////
+      key   <- F.fromEither(kv._1.asEither[K])
+      value <- F.fromEither(kv._2.asEither[V])
+    } yield key -> value
 
   private[jbok] def getNodes: F[Map[String, MptNode]] = {
     def getNodes0(prefix: String, node: Option[MptNode]): F[Map[String, MptNode]] = node match {
@@ -170,7 +159,7 @@ final class MerklePatriciaTrie[F[_]](
 
   private[jbok] def getNodeByHash(nodeHash: ByteVector): F[Option[MptNode]] =
     for {
-      v <- db.getRaw(namespace ++ nodeHash)
+      v <- store.get(cf, nodeHash)
       node = v.map(x => nodeCodec.decode(x.bits).require.value)
     } yield node
 
@@ -221,15 +210,13 @@ final class MerklePatriciaTrie[F[_]](
     val newRootHash  = newRoot.map(_.hash).getOrElse(MerklePatriciaTrie.emptyRootHash)
     val newRootBytes = newRoot.map(_.capped).getOrElse(ByteVector.empty)
 
-    getRootHash.flatMap { previousRootHash =>
-      val putOps = toPut
-        .withFilter { node =>
-          node.entry.isLeft || node.capped == newRootBytes
-        }
-        .map(x => namespace ++ x.hash -> x.bytes)
+    val putOps = toPut
+      .withFilter { node =>
+        node.entry.isLeft || node.capped == newRootBytes
+      }
+      .map(x => x.hash -> x.bytes)
 
-      db.writeBatchRaw(putOps, Nil).map(_ => newRootHash)
-    }
+    store.writeBatch(cf, putOps, Nil).map(_ => newRootHash)
   }
 
   private def commitPut(nodeInsertResult: NodeInsertResult): F[ByteVector] =
@@ -478,7 +465,6 @@ final class MerklePatriciaTrie[F[_]](
       // try to remove 1 of the 16 branches
       for {
         child <- getNodeByBranch(branchNode.branchAt(key.head))
-        _     <- log.trace(s"should be here, ${child}")
         result <- child match {
           case Some(n) =>
             // recursively delete
@@ -555,16 +541,16 @@ final class MerklePatriciaTrie[F[_]](
 }
 
 object MerklePatriciaTrie {
-  def apply[F[_]: Sync](namespace: ByteVector, db: KeyValueDB[F], root: Option[ByteVector] = None): F[MerklePatriciaTrie[F]] =
+  def apply[F[_]: Sync, K: RlpCodec, V: RlpCodec](cf: ColumnFamily, store: KVStore[F], root: Option[ByteVector] = None): F[MerklePatriciaTrie[F, K, V]] =
     for {
-      rootHash <- Ref.of[F, Option[ByteVector]](root)
-    } yield new MerklePatriciaTrie[F](namespace, db, rootHash)
+      ref <- Ref.of[F, Option[ByteVector]](root)
+    } yield new MerklePatriciaTrie[F, K, V](cf, store, ref)
 
   def calcMerkleRoot[F[_]: Sync, V: RlpCodec](entities: List[V]): F[ByteVector] =
     for {
-      db   <- KeyValueDB.inmem[F]
-      mpt  <- MerklePatriciaTrie[F](ByteVector.empty, db)
-      _    <- entities.zipWithIndex.map { case (v, k) => mpt.put[Int, V](k, v, ByteVector.empty) }.sequence
+      db   <- MemoryKVStore[F]
+      mpt  <- MerklePatriciaTrie[F, Int, V](ColumnFamily.default, db)
+      _    <- entities.zipWithIndex.map { case (v, k) => mpt.put(k, v) }.sequence
       root <- mpt.getRootHash
     } yield root
 

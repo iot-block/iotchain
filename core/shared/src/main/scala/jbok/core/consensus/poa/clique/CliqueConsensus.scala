@@ -203,7 +203,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
         for {
           receipts <- history.getReceiptsByHash(block.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
           td       <- history.getTotalDifficultyByHash(block.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
-          _        <- history.delBlock(block.header.hash, false)
+          _        <- history.delBlock(block.header.hash)
           removed  <- removeBlocksUntil(parent, fromNumber - 1)
         } yield (block, receipts, td) :: removed
 

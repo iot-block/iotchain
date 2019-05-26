@@ -5,32 +5,33 @@ import cats.implicits._
 import fs2._
 import fs2.concurrent.Queue
 import jbok.codec.rlp.implicits._
-import jbok.persistent.KeyValueDB
-import scodec.bits.ByteVector
+import jbok.core.store.ColumnFamilies
+import jbok.persistent.{KVStore, SingleColumnKVStore}
 
-final class PeerStore[F[_]](db: KeyValueDB[F], queue: Queue[F, PeerUri])(implicit F: Concurrent[F]) {
-  val namespace = ByteVector("peer".getBytes)
-
-  def get(uri: String): F[PeerUri] =
-    db.get[String, PeerUri](uri, namespace)
+final class PeerStore[F[_]](store: SingleColumnKVStore[F, String, PeerUri], queue: Queue[F, PeerUri])(implicit F: Concurrent[F]) {
+  def get(uri: String): F[Option[PeerUri]] =
+    store.get(uri)
 
   def put(uri: PeerUri): F[Unit] =
-    db.put[String, PeerUri](uri.uri, uri, namespace) >> queue.enqueue1(uri)
+    store.put(uri.uri, uri) >> queue.enqueue1(uri)
 
   def add(uris: PeerUri*): F[Unit] =
     uris.toList.traverse_(put)
 
   def del(uri: String): F[Unit] =
-    db.del[String](uri, namespace)
+    store.del(uri)
 
   def getAll: F[List[PeerUri]] =
-    db.toMap[String, PeerUri](namespace).map(_.values.toList)
+    store.toMap.map(_.values.toList)
 
   def subscribe: Stream[F, PeerUri] =
     queue.dequeue
 }
 
 object PeerStore {
-  def apply[F[_]](db: KeyValueDB[F])(implicit F: Concurrent[F]): F[PeerStore[F]] =
-    Queue.bounded[F, PeerUri](100).map(queue => new PeerStore[F](db, queue))
+  def apply[F[_]](db: KVStore[F])(implicit F: Concurrent[F]): F[PeerStore[F]] =
+    for {
+      queue <- Queue.bounded[F, PeerUri](100)
+      store = SingleColumnKVStore[F, String, PeerUri](ColumnFamilies.Peer, db)
+    } yield new PeerStore[F](store, queue)
 }

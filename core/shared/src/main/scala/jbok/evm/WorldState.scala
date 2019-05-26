@@ -8,17 +8,17 @@ import jbok.codec.rlp.implicits._
 import jbok.common._
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
-import jbok.core.store.namespaces
+import jbok.core.store.ColumnFamilies
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
-import jbok.persistent.{DBErr, KeyValueDB, StageKeyValueDB}
+import jbok.persistent._
 import scodec.bits._
 import scodec.bits.ByteVector
 
 final case class WorldState[F[_]](
-    db: KeyValueDB[F],
+    store: KVStore[F],
     history: History[F],
-    accountProxy: StageKeyValueDB[F, Address, Account],
+    accountProxy: StageKVStore[F, Address, Account],
     stateRootHash: ByteVector = MerklePatriciaTrie.emptyRootHash,
     touchedAccounts: Set[Address] = Set.empty[Address],
     contractStorages: Map[Address, Storage[F]] = Map.empty[Address, Storage[F]],
@@ -30,7 +30,7 @@ final case class WorldState[F[_]](
     Sync[F].pure(Some(UInt256(ByteVector(number.toString.getBytes).kec256)))
 
   def getAccountOpt(address: Address): OptionT[F, Account] =
-    OptionT(accountProxy.getOpt(address))
+    OptionT(accountProxy.get(address))
 
   def putAccount(address: Address, account: Account): WorldState[F] =
     this.copy(accountProxy = accountProxy.put(address, account))
@@ -59,9 +59,9 @@ final case class WorldState[F[_]](
   def getOriginalStorage(address: Address): F[Storage[F]] =
     for {
       storageRoot <- getAccountOpt(address).map(_.storageRoot).value
-      mpt         <- MerklePatriciaTrie[F](namespaces.Node, db, storageRoot)
-      s = StageKeyValueDB[F, UInt256, UInt256](namespaces.empty, mpt)
-    } yield Storage[F](s)
+      mpt         <- MerklePatriciaTrie[F, UInt256, UInt256](ColumnFamilies.Node, store, storageRoot)
+      stage = StageKVStore[F, UInt256, UInt256](mpt)
+    } yield Storage[F](stage)
 
   def putStorage(address: Address, storage: Storage[F]): WorldState[F] =
     this.copy(contractStorages = contractStorages + (address -> storage))
@@ -203,7 +203,7 @@ final case class WorldState[F[_]](
       case (updatedWorldState, (address, storageTrie)) =>
         for {
           persistedStorage   <- storageTrie.commit
-          newStorageRootHash <- persistedStorage.db.inner.asInstanceOf[MerklePatriciaTrie[F]].getRootHash
+          newStorageRootHash <- persistedStorage.store.inner.asInstanceOf[MerklePatriciaTrie[F, UInt256, UInt256]].getRootHash
           account            <- updatedWorldState.getAccount(address)
         } yield
           updatedWorldState.copy(
@@ -215,6 +215,6 @@ final case class WorldState[F[_]](
   private def persistAccount(world: WorldState[F]): F[WorldState[F]] =
     for {
       committed        <- world.accountProxy.commit
-      newStateRootHash <- committed.inner.asInstanceOf[MerklePatriciaTrie[F]].getRootHash
+      newStateRootHash <- committed.inner.asInstanceOf[MerklePatriciaTrie[F, Address, Account]].getRootHash
     } yield world.copy(accountProxy = committed, stateRootHash = newStateRootHash)
 }

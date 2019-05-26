@@ -7,7 +7,7 @@ import jbok.core.ledger.History
 import jbok.core.models.{Address, UInt256}
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, Signature}
-import jbok.persistent.KeyValueDB
+import jbok.persistent.MemoryKVStore
 import scodec.bits._
 
 class PrecompiledContractsSpec extends CoreSpec {
@@ -16,8 +16,8 @@ class PrecompiledContractsSpec extends CoreSpec {
     val origin = Address(0xcafebabe)
     val env    = ExecEnv(recipient, origin, origin, 1000, inputData, 0, Program(ByteVector.empty), null, 0)
 
-    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history       = History(db)
+    val store            = MemoryKVStore[IO].unsafeRunSync()
+    val history       = History(store)
     val world = history
       .getWorldState()
       .unsafeRunSync()

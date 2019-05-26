@@ -4,13 +4,13 @@ import cats.effect.IO
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
-import jbok.persistent.KeyValueDB
+import jbok.persistent.MemoryKVStore
 import scodec.bits.ByteVector
 
 class CallOpcodesSpecByzantium extends CoreSpec {
   val evmConfig  = EvmConfig.ByzantiumConfigBuilder(None)
-  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history       = History(db)
+  val store            = MemoryKVStore[IO].unsafeRunSync()
+  val history       = History(store)
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
 
   val fxt = new CallOpFixture(evmConfig, startState)

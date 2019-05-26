@@ -10,9 +10,10 @@ import jbok.core.config.{GenesisConfig, MiningConfig}
 import jbok.core.keystore.KeyStore
 import jbok.core.ledger.History
 import jbok.core.models._
+import jbok.core.store.ColumnFamilies
 import jbok.crypto._
 import jbok.crypto.signature._
-import jbok.persistent.KeyValueDB
+import jbok.persistent.{KVStore, SingleColumnKVStore}
 import scodec.bits._
 
 import scala.concurrent.duration._
@@ -23,7 +24,7 @@ final case class CliqueExtra(miners: List[Address], signature: CryptoSignature, 
 
 final class Clique[F[_]](
     config: MiningConfig,
-    db: KeyValueDB[F],
+    store: SingleColumnKVStore[F, ByteVector, String],
     history: History[F],
     proposal: Ref[F, Option[Proposal]],
     keyPair: KeyPair
@@ -69,7 +70,7 @@ final class Clique[F[_]](
       headers: List[BlockHeader] = Nil
   ): F[Snapshot] = {
     val snap =
-      OptionT(Snapshot.loadSnapshot[F](db, hash))
+      OptionT(Snapshot.loadSnapshot[F](store, hash))
         .orElseF(if (number == 0) genesisSnapshot.map(_.some) else F.pure(None))
 
     snap.value flatMap {
@@ -77,7 +78,7 @@ final class Clique[F[_]](
         // Previous snapshot found, apply any pending headers on top of it
         for {
           newSnap <- Snapshot.applyHeaders[F](s, headers, history.chainId)
-          _       <- Snapshot.storeSnapshot[F](newSnap, db, checkpointInterval)
+          _       <- Snapshot.storeSnapshot[F](newSnap, store, checkpointInterval)
         } yield newSnap
 
       case None =>
@@ -104,7 +105,7 @@ final class Clique[F[_]](
       genesis <- history.genesisHeader
       extra   <- genesis.extraAs[F, CliqueExtra]
       snap = Snapshot(config, 0, genesis.hash, extra.miners.toSet)
-      _ <- Snapshot.storeSnapshot[F](snap, db, checkpointInterval)
+      _ <- Snapshot.storeSnapshot[F](snap, store, checkpointInterval)
       _ <- log.i(s"stored genesis with ${extra.miners.size} miners")
     } yield snap
 }
@@ -120,7 +121,7 @@ object Clique {
   def apply[F[_]](
       config: MiningConfig,
       genesisConfig: GenesisConfig,
-      db: KeyValueDB[F],
+      db: KVStore[F],
       history: History[F],
       keystore: KeyStore[F],
   )(implicit F: Concurrent[F]): F[Clique[F]] =
@@ -132,8 +133,9 @@ object Clique {
       } else {
         F.unit
       }
+      store = SingleColumnKVStore[F, ByteVector, String](ColumnFamilies.Snapshot, db)
       proposal <- Ref[F].of(Option.empty[Proposal])
-    } yield new Clique[F](config, db, history, proposal, keyPair)
+    } yield new Clique[F](config, store, history, proposal, keyPair)
 
   def fillExtraData(miners: List[Address]): ByteVector =
     CliqueExtra(miners, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asValidBytes

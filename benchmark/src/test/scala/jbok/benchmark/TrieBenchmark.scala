@@ -4,19 +4,19 @@ import cats.effect.IO
 import jbok.codec.HexPrefix
 import jbok.codec.rlp.implicits._
 import jbok.common.testkit._
-import jbok.core.store.namespaces
+import jbok.core.store.ColumnFamilies
 import jbok.crypto.authds.mpt.MptNode.LeafNode
 import jbok.crypto.authds.mpt.{MerklePatriciaTrie, MptNode}
-import jbok.persistent.{KeyValueDB, StageKeyValueDB}
+import jbok.persistent.{MemoryKVStore, StageKVStore}
 import org.openjdk.jmh.annotations._
 import org.scalacheck.Gen
 import scodec.bits.ByteVector
 
 class TrieBenchmark extends JbokBenchmark {
 
-  val db    = KeyValueDB.inmem[IO].unsafeRunSync()
-  val mpt   = MerklePatriciaTrie[IO](namespaces.Node, db).unsafeRunSync()
-  var stage = StageKeyValueDB[IO, ByteVector, ByteVector](namespaces.empty, mpt)
+  val store    = MemoryKVStore[IO].unsafeRunSync()
+  val mpt   = MerklePatriciaTrie[IO, ByteVector, ByteVector](ColumnFamilies.Node, store).unsafeRunSync()
+  var stage = StageKVStore(mpt)
 
   val size = 100000
 

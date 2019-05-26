@@ -4,12 +4,12 @@ import cats.effect.IO
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.UInt256
-import jbok.persistent.KeyValueDB
+import jbok.persistent.MemoryKVStore
 
 class CallOpcodesSpecSpuriousDragon extends CoreSpec {
   val evmConfig  = EvmConfig.SpuriousDragonConfigBuilder(None)
-  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history       = History(db)
+  val store            = MemoryKVStore[IO].unsafeRunSync()
+  val history       = History(store)
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
   import evmConfig.feeSchedule._
 

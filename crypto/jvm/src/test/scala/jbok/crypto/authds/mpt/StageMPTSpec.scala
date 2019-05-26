@@ -1,42 +1,57 @@
 package jbok.crypto.authds.mpt
 
-import cats.effect.IO
-import jbok.common.CommonSpec
-import jbok.persistent.{KeyValueDB, StageKeyValueDB}
-import scodec.bits.ByteVector
+import cats.effect.{IO, Resource}
 import jbok.codec.rlp.implicits._
+import jbok.common.{CommonSpec, FileUtil}
+import jbok.persistent._
+import jbok.persistent.rocksdb.RocksKVStore
 
 class StageMPTSpec extends CommonSpec {
-  trait Fixture {
-    val db        = KeyValueDB.inmem[IO].unsafeRunSync()
-    val namespace = ByteVector.empty
-    val mpt       = MerklePatriciaTrie[IO](namespace, db).unsafeRunSync()
-    val stage     = StageKeyValueDB[IO, String, String](namespace, mpt)
-  }
 
-  "Staged MPT" should {
-    "not write inserts until commit" in new Fixture {
-      val updated = stage
-        .put("1", "1")
-        .put("2", "2")
+  def check(name: String, resource: Resource[IO, StageKVStore[IO, String, String]]): Unit =
+    s"Staged MPT ${name}" should {
+      "not write inserts until commit" in withResource(resource) { stage =>
+        val updated = stage
+          .put("1", "1")
 
-      updated.has("1").unsafeRunSync() shouldBe true
-      updated.has("2").unsafeRunSync() shouldBe true
-      updated.inner.has[String]("1", namespace).unsafeRunSync() shouldBe false
-      updated.inner.has[String]("2", namespace).unsafeRunSync() shouldBe false
+        for {
+          res <- updated.get("1")
+          _ = res shouldBe Some("1")
 
-      stage.has("1").unsafeRunSync() shouldBe false
-      stage.has("2").unsafeRunSync() shouldBe false
-      stage.inner.has[String]("1", namespace).unsafeRunSync() shouldBe false
-      stage.inner.has[String]("2", namespace).unsafeRunSync() shouldBe false
+          res <- updated.inner.get("1")
+          _ = res shouldBe None
 
-      val committed = updated.commit.unsafeRunSync()
-      committed.inner.has[String]("1", namespace).unsafeRunSync() shouldBe true
-      committed.inner.has[String]("2", namespace).unsafeRunSync() shouldBe true
+          res <- stage.get("1")
+          _ = res shouldBe None
 
-      // after commit
-      stage.has("1").unsafeRunSync() shouldBe true
-      stage.has("2").unsafeRunSync() shouldBe true
+          res <- stage.inner.get("1")
+          _ = res shouldBe None
+
+          committed <- updated.commit
+
+          res <- committed.inner.get("1")
+          _ = res shouldBe Some("1")
+
+          res <- stage.get("1")
+          _ = res shouldBe Some("1")
+        } yield ()
+      }
     }
-  }
+
+  val memory = Resource.liftF(for {
+    store <- MemoryKVStore[IO]
+    mpt   <- MerklePatriciaTrie[IO, String, String](ColumnFamily.default, store)
+    stage = StageKVStore(mpt)
+  } yield stage)
+
+  val rocksdb = for {
+    file  <- FileUtil[IO].temporaryDir()
+    store <- RocksKVStore.resource[IO](file.path, List(ColumnFamily.default))
+    mpt   <- Resource.liftF(MerklePatriciaTrie[IO, String, String](ColumnFamily.default, store))
+    stage = StageKVStore(mpt)
+  } yield stage
+
+  check("memory", memory)
+  check("rocksdb", rocksdb)
+
 }

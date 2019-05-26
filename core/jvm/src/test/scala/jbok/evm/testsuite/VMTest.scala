@@ -9,11 +9,11 @@ import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
-import jbok.core.store.namespaces
+import jbok.core.store.ColumnFamilies
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
-import jbok.persistent.{KeyValueDB, StageKeyValueDB}
+import jbok.persistent.{MemoryKVStore, StageKVStore}
 import scodec.bits.ByteVector
 import jbok.core.CoreSpec
 
@@ -110,19 +110,19 @@ class VMTest extends CoreSpec {
       case (addr, account) => (addr, account.code)
     }
 
-    val db      = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history = History(db)
+    val store      = MemoryKVStore[IO].unsafeRunSync()
+    val history = History(store)
 
     val storages = json.map {
       case (addr, account) =>
         (addr, Storage.fromMap[IO](account.storage.map(s => (UInt256(s._1), UInt256(s._2)))).unsafeRunSync())
     }
 
-    val mpt          = MerklePatriciaTrie[IO](namespaces.Node, db).unsafeRunSync()
-    val accountProxy = StageKeyValueDB[IO, Address, Account](namespaces.empty, mpt) ++ accounts
+    val mpt          = MerklePatriciaTrie[IO, Address, Account](ColumnFamilies.Node, store).unsafeRunSync()
+    val accountProxy = StageKVStore(mpt) ++ accounts
 
     WorldState[IO](
-      db,
+      store,
       history,
       accountProxy,
       MerklePatriciaTrie.emptyRootHash,

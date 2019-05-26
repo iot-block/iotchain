@@ -4,21 +4,12 @@ import java.security.SecureRandom
 import cats.effect.IO
 import jbok.codec.HexPrefix
 import jbok.common.testkit._
+import jbok.crypto.authds.mpt.MptNode
 import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
-import jbok.crypto.authds.mpt.{MerklePatriciaTrie, MptNode}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
-import jbok.persistent.KeyValueDB
-import org.scalacheck.Arbitrary._
 import org.scalacheck.{Arbitrary, Gen}
-import scodec.bits.ByteVector
 
 object testkit {
-  implicit def arbMerkleTrie: Arbitrary[MerklePatriciaTrie[IO]] = Arbitrary {
-    for {
-      namespace <- arbitrary[ByteVector]
-      db = KeyValueDB.inmem[IO].unsafeRunSync()
-    } yield MerklePatriciaTrie[IO](namespace, db).unsafeRunSync()
-  }
 
   implicit val arbBranchNode: Arbitrary[BranchNode] = Arbitrary {
     for {

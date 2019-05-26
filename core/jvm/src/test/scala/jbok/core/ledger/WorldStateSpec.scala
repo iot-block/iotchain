@@ -6,13 +6,17 @@ import jbok.core.CoreSpec
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.testkit._
 import jbok.evm.WorldState
-import jbok.persistent.KeyValueDB
+import jbok.persistent.MemoryKVStore
 import scodec.bits._
 
 class WorldStateSpec extends CoreSpec {
+  val address1 = Address(0x123456)
+  val address2 = Address(0xabcdef)
+  val address3 = Address(0xfedcba)
+
   trait Fixture {
-    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history       = History(db)
+    val store      = MemoryKVStore[IO].unsafeRunSync()
+    val history = History(store)
 
     val world = history
       .getWorldState(noEmptyAccounts = false)
@@ -21,10 +25,6 @@ class WorldStateSpec extends CoreSpec {
     val postEIP161WorldState = history
       .getWorldState(noEmptyAccounts = true)
       .unsafeRunSync()
-
-    val address1 = Address(0x123456)
-    val address2 = Address(0xabcdef)
-    val address3 = Address(0xfedcba)
   }
 
   "WorldState" should {
@@ -299,7 +299,8 @@ class WorldStateSpec extends CoreSpec {
           .unsafeRunSync()
           .stateRootHash
 
-      history.getWorldState(stateRootHash = Some(root))
+      history
+        .getWorldState(stateRootHash = Some(root))
         .flatMap(_.getAccount(address1))
         .map(_ shouldBe Account(0, 1000))
         .unsafeRunSync()

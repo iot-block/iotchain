@@ -27,7 +27,7 @@ import jbok.core.sync.SyncClient
 import jbok.core.validators.TxValidator
 import jbok.crypto.ssl.{SSLConfig, SSLContextHelper}
 import jbok.network.Message
-import jbok.persistent.{KeyValueDB, KeyValueDBPlatform}
+import jbok.persistent.{KVStore, KVStorePlatform}
 
 class CoreModule[F[_]: TagK](config: FullConfig)(implicit F: ConcurrentEffect[F], cs: ContextShift[F], T: Timer[F]) extends ModuleDef {
   implicit lazy val acg: AsynchronousChannelGroup = ThreadUtil.acgGlobal
@@ -55,11 +55,11 @@ class CoreModule[F[_]: TagK](config: FullConfig)(implicit F: ConcurrentEffect[F]
   make[KeyStoreConfig].from((config: FullConfig) => config.keystore)
   make[SSLConfig].from((config: FullConfig) => config.ssl)
 
-  make[KeyValueDB[F]].fromResource(KeyValueDBPlatform.resource[F](config.persist))
+  make[KVStore[F]].fromResource(KVStorePlatform.resource[F](config.persist))
   make[Metrics[F]].from(new PrometheusMetrics[F]())
   make[History[F]].from[HistoryImpl[F]]
   make[KeyStore[F]].from[KeyStorePlatform[F]]
-  make[Clique[F]].fromEffect((config: FullConfig, db: KeyValueDB[F], history: History[F], keystore: KeyStore[F]) => Clique[F](config.mining, config.genesis, db, history, keystore))
+  make[Clique[F]].fromEffect((config: FullConfig, store: KVStore[F], history: History[F], keystore: KeyStore[F]) => Clique[F](config.mining, config.genesis, store, history, keystore))
   make[Consensus[F]].from[CliqueConsensus[F]]
 
   // peer
@@ -84,7 +84,7 @@ class CoreModule[F[_]: TagK](config: FullConfig)(implicit F: ConcurrentEffect[F]
   make[Option[SSLContext]].fromEffect(SSLContextHelper[F](config.ssl))
   make[IncomingManager[F]]
   make[OutgoingManager[F]]
-  make[PeerStore[F]].fromEffect((db: KeyValueDB[F]) => PeerStore[F](db))
+  make[PeerStore[F]].fromEffect((store: KVStore[F]) => PeerStore[F](store))
   make[PeerManager[F]]
   make[PeerMessageHandler[F]]
 

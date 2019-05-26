@@ -13,10 +13,10 @@ import jbok.core.models._
 import jbok.core.store._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm.WorldState
-import jbok.persistent.{KeyValueDB, StageKeyValueDB}
+import jbok.persistent._
 import scodec.bits._
 
-final class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F: Sync[F], c: BigInt, T: Timer[F]) extends History[F] {
+final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F: Sync[F], c: BigInt, T: Timer[F]) extends History[F] {
   private[this] val log = Logger[F]
 
   implicit private val m = metrics
@@ -42,7 +42,7 @@ final class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F
 
   // header
   override def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]] =
-    db.getOpt[ByteVector, BlockHeader](hash, namespaces.BlockHeader).observed("getBlockHeaderByHash")
+    store.getAs[BlockHeader](ColumnFamilies.BlockHeader, hash.asValidBytes).observed("getBlockHeaderByHash")
 
   override def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]] =
     (for {
@@ -52,41 +52,51 @@ final class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F
 
   override def putBlockHeader(blockHeader: BlockHeader): F[Unit] = metrics.observed("putBlockHeader") {
     if (blockHeader.number == 0) {
-      db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) >>
-        db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash) >>
-        db.put(blockHeader.hash, blockHeader.difficulty, namespaces.TotalDifficulty)
+      val puts = List(
+        Put(ColumnFamilies.BlockHeader, blockHeader.hash.asValidBytes, blockHeader.asValidBytes),
+        Put(ColumnFamilies.NumberHash, blockHeader.number.asValidBytes, blockHeader.hash.asValidBytes),
+        Put(ColumnFamilies.TotalDifficulty, blockHeader.hash.asValidBytes, blockHeader.difficulty.asValidBytes)
+      )
+      store.writeBatch(puts, Nil)
     } else {
       getTotalDifficultyByHash(blockHeader.parentHash).flatMap {
         case Some(td) =>
-          db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) >>
-            db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash) >>
-            db.put(blockHeader.hash, td + blockHeader.difficulty, namespaces.TotalDifficulty)
+          val puts = List(
+            Put(ColumnFamilies.BlockHeader, blockHeader.hash.asValidBytes, blockHeader.asValidBytes),
+            Put(ColumnFamilies.NumberHash, blockHeader.number.asValidBytes, blockHeader.hash.asValidBytes),
+            Put(ColumnFamilies.TotalDifficulty, blockHeader.hash.asValidBytes, (td + blockHeader.difficulty).asValidBytes)
+          )
+          store.writeBatch(puts, Nil)
 
         case None =>
-          db.put(blockHeader.hash, blockHeader, namespaces.BlockHeader) >>
-            db.put(blockHeader.number, blockHeader.hash, namespaces.NumberHash)
+          val puts = List(
+            Put(ColumnFamilies.BlockHeader, blockHeader.hash.asValidBytes, blockHeader.asValidBytes),
+            Put(ColumnFamilies.NumberHash, blockHeader.number.asValidBytes, blockHeader.hash.asValidBytes),
+          )
+          store.writeBatch(puts, Nil)
       }
     }
   }
 
   // body
   override def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]] =
-    db.getOpt[ByteVector, BlockBody](hash, namespaces.BlockBody).observed("getBlockBodyByHash")
+    store.getAs[BlockBody](ColumnFamilies.BlockBody, hash.asValidBytes).observed("getBlockBodyByHash")
 
-  override def putBlockBody(blockHash: ByteVector, blockBody: BlockBody): F[Unit] =
-    (db.put(blockHash, blockBody, namespaces.BlockBody) >>
-      blockBody.transactionList.zipWithIndex
-        .traverse_ {
-          case (tx, index) =>
-            db.put(tx.hash, TransactionLocation(blockHash, index), namespaces.TxLocation)
-        }).observed("putBlockBody")
+  override def putBlockBody(blockHash: ByteVector, blockBody: BlockBody): F[Unit] = {
+    val putBody = Put(ColumnFamilies.BlockBody, blockHash.asValidBytes, blockBody.asValidBytes)
+    val putLocations = blockBody.transactionList.zipWithIndex.map {
+      case (tx, index) =>
+        Put(ColumnFamilies.TxLocation, tx.hash.asValidBytes, TransactionLocation(blockHash, index).asValidBytes)
+    }
+    store.writeBatch(putBody :: putLocations, Nil).observed("putBlockBody")
+  }
 
   // receipts
   override def getReceiptsByHash(blockHash: ByteVector): F[Option[List[Receipt]]] =
-    db.getOpt[ByteVector, List[Receipt]](blockHash, namespaces.Receipts).observed("getReceiptsByHash")
+    store.getAs[List[Receipt]](ColumnFamilies.Receipts, blockHash.asValidBytes).observed("getReceiptsByHash")
 
   override def putReceipts(blockHash: ByteVector, receipts: List[Receipt]): F[Unit] =
-    db.put(blockHash, receipts, namespaces.Receipts).observed("putReceipts")
+    store.put(ColumnFamilies.Receipts, blockHash.asValidBytes, receipts.asValidBytes).observed("putReceipts")
 
   // block
   override def getBlockByHash(hash: ByteVector): F[Option[Block]] =
@@ -107,62 +117,65 @@ final class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F
       putReceipts(block.header.hash, receipts) >>
       putBestBlockNumber(block.header.number)).observed("putBlockAndReceipts")
 
-  override def delBlock(blockHash: ByteVector, parentAsBestBlock: Boolean): F[Unit] = {
-    val maybeBlockHeader = getBlockHeaderByHash(blockHash)
-    val maybeTxList      = getBlockBodyByHash(blockHash).map(_.map(_.transactionList))
+  override def delBlock(blockHash: ByteVector): F[Unit] = {
+    val dels: F[List[Del]] =
+      List(
+        Del(ColumnFamilies.BlockHeader, blockHash),
+        Del(ColumnFamilies.BlockBody, blockHash),
+        Del(ColumnFamilies.TotalDifficulty, blockHash),
+        Del(ColumnFamilies.Receipts, blockHash)
+      ).pure[F]
 
-    val p = db.del(blockHash, namespaces.BlockHeader) >>
-      db.del(blockHash, namespaces.BlockBody) >>
-      db.del(blockHash, namespaces.TotalDifficulty) >>
-      db.del(blockHash, namespaces.Receipts) >>
-      maybeTxList.flatMap {
-        case Some(txs) => txs.traverse(tx => db.del(tx.hash, namespaces.TxLocation)).void
-        case None      => F.unit
-      } >>
-      maybeBlockHeader.flatMap {
-        case Some(bh) =>
-          val removeMapping = getHashByBlockNumber(bh.number).flatMap {
-            case Some(_) => db.del(bh.number, namespaces.NumberHash)
-            case None    => F.unit
+    val delMapping: F[List[Del]] =
+      getBlockHeaderByHash(blockHash).flatMap {
+        case Some(header) =>
+          getHashByBlockNumber(header.number).map {
+            case Some(_) => Del(ColumnFamilies.NumberHash, header.number.asValidBytes) :: Nil
+            case None    => Nil
           }
-
-          val updateBest =
-            if (parentAsBestBlock) putBestBlockNumber(bh.number - 1)
-            else F.unit
-
-          removeMapping >> updateBest
-
-        case None => F.unit
+        case None => F.pure(Nil)
       }
 
-    p.observed("delBlock")
+    val delTxs: F[List[Del]] =
+      getBlockBodyByHash(blockHash).map(_.map(_.transactionList)).map {
+        case Some(txs) => txs.map(tx => Del(ColumnFamilies.TxLocation, tx.hash))
+        case None      => Nil
+      }
+
+    (dels, delMapping, delTxs)
+      .mapN {
+        case (a, b, c) =>
+          a ++ b ++ c
+      }
+      .flatMap(dels => store.writeBatch(Nil, dels))
+      .observed("delBlock")
   }
 
   // accounts, storage and codes
   override def getMptNode(hash: ByteVector): F[Option[ByteVector]] =
-    db.getRaw(namespaces.Node ++ hash).observed("getMptNode")
+    store.getAs[ByteVector](ColumnFamilies.Node, hash.asValidBytes).observed("getMptNode")
 
   override def putMptNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
-    db.putRaw(namespaces.Node ++ hash, bytes).observed("putMptNode")
+    store.put(ColumnFamilies.Node, hash.asValidBytes, bytes.asValidBytes).observed("putMptNode")
 
   override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] =
     (for {
       header  <- OptionT(getBlockHeaderByNumber(blockNumber))
-      mpt     <- OptionT.liftF(MerklePatriciaTrie[F](namespaces.Node, db, Some(header.stateRoot)))
-      account <- OptionT(mpt.getOpt[Address, Account](address, namespaces.empty))
+      mpt     <- OptionT.liftF(MerklePatriciaTrie[F, Address, Account](ColumnFamilies.Node, store, Some(header.stateRoot)))
+      account <- OptionT(mpt.get(address))
     } yield account).value.observed("getAccount")
 
   override def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector] =
     (for {
-      mpt   <- MerklePatriciaTrie[F](namespaces.Node, db, Some(rootHash))
-      bytes <- mpt.getOpt[UInt256, UInt256](UInt256(position), namespaces.empty).map(_.getOrElse(UInt256.Zero).bytes)
+      mpt   <- MerklePatriciaTrie[F, UInt256, UInt256](ColumnFamilies.Node, store, Some(rootHash))
+      bytes <- mpt.get(UInt256(position)).map(_.getOrElse(UInt256.Zero).bytes)
     } yield bytes).observed("getStorage")
 
   override def getCode(hash: ByteVector): F[Option[ByteVector]] =
-    db.getRaw(namespaces.Code ++ hash).observed("getCode")
+    store.getAs[ByteVector](ColumnFamilies.Code, hash.asValidBytes).observed("getCode")
 
   override def putCode(hash: ByteVector, code: ByteVector): F[Unit] =
-    db.putRaw(namespaces.Code ++ hash, code).observed("putCode")
+    store.put(ColumnFamilies.Code, hash.asValidBytes, code.asValidBytes).observed("putCode")
 
   override def getWorldState(
       accountStartNonce: UInt256,
@@ -170,11 +183,11 @@ final class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F
       noEmptyAccounts: Boolean
   ): F[WorldState[F]] =
     for {
-      mpt <- MerklePatriciaTrie[F](namespaces.Node, db, stateRootHash)
-      accountProxy = StageKeyValueDB[F, Address, Account](namespaces.empty, mpt)
+      mpt <- MerklePatriciaTrie[F, Address, Account](ColumnFamilies.Node, store, stateRootHash)
+      accountProxy = StageKVStore(mpt)
     } yield
       WorldState[F](
-        db,
+        store,
         this,
         accountProxy,
         stateRootHash.getOrElse(MerklePatriciaTrie.emptyRootHash),
@@ -193,13 +206,13 @@ final class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F
     } yield td).value.observed("getTotalDifficultyByNumber")
 
   override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]] =
-    db.getOpt[ByteVector, BigInt](blockHash, namespaces.TotalDifficulty).observed("getTotalDifficultyByHash")
+    store.getAs[BigInt](ColumnFamilies.TotalDifficulty, blockHash.asValidBytes).observed("getTotalDifficultyByHash")
 
   override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
-    db.getOpt[BigInt, ByteVector](number, namespaces.NumberHash).observed("getHashByBlockNumber")
+    store.getAs[ByteVector](ColumnFamilies.NumberHash, number.asValidBytes).observed("getHashByBlockNumber")
 
   override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
-    db.getOpt[ByteVector, TransactionLocation](txHash, namespaces.TxLocation).observed("getTransactionLocation")
+    store.getAs[TransactionLocation](ColumnFamilies.TxLocation, txHash.asValidBytes).observed("getTransactionLocation")
 
   override def getBestBlockHeader: F[BlockHeader] =
     getBestBlockNumber.flatMap(bn =>
@@ -216,10 +229,11 @@ final class HistoryImpl[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F
     })
 
   override def getBestBlockNumber: F[BigInt] =
-    db.getOptT[String, BigInt]("BestBlockNumber", namespaces.AppStateNamespace).getOrElse(BigInt(0)).observed("getBestBlockNumber")
+    store.getAs[BigInt](ColumnFamilies.AppState, "BestBlockNumber".asValidBytes).map(_.getOrElse(BigInt(0))).observed("getBestBlockNumber")
 
   override def putBestBlockNumber(number: BigInt): F[Unit] =
-    db.put[String, BigInt]("BestBlockNumber", number, namespaces.AppStateNamespace)
+    store
+      .put(ColumnFamilies.AppState, "BestBlockNumber".asValidBytes, number.asValidBytes)
       .observed("putBestBlockNumber") <* metrics.set("BestBlockNumber")(number.toDouble)
 
   override def genesisHeader: F[BlockHeader] =

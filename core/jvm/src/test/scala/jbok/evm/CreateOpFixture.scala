@@ -4,7 +4,7 @@ import cats.effect.IO
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
-import jbok.persistent.KeyValueDB
+import jbok.persistent.MemoryKVStore
 import scodec.bits._
 
 case class CreateOpFixture(evmConfig: EvmConfig) extends CoreSpec {
@@ -12,8 +12,8 @@ case class CreateOpFixture(evmConfig: EvmConfig) extends CoreSpec {
 
   val creatorAddr        = Address(0xcafe)
   val endowment: UInt256 = 123
-  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history       = History(db)
+  val store            = MemoryKVStore[IO].unsafeRunSync()
+  val history       = History(store)
   val initWorld =
     history
       .getWorldState()

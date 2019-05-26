@@ -66,6 +66,19 @@ mining:
 persist:
   driver: inmem
   path: ""
+  columnFamilies:
+    - default
+    - BlockHeader
+    - BlockBody
+    - Receipts
+    - Snapshot
+    - Node
+    - Code
+    - TotalDifficulty
+    - AppState
+    - Peer
+    - NumberHash
+    - TxLocation
 
 ssl:
   enabled: false

@@ -9,7 +9,7 @@ import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.core.consensus.poa.clique.Snapshot._
 import jbok.core.models.{Address, BlockHeader}
-import jbok.persistent.KeyValueDB
+import jbok.persistent.SingleColumnKVStore
 import scodec.bits._
 import cats.implicits._
 import jbok.core.config.MiningConfig
@@ -138,18 +138,16 @@ final case class Snapshot(
 }
 
 object Snapshot {
-  val namespace = ByteVector("clique".getBytes)
-
   implicit val byteArrayOrd: Ordering[Array[Byte]] = Ordering.by((_: Array[Byte]).toIterable)
 
   implicit val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
-  def storeSnapshot[F[_]: Async](snapshot: Snapshot, db: KeyValueDB[F], checkpointInterval: Int): F[Unit] =
-    db.put(snapshot.hash, snapshot.asJson.noSpaces, namespace)
+  def storeSnapshot[F[_]: Async](snapshot: Snapshot, store: SingleColumnKVStore[F, ByteVector, String], checkpointInterval: Int): F[Unit] =
+    store.put(snapshot.hash, snapshot.asJson.noSpaces)
 
-  def loadSnapshot[F[_]](db: KeyValueDB[F], hash: ByteVector)(implicit F: Sync[F]): F[Option[Snapshot]] =
+  def loadSnapshot[F[_]](store: SingleColumnKVStore[F, ByteVector, String], hash: ByteVector)(implicit F: Sync[F]): F[Option[Snapshot]] =
     (for {
-      str  <- db.getOptT[ByteVector, String](hash, namespace)
+      str  <- OptionT(store.get(hash))
       snap <- OptionT.fromOption[F](decode[Snapshot](str).toOption)
     } yield snap).value
 

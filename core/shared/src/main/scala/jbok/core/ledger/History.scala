@@ -5,7 +5,7 @@ import jbok.common.metrics.Metrics
 import jbok.core.config.GenesisConfig
 import jbok.core.models._
 import jbok.evm.WorldState
-import jbok.persistent.KeyValueDB
+import jbok.persistent.KVStore
 import scodec.bits._
 
 trait History[F[_]] {
@@ -38,7 +38,7 @@ trait History[F[_]] {
 
   def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: BigInt): F[Unit]
 
-  def delBlock(hash: ByteVector, parentAsBestBlock: Boolean): F[Unit]
+  def delBlock(hash: ByteVector): F[Unit]
 
   // accounts, storage and codes
   def getMptNode(hash: ByteVector): F[Option[ByteVector]]
@@ -80,9 +80,9 @@ trait History[F[_]] {
 }
 
 object History {
-  def apply[F[_]](db: KeyValueDB[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F]): History[F] =
-    new HistoryImpl[F](db, Metrics.nop[F])
+  def apply[F[_]](store: KVStore[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F]): History[F] =
+    new HistoryImpl[F](store, Metrics.nop[F])
 
-  def apply[F[_]](db: KeyValueDB[F], metrics: Metrics[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F]): History[F] =
-    new HistoryImpl[F](db, metrics)
+  def apply[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F]): History[F] =
+    new HistoryImpl[F](store, metrics)
 }

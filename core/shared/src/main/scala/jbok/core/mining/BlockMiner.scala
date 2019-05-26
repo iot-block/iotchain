@@ -7,15 +7,14 @@ import fs2._
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
 import jbok.core.NodeStatus
-import jbok.core.config.MiningConfig
 import jbok.core.consensus.Consensus
+import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.TypedBlock._
-import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.models.{SignedTransaction, _}
 import jbok.core.pool.TxPool
-import jbok.core.store.namespaces
+import jbok.core.store.ColumnFamilies
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
-import jbok.persistent.KeyValueDB
+import jbok.persistent.{ColumnFamily, MemoryKVStore}
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
@@ -118,9 +117,9 @@ final class BlockMiner[F[_]](
 
   private[jbok] def calcMerkleRoot[V: RlpCodec](entities: List[V]): F[ByteVector] =
     for {
-      db   <- KeyValueDB.inmem[F]
-      mpt  <- MerklePatriciaTrie[F](namespaces.empty, db)
-      _    <- entities.zipWithIndex.map { case (v, k) => mpt.put[Int, V](k, v, namespaces.empty) }.sequence
+      db   <- MemoryKVStore[F]
+      mpt  <- MerklePatriciaTrie[F, Int, V](ColumnFamily.default, db)
+      _    <- entities.zipWithIndex.map { case (v, k) => mpt.put(k, v) }.sequence
       root <- mpt.getRootHash
     } yield root
 }

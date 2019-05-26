@@ -5,13 +5,13 @@ import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models._
 import jbok.crypto._
-import jbok.persistent.KeyValueDB
+import jbok.persistent.MemoryKVStore
 import scodec.bits.ByteVector
 
 class CallOpcodesSpec extends CoreSpec {
   val evmConfig     = EvmConfig.FrontierConfigBuilder(None)
-  val db            = KeyValueDB.inmem[IO].unsafeRunSync()
-  val history       = History(db)
+  val store            = MemoryKVStore[IO].unsafeRunSync()
+  val history       = History(store)
   val startState = history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
   import evmConfig.feeSchedule._
 

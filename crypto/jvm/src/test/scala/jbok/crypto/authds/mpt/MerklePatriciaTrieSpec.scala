@@ -1,165 +1,180 @@
 package jbok.crypto.authds.mpt
 
-import cats.effect.IO
-import jbok.common.CommonSpec
+import cats.effect.{IO, Resource}
+import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import jbok.common.testkit._
+import jbok.common.{CommonSpec, FileUtil}
 import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
-import jbok.crypto.testkit._
-import jbok.persistent.KeyValueDB
+import jbok.persistent.rocksdb.RocksKVStore
+import jbok.persistent.{ColumnFamily, MemoryKVStore}
 import org.scalacheck.Gen
 import scodec.bits._
 
 import scala.util.Random
 
 class MerklePatriciaTrieSpec extends CommonSpec {
-  trait Fixture {
-    val db        = KeyValueDB.inmem[IO].unsafeRunSync()
-    val namespace = ByteVector.empty
-    val mpt      = MerklePatriciaTrie[IO](namespace, db).unsafeRunSync()
-  }
 
-  "codec round trip" in {
-    val leafNode = LeafNode("dead", hex"beef")
-    RlpCodec.decode[MptNode](leafNode.bytes.bits).require.value shouldBe leafNode
-    leafNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + 2)
+  def test(name: String, resource: Resource[IO, MerklePatriciaTrie[IO, String, String]]): Unit = {
+    s"MPT ${name}" should {
+      "codec round trip" in {
+        val leafNode = LeafNode("dead", hex"beef")
+        RlpCodec.decode[MptNode](leafNode.bytes.bits).require.value shouldBe leafNode
+        leafNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + 2)
 
-    val extNode = ExtensionNode("babe", leafNode.entry)
-    RlpCodec.decode[MptNode](extNode.bytes.bits).require.value shouldBe extNode
-    RlpCodec.decode[MptNode](extNode.bytes.bits).require.value.asInstanceOf[ExtensionNode].child shouldBe Right(leafNode)
-    extNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + leafNode.bytes.length)
+        val extNode = ExtensionNode("babe", leafNode.entry)
+        RlpCodec.decode[MptNode](extNode.bytes.bits).require.value shouldBe extNode
+        RlpCodec.decode[MptNode](extNode.bytes.bits).require.value.asInstanceOf[ExtensionNode].child shouldBe Right(leafNode)
+        extNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + leafNode.bytes.length)
 
-    val branchNode = BranchNode.withSingleBranch('a', extNode.entry, Some(hex"c0de"))
-    val bn         = RlpCodec.decode[MptNode](branchNode.bytes.bits).require.value.asInstanceOf[BranchNode]
-    bn shouldBe branchNode
-    bn.branchAt('a') shouldBe Some(extNode.entry)
-    bn.bytes.length shouldBe 1 + (15 * 1) + (1 + extNode.bytes.length) + (1 + 2)
-  }
+        val branchNode = BranchNode.withSingleBranch('a', extNode.entry, Some(hex"c0de"))
+        val bn         = RlpCodec.decode[MptNode](branchNode.bytes.bits).require.value.asInstanceOf[BranchNode]
+        bn shouldBe branchNode
+        bn.branchAt('a') shouldBe Some(extNode.entry)
+        bn.bytes.length shouldBe 1 + (15 * 1) + (1 + extNode.bytes.length) + (1 + 2)
+      }
 
-  "simple put and get" in new Fixture {
-    mpt.getRootOpt.unsafeRunSync() shouldBe None
-    mpt.getRootHash.unsafeRunSync() shouldBe MerklePatriciaTrie.emptyRootHash
-    mpt.putRaw(hex"cafe", hex"babe").unsafeRunSync()
-    mpt.getRootOpt.unsafeRunSync() shouldBe Some(LeafNode("cafe", hex"babe"))
-    mpt.getRootHash.unsafeRunSync() shouldBe LeafNode("cafe", hex"babe").hash
+      "put and get" in withResource(resource) { mpt =>
+        val kvs = List(
+          ""     -> "83b",
+          "dc17" -> "a",
+          "b07d" -> "",
+          "9"    -> "94e5",
+          "a867" -> "0",
+          "c5"   -> "fa01",
+          "7c"   -> "c",
+          "de8a" -> "",
+          "5eb"  -> "d869",
+          "b395" -> "",
+          "7"    -> "f",
+          "3"    -> "",
+          "d"    -> "8491"
+        )
 
-    mpt.keysRaw.unsafeRunSync() shouldBe List(hex"cafe")
-    mpt.toMapRaw.unsafeRunSync() shouldBe Map(hex"cafe" -> hex"babe")
-  }
+        kvs.foreach { case (k, v) => mpt.put(k, v).unsafeRunSync() }
+        kvs.foreach { case (k, v) => mpt.get(k).unsafeRunSync() shouldBe Some(v) }
+        mpt.toMap.map(_ shouldBe kvs.toMap)
+      }
 
-  "put and get" in new Fixture {
-    val kvs = List(
-      ""     -> "83b",
-      "dc17" -> "a",
-      "b07d" -> "",
-      "9"    -> "94e5",
-      "a867" -> "0",
-      "c5"   -> "fa01",
-      "7c"   -> "c",
-      "de8a" -> "",
-      "5eb"  -> "d869",
-      "b395" -> "",
-      "7"    -> "f",
-      "3"    -> "",
-      "d"    -> "8491"
-    ).map(t => (ByteVector.fromValidHex(t._1), ByteVector.fromValidHex(t._2)))
+      "mustGet empty root & hash" in withResource(resource) { mpt =>
+        for {
+          hash <- mpt.getRootHash
+          _ = hash shouldBe MerklePatriciaTrie.emptyRootHash
+          _ <- mpt.getNodeByHash(hash).map(_ shouldBe None)
+        } yield ()
+      }
 
-    kvs.foreach { case (k, v) => mpt.putRaw(k, v).unsafeRunSync() }
-    kvs.foreach { case (k, v) => mpt.getRaw(k).unsafeRunSync() shouldBe Some(v) }
-    mpt.toMapRaw.unsafeRunSync() shouldBe kvs.toMap
-  }
+      "put leaf node when empty" in withResource(resource) { mpt =>
+        for {
+          _   <- mpt.put("leafKey", "leafValue")
+          res <- mpt.get("leafKey")
+          _ = res shouldBe Some("leafValue")
+        } yield ()
+      }
 
-  val kvsGen = for {
-    n    <- Gen.chooseNum(0, 32)
-    size <- Gen.chooseNum(0, 100)
-  } yield (1 to n).toList.map(_ => genHex(0, size).sample.get -> genHex(0, size).sample.get).toMap
+      "put large key and value" in withResource(resource) { mpt =>
+        val key   = genHex(0, 1024).sample.get
+        val value = genHex(1024, 2048).sample.get
+        for {
+          _   <- mpt.put(key, value)
+          res <- mpt.get(key)
+          _ = res shouldBe Some(value)
+        } yield ()
+      }
 
-  "get empty root & hash" in new Fixture {
-    val hash = mpt.getRootHash.unsafeRunSync()
-    hash shouldBe MerklePatriciaTrie.emptyRootHash
-    mpt.getNodeByHash(hash).unsafeRunSync() shouldBe None
-  }
+      "put and mustGet empty key" in withResource(resource) { mpt =>
+        for {
+          _   <- mpt.put("", "")
+          _   <- mpt.put("", "1")
+          res <- mpt.get("")
+          _ = res shouldBe Some("1")
+        } yield ()
+      }
 
-  "put leaf node when empty" in new Fixture {
-    mpt.put("leafKey", "leafValue", namespace).unsafeRunSync()
-    mpt.get[String, String]("leafKey", namespace).unsafeRunSync() shouldBe "leafValue"
-  }
+      "have same root on different orders of insertion" in {
+        forAll { m: Map[String, String] =>
+          val kvs = m.toList
+          resource
+            .use { mpt =>
+              for {
+                _  <- kvs.traverse { case (k, v) => mpt.put(k, v) }
+                h1 <- mpt.getRootHash
+                kvs2 = Random.shuffle(kvs)
+                _  <- kvs2.traverse { case (k, v) => mpt.put(k, v) }
+                h2 <- mpt.getRootHash
+                _ = h1 shouldBe h2
+              } yield ()
+            }
+            .unsafeRunSync()
+        }
+      }
 
-  "put large key and value" in new Fixture {
-    val key   = genHex(0, 1024).sample.get
-    val value = genHex(1024, 2048).sample.get
-    mpt.put(key, value, namespace).unsafeRunSync()
-    mpt.getOpt[String, String](key, namespace).unsafeRunSync() shouldBe Some(value)
-  }
+      "remove key from an empty tree" in withResource(resource) { mpt =>
+        mpt.del("1").unsafeRunSync()
+        mpt.getRootHash.map(_ shouldBe MerklePatriciaTrie.emptyRootHash)
+      }
 
-  "put and get empty key" in new Fixture {
-    mpt.put("", "", namespace).unsafeRunSync()
-    mpt.put("", "1", namespace).unsafeRunSync()
-    mpt.getOpt[String, String]("", namespace).unsafeRunSync() shouldBe Some("1")
-  }
+      "remove a key that does not exist" in withResource(resource) { mpt =>
+        for {
+          _ <- mpt.put("1", "5")
+          _ <- mpt.get("1").map(_ shouldBe Some("5"))
+          _ <- mpt.del("2")
+          _ <- mpt.get("1").map(_ shouldBe Some("5"))
+        } yield ()
+      }
 
-  "put and get string" in {
-    forAll { (trie: MerklePatriciaTrie[IO], m: Map[Int, Int]) =>
-      val kvs       = m.toList
-      val namespace = ByteVector.empty
-      kvs.foreach { case (k, v) => trie.put(k, v, namespace).unsafeRunSync() }
-      kvs.foreach { case (k, v) => trie.getOpt[Int, Int](k, namespace).unsafeRunSync() shouldBe Some(v) }
-      trie.toMap[Int, Int](namespace).unsafeRunSync() shouldBe m
+      "perform as an immutable data structure" in {
+        forAll { (m1: Map[String, String], m2: Map[String, String]) =>
+          resource
+            .use { mpt =>
+              for {
+                _     <- m1.toList.traverse { case (k, v) => mpt.put(k, v) }
+                root1 <- mpt.getRootHash
+                _     <- m2.toList.traverse { case (k, v) => mpt.put(k, v) }
+                res   <- mpt.toMap
+                _ = res shouldBe m1 ++ m2
+                _   <- mpt.rootHash.set(Some(root1))
+                res <- mpt.toMap
+                _ = res shouldBe m1
+              } yield ()
+            }
+            .unsafeRunSync()
+        }
+      }
+
+      "perform as an immutable data structure with deletion" in {
+        forAll { (m1: Map[String, String], m2: Map[String, String]) =>
+          resource
+            .use { mpt =>
+              for {
+                _     <- m1.toList.traverse { case (k, v) => mpt.put(k, v) }
+                root1 <- mpt.getRootHash
+                _     <- m2.toList.traverse { case (k, v) => mpt.del(k) }
+                res   <- mpt.toMap.map(_.keySet)
+                _ = res shouldBe (m1.keySet -- m2.keySet)
+                _   <- mpt.rootHash.set(Some(root1))
+                res <- mpt.toMap
+                _ = res shouldBe m1
+              } yield ()
+            }
+            .unsafeRunSync()
+        }
+      }
     }
   }
 
-  "have same root on different orders of insertion" in {
-    forAll { (trie: MerklePatriciaTrie[IO], m: Map[String, String], namespace: ByteVector) =>
-      val kvs = m.toList
-      kvs.foreach { case (k, v) => trie.put(k, v, namespace).unsafeRunSync() }
-      val h1 = trie.getRootHash.unsafeRunSync()
+  val memory = Resource.liftF(for {
+    store <- MemoryKVStore[IO]
+    mpt   <- MerklePatriciaTrie[IO, String, String](ColumnFamily.default, store)
+  } yield mpt)
 
-      val kvs2 = Random.shuffle(kvs)
-      kvs2.foreach { case (k, v) => trie.put(k, v, namespace).unsafeRunSync() }
-      val h2 = trie.getRootHash.unsafeRunSync()
-      h1 shouldBe h2
-    }
-  }
+  val rocksdb = for {
+    file  <- FileUtil[IO].temporaryDir()
+    store <- RocksKVStore.resource[IO](file.path, List(ColumnFamily.default))
+    mpt   <- Resource.liftF(MerklePatriciaTrie[IO, String, String](ColumnFamily.default, store))
+  } yield mpt
 
-  "Remove key from an empty tree" in new Fixture {
-    mpt.del("1", namespace).unsafeRunSync()
-    mpt.getRootHash.unsafeRunSync() shouldBe MerklePatriciaTrie.emptyRootHash
-  }
-
-  "Remove a key that does not exist" in new Fixture {
-    mpt.put("1", "5", namespace).unsafeRunSync()
-    mpt.get[String, String]("1", namespace).unsafeRunSync() shouldBe "5"
-
-    mpt.del("2", namespace).unsafeRunSync()
-    mpt.get[String, String]("1", namespace).unsafeRunSync() shouldBe "5"
-  }
-
-  "perform as an immutable data structure" in {
-    forAll { (trie: MerklePatriciaTrie[IO], m1: Map[Int, Int], m2: Map[Int, Int], namespace: ByteVector) =>
-      m1.foreach { case (k, v) => trie.put(k, v, namespace).unsafeRunSync() }
-      val root1 = trie.getRootHash.unsafeRunSync()
-
-      m2.foreach { case (k, v) => trie.put(k, v, namespace).unsafeRunSync() }
-
-      trie.toMap[Int, Int](namespace).unsafeRunSync() shouldBe m1 ++ m2
-
-      trie.rootHash.set(Some(root1)).unsafeRunSync()
-      trie.toMap[Int, Int](namespace).unsafeRunSync() shouldBe m1
-    }
-  }
-
-  "perform as an immutable data structure with deletion" in {
-    forAll { (trie: MerklePatriciaTrie[IO], m1: Map[Int, Int], m2: Map[Int, Int], namespace: ByteVector) =>
-      m1.foreach { case (k, v) => trie.put(k, v, namespace).unsafeRunSync() }
-      val root1 = trie.getRootHash.unsafeRunSync()
-
-      m2.foreach { case (k, v) => trie.del(k, namespace).unsafeRunSync() }
-
-      trie.toMap[Int, Int](namespace).unsafeRunSync().keySet shouldBe (m1.keySet -- m2.keySet)
-
-      trie.rootHash.set(Some(root1)).unsafeRunSync()
-      trie.toMap[Int, Int](namespace).unsafeRunSync() shouldBe m1
-    }
-  }
+  test("memory", memory)
+  test("rocksdb", rocksdb)
 }

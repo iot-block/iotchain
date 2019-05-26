@@ -6,7 +6,7 @@ import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.testkit._
-import jbok.persistent.KeyValueDB
+import jbok.persistent.MemoryKVStore
 import org.scalacheck.{Arbitrary, Gen}
 
 object testkit {
@@ -47,8 +47,8 @@ object testkit {
   implicit def arbWorldState(env: ExecEnv): Arbitrary[WorldState[IO]] = Arbitrary {
     import CoreSpec.chainId
     import CoreSpec.timer
-    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history       = History(db)
+    val store            = MemoryKVStore[IO].unsafeRunSync()
+    val history       = History(store)
 
     history
       .getWorldState()

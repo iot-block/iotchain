@@ -7,9 +7,10 @@ import jbok.common.testkit._
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Address, BlockHeader}
+import jbok.core.store.ColumnFamilies
 import jbok.core.testkit._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
-import jbok.persistent.KeyValueDB
+import jbok.persistent.{MemoryKVStore, SingleColumnKVStore}
 import scodec.bits.ByteVector
 
 import scala.collection.mutable
@@ -26,8 +27,8 @@ trait SnapshotFixture extends CoreSpec {
   def mkHistory(signers: List[Address]) = {
     val config           = genesis.copy(miners = signers)
     implicit val chainId = config.chainId
-    val db               = KeyValueDB.inmem[IO].unsafeRunSync()
-    val history          = History(db)
+    val store               = MemoryKVStore[IO].unsafeRunSync()
+    val history          = History(store)
     history.initGenesis(config).unsafeRunSync()
     history
   }
@@ -63,7 +64,7 @@ class SnapshotSpec extends CoreSpec {
     val miningConfig  = config.mining.copy(epoch = test.epoch)
     val signers       = test.signers.map(signer => address(signer))
     val genesisConfig = genesis.copy(miners = signers)
-    val db            = KeyValueDB.inmem[IO].unsafeRunSync()
+    val db = MemoryKVStore[IO].unsafeRunSync()
     val history       = History(db)
 
     history.initGenesis(genesisConfig).unsafeRunSync()
@@ -90,10 +91,10 @@ class SnapshotSpec extends CoreSpec {
     }
 
     val head           = headers.last
-    val keyValueDB     = KeyValueDB.inmem[IO].unsafeRunSync()
     val kp             = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
     val proposal = Ref.of[IO, Option[Proposal]](None).unsafeRunSync()
-    val clique         = new Clique[IO](miningConfig, db, history, proposal, kp)
+    val store = SingleColumnKVStore[IO, ByteVector, String](ColumnFamilies.Snapshot, db)
+    val clique         = new Clique[IO](miningConfig, store, history, proposal, kp)
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedSigners = snap.getSigners
     import Snapshot.addressOrd

@@ -1,14 +1,14 @@
 package jbok.benchmark
 
 import cats.effect.IO
-import jbok.persistent.KeyValueDB
 import jbok.common.testkit._
 import jbok.core.testkit._
-import jbok.persistent.rocksdb.RocksDB
 import org.openjdk.jmh.annotations.{Benchmark, OperationsPerInvocation, TearDown}
 import org.scalacheck.Gen
 import cats.implicits._
 import jbok.common.FileUtil
+import jbok.persistent.{ColumnFamily, MemoryKVStore}
+import jbok.persistent.rocksdb.RocksKVStore
 
 class KeyValueDBBenchmark extends JbokBenchmark {
   val size = 10000
@@ -24,15 +24,15 @@ class KeyValueDBBenchmark extends JbokBenchmark {
   val values = Gen.listOfN(size, valueGen).sample.get
   val kvs    = keys.zip(values).toArray
 
-  val dirRocks = FileUtil[IO].temporaryDir().allocated.unsafeRunSync()._1
-  val (dbRocks, close) = RocksDB.resource[IO](dirRocks.path).allocated.unsafeRunSync()
-  var dbMem            = KeyValueDB.inmem[IO].unsafeRunSync()
+  val dirRocks         = FileUtil[IO].temporaryDir().allocated.unsafeRunSync()._1
+  val (dbRocks, close) = RocksKVStore.resource[IO](dirRocks.path, List(ColumnFamily.default)).allocated.unsafeRunSync()
+  var dbMem            = MemoryKVStore[IO].unsafeRunSync()
 
   @Benchmark
   def putRocks() = {
     val (k, v) = kvs(i)
     i = (i + 1) % kvs.length
-    dbRocks.putRaw(k, v).unsafeRunSync()
+    dbRocks.put(ColumnFamily.default, k, v).unsafeRunSync()
   }
 
   @Benchmark
@@ -42,7 +42,7 @@ class KeyValueDBBenchmark extends JbokBenchmark {
     val put = (i * 100 until (i + 1) * 100)
       .map(i => kvs(i))
       .toList
-    dbRocks.writeBatchRaw(put, Nil).unsafeRunSync()
+    dbRocks.writeBatch(ColumnFamily.default, put, Nil).unsafeRunSync()
   }
 
   @Benchmark
@@ -52,13 +52,13 @@ class KeyValueDBBenchmark extends JbokBenchmark {
     val put = (i * 100 until (i + 1) * 100)
       .map(i => kvs(i))
       .toList
-    put.parTraverse { case (k, v) => dbRocks.putRaw(k, v) }.unsafeRunSync()
+    put.parTraverse { case (k, v) => dbRocks.put(ColumnFamily.default, k, v) }.unsafeRunSync()
   }
 
   @TearDown
   def tearDown(): Unit = {
     close.unsafeRunSync()
-    dbMem = KeyValueDB.inmem[IO].unsafeRunSync()
-    RocksDB.destroy[IO](dirRocks.path).unsafeToFuture()
+    dbMem = MemoryKVStore[IO].unsafeRunSync()
+    RocksKVStore.destroy[IO](dirRocks.path).unsafeToFuture()
   }
 }
