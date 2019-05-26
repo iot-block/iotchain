@@ -67,9 +67,8 @@ lazy val appJS = app.js.settings(
 )
 
 lazy val appJVM = app.jvm.settings(
-//  scalaJSProjects := Seq(appJS, sdk.js),
-//  pipelineStages in Assets := Seq(scalaJSPipeline),
-//  isDevMode in scalaJSPipeline := true,
+  scalaJSProjects := Seq(appJS, sdk.js),
+  pipelineStages in Assets := Seq(scalaJSPipeline),
   javaOptions in Universal ++= Seq(
     "-J-Xms2g",
     "-J-Xmx4g",

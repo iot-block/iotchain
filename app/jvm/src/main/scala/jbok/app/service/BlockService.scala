@@ -8,7 +8,7 @@ import jbok.core.models.{Block, BlockBody, BlockHeader}
 import jbok.core.api.BlockAPI
 import scodec.bits.ByteVector
 
-final class BlockService[F[_]](history: History[F], helper: ServiceHelper[F], config: SyncConfig)(implicit F: Concurrent[F]) extends BlockAPI[F] {
+final class BlockService[F[_]](history: History[F], config: SyncConfig)(implicit F: Concurrent[F]) extends BlockAPI[F] {
   override def getBestBlockNumber: F[BigInt] =
     history.getBestBlockNumber
 

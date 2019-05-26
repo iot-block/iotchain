@@ -16,7 +16,7 @@ import scala.concurrent.duration._
 object CliMain extends IOApp {
   override def run(args: List[String]): IO[ExitCode] =
     Config[IO].read[FullConfig](Paths.get(args.head)).flatMap { config =>
-      AppModule.resource[IO](config.lens(_.persist.driver).set("inmem")).use { objects =>
+      AppModule.resource[IO](config.lens(_.persist.driver).set("memory")).use { objects =>
         val config = objects.get[FullConfig]
         val ssl    = objects.get[Option[SSLContext]]
         JbokClientPlatform.resource[IO](config.service.uri, ssl).use { client =>

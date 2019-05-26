@@ -6,13 +6,13 @@ import com.thoughtworks.binding.Binding.{Constants, Var}
 import org.scalajs.dom.Element
 
 final case class FormEntry(name: String, `type`: String = "text", value: Var[String] = Var("")) {
-  val initValue = value.value
+  val initValue: String = value.value
 }
 
 final case class Form(entries: Constants[Input], submit: Map[String, Input] => Unit) {
   def entryMap = entries.value.map(x => x.name -> x).toMap
 
-  def clear() = entries.value.foreach(_.clear())
+  def clear(): Unit = entries.value.foreach(_.clear())
 
   @binding.dom
   def render: Binding[Element] =

@@ -133,9 +133,7 @@ object Libs {
     )
 
     val network = npmDependencies in Compile ++= Seq(
-      "ws"            -> "6.1.2",
-      "isomorphic-ws" -> "4.0.1",
-      "axios"         -> "0.18.0"
+      "axios" -> "0.18.0"
     )
   }
 }

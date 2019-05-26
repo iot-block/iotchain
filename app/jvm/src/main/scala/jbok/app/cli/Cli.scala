@@ -18,7 +18,8 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
   implicit val screen = new Scurses
 
   // layout
-  val frame = Frame(Some("JBOK"), debug = true)
+  val version = getClass.getPackage.getImplementationVersion
+  val frame = Frame(Some(s"JBOK v${version}"), debug = false)
   val left  = frame.panel
   left.title = "status"
   val middle1 = left.splitRight
@@ -101,7 +102,7 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
   val blocks = mutable.ArrayBuffer[Label](List.fill(10)(Label(right1, "")): _*)
   val renderBlocks = for {
     start   <- client.block.getBestBlockNumber
-    headers <- client.block.getBlockHeadersByNumber((start - 10) max 0, 10)
+    headers <- client.block.getBlockHeadersByNumber((start - 9) max 0, 10)
     bodies  <- client.block.getBlockBodies(headers.map(_.hash))
   } yield {
     headers.zip(bodies).reverse.zipWithIndex.map {

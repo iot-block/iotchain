@@ -8,7 +8,6 @@ import jbok.app.components.{Input, Spin}
 import jbok.app.helper.InputValidator
 import jbok.app.{AppState, JbokClientPlatform}
 import jbok.app.execution._
-//import jbok.sdk.api.NodeInfo
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw._
 

@@ -24,7 +24,7 @@ history:
   difficultyBombContinueBlockNumber: "5000000"
 
 keystore:
-  dir: "temporary"
+  dir: ""
 
 peer:
   host: localhost
@@ -64,7 +64,7 @@ mining:
   minBroadcastPeers: 4
 
 persist:
-  driver: inmem
+  driver: memory
   path: ""
   columnFamilies:
     - default

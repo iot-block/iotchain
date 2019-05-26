@@ -10,15 +10,17 @@ import jbok.core.models.Address
 import org.scalajs.dom.Event
 import org.scalajs.dom.raw.{Element, HTMLInputElement, HTMLSelectElement, HTMLTextAreaElement}
 
-final case class Input(name: String,
-                       placeholder: String = "",
-                       defaultValue: String = "",
-                       idOpt: Option[String] = None,
-                       validator: String => Boolean = (input: String) => true,
-                       onchange: String => Unit = (input: String) => (),
-                       disabled: Boolean = false,
-                       `type`: String = "text",
-                       className: String = "") {
+final case class Input(
+    name: String,
+    placeholder: String = "",
+    defaultValue: String = "",
+    idOpt: Option[String] = None,
+    validator: String => Boolean = (input: String) => true,
+    onchange: String => Unit = (input: String) => (),
+    disabled: Boolean = false,
+    `type`: String = "text",
+    className: String = ""
+) {
   private val _value: Var[String]   = Var(defaultValue)
   private val _Syntax: Var[Boolean] = Var(true)
   val id                            = idOpt getOrElse UUID.randomUUID().toString
