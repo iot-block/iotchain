@@ -60,7 +60,8 @@ final case class WatchView(state: AppState) {
       },
       (r, i) =>
         currentId.foreach(id => {
-          state.nodes.value.get(id).foreach(_.contractsABI.value += Contract(contractAddress, r.contractDefs.last.toABI().methods))
+          state.nodes.value.get(id).foreach(_.contractsABI.value += contractAddress -> Contract(contractAddress, r.contractDefs.last.toABI().methods))
+          statusMessage.value = Some("watch success.")
         })
     )
   }
@@ -85,6 +86,8 @@ final case class WatchView(state: AppState) {
           <div style="padding-left: 10px">{status}</div>
         statusMessage.bind match {
           case None => <div/>
+          case Some(status) if status =="watch success." =>
+            Notification.renderSuccess(content(status), onclose).bind
           case Some(status) =>
             Notification.renderWarning(content(status), onclose).bind
         }

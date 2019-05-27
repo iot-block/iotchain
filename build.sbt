@@ -67,6 +67,7 @@ lazy val appJS = app.js.settings(
 )
 
 lazy val appJVM = app.jvm.settings(
+  fork in run := true,
   scalaJSProjects := Seq(appJS, sdk.js),
   pipelineStages in Assets := Seq(scalaJSPipeline),
   javaOptions in Universal ++= Seq(

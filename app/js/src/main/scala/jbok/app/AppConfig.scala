@@ -7,7 +7,7 @@ final case class AppConfig(interface: String, port: Int, refreshTime: FiniteDura
 }
 object AppConfig {
   val default = AppConfig(
-    "127.0.0.1",
+    "127.0.0.2",
     30315,
     5.seconds,
     100,

@@ -37,10 +37,9 @@ object NetworkBuilderMain extends IOApp {
 
     val builder = NetworkBuilder(config)
       .withBlockPeriod(1000)
-      .withTrustStorePath(s"${home}/.jbok/ca/cacert.jks")
-      .addNode(miner0, coinbase0, root.resolve("node-0"), "127.0.0.2", root.resolve("certs/cert-node-0/server.jks"))
-      .addNode(miner1, coinbase1, root.resolve("node-1"), "127.0.0.3", root.resolve("certs/cert-node-1/server.jks"))
-      .addNode(miner2, coinbase2, root.resolve("node-2"), "127.0.0.4", root.resolve("certs/cert-node-2/server.jks"))
+      .addNode(miner0, coinbase0, root.resolve("node-0"), "127.0.0.2")
+      .addNode(miner1, coinbase1, root.resolve("node-1"), "127.0.0.3")
+      .addNode(miner2, coinbase2, root.resolve("node-2"), "127.0.0.4")
 
     builder.dump.as(ExitCode.Success)
   }
