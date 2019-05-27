@@ -48,7 +48,11 @@ final case class SearchResult(state: AppState, search: Search) {
             }
           } yield ()
           p.timeout(state.config.value.clientTimeout)
-            .handleErrorWith((e: Throwable) => IO.delay { failed.value = true })
+            .handleErrorWith((e: Throwable) =>
+              for {
+                _ <- IO.delay(e.printStackTrace())
+                _ <- IO.delay { failed.value = true }
+              } yield ())
             .unsafeToFuture()
         case "txHash" =>
           val p = for {

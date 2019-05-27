@@ -30,7 +30,7 @@ final case class ContractView(state: AppState) {
   val tableRenderHelper    = TableRenderHelper(header)
 
   @binding.dom
-  def renderTable(contracts: Map[Address, Var[Account]]): Binding[Element] =
+  def renderTable(contracts: Map[Address, Option[Account]]): Binding[Element] =
     <table class="table-view">
       {tableRenderHelper.renderTableHeader.bind}
       <tbody>
@@ -43,16 +43,16 @@ final case class ContractView(state: AppState) {
               </a>
             </td>
             <td>
-              {contract.bind.balance.toString}
+              {contract.map(_.balance.toString).getOrElse("")}
             </td>
             <td>
-              {contract.bind.nonce.toString}
+              {contract.map(_.nonce.toString).getOrElse("")}
             </td>
             <td>
-              {contract.bind.storageRoot.toHex}
+              {contract.map(_.storageRoot.toHex).getOrElse("")}
             </td>
             <td>
-              {contract.bind.codeHash.toHex}
+              {contract.map(_.codeHash.toHex).getOrElse("")}
             </td>
           </tr>
         }

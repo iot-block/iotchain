@@ -43,8 +43,8 @@ final case class NodeData(
     addresses: Var[Map[Address, Option[Account]]] = Var(Map.empty),
     stxs: Vars[SignedTransaction] = Vars.empty[SignedTransaction],
     receipts: Var[Map[ByteVector, Var[Option[Receipt]]]] = Var(Map.empty),
-    contractsABI: Vars[Contract] = Vars.empty[Contract],
-    contracts: Var[Map[Address, Var[Account]]] = Var(Map.empty)
+    contractsABI: Var[Map[Address, Contract]] = Var(Map.empty),
+    contracts: Var[Map[Address, Option[Account]]] = Var(Map.empty)
 ) {
   lazy val addr = s"http://$interface:$port"
 }
@@ -133,7 +133,7 @@ final case class AppState(
 
   def addContract(id: String, address: Address): Unit =
     nodes.value.get(id).foreach { node =>
-      node.contracts.value += address -> Var(Account())
+      node.contracts.value += address -> None
     }
 
   def searchTxHash(hash: String): Unit =
@@ -199,6 +199,7 @@ final case class AppState(
     val addrs = addresses.value.keys.toList
     for {
       simuAccounts <- addrs.traverse[IO, Account](addr => client.account.getAccount(addr, BlockTag.latest))
+      _            <- log.i(simuAccounts.map(_.balance).mkString("\n"))
       _ = addresses.value ++= addrs.zip(simuAccounts.map(Some(_)))
     } yield ()
   }
@@ -206,16 +207,16 @@ final case class AppState(
   def updateReceipts(stxs: Vars[SignedTransaction], receipts: Var[Map[ByteVector, Var[Option[Receipt]]]], client: JbokClient[IO]): IO[Unit] = {
     val txHashes = stxs.value.map(_.hash).toList
     for {
-      txReceipts <- txHashes.traverse[IO, Option[Receipt]](hash => client.transaction.getReceipt(hash))
+      txReceipts <- txHashes.traverse[IO, Option[Receipt]](client.transaction.getReceipt)
       _ = receipts.value ++= txHashes.zip(txReceipts.map(Var(_))).toMap
     } yield ()
   }
 
-  def updateContracts(contracts: Var[Map[Address, Var[Account]]], client: JbokClient[IO]): IO[Unit] = {
-    val addresses = contracts.value.keys.toList
+  def updateContracts(contracts: Var[Map[Address, Option[Account]]], contractsABI: Var[Map[Address, Contract]], client: JbokClient[IO]): IO[Unit] = {
+    val addresses = (contracts.value.keys.toSet ++ contractsABI.value.keys.toSet).toList
     for {
       simuAccounts <- addresses.traverse[IO, Account](addr => client.account.getAccount(addr, BlockTag.latest))
-      _ = contracts.value ++= addresses.zip(simuAccounts.map(Var(_))).toMap
+      _ = contracts.value ++= addresses.zip(simuAccounts.map(Some(_)))
     } yield ()
   }
 
@@ -224,7 +225,8 @@ final case class AppState(
       (for {
         currId <- activeNode.value
         node   <- nodes.value.get(currId)
-        client <- clients.value.get(node.id)
+//        client <- clients.value.get(node.id)
+        client <- JbokClientPlatform.apply[IO](s"http://${node.interface}:${node.port}").some
       } yield node -> client)
         .map {
           case (node, client) =>
@@ -232,7 +234,7 @@ final case class AppState(
               _ <- updateStatus(node.status, client) *> IO(isLoading.loadingStatus.value = false)
               _ <- updateAddresses(node.addresses, client) *> IO(isLoading.loadingAddresses.value = false)
               _ <- updateAccounts(node.addresses, client) *> IO(isLoading.loadingAccounts.value = false)
-              _ <- updateContracts(node.contracts, client) *> IO(isLoading.loadingContracts.value = false)
+              _ <- updateContracts(node.contracts, node.contractsABI, client) *> IO(isLoading.loadingContracts.value = false)
               _ <- updateReceipts(node.stxs, node.receipts, client) *> IO(isLoading.loadingReceipts.value = false)
               _ <- updateBlocks(node.blocks, client) *> IO(isLoading.loadingBlocks.value = false)
             } yield ()

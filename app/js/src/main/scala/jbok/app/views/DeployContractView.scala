@@ -55,7 +55,6 @@ final case class DeployContractView(state: AppState) {
     val valueSubmit = None
     //      val valueSubmit = if (valueInput.value.isEmpty) None else Some(BigInt(valueInput.value))
     val dataSubmit = Some(ByteVector.fromValidHex(data))
-    val passphase  = Some(password)
 //    val txRequest  = TransactionRequest(fromSubmit, None, valueSubmit, None, None, None, dataSubmit)
     val callTx = CallTx(Some(fromSubmit), None, None, 1, 0, dataSubmit.get)
 
