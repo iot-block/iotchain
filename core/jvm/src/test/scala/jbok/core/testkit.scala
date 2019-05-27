@@ -6,6 +6,7 @@ import cats.effect.IO
 import cats.effect.concurrent.Ref
 import jbok.common.testkit._
 import jbok.core.config._
+import jbok.core.ledger.History
 import jbok.core.messages._
 import jbok.core.mining.{BlockMiner, TxGen}
 import jbok.core.models._
@@ -170,10 +171,11 @@ object testkit {
 
   implicit def arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-  def genTxs(min: Int = 0, max: Int = 1024)(implicit config: FullConfig): Gen[List[SignedTransaction]] =
+  def genTxs(min: Int = 0, max: Int = 1024, history: History[IO] = locator.unsafeRunSync().get[History[IO]])(implicit config: FullConfig): Gen[List[SignedTransaction]] =
     for {
-      size <- Gen.chooseNum(min, max)
-      (_, txs) = TxGen.genTxs(size, Map(testKeyPair -> Account.empty())).unsafeRunSync()
+      size  <- Gen.chooseNum(min, max)
+      txGen = TxGen[IO](testKeyPair :: Nil, history).unsafeRunSync()
+      txs = txGen.genValidExternalTxN(size).unsafeRunSync()
     } yield txs
 
   implicit def arbTxs(implicit config: FullConfig): Arbitrary[List[SignedTransaction]] = Arbitrary {
@@ -183,11 +185,9 @@ object testkit {
   def genBlocks(min: Int, max: Int)(implicit config: FullConfig): Gen[List[Block]] = {
     val objects = locator.unsafeRunSync()
     val miner            = objects.get[BlockMiner[IO]]
-    val status           = objects.get[Ref[IO, NodeStatus]]
-    status.set(NodeStatus.Done).unsafeRunSync()
     for {
       size <- Gen.chooseNum(min, max)
-      blocks = miner.stream.take(size.toLong).compile.toList.unsafeRunSync()
+      blocks = miner.mineN(size).unsafeRunSync()
     } yield blocks.map(_.block)
   }
 

@@ -33,7 +33,7 @@ final class BlockMiner[F[_]](
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = Logger[F]
 
-  private def prepare(
+  private[jbok] def prepare(
       parentOpt: Option[Block] = None,
       stxsOpt: Option[List[SignedTransaction]] = None
   ): F[PendingBlock] =
@@ -60,7 +60,10 @@ final class BlockMiner[F[_]](
       _        <- submit(mined)
     } yield mined
 
-  def stream: Stream[F, MinedBlock] =
+  def mineN(n: Int): F[List[MinedBlock]] =
+    mine().replicateA(n)
+
+  val stream: Stream[F, MinedBlock] =
     Stream.eval_(log.i(s"starting Core/BlockMiner")) ++
       Stream
         .eval(status.get)

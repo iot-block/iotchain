@@ -18,7 +18,6 @@ final case class MiningConfig(
     coinbase: Address,
     period: FiniteDuration,
     epoch: Int,
-    checkpointInterval: Int,
     minBroadcastPeers: Int
 )
 

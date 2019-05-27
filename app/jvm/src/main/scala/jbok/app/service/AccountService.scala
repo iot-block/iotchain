@@ -13,17 +13,17 @@ import scodec.bits.ByteVector
 final class AccountService[F[_]](config: HistoryConfig, history: History[F], txPool: TxPool[F], helper: ServiceHelper[F], txStore: TransactionStore[F])(implicit F: Sync[F])
     extends AccountAPI[F] {
 
+  override def getAccount(address: Address, tag: BlockTag): F[Account] =
+    for {
+      account <- helper.resolveAccount(address, tag)
+    } yield account
+
   override def getCode(address: Address, tag: BlockTag): F[ByteVector] =
     for {
       block <- helper.resolveBlock(tag)
       world <- history.getWorldState(config.accountStartNonce, block.map(_.header.stateRoot))
       code  <- world.getCode(address)
     } yield code
-
-  override def getAccount(address: Address, tag: BlockTag): F[Account] =
-    for {
-      account <- helper.resolveAccount(address, tag)
-    } yield account
 
   override def getBalance(address: Address, tag: BlockTag): F[BigInt] =
     for {

@@ -4,19 +4,22 @@ import cats.effect.IO
 import cats.implicits._
 import jbok.common.testkit._
 import jbok.core.CoreSpec
+import jbok.core.ledger.History
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.SignedTransaction
 import jbok.core.testkit._
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.testkit._
 import monocle.macros.syntax.lens._
+
 import scala.concurrent.duration._
 
 class TxPoolSpec extends CoreSpec {
   "TxPool" should {
     "store pending transactions" in check { objects =>
       val txPool = objects.get[TxPool[IO]]
-      val txs    = random[List[SignedTransaction]](genTxs(1, 10))
+      val history = objects.get[History[IO]]
+      val txs    = random[List[SignedTransaction]](genTxs(1, 10, history))
       for {
         _   <- txPool.addTransactions(SignedTransactions(txs))
         res <- txPool.getPendingTransactions.map(_.keys)
@@ -26,7 +29,8 @@ class TxPoolSpec extends CoreSpec {
 
     "ignore known transactions" in check { objects =>
       val txPool = objects.get[TxPool[IO]]
-      val txs    = random[List[SignedTransaction]](genTxs(1, 10))
+      val history = objects.get[History[IO]]
+      val txs    = random[List[SignedTransaction]](genTxs(1, 10, history))
       val stxs   = SignedTransactions(txs)
       for {
         _   <- txPool.addTransactions(stxs)
@@ -35,15 +39,6 @@ class TxPoolSpec extends CoreSpec {
         _ = res should contain theSameElementsAs txs
       } yield ()
     }
-//
-//    "broadcast received pending transactions to other peers" in check { objects =>
-//      val txPool = objects.get[TxPool[IO]]
-//      val txs    = random[List[SignedTransaction]](genTxs(1, 10))
-////      val peerSet = genPeerSet(1, 10).sample.get
-//      val output = txPool.addTransactions(SignedTransactions(txs)).unsafeRunSync()
-//      ???
-////      output.length shouldBe peerSet.connected.map(_.length).unsafeRunSync()
-//    }
 
     "override transactions with the same sender and nonce" in check { objects =>
       val txPool = objects.get[TxPool[IO]]
@@ -69,7 +64,8 @@ class TxPoolSpec extends CoreSpec {
 
     "remove transaction on timeout" in check(config.lens(_.txPool.transactionTimeout).set(100.millis)) { objects =>
       val txPool = objects.get[TxPool[IO]]
-      val stx    = random[List[SignedTransaction]](genTxs(1, 1)).head
+      val history = objects.get[History[IO]]
+      val stx    = random[List[SignedTransaction]](genTxs(1, 1, history)).head
       for {
         _  <- txPool.addTransactions(SignedTransactions(stx :: Nil))
         p1 <- txPool.getPendingTransactions

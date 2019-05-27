@@ -26,9 +26,9 @@ final case class HistoryTransaction(
 
 @PathName("account")
 trait AccountAPI[F[_]] {
-  def getCode(address: Address, tag: BlockTag = BlockTag.latest): F[ByteVector]
-
   def getAccount(address: Address, tag: BlockTag = BlockTag.latest): F[Account]
+
+  def getCode(address: Address, tag: BlockTag = BlockTag.latest): F[ByteVector]
 
   def getBalance(address: Address, tag: BlockTag = BlockTag.latest): F[BigInt]
 

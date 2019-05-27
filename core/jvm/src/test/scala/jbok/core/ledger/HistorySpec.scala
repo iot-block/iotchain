@@ -51,7 +51,7 @@ class HistorySpec extends CoreSpec {
     }
 
     "put block body should update tx location mapping" in {
-      val txs   = random[List[SignedTransaction]](genTxs(1, 1))
+      val txs   = random[List[SignedTransaction]](genTxs(1, 1, history))
       val block = random[Block](genBlock(stxsOpt = txs.some))
       history.putBlockBody(block.header.hash, block.body).unsafeRunSync()
       val location = history.getTransactionLocation(txs.head.hash).unsafeRunSync()

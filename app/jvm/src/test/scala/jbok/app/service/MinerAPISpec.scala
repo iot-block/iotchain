@@ -26,7 +26,8 @@ class MinerAPISpec extends AppSpec {
 
         extra <- minedBlock.block.header.extraAs[IO, CliqueExtra]
         _ = extra.proposal shouldBe expectedProposal
-        _         <- miner.mine(minedBlock.block.some)
+
+        _         <- miner.prepare(minedBlock.block.some)
         proposal2 <- minerAPI.getBallot
         _ = proposal2 shouldBe None
       } yield ()

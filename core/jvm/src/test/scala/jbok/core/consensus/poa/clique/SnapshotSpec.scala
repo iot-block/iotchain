@@ -16,16 +16,16 @@ import scodec.bits.ByteVector
 import scala.collection.mutable
 
 final case class TestVote(
-    signer: String,
+    miner: String,
     voted: String = "",
     auth: Boolean = false
 )
 
-final case class Test(signers: List[String], votes: List[TestVote], results: List[String], epoch: Int = 30000)
+final case class Test(miners: List[String], votes: List[TestVote], results: List[String], epoch: Int = 30000)
 
 trait SnapshotFixture extends CoreSpec {
-  def mkHistory(signers: List[Address]) = {
-    val config           = genesis.copy(miners = signers)
+  def mkHistory(miners: List[Address]) = {
+    val config           = genesis.copy(miners = miners)
     implicit val chainId = config.chainId
     val store               = MemoryKVStore[IO].unsafeRunSync()
     val history          = History(store)
@@ -42,19 +42,18 @@ trait SnapshotFixture extends CoreSpec {
     Address(accounts(account))
   }
 
-  def sign(header: BlockHeader, signer: String)(implicit chainId: BigInt): BlockHeader = {
-    if (!accounts.contains(signer)) {
-      accounts += (signer -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
+  def sign(header: BlockHeader, miner: String)(implicit chainId: BigInt): BlockHeader = {
+    if (!accounts.contains(miner)) {
+      accounts += (miner -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
     }
     val sig = Signature[ECDSA]
-      .sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(signer), chainId)
+      .sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(miner), chainId)
       .unsafeRunSync()
     val extra      = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value.copy(signature = sig)
     val extraBytes = extra.asValidBytes
-//    val signed    = header.copy(extraData = header.extraData.dropRight(65) ++ ByteVector(sig.bytes))
     val signed    = header.copy(extra = extraBytes)
     val recovered = Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get
-    require(recovered == Address(accounts(signer)), s"recovered: ${recovered}, signer: ${accounts(signer)}")
+    require(recovered == Address(accounts(miner)), s"recovered: ${recovered}, miner: ${accounts(miner)}")
     signed
   }
 }
@@ -62,8 +61,8 @@ trait SnapshotFixture extends CoreSpec {
 class SnapshotSpec extends CoreSpec {
   def check(test: Test) = new SnapshotFixture {
     val miningConfig  = config.mining.copy(epoch = test.epoch)
-    val signers       = test.signers.map(signer => address(signer))
-    val genesisConfig = genesis.copy(miners = signers)
+    val miners       = test.miners.map(miner => address(miner))
+    val genesisConfig = genesis.copy(miners = miners)
     val db = MemoryKVStore[IO].unsafeRunSync()
     val history       = History(db)
 
@@ -87,7 +86,7 @@ class SnapshotSpec extends CoreSpec {
             unixTimestamp = time,
             extra = extraBytes,
           )
-        sign(header, v.signer) // signer vote to authorize/deauthorize the beneficiary
+        sign(header, v.miner) // miner vote to authorize/deauthorize the beneficiary
     }
 
     val head           = headers.last
@@ -96,16 +95,16 @@ class SnapshotSpec extends CoreSpec {
     val store = SingleColumnKVStore[IO, ByteVector, String](ColumnFamilies.Snapshot, db)
     val clique         = new Clique[IO](miningConfig, store, history, proposal, kp)
     val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
-    val updatedSigners = snap.getSigners
+    val updatedMiners = snap.sortedMiners
     import Snapshot.addressOrd
-    val expectedSigners = test.results.map(address).sorted
+    val expectedMiners = test.results.map(address).sorted
 
-    updatedSigners shouldBe expectedSigners
+    updatedMiners shouldBe expectedMiners
   }
 
   "Snapshot" should {
     "sigHash and ecrecover" in new SnapshotFixture {
-      val signer   = address("A")
+      val miner   = address("A")
       val coinbase = address("B")
       val extra = CliqueExtra(
         Nil,
@@ -115,15 +114,15 @@ class SnapshotSpec extends CoreSpec {
       val extraBytes = extra.asValidBytes
       val header     = random[BlockHeader].copy(extra = extraBytes)
       val signed     = sign(header, "A")(genesis.chainId)
-      Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get shouldBe signer
+      Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get shouldBe miner
     }
 
-    "single signer, no votes cast" in {
+    "single miner, no votes cast" in {
       val test = Test(List("A"), List(TestVote("A")), List("A"))
       check(test)
     }
 
-    "single signer, voting to add two others (only accept first, second needs 2 votes)" in {
+    "single miner, voting to add two others (only accept first, second needs 2 votes)" in {
       val test = Test(
         List("A"),
         List(TestVote("A", "B", auth = true), TestVote("B"), TestVote("A", "C", auth = true)),
@@ -146,7 +145,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "two signers, voting to add three others (only accept first two, third needs 3 votes already)" in {
+    "two miners, voting to add three others (only accept first two, third needs 3 votes already)" in {
       val test = Test(
         List("A", "B"),
         List(
@@ -163,7 +162,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "single signer, dropping itself (weird, but one less corner case by explicitly allowing this)" in {
+    "single miner, dropping itself (weird, but one less corner case by explicitly allowing this)" in {
       val test = Test(
         List("A"),
         List(TestVote("A", "A", false)),
@@ -172,7 +171,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "two signers, actually needing mutual consent to drop either of them (not fulfilled)" in {
+    "two miners, actually needing mutual consent to drop either of them (not fulfilled)" in {
       val test = Test(
         List("A", "B"),
         List(TestVote("A", "B", false)),
@@ -181,7 +180,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "two signers, actually needing mutual consent to drop either of them (fulfilled)" in {
+    "two miners, actually needing mutual consent to drop either of them (fulfilled)" in {
       val test = Test(
         List("A", "B"),
         List(TestVote("A", "B", false), TestVote("B", "B", false)),
@@ -190,7 +189,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "three signers, two of them deciding to drop the third" in {
+    "three miners, two of them deciding to drop the third" in {
       val test = Test(
         "A" :: "B" :: "C" :: Nil,
         TestVote("A", "C", false) :: TestVote("B", "C", false) :: Nil,
@@ -199,7 +198,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "four signers, consensus of two not being enough to drop anyone" in {
+    "four miners, consensus of two not being enough to drop anyone" in {
       val test = Test(
         "A" :: "B" :: "C" :: "D" :: Nil,
         TestVote("A", "C", false) :: TestVote("B", "C", false) :: Nil,
@@ -208,7 +207,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "four signers, consensus of three already being enough to drop someone" in {
+    "four miners, consensus of three already being enough to drop someone" in {
       val test = Test(
         "A" :: "B" :: "C" :: "D" :: Nil,
         TestVote("A", "D", false) :: TestVote("B", "D", false) :: TestVote("C", "D", false) :: Nil,
@@ -217,7 +216,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "authorizations are counted once per signer per target" in {
+    "authorizations are counted once per miner per target" in {
       val test = Test(
         "A" :: "B" :: Nil,
         List(
@@ -250,7 +249,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "deauthorizations are counted once per signer per target" in {
+    "deauthorizations are counted once per miner per target" in {
       val test = Test(
         "A" :: "B" :: Nil,
         List(
@@ -286,7 +285,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "Votes from deauthorized signers are discarded immediately (deauth votes)" in {
+    "Votes from deauthorized miners are discarded immediately (deauth votes)" in {
       val test = Test(
         "A" :: "B" :: "C" :: Nil,
         List(
@@ -300,7 +299,7 @@ class SnapshotSpec extends CoreSpec {
       check(test)
     }
 
-    "Votes from deauthorized signers are discarded immediately (auth votes)" in {
+    "Votes from deauthorized miners are discarded immediately (auth votes)" in {
       val test = Test(
         "A" :: "B" :: "C" :: Nil,
         List(
@@ -376,10 +375,10 @@ class SnapshotSpec extends CoreSpec {
     }
 
     "ensure that pending votes don't survive authorization status changes" in {
-      // this corner case can only appear if a signer is quickly added, remove and then
+      // this corner case can only appear if a miner is quickly added, remove and then
       // readded (or the inverse), while one of the original voters dropped. If a
       // past vote is left cached in the system somewhere, this will interfere with
-      // the final signer outcome.
+      // the final miner outcome.
       val test = Test(
         "A" :: "B" :: "C" :: "D" :: "E" :: Nil,
         List(

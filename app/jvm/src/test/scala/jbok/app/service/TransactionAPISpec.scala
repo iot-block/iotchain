@@ -45,14 +45,13 @@ class TransactionAPISpec extends AppSpec {
     }
 
     "return tx by hash & number send a bad stx" in check { objects =>
-      val history     = objects.get[History[IO]]
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
 
       val tx = Transaction(1, 1, 21000, Some(Address.empty), 100000, ByteVector.empty)
 
       for {
-        stx <- SignedTransaction.sign[IO](tx, testMiner.keyPair)
+        stx <- SignedTransaction.sign[IO](tx, testKeyPair)
         _   <- transaction.sendTx(stx)
         res <- transaction.getTx(stx.hash)
         _ = res shouldBe None

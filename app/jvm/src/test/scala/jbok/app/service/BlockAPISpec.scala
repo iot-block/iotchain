@@ -1,10 +1,8 @@
 package jbok.app.service
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import jbok.app.AppSpec
 import jbok.common.testkit._
-import jbok.core.NodeStatus
 import jbok.core.api.BlockAPI
 import jbok.core.ledger.History
 import jbok.core.mining.BlockMiner
@@ -16,11 +14,9 @@ class BlockAPISpec extends AppSpec {
     "return bestBlockNumber correct" in check { objects =>
       val miner  = objects.get[BlockMiner[IO]]
       val block  = objects.get[BlockAPI[IO]]
-      val status = objects.get[Ref[IO, NodeStatus]]
 
       for {
-        _   <- status.set(NodeStatus.Done)
-        _   <- miner.stream.take(40).compile.toList
+        _   <- miner.mineN(40)
         res <- block.getBestBlockNumber
         _ = res shouldBe BigInt(40)
       } yield ()

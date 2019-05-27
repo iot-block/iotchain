@@ -1,6 +1,6 @@
 package jbok.core.consensus.poa.clique
 
-import cats.effect.{Async, IO, Sync}
+import cats.effect.{Async, Sync}
 import _root_.io.circe.generic.JsonCodec
 import _root_.io.circe.parser._
 import _root_.io.circe.syntax._
@@ -16,7 +16,7 @@ import jbok.core.config.MiningConfig
 
 @JsonCodec
 final case class Vote(
-    signer: Address, // Authorized signer that cast this vote
+    miner: Address, // Authorized miner that cast this vote
     block: BigInt, // Block number the vote was cast in (expire old votes)
     address: Address, // Account being voted on to change its authorization
     authorize: Boolean // Whether to authorize or deauthorize the voted account
@@ -37,25 +37,25 @@ final case class Snapshot(
     config: MiningConfig,
     number: BigInt, // Block number where the snapshot was created
     hash: ByteVector, // Block hash where the snapshot was created
-    signers: Set[Address], // Set of authorized signers at this moment
-    recents: Map[BigInt, Address] = Map.empty, // Set of recent signers for spam protections
+    miners: Set[Address], // Set of authorized miners at this moment
+    recents: Map[BigInt, Address] = Map.empty, // Set of recent miners for spam protections
     votes: List[Vote] = Nil, // List of votes cast in chronological order
     tally: Map[Address, Tally] = Map.empty // Current vote tally to avoid recalculating
 ) {
 
-  /** cast adds a new vote into the tally. should clear previous votes from signer -> address */
-  def cast(signer: Address, address: Address, authorize: Boolean): Snapshot = {
+  /** cast adds a new vote into the tally. should clear previous votes from miner -> address */
+  def cast(miner: Address, address: Address, authorize: Boolean): Snapshot = {
     val dedup: Snapshot =
       votes
-        .filter(x => x.signer == signer && x.address == address)
+        .filter(x => x.miner == miner && x.address == address)
         .foldLeft(this)((snap, v) => snap.uncast(v.address, v.authorize))
-        .copy(votes = votes.filterNot(x => x.signer == signer && x.address == address))
+        .copy(votes = votes.filterNot(x => x.miner == miner && x.address == address))
 
-    dedup.signers.contains(address) match {
+    dedup.miners.contains(address) match {
       case true if authorize   => dedup
       case false if !authorize => dedup
       case _ =>
-        val vote = Vote(signer, number, address, authorize)
+        val vote = Vote(miner, number, address, authorize)
         if (dedup.tally.contains(address)) {
           val old = dedup.tally(address)
           dedup.copy(
@@ -84,16 +84,15 @@ final case class Snapshot(
         }
     }
 
-  /** signers retrieves the list of authorized signers in ascending order. */
-  def getSigners: List[Address] = signers.toList.sorted
+  def sortedMiners: List[Address] = miners.toList.sorted
 
-  /** inturn returns if a signer at a given block height is in-turn or not. */
-  def inturn(number: BigInt, signer: Address): Boolean = {
-    val signers = getSigners
-    val offset = signers.zipWithIndex.collectFirst {
-      case (address, index) if address == signer => index
+  /** inturn returns if a miner at a given block height is in-turn or not. */
+  def inturn(number: BigInt, miner: Address): Boolean = {
+    val miners = sortedMiners
+    val offset = miners.zipWithIndex.collectFirst {
+      case (address, index) if address == miner => index
     }
-    offset.exists(i => number % BigInt(signers.length) == BigInt(i))
+    offset.exists(i => number % BigInt(miners.length) == BigInt(i))
   }
 
   def clearStaleVotes(number: BigInt): Snapshot =
@@ -103,9 +102,9 @@ final case class Snapshot(
       this
     }
 
-  /** Delete the oldest signer from the recent list to allow it signing again */
+  /** Delete the oldest miner from the recent list to allow it signing again */
   def deleteOldestRecent(number: BigInt): Snapshot = {
-    val limit = BigInt(signers.size / 2 + 1)
+    val limit = BigInt(miners.size / 2 + 1)
     if (number >= limit) {
       copy(recents = this.recents - (number - limit))
     } else {
@@ -115,23 +114,23 @@ final case class Snapshot(
 
   def authorized(address: Address): Snapshot =
     copy(
-      signers = this.signers + address,
+      miners = this.miners + address,
       tally = this.tally - address,
       votes = this.votes.filter(_.address != address)
     )
 
   def deauthorized(address: Address, number: BigInt): Snapshot = {
-    // Signer list shrunk, delete any leftover recent caches
+    // miner list shrunk, delete any leftover recent caches
     val uncasted =
       votes
-        .filter(_.signer == address)
+        .filter(_.miner == address)
         .foldLeft(this)((snap, v) => snap.uncast(v.address, v.authorize))
 
     uncasted
       .copy(
-        signers = uncasted.signers - address,
+        miners = uncasted.miners - address,
         tally = uncasted.tally - address,
-        votes = uncasted.votes.filter(x => x.address != address || x.signer != address)
+        votes = uncasted.votes.filter(x => x.address != address || x.miner != address)
       )
       .deleteOldestRecent(number)
   }
@@ -142,7 +141,7 @@ object Snapshot {
 
   implicit val addressOrd: Ordering[Address] = Ordering.by(_.bytes.toArray)
 
-  def storeSnapshot[F[_]: Async](snapshot: Snapshot, store: SingleColumnKVStore[F, ByteVector, String], checkpointInterval: Int): F[Unit] =
+  def storeSnapshot[F[_]: Async](snapshot: Snapshot, store: SingleColumnKVStore[F, ByteVector, String]): F[Unit] =
     store.put(snapshot.hash, snapshot.asJson.noSpaces)
 
   def loadSnapshot[F[_]](store: SingleColumnKVStore[F, ByteVector, String], hash: ByteVector)(implicit F: Sync[F]): F[Option[Snapshot]] =
@@ -175,48 +174,36 @@ object Snapshot {
     }
 
   /** create a new snapshot by applying a given header */
-  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader, chainId: BigInt)(implicit F: Sync[F]): F[Snapshot] = F.delay {
+  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader, chainId: BigInt)(implicit F: Sync[F]): F[Snapshot] = {
     val number = header.number
     val extra  = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value
+    Clique.ecrecover[F](header, chainId).map {
+      case None                                              => throw new Exception("recover none from signature")
+      case Some(miner) if !snap.miners.contains(miner)       => throw new Exception("unauthorized miner")
+      case Some(miner) if snap.recents.exists(_._2 == miner) => throw new Exception("miner has mined recently")
+      case Some(miner)                                       =>
+        // Tally up the new vote from the miner
+        val authorize = extra.proposal.exists(_.auth == true)
+        val address   = extra.proposal.map(_.address).getOrElse(Address.empty)
+        val casted = snap.cast(miner, address, authorize)
 
-    // Resolve the authorization key and check against signers
-    val signerOpt = Clique.ecrecover[IO](header, chainId).unsafeRunSync()
-    signerOpt match {
-      case None =>
-        throw new Exception("recover none from signature")
-      case Some(s) if !snap.signers.contains(s) =>
-        throw new Exception("unauthorized signer")
-      case _ => ()
+        // If the vote passed, update the list of miners
+        val result = casted.tally.get(address) match {
+          case Some(t) if t.votes > snap.miners.size / 2 && t.authorize =>
+            casted.authorized(address)
+
+          case Some(t) if t.votes > snap.miners.size / 2 =>
+            casted.deauthorized(address, number)
+
+          case _ =>
+            casted
+        }
+
+        result.copy(
+          number = snap.number + 1,
+          hash = header.hash,
+          recents = result.recents + (number -> miner)
+        )
     }
-
-    val Some(signer) = signerOpt
-
-    if (snap.recents.exists(_._2 == signer)) {
-      throw new Exception("signer has signed recently")
-    }
-
-    // Tally up the new vote from the signer
-    val authorize = extra.proposal.exists(_.auth == true)
-    val address   = extra.proposal.map(_.address).getOrElse(Address.empty)
-
-    val casted = snap.cast(signer, address, authorize)
-
-    // If the vote passed, update the list of signers
-    val result = casted.tally.get(address) match {
-      case Some(t) if t.votes > snap.signers.size / 2 && t.authorize =>
-        casted.authorized(address)
-
-      case Some(t) if t.votes > snap.signers.size / 2 =>
-        casted.deauthorized(address, number)
-
-      case _ =>
-        casted
-    }
-
-    result.copy(
-      number = snap.number + 1,
-      hash = header.hash,
-      recents = result.recents + (number -> signer)
-    )
   }
 }

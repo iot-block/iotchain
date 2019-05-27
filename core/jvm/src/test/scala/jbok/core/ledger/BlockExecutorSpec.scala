@@ -20,7 +20,7 @@ class BlockExecutorSpec extends CoreSpec {
       val history   = objects.get[History[IO]]
       val consensus = objects.get[Consensus[IO]]
 
-      val txs    = random[List[SignedTransaction]](genTxs(1, 1))
+      val txs    = random[List[SignedTransaction]](genTxs(1, 1, history))
       val stx    = txs.head
       val sender = stx.senderAddress.get
 
@@ -33,12 +33,19 @@ class BlockExecutorSpec extends CoreSpec {
         initReceiverBalance <- world.getBalance(stx.receivingAddress)
         result              <- executor.executeTransaction(stx, header, world, 0)
         gas = UInt256(result.gasUsed * stx.gasPrice)
+
         res <- result.world.getBalance(sender)
-        _ = res shouldBe (initSenderBalance - gas - stx.value)
+        _ = if (sender == stx.receivingAddress) { res shouldBe (initSenderBalance - gas) } else { res shouldBe initSenderBalance - gas - stx.value }
+
         res <- result.world.getBalance(Address(header.beneficiary))
         _ = res shouldBe (initMinerBalance + gas)
+
         res <- result.world.getBalance(stx.receivingAddress)
-        _ = res shouldBe (initReceiverBalance + stx.value)
+        _ = if (sender == stx.receivingAddress) {
+          res shouldBe (initReceiverBalance - gas)
+        } else {
+          res shouldBe (initReceiverBalance + stx.value)
+        }
       } yield ()
     }
 
@@ -46,7 +53,7 @@ class BlockExecutorSpec extends CoreSpec {
       val executor  = objects.get[BlockExecutor[IO]]
       val history   = objects.get[History[IO]]
       val consensus = objects.get[Consensus[IO]]
-      val txs       = random[List[SignedTransaction]](genTxs(1, 1))
+      val txs       = random[List[SignedTransaction]](genTxs(1, 1, history))
       val stx       = txs.head
       val sender    = stx.senderAddress.get
 
@@ -73,14 +80,13 @@ class BlockExecutorSpec extends CoreSpec {
       val executor = objects.get[BlockExecutor[IO]]
       val history  = objects.get[History[IO]]
 
-      val txs   = random[List[SignedTransaction]](genTxs(10, 10))
+      val txs   = random[List[SignedTransaction]](genTxs(10, 10, history))
       val block = random[Block](genBlock(stxsOpt = Some(txs)))
       val peer  = random[Peer[IO]]
       for {
         number <- history.getBestBlockNumber
         receivers = block.body.transactionList.map(_.receivingAddress)
-        xs <- receivers.traverse[IO, Option[Account]](addr => history.getAccount(addr, number))
-        _ = xs.forall(_.isEmpty) shouldBe true
+        _       <- receivers.traverse[IO, Option[Account]](addr => history.getAccount(addr, number))
         _       <- executor.handleReceivedBlock(ReceivedBlock(block, peer))
         number2 <- history.getBestBlockNumber
         xs2     <- receivers.traverse[IO, Option[Account]](addr => history.getAccount(addr, number2))
@@ -103,11 +109,10 @@ class BlockExecutorSpec extends CoreSpec {
       )
 
       for {
-        txs <- SignedTransaction.sign[IO](tx, testMiner.keyPair).map(_ :: Nil)
+        txs <- SignedTransaction.sign[IO](tx, testKeyPair).map(_ :: Nil)
         block = random[Block](genBlock(stxsOpt = Some(txs)))
-        number <- history.getBestBlockNumber
-        _      <- executor.executeBlock(block)
-        hash            = (testMiner.address, UInt256(0)).asValidBytes.kec256
+        _ <- executor.executeBlock(block)
+        hash            = (testAllocAddress, UInt256(0)).asValidBytes.kec256
         contractAddress = Address.apply(hash)
         contract <- history.getAccount(contractAddress, BigInt(1)).map(_.get)
         code     <- history.getCode(contract.codeHash).map(_.get)

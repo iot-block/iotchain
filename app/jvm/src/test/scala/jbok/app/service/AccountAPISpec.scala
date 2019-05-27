@@ -23,22 +23,21 @@ class AccountAPISpec extends AppSpec {
         parent <- history.getBestBlock
         List(stx1, stx2) = txs
         defaultNonce     = config.history.accountStartNonce.toBigInt
-        res <- account.getEstimatedNonce(testMiner.address)
+        res <- account.getEstimatedNonce(testAllocAddress)
         _ = res shouldBe defaultNonce
         _   <- transaction.sendTx(stx1)
-        res <- account.getEstimatedNonce(testMiner.address)
+        res <- account.getEstimatedNonce(testAllocAddress)
         _ = res shouldBe defaultNonce + 1
-        _ <- miner.mine()
-        res        <- account.getEstimatedNonce(testMiner.address)
+        _   <- miner.mine()
+        res <- account.getEstimatedNonce(testAllocAddress)
         _ = res shouldBe defaultNonce + 1
         _   <- transaction.sendTx(stx2)
-        res <- account.getEstimatedNonce(testMiner.address)
+        res <- account.getEstimatedNonce(testAllocAddress)
         _ = res shouldBe defaultNonce + 2
       } yield ()
     }
 
     "return account" in check { objects =>
-      val history     = objects.get[History[IO]]
       val miner       = objects.get[BlockMiner[IO]]
       val acc         = objects.get[AccountAPI[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
@@ -49,15 +48,22 @@ class AccountAPISpec extends AppSpec {
         _ = res shouldBe stx.hash
         _       <- miner.mine()
         account <- acc.getAccount(stx.receivingAddress)
-        _ = account.nonce shouldBe 0
-        _ = account.balance shouldBe stx.value
+        _ = if (stx.senderAddress.contains(stx.receivingAddress)) {
+          account.nonce shouldBe 1
+        } else {
+          account.nonce shouldBe 0
+        }
+        _ = if (stx.senderAddress.contains(stx.receivingAddress)) {
+          ()
+        } else {
+          account.balance shouldBe stx.value
+        }
         _ = account.codeHash shouldBe ByteVector.fromValidHex("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
         _ = account.storageRoot shouldBe ByteVector.fromValidHex("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
       } yield ()
     }
 
     "return balance" in check { objects =>
-      val history     = objects.get[History[IO]]
       val miner       = objects.get[BlockMiner[IO]]
       val account     = objects.get[AccountAPI[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
@@ -68,12 +74,15 @@ class AccountAPISpec extends AppSpec {
         _ = res shouldBe stx.hash
         _   <- miner.mine()
         res <- account.getBalance(stx.receivingAddress)
-        _ = res shouldBe stx.value
+        _ = if (stx.senderAddress.contains(stx.receivingAddress)) {
+          ()
+        } else {
+          res shouldBe stx.value
+        }
       } yield ()
     }
 
     "return getCode" in check { objects =>
-      val history     = objects.get[History[IO]]
       val miner       = objects.get[BlockMiner[IO]]
       val account     = objects.get[AccountAPI[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
@@ -89,7 +98,7 @@ class AccountAPISpec extends AppSpec {
       )
       implicit val chainId = config.genesis.chainId
       for {
-        stx <- SignedTransaction.sign[IO](tx, testMiner.keyPair)
+        stx <- SignedTransaction.sign[IO](tx, testKeyPair)
         res <- transaction.sendTx(stx)
         _ = res shouldBe stx.hash
         _               <- miner.mine()

@@ -58,13 +58,13 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
     } else {
       for {
         snap <- clique.applyHeaders(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
-        mined <- if (!snap.signers.contains(clique.minerAddress)) {
-          F.raiseError(new Exception("unauthorized miner"))
+        mined <- if (!snap.miners.contains(clique.minerAddress)) {
+          F.raiseError(new Exception(s"unauthorized miner ${clique.minerAddress}"))
         } else {
           snap.recents.find(_._2 == clique.minerAddress) match {
-            case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.signers.size) =>
-              // If we're amongst the recent signers, wait for the next block
-              val wait = (snap.signers.size / 2 + 1 - (executed.block.header.number - seen).toInt)
+            case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.miners.size) =>
+              // If we're amongst the recent miners, wait for the next block
+              val wait = (snap.miners.size / 2 + 1 - (executed.block.header.number - seen).toInt)
                 .max(0) * config.period.toMillis
               val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
 
@@ -75,7 +75,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
               for {
                 delay <- if (executed.block.header.difficulty == Clique.diffNoTurn) {
                   // It's not our turn explicitly to sign, delay it a bit
-                  val wiggle = Random.nextLong().abs % ((snap.signers.size / 2 + 1) * Clique.wiggleTime.toMillis)
+                  val wiggle = Random.nextLong().abs % ((snap.miners.size / 2 + 1) * Clique.wiggleTime.toMillis)
                   log.trace(s"${clique.minerAddress} it is not our turn, delay ${wiggle}").as(wait + wiggle)
                 } else {
                   log.trace(s"${clique.minerAddress} it is our turn, mine immediately").as(wait)
@@ -224,8 +224,8 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
       case Nil => F.pure(false)
     }
 
-  private def calcDifficulty(snapshot: Snapshot, signer: Address, number: BigInt): BigInt =
-    if (snapshot.inturn(number, signer)) Clique.diffInTurn else Clique.diffNoTurn
+  private def calcDifficulty(snapshot: Snapshot, miner: Address, number: BigInt): BigInt =
+    if (snapshot.inturn(number, miner)) Clique.diffInTurn else Clique.diffNoTurn
 
   private def calcGasLimit(parentGas: BigInt): BigInt =
     parentGas

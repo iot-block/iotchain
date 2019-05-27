@@ -31,8 +31,6 @@ final class Clique[F[_]](
 )(implicit F: Concurrent[F]) {
   private[this] val log = Logger[F]
 
-  import config._
-
   val minerAddress: Address = Address(keyPair)
 
   def sign(bv: ByteVector): F[CryptoSignature] =
@@ -78,7 +76,7 @@ final class Clique[F[_]](
         // Previous snapshot found, apply any pending headers on top of it
         for {
           newSnap <- Snapshot.applyHeaders[F](s, headers, history.chainId)
-          _       <- Snapshot.storeSnapshot[F](newSnap, store, checkpointInterval)
+          _       <- Snapshot.storeSnapshot[F](newSnap, store)
         } yield newSnap
 
       case None =>
@@ -105,7 +103,7 @@ final class Clique[F[_]](
       genesis <- history.genesisHeader
       extra   <- genesis.extraAs[F, CliqueExtra]
       snap = Snapshot(config, 0, genesis.hash, extra.miners.toSet)
-      _ <- Snapshot.storeSnapshot[F](snap, store, checkpointInterval)
+      _ <- Snapshot.storeSnapshot[F](snap, store)
       _ <- log.i(s"stored genesis with ${extra.miners.size} miners")
     } yield snap
 }

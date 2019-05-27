@@ -60,7 +60,6 @@ mining:
   coinbase: "0000000000000000000000000000000000000000"
   period: "100 millis"
   epoch: "30000"
-  checkpointInterval: 1024
   minBroadcastPeers: 4
 
 persist:

@@ -120,7 +120,7 @@ class BlockPoolSpec extends CoreSpec {
       val pool    = objects.get[BlockPool[IO]]
       val miner   = objects.get[BlockMiner[IO]]
       val history = objects.get[History[IO]]
-      val txs     = random[List[SignedTransaction]](genTxs(2, 2))
+      val txs     = random[List[SignedTransaction]](genTxs(2, 2, history))
 
       for {
         genesis <- history.getBestBlock

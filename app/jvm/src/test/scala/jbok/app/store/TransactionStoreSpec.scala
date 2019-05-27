@@ -9,7 +9,6 @@ import jbok.core.models.{Block, SignedTransaction}
 import jbok.core.testkit._
 
 class TransactionStoreSpec extends AppSpec {
-  val keyPair = Some(testMiner.keyPair)
   "insert and query transactions" in check { objects =>
     val executor = objects.get[BlockExecutor[IO]]
     val txStore  = objects.get[TransactionStore[IO]]

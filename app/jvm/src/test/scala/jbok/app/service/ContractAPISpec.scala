@@ -1,9 +1,7 @@
 package jbok.app.service
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import jbok.app.AppSpec
-import jbok.core.NodeStatus
 import jbok.core.api.{CallTx, ContractAPI}
 import jbok.core.mining.BlockMiner
 import scodec.bits.ByteVector
@@ -15,11 +13,9 @@ class ContractAPISpec extends AppSpec {
         check { objects =>
           val miner    = objects.get[BlockMiner[IO]]
           val contract = objects.get[ContractAPI[IO]]
-          val status   = objects.get[Ref[IO, NodeStatus]]
 
           for {
-            _   <- status.set(NodeStatus.Done)
-            _   <- miner.stream.take(blockN).compile.toList
+            _   <- miner.mineN(blockN)
             res <- contract.getGasPrice
             _ = res shouldBe BigInt(0)
           } yield ()

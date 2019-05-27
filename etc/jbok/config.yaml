@@ -54,7 +54,6 @@ mining:
   coinbase: '0x410be0ff99e37e82b2593f5ed4bd6316908f2b32'
   period: 1000 milliseconds
   epoch: 30000
-  checkpointInterval: 1024
   minBroadcastPeers: 4
 persist:
   driver: rocksdb

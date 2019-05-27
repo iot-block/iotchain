@@ -59,5 +59,5 @@ final case class NetworkBuilder(
   }
 
   def dump: IO[Unit] =
-    build.zipWithIndex.traverse_ { case (config, i) => Config[IO].dump(config.asJson, Paths.get(config.rootPath).resolve(s"config.yaml")) }
+    build.traverse_(config => Config[IO].dump(config.asJson, Paths.get(config.rootPath).resolve(s"config.yaml")))
 }
