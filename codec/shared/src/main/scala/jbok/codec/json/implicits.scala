@@ -23,6 +23,10 @@ object implicits {
   implicit val finiteDurationDecoder: Decoder[FiniteDuration] =
     Decoder[String].map(s => Duration.apply(s).asInstanceOf[FiniteDuration])
 
+  implicit val bigIntEncoder: Encoder[BigInt] = Encoder.encodeString.contramap[BigInt](_.toString(10))
+
+  implicit val bigIntDecoder: Decoder[BigInt] = Decoder.decodeString.map[BigInt](BigInt.apply)
+
   // key codecs
   implicit val bigIntKeyEncoder: KeyEncoder[BigInt] = KeyEncoder.encodeKeyString.contramap[BigInt](_.toString(10))
 
