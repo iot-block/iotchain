@@ -29,7 +29,7 @@ final case class NetworkBuilder(
 
   def createCert(ip: String, cn: String, caDir: Path, certDir: Path): IO[String] = IO {
     val path = File(".")
-    val projectDir = path.parent.parent.path.toAbsolutePath
+    val projectDir = path.path.toAbsolutePath
     val processLogger = new ProcessLogger {
       override def out(s: => String): Unit = println(s)
       override def err(s: => String): Unit = println(s)

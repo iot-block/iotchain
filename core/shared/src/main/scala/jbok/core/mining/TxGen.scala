@@ -39,7 +39,7 @@ final class TxGen[F[_]] private (accounts: Ref[F, Map[Address, SimAccount]], rea
   val minBalance: BigInt = BigInt(100000)
 
   def genValue(account: SimAccount): BigInt =
-    BigInt(100000)
+    BigInt(25000)
 
   def getValidSenderReceiver: F[(SimAccount, SimAccount)] =
     for {

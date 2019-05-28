@@ -52,6 +52,7 @@ final class SyncClient[F[_]](
           case NodeStatus.Done                => Stream.sleep_(syncConfig.checkInterval)
           case syncing: NodeStatus.Syncing[F] => Stream.eval(requestHeaders(syncing.peer)).flatMap(Stream.emits)
         }
+        .handleErrorWith(e => Stream.eval_(log.w(s"SyncClient failure, ${e}")))
         .repeat
 
   def mkClient(peer: Peer[F]): Resource[F, JbokClient[F]] =

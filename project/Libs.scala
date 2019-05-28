@@ -85,7 +85,7 @@ object Libs {
     "io.circe" %%% "circe-core"    % Versions.circe,
     "io.circe" %%% "circe-generic" % Versions.circe,
     "io.circe" %%% "circe-parser"  % Versions.circe,
-    "io.circe" %% "circe-yaml"     % "0.9.0",
+    "io.circe" %% "circe-yaml"     % "0.10.0",
   )
 
   private lazy val scodec = libraryDependencies ++= Seq(
@@ -98,10 +98,8 @@ object Libs {
     "com.github.pshirshov.izumi.r2" %% "distage-core"    % Versions.izumi,
     "com.github.pshirshov.izumi.r2" %% "distage-cats"    % Versions.izumi,
     "com.github.pshirshov.izumi.r2" %% "distage-static"  % Versions.izumi,
-    "com.github.pshirshov.izumi.r2" %% "distage-plugins" % Versions.izumi,
-    "com.github.pshirshov.izumi.r2" %% "distage-app"     % Versions.izumi,
-    "com.github.pshirshov.izumi.r2" %% "distage-roles"   % Versions.izumi,
-  ).map(_.exclude("com.github.pshirshov.izumi.r2", "logstage-adapter-slf4j_2.12"))
+    "com.github.pshirshov.izumi.r2" %% "distage-plugins" % Versions.izumi
+  )
 
   private lazy val logging = libraryDependencies ++= Seq(
     "com.outr" %%% "scribe"      % Versions.scribe,

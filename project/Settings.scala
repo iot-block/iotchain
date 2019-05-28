@@ -10,11 +10,14 @@ object Settings {
     version := Versions.version,
     licenses ++= Seq(("MIT", url("http://opensource.org/licenses/MIT"))),
     scalaVersion := Versions.scala212Version,
-    connectInput in run := true,
-    connectInput := true,
     parallelExecution in test := false,
     scalacOptions ++= ScalacSettings.base ++ ScalacSettings.specificFor(scalaVersion.value) ++ ScalacSettings.strictBase ++ ScalacSettings.strictSpecificFor(scalaVersion.value),
     javacOptions ++= JavacSettings.base ++ JavacSettings.specificFor(scalaVersion.value),
+  )
+
+  lazy val jvmCommon = Seq(
+    fork := true,
+    run / connectInput := true
   )
 
   private lazy val compilerPlugins = Seq(

@@ -33,31 +33,34 @@ final class RocksKVStore[F[_]](db: Underlying, readOptions: ReadOptions, writeOp
     F.delay(db.delete(handle(cf), writeOptions, key.toArray))
 
   override def writeBatch(cf: ColumnFamily, puts: List[(ByteVector, ByteVector)], dels: List[ByteVector]): F[Unit] =
-    F.delay {
-      val batch = new WriteBatch()
-      puts.foreach { case (key, value) => batch.put(handle(cf), key.toArray, value.toArray) }
-      dels.foreach { key =>
-        batch.delete(handle(cf), key.toArray)
+    batchResource.use { batch =>
+      F.delay {
+        puts.foreach { case (key, value) => batch.put(handle(cf), key.toArray, value.toArray) }
+        dels.foreach { key =>
+          batch.delete(handle(cf), key.toArray)
+        }
+        db.write(writeOptions, batch)
       }
-      db.write(writeOptions, batch)
     }
 
   override def writeBatch(cf: ColumnFamily, ops: List[(ByteVector, Option[ByteVector])]): F[Unit] =
-    F.delay {
-      val batch = new WriteBatch()
-      ops.foreach {
-        case (key, Some(value)) => batch.put(handle(cf), key.toArray, value.toArray)
-        case (key, None)        => batch.delete(handle(cf), key.toArray)
+    batchResource.use { batch =>
+      F.delay {
+        ops.foreach {
+          case (key, Some(value)) => batch.put(handle(cf), key.toArray, value.toArray)
+          case (key, None)        => batch.delete(handle(cf), key.toArray)
+        }
+        db.write(writeOptions, batch)
       }
-      db.write(writeOptions, batch)
     }
 
   override def writeBatch(puts: List[Put], dels: List[Del]): F[Unit] =
-    F.delay {
-      val batch = new WriteBatch()
-      puts.foreach { case (cf, key, value) => batch.put(handle(cf), key.toArray, value.toArray) }
-      dels.foreach { case (cf, key)        => batch.delete(handle(cf), key.toArray) }
-      db.write(writeOptions, batch)
+    batchResource.use { batch =>
+      F.delay {
+        puts.foreach { case (cf, key, value) => batch.put(handle(cf), key.toArray, value.toArray) }
+        dels.foreach { case (cf, key)        => batch.delete(handle(cf), key.toArray) }
+        db.write(writeOptions, batch)
+      }
     }
 
   override def toStream(cf: ColumnFamily): Stream[F, (ByteVector, ByteVector)] = {
@@ -92,6 +95,12 @@ final class RocksKVStore[F[_]](db: Underlying, readOptions: ReadOptions, writeOp
 
   override def size(cf: ColumnFamily): F[Int] =
     toList(cf).map(_.length)
+
+  private val batchResource: Resource[F, WriteBatch] = Resource {
+    F.delay(new WriteBatch()).map { batch =>
+      batch -> F.delay(batch.close())
+    }
+  }
 
   private def handle(cf: ColumnFamily): ColumnFamilyHandle =
     cfs(cf)

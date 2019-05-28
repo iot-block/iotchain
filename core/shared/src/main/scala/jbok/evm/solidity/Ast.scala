@@ -53,21 +53,6 @@ object Ast {
       }
     }
 
-    lazy val structDefinitionMap = {
-      val sds = parts.collect {
-        case structDef @ StructDefinition(id, params) =>
-          id -> structDef
-      }
-
-      sds.toMap
-
-      // map -> graph
-      // test no circle
-      // topology sort
-      // have all infos struct map
-      ???
-    }
-
     def enumSizeToUint(size: Int) = (1 to 16).toList.find(i => BigInt(2).pow(i * 8) > size).getOrElse(16).toString
 
     lazy val enumDefinitionMap = {

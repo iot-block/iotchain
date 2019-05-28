@@ -7,13 +7,15 @@ import fs2.concurrent.Queue
 import jbok.core.messages.{SignedTransactions, Status}
 import jbok.network.Message
 import scodec.bits.ByteVector
+import jbok.codec.rlp.implicits._
+import jbok.crypto._
 
 final case class Peer[F[_]](
     uri: PeerUri,
     queue: Queue[F, Message[F]],
     status: Ref[F, Status],
     knownBlocks: Ref[F, Set[ByteVector]],
-    knownTxs: Ref[F, Set[SignedTransactions]]
+    knownTxs: Ref[F, Set[ByteVector]]
 )(implicit F: Sync[F]) {
   import Peer._
 
@@ -21,14 +23,14 @@ final case class Peer[F[_]](
     knownBlocks.get.map(_.contains(blockHash))
 
   def hasTxs(stxs: SignedTransactions): F[Boolean] =
-    knownTxs.get.map(_.contains(stxs))
+    knownTxs.get.map(_.contains(stxs.asValidBytes.kec256))
 
   def markBlock(blockHash: ByteVector, number: BigInt): F[Unit] =
     knownBlocks.update(s => s.take(MaxKnownBlocks - 1) + blockHash) >>
       status.update(s => s.copy(bestNumber = s.bestNumber.max(number)))
 
   def markTxs(stxs: SignedTransactions): F[Unit] =
-    knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs)
+    knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs.asValidBytes.kec256)
 }
 
 object Peer {
@@ -40,6 +42,6 @@ object Peer {
       queue       <- Queue.bounded[F, Message[F]](10)
       status      <- Ref.of[F, Status](status)
       knownBlocks <- Ref.of[F, Set[ByteVector]](Set.empty)
-      knownTxs    <- Ref.of[F, Set[SignedTransactions]](Set.empty)
+      knownTxs    <- Ref.of[F, Set[ByteVector]](Set.empty)
     } yield Peer[F](uri, queue, status, knownBlocks, knownTxs)
 }

@@ -8,9 +8,9 @@ import scoverage.ScoverageSbtPlugin.autoImport._
 object ScalaJS {
   val common = Seq(
     fork := false,
-    fork in Test := false,
+    fork in test := false,
     scalaJSUseMainModuleInitializer := false,
-    scalaJSUseMainModuleInitializer in Test := false,
+    scalaJSUseMainModuleInitializer in test := false,
     webpackBundlingMode := BundlingMode.LibraryOnly(),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
     coverageEnabled := false, // workaround

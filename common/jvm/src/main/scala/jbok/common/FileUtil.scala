@@ -58,12 +58,7 @@ object FileUtil {
       }
 
     override def inputStream(path: Path): Resource[F, InputStream] =
-      Resource {
-        for {
-          file <- open(path, create = false)
-          is   <- F.delay(file.newInputStream)
-        } yield is -> F.delay(is.close())
-      }
+      Resource.fromAutoCloseable(open(path, create = false).map(_.newInputStream))
 
     override def dump(text: String, path: Path, create: Boolean): F[Unit] =
       log.i(s"writing text to path=${path.toAbsolutePath}") >>
@@ -84,6 +79,7 @@ object FileUtil {
               case _: OverlappingFileLockException => FileLockErr(path)
             }
             _ <- if (lock == null) F.raiseError(FileLockErr(path)) else F.unit
+            _ <- F.delay(file.deleteOnExit())
           } yield lock
         } { lock =>
           F.delay(File(path).delete(swallowIOExceptions = true)) >> F.delay(lock.release()) >>
@@ -96,6 +92,7 @@ object FileUtil {
     override def temporaryFile(prefix: String, suffix: String): Resource[F, File] = Resource {
       for {
         file <- F.delay(File.newTemporaryFile(prefix, suffix))
+        _    <- F.delay(file.deleteOnExit())
         _    <- log.i(s"creating temporary file path=${file.path}")
       } yield file -> (F.delay(file.delete()) >> log.i(s"deleted temporary file path=${file.path}"))
     }
@@ -103,6 +100,7 @@ object FileUtil {
     override def temporaryDir(prefix: String): Resource[F, File] = Resource {
       for {
         file <- F.delay(File.newTemporaryDirectory(prefix))
+        _    <- F.delay(file.deleteOnExit())
         _    <- log.i(s"creating temporary dir path=${file.path}")
       } yield file -> (F.delay(file.delete()) >> log.i(s"deleted temporary dir path=${file.path}"))
     }

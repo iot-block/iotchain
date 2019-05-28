@@ -2,7 +2,7 @@ package jbok.app
 
 import java.net.URI
 
-import cats.effect.{Clock, ConcurrentEffect}
+import cats.effect.ConcurrentEffect
 import io.circe.Json
 import jbok.network.http.HttpTransport
 import jbok.network.rpc.RpcClient
@@ -13,7 +13,7 @@ object JbokClientPlatform {
   import io.circe.generic.auto._
   import jbok.codec.json.implicits._
 
-  def apply[F[_]](url: String)(implicit F: ConcurrentEffect[F], clock: Clock[F]): JbokClient[F] = {
+  def apply[F[_]](url: String)(implicit F: ConcurrentEffect[F]): JbokClient[F] = {
     val transport = HttpTransport[F](url)
     val rpc       = RpcClient[F, Json](transport)
     new JbokClient[F] {

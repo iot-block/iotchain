@@ -1,16 +1,11 @@
 package jbok.persistent
+
 import cats.effect.{IO, Resource}
-import jbok.common.{CommonSpec, FileUtil}
-import jbok.persistent.rocksdb.RocksKVStore
+import jbok.common.CommonSpec
 import scodec.bits.ByteVector
-import jbok.codec.rlp.implicits._
+import jbok.persistent.testkit._
 
 class StageKVStoreSpec extends CommonSpec {
-  val default = ColumnFamily.default
-  val cfa     = ColumnFamily("a")
-  val cfb     = ColumnFamily("b")
-  val cfs     = List(default, cfa, cfb)
-
   def test(name: String, resource: Resource[IO, StageKVStore[IO, ByteVector, ByteVector]]): Unit =
     s"StageKVStore $name" should {
       val key   = ByteVector("key".getBytes)
@@ -38,13 +33,6 @@ class StageKVStoreSpec extends CommonSpec {
       }
     }
 
-  val rocks = FileUtil[IO].temporaryDir().flatMap { dir =>
-    RocksKVStore.resource[IO](dir.path, cfs).map(inner => StageKVStore(SingleColumnKVStore[IO, ByteVector, ByteVector](default, inner)))
-  }
-
-  val memory =
-    Resource.liftF(MemoryKVStore[IO]).map(inner => StageKVStore(SingleColumnKVStore[IO, ByteVector, ByteVector](default, inner)))
-
-  test("rocksdb", rocks)
-  test("memory", memory)
+  test("rocksdb", testRocksStageStore())
+  test("memory", testMemoryStageStore)
 }

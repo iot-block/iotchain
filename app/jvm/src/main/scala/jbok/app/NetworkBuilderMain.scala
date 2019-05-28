@@ -22,9 +22,14 @@ object NetworkBuilderMain extends IOApp {
     val coinbase1 = Address(randomKP)
     val coinbase2 = Address(randomKP)
 
+    val alloc = KeyPair(
+      KeyPair.Public("a4991b82cb3f6b2818ce8fedc00ef919ba505bf9e67d96439b63937d24e4d19d509dd07ac95949e815b307769f4e4d6c3ed5d6bd4883af23cb679b251468a8bc"),
+      KeyPair.Secret("1a3c21bb6e303a384154a56a882f5b760a2d166161f6ccff15fc70e147161788")
+    )
+
     val genesis = GenesisBuilder()
       .withChainId(10)
-      .addAlloc(Address(randomKP), BigInt("1" + "0" * 30))
+      .addAlloc(Address(alloc), BigInt("1" + "0" * 30))
       .addMiner(Address(miner0))
 //      .addMiner(Address(miner1))
 //      .addMiner(Address(miner2))
@@ -36,7 +41,7 @@ object NetworkBuilderMain extends IOApp {
     val root = Paths.get(home).resolve(".jbok")
 
     val builder = NetworkBuilder(config)
-      .withBlockPeriod(1000)
+      .withBlockPeriod(10000)
       .addNode(miner0, coinbase0, root.resolve("node-0"), "127.0.0.2")
       .addNode(miner1, coinbase1, root.resolve("node-1"), "127.0.0.3")
       .addNode(miner2, coinbase2, root.resolve("node-2"), "127.0.0.4")

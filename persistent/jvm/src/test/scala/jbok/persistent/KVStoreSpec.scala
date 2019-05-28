@@ -2,10 +2,10 @@ package jbok.persistent
 
 import cats.effect.{IO, Resource}
 import cats.implicits._
-import jbok.common.{CommonSpec, FileUtil}
-import jbok.persistent.rocksdb.RocksKVStore
+import jbok.common.CommonSpec
 import scodec.bits.ByteVector
 import jbok.common.testkit._
+import jbok.persistent.testkit._
 
 class KVStoreSpec extends CommonSpec {
   val default = ColumnFamily.default
@@ -74,13 +74,6 @@ class KVStoreSpec extends CommonSpec {
       }
     }
 
-  val rocks = FileUtil[IO].temporaryDir().flatMap { dir =>
-    RocksKVStore.resource[IO](dir.path, cfs)
-  }
-
-  val memory =
-    Resource.liftF(MemoryKVStore[IO])
-
-  test("rocksdb", rocks)
-  test("memory", memory)
+  test("rocksdb", testRocksKVStore(cfs))
+  test("memory", testMemoryKVStore)
 }
