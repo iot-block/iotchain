@@ -1,10 +1,11 @@
 package jbok.core.messages
 
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.rlp.implicits._
+import jbok.codec.json.implicits._
 import jbok.core.models.SignedTransaction
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class SignedTransactions(txs: List[SignedTransaction])
 object SignedTransactions {
   val name = "SignedTransactions"

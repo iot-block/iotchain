@@ -133,7 +133,7 @@ final case class WorldState[F[_]](
     for {
       creatorAccount <- getAccount(creatorAddr)
     } yield {
-      val hash = (creatorAddr, creatorAccount.nonce - 1).asValidBytes.kec256
+      val hash = (creatorAddr, creatorAccount.nonce - 1).asBytes.kec256
       Address.apply(hash)
     }
 

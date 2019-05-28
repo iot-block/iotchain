@@ -2,7 +2,7 @@ package jbok.core.models
 
 import cats.effect.Sync
 import cats.implicits._
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.core.validators.TxInvalid.TxSignatureInvalid
@@ -14,7 +14,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("SignedTransaction")
 @JSExportAll
-@JsonCodec
+@ConfiguredJsonCodec
 final case class SignedTransaction(
     nonce: BigInt,
     gasPrice: BigInt,
@@ -26,7 +26,7 @@ final case class SignedTransaction(
     r: BigInt,
     s: BigInt
 ) {
-  lazy val bytes: ByteVector = this.asValidBytes
+  lazy val bytes: ByteVector = this.asBytes
 
   lazy val hash: ByteVector = bytes.kec256
 
@@ -83,7 +83,7 @@ object SignedTransaction {
   }
 
   private def bytesToSign(stx: SignedTransaction, chainId: BigInt): ByteVector =
-    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId, BigInt(0), BigInt(0)).asValidBytes.kec256
+    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId, BigInt(0), BigInt(0)).asBytes.kec256
 
   private def recoverPublicKey(stx: SignedTransaction, chainId: BigInt): Option[KeyPair.Public] = {
     val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)

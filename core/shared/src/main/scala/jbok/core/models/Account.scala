@@ -1,6 +1,6 @@
 package jbok.core.models
 
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
 import jbok.crypto._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
@@ -10,7 +10,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("Account")
 @JSExportAll
-@JsonCodec
+@ConfiguredJsonCodec
 final case class Account(
     nonce: UInt256 = 0,
     balance: UInt256 = 0,

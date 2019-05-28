@@ -1,8 +1,8 @@
 package jbok.core.models
 
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class TransactionLocation(blockHash: ByteVector, txIndex: Int)

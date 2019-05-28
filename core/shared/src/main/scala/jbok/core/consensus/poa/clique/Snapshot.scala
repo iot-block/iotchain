@@ -1,7 +1,6 @@
 package jbok.core.consensus.poa.clique
 
 import cats.effect.{Async, Sync}
-import _root_.io.circe.generic.JsonCodec
 import _root_.io.circe.parser._
 import _root_.io.circe.syntax._
 import cats.data.OptionT
@@ -12,9 +11,10 @@ import jbok.core.models.{Address, BlockHeader}
 import jbok.persistent.SingleColumnKVStore
 import scodec.bits._
 import cats.implicits._
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.config.MiningConfig
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class Vote(
     miner: Address, // Authorized miner that cast this vote
     block: BigInt, // Block number the vote was cast in (expire old votes)
@@ -22,7 +22,7 @@ final case class Vote(
     authorize: Boolean // Whether to authorize or deauthorize the voted account
 )
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class Tally(
     authorize: Boolean, // Whether the vote is about authorizing or kicking someone
     votes: Int // Number of votes until now wanting to pass the proposal
@@ -32,7 +32,7 @@ final case class Tally(
   * `Snapshot` is the state of the authorization voting at a given point(block hash and number).
   * the snapshot should be *immutable* once it has been created
   */
-@JsonCodec
+@ConfiguredJsonCodec
 final case class Snapshot(
     config: MiningConfig,
     number: BigInt, // Block number where the snapshot was created

@@ -42,7 +42,7 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
 
   // header
   override def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]] =
-    store.getAs[BlockHeader](ColumnFamilies.BlockHeader, hash.asValidBytes).observed("getBlockHeaderByHash")
+    store.getAs[BlockHeader](ColumnFamilies.BlockHeader, hash.asBytes).observed("getBlockHeaderByHash")
 
   override def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]] =
     (for {
@@ -53,25 +53,25 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
   override def putBlockHeader(blockHeader: BlockHeader): F[Unit] = metrics.observed("putBlockHeader") {
     if (blockHeader.number == 0) {
       val puts = List(
-        Put(ColumnFamilies.BlockHeader, blockHeader.hash.asValidBytes, blockHeader.asValidBytes),
-        Put(ColumnFamilies.NumberHash, blockHeader.number.asValidBytes, blockHeader.hash.asValidBytes),
-        Put(ColumnFamilies.TotalDifficulty, blockHeader.hash.asValidBytes, blockHeader.difficulty.asValidBytes)
+        Put(ColumnFamilies.BlockHeader, blockHeader.hash.asBytes, blockHeader.asBytes),
+        Put(ColumnFamilies.NumberHash, blockHeader.number.asBytes, blockHeader.hash.asBytes),
+        Put(ColumnFamilies.TotalDifficulty, blockHeader.hash.asBytes, blockHeader.difficulty.asBytes)
       )
       store.writeBatch(puts, Nil)
     } else {
       getTotalDifficultyByHash(blockHeader.parentHash).flatMap {
         case Some(td) =>
           val puts = List(
-            Put(ColumnFamilies.BlockHeader, blockHeader.hash.asValidBytes, blockHeader.asValidBytes),
-            Put(ColumnFamilies.NumberHash, blockHeader.number.asValidBytes, blockHeader.hash.asValidBytes),
-            Put(ColumnFamilies.TotalDifficulty, blockHeader.hash.asValidBytes, (td + blockHeader.difficulty).asValidBytes)
+            Put(ColumnFamilies.BlockHeader, blockHeader.hash.asBytes, blockHeader.asBytes),
+            Put(ColumnFamilies.NumberHash, blockHeader.number.asBytes, blockHeader.hash.asBytes),
+            Put(ColumnFamilies.TotalDifficulty, blockHeader.hash.asBytes, (td + blockHeader.difficulty).asBytes)
           )
           store.writeBatch(puts, Nil)
 
         case None =>
           val puts = List(
-            Put(ColumnFamilies.BlockHeader, blockHeader.hash.asValidBytes, blockHeader.asValidBytes),
-            Put(ColumnFamilies.NumberHash, blockHeader.number.asValidBytes, blockHeader.hash.asValidBytes),
+            Put(ColumnFamilies.BlockHeader, blockHeader.hash.asBytes, blockHeader.asBytes),
+            Put(ColumnFamilies.NumberHash, blockHeader.number.asBytes, blockHeader.hash.asBytes),
           )
           store.writeBatch(puts, Nil)
       }
@@ -80,23 +80,23 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
 
   // body
   override def getBlockBodyByHash(hash: ByteVector): F[Option[BlockBody]] =
-    store.getAs[BlockBody](ColumnFamilies.BlockBody, hash.asValidBytes).observed("getBlockBodyByHash")
+    store.getAs[BlockBody](ColumnFamilies.BlockBody, hash.asBytes).observed("getBlockBodyByHash")
 
   override def putBlockBody(blockHash: ByteVector, blockBody: BlockBody): F[Unit] = {
-    val putBody = Put(ColumnFamilies.BlockBody, blockHash.asValidBytes, blockBody.asValidBytes)
+    val putBody = Put(ColumnFamilies.BlockBody, blockHash.asBytes, blockBody.asBytes)
     val putLocations = blockBody.transactionList.zipWithIndex.map {
       case (tx, index) =>
-        Put(ColumnFamilies.TxLocation, tx.hash.asValidBytes, TransactionLocation(blockHash, index).asValidBytes)
+        Put(ColumnFamilies.TxLocation, tx.hash.asBytes, TransactionLocation(blockHash, index).asBytes)
     }
     store.writeBatch(putBody :: putLocations, Nil).observed("putBlockBody")
   }
 
   // receipts
   override def getReceiptsByHash(blockHash: ByteVector): F[Option[List[Receipt]]] =
-    store.getAs[List[Receipt]](ColumnFamilies.Receipts, blockHash.asValidBytes).observed("getReceiptsByHash")
+    store.getAs[List[Receipt]](ColumnFamilies.Receipts, blockHash.asBytes).observed("getReceiptsByHash")
 
   override def putReceipts(blockHash: ByteVector, receipts: List[Receipt]): F[Unit] =
-    store.put(ColumnFamilies.Receipts, blockHash.asValidBytes, receipts.asValidBytes).observed("putReceipts")
+    store.put(ColumnFamilies.Receipts, blockHash.asBytes, receipts.asBytes).observed("putReceipts")
 
   // block
   override def getBlockByHash(hash: ByteVector): F[Option[Block]] =
@@ -130,7 +130,7 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
       getBlockHeaderByHash(blockHash).flatMap {
         case Some(header) =>
           getHashByBlockNumber(header.number).map {
-            case Some(_) => Del(ColumnFamilies.NumberHash, header.number.asValidBytes) :: Nil
+            case Some(_) => Del(ColumnFamilies.NumberHash, header.number.asBytes) :: Nil
             case None    => Nil
           }
         case None => F.pure(Nil)
@@ -153,10 +153,10 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
 
   // accounts, storage and codes
   override def getMptNode(hash: ByteVector): F[Option[ByteVector]] =
-    store.getAs[ByteVector](ColumnFamilies.Node, hash.asValidBytes).observed("getMptNode")
+    store.getAs[ByteVector](ColumnFamilies.Node, hash.asBytes).observed("getMptNode")
 
   override def putMptNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
-    store.put(ColumnFamilies.Node, hash.asValidBytes, bytes.asValidBytes).observed("putMptNode")
+    store.put(ColumnFamilies.Node, hash.asBytes, bytes.asBytes).observed("putMptNode")
 
   override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] =
     (for {
@@ -172,10 +172,10 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
     } yield bytes).observed("getStorage")
 
   override def getCode(hash: ByteVector): F[Option[ByteVector]] =
-    store.getAs[ByteVector](ColumnFamilies.Code, hash.asValidBytes).observed("getCode")
+    store.getAs[ByteVector](ColumnFamilies.Code, hash.asBytes).observed("getCode")
 
   override def putCode(hash: ByteVector, code: ByteVector): F[Unit] =
-    store.put(ColumnFamilies.Code, hash.asValidBytes, code.asValidBytes).observed("putCode")
+    store.put(ColumnFamilies.Code, hash.asBytes, code.asBytes).observed("putCode")
 
   override def getWorldState(
       accountStartNonce: UInt256,
@@ -206,13 +206,13 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
     } yield td).value.observed("getTotalDifficultyByNumber")
 
   override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]] =
-    store.getAs[BigInt](ColumnFamilies.TotalDifficulty, blockHash.asValidBytes).observed("getTotalDifficultyByHash")
+    store.getAs[BigInt](ColumnFamilies.TotalDifficulty, blockHash.asBytes).observed("getTotalDifficultyByHash")
 
   override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
-    store.getAs[ByteVector](ColumnFamilies.NumberHash, number.asValidBytes).observed("getHashByBlockNumber")
+    store.getAs[ByteVector](ColumnFamilies.NumberHash, number.asBytes).observed("getHashByBlockNumber")
 
   override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
-    store.getAs[TransactionLocation](ColumnFamilies.TxLocation, txHash.asValidBytes).observed("getTransactionLocation")
+    store.getAs[TransactionLocation](ColumnFamilies.TxLocation, txHash.asBytes).observed("getTransactionLocation")
 
   override def getBestBlockHeader: F[BlockHeader] =
     getBestBlockNumber.flatMap(bn =>
@@ -229,11 +229,11 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
     })
 
   override def getBestBlockNumber: F[BigInt] =
-    store.getAs[BigInt](ColumnFamilies.AppState, "BestBlockNumber".asValidBytes).map(_.getOrElse(BigInt(0))).observed("getBestBlockNumber")
+    store.getAs[BigInt](ColumnFamilies.AppState, "BestBlockNumber".asBytes).map(_.getOrElse(BigInt(0))).observed("getBestBlockNumber")
 
   override def putBestBlockNumber(number: BigInt): F[Unit] =
     store
-      .put(ColumnFamilies.AppState, "BestBlockNumber".asValidBytes, number.asValidBytes)
+      .put(ColumnFamilies.AppState, "BestBlockNumber".asBytes, number.asBytes)
       .observed("putBestBlockNumber") <* metrics.set("BestBlockNumber")(number.toDouble)
 
   override def genesisHeader: F[BlockHeader] =

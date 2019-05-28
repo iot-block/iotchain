@@ -29,15 +29,15 @@ class ModelCodecSpec extends CoreSpec {
 
     "roundtrip Transaction" in {
       forAll { tx: SignedTransaction =>
-        val r        = tx.r.asValidBytes
-        val s        = tx.s.asValidBytes
-        val v        = tx.v.asValidBytes
-        val p        = tx.payload.asValidBytes
-        val nonce    = tx.nonce.asValidBytes
-        val price    = tx.gasPrice.asValidBytes
-        val limit    = tx.gasLimit.asValidBytes
-        val value    = tx.value.asValidBytes
-        val address  = tx.receivingAddress.asValidBytes
+        val r        = tx.r.asBytes
+        val s        = tx.s.asBytes
+        val v        = tx.v.asBytes
+        val p        = tx.payload.asBytes
+        val nonce    = tx.nonce.asBytes
+        val price    = tx.gasPrice.asBytes
+        val limit    = tx.gasLimit.asBytes
+        val value    = tx.value.asBytes
+        val address  = tx.receivingAddress.asBytes
         val size     = nonce.length + price.length + limit.length + address.length + value.length + v.length + r.length + s.length + p.length
         val listSize = size + RlpCodec.listLength.encode(size).require.bytes.length
         roundtripLen(tx, listSize.toInt)

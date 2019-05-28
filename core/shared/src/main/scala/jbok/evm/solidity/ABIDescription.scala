@@ -2,7 +2,7 @@ package jbok.evm.solidity
 
 import cats.implicits._
 import io.circe.Json
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import scodec.bits.ByteVector
 import jbok.crypto._
 import io.circe.parser._
@@ -14,7 +14,7 @@ import scala.scalajs.js.annotation.JSExportAll
 
 object ABIDescription {
   @JSExportAll
-  @JsonCodec
+  @ConfiguredJsonCodec
   final case class ParameterType(solidityType: SolidityType, arrayList: List[Int]) {
     def typeString: String =
       solidityType.name + arrayList.map(size => if (size == 0) "[]" else s"[$size]").mkString
@@ -26,19 +26,21 @@ object ABIDescription {
   }
 
   @JSExportAll
-  @JsonCodec
+  @ConfiguredJsonCodec
   final case class ParameterDescription(name: Option[String], parameterType: ParameterType)
 
   @JSExportAll
-  @JsonCodec
+  @ConfiguredJsonCodec
   final case class ContractDescription(name: String, methods: List[FunctionDescription])
 
   @JSExportAll
-  @JsonCodec
-  final case class FunctionDescription(name: String,
-                                       inputs: List[ParameterDescription],
-                                       outputs: List[ParameterDescription],
-                                       stateMutability: String) {
+  @ConfiguredJsonCodec
+  final case class FunctionDescription(
+      name: String,
+      inputs: List[ParameterDescription],
+      outputs: List[ParameterDescription],
+      stateMutability: String
+  ) {
     lazy val methodID = ByteVector(methodWithOutReturn.getBytes.kec256.take(4))
 
     lazy val methodWithOutReturn =
@@ -148,9 +150,7 @@ object ABIDescription {
           case ((pre, idx, byteVectors), output) =>
             output.size.map(s => (pre + s, idx, byteVectors :+ byteVector.slice(pre, pre + s))).getOrElse {
               val offset = UInt256(byteVector.slice(pre, pre + 32)).toInt
-              (pre + 32,
-               idx + 1,
-               byteVectors :+ byteVector.slice(offset, offset + daynamicSizeList.get(idx).getOrElse(0)))
+              (pre + 32, idx + 1, byteVectors :+ byteVector.slice(offset, offset + daynamicSizeList.get(idx).getOrElse(0)))
             }
         }
         val eitherResults = outputs.zip(values).map {

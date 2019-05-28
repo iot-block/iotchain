@@ -1,16 +1,16 @@
 package jbok.core.config
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 
 import scala.concurrent.duration.FiniteDuration
 import jbok.codec.json.implicits._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class TxPoolConfig(
     poolSize: Int,
     transactionTimeout: FiniteDuration
 )
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class BlockPoolConfig(
     maxBlockAhead: Int,
     maxBlockBehind: Int

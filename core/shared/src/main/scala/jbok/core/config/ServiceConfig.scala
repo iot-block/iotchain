@@ -1,9 +1,11 @@
 package jbok.core.config
 
 import java.net.InetSocketAddress
-import io.circe.generic.JsonCodec
 
-@JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
+import jbok.codec.json.implicits._
+
+@ConfiguredJsonCodec
 final case class ServiceConfig(
     enable: Boolean,
     enableHttp2: Boolean,
@@ -18,7 +20,7 @@ final case class ServiceConfig(
   val uri: String = (if (secure) "https:" else "http:") + s"//${host}:${port}"
 }
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class AppConfig(
     db: DatabaseConfig,
     service: ServiceConfig

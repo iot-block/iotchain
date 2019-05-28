@@ -2,7 +2,7 @@ package jbok.core.config
 
 import cats.effect.Sync
 import cats.implicits._
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.keystore.KeyStore
 import jbok.core.models.Address
 import jbok.crypto.signature.KeyPair
@@ -10,7 +10,7 @@ import jbok.codec.json.implicits._
 
 import scala.concurrent.duration.FiniteDuration
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class MiningConfig(
     enabled: Boolean,
     address: Address,

@@ -82,10 +82,11 @@ object Libs {
   )
 
   private lazy val circe = libraryDependencies ++= Seq(
-    "io.circe" %%% "circe-core"    % Versions.circe,
-    "io.circe" %%% "circe-generic" % Versions.circe,
-    "io.circe" %%% "circe-parser"  % Versions.circe,
-    "io.circe" %% "circe-yaml"     % "0.10.0",
+    "io.circe" %%% "circe-core"           % Versions.circe,
+    "io.circe" %%% "circe-parser"         % Versions.circe,
+    "io.circe" %%% "circe-generic"        % Versions.circe,
+    "io.circe" %%% "circe-generic-extras" % Versions.circe,
+    "io.circe" %% "circe-yaml"            % "0.10.0",
   )
 
   private lazy val scodec = libraryDependencies ++= Seq(

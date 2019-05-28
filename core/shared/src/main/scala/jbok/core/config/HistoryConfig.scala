@@ -1,10 +1,10 @@
 package jbok.core.config
 
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.models.UInt256
 import jbok.codec.json.implicits._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class HistoryConfig(
     frontierBlockNumber: BigInt,
     homesteadBlockNumber: BigInt,

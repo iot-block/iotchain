@@ -17,7 +17,7 @@ import jbok.network.{Message, Request}
 import scala.util.control.NoStackTrace
 
 final case class Incompatible(local: Status, remote: Status) extends NoStackTrace {
-  override def toString: String = s"peer incompatible chainId:${local.chainId}/${remote.chainId} genesis:${local.genesisHash}/${remote.genesisHash}"
+  override def toString: String = s"peer incompatible chainId:${local.chainId}/${remote.chainId} genesis:${local.genesisHash.toHex}/${remote.genesisHash.toHex}"
 }
 
 abstract class BaseManager[F[_]](config: FullConfig, history: History[F])(implicit F: Concurrent[F]) {
@@ -41,7 +41,7 @@ abstract class BaseManager[F[_]](config: FullConfig, history: History[F])(implic
   def handshake(socket: Socket[F]): F[Peer[F]] =
     for {
       localStatus <- localStatus
-      request = Request.binary[F, Status](Status.name, localStatus.asValidBytes)
+      request = Request.binary[F, Status](Status.name, localStatus.asBytes)
       _            <- socket.writeMessage(request)
       remoteStatus <- socket.readMessage.flatMap(_.as[Status])
       remote       <- socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])

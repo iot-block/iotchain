@@ -1,9 +1,10 @@
 package jbok.network.rpc
 
 import cats.effect.IO
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
+import jbok.codec.json.implicits._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class Person(name: String, age: Int)
 
 trait TestAPI[F[_]] {

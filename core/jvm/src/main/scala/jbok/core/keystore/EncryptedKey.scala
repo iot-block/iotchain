@@ -5,7 +5,7 @@ import java.util.UUID
 
 import cats.effect.{IO, Sync}
 import cats.implicits._
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.models.Address
 import jbok.crypto._
 import jbok.crypto.password.SCrypt
@@ -15,13 +15,13 @@ import tsec.cipher.symmetric._
 import tsec.cipher.symmetric.jca._
 import jbok.codec.json.implicits._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class KdfParams(salt: ByteVector, n: Int, r: Int, p: Int, dklen: Int)
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class CipherParams(iv: ByteVector)
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class CryptoSpec(
     cipher: String,
     ciphertext: ByteVector,
@@ -33,7 +33,7 @@ final case class CryptoSpec(
 
 import jbok.core.keystore.EncryptedKey._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class EncryptedKey(
     id: UUID,
     address: Address,

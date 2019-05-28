@@ -1,7 +1,7 @@
 package jbok.sdk
 
 import fastparse.Parsed
-import io.circe.generic.{JsonCodec => JsonCodecAnnotion}
+import io.circe.generic.extras._
 import jbok.evm.solidity.SolidityParser
 import jbok.evm.solidity.ABIDescription
 import jbok.evm.solidity.ABIDescription.ContractDescription
@@ -15,7 +15,7 @@ import scala.scalajs.js.UndefOr
 
 @JSExportTopLevel("Contracts")
 @JSExportAll
-@JsonCodecAnnotion
+@ConfiguredJsonCodec
 final case class Contracts(contractDescriptions: List[ContractDescription]) {
   private lazy val contracts = contractDescriptions.map(cd => cd.name -> cd).toMap
 
@@ -42,7 +42,7 @@ final case class Contracts(contractDescriptions: List[ContractDescription]) {
     } yield returns).orUndefined
 }
 
-@JsonCodecAnnotion
+@ConfiguredJsonCodec
 final case class ParsedResult(contracts: Option[Contracts], error: String)
 
 @JSExportTopLevel("ContractParser")

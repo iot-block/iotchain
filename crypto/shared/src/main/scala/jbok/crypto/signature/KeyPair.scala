@@ -4,14 +4,14 @@ import java.math.BigInteger
 
 import cats.effect.IO
 import jbok.codec.json.implicits._
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import scodec.bits.ByteVector
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class KeyPair(public: KeyPair.Public, secret: KeyPair.Secret)
 
 object KeyPair {
-  @JsonCodec
+  @ConfiguredJsonCodec
   final case class Public(bytes: ByteVector) extends AnyVal
 
   object Public {
@@ -19,7 +19,7 @@ object KeyPair {
     def apply(bytes: Array[Byte]): Public = Public(ByteVector(bytes))
   }
 
-  @JsonCodec
+  @ConfiguredJsonCodec
   final case class Secret(bytes: ByteVector) extends AnyVal {
     def d: BigInteger = new BigInteger(1, bytes.toArray)
   }

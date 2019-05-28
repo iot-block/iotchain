@@ -171,7 +171,7 @@ object testkit {
 
   implicit def arbNewBlockHashes: Arbitrary[NewBlockHashes] = Arbitrary(genNewBlockHashes)
 
-  def genTxs(min: Int = 0, max: Int = 1024, history: History[IO] = locator.unsafeRunSync().get[History[IO]])(implicit config: FullConfig): Gen[List[SignedTransaction]] =
+  def genTxs(min: Int = 0, max: Int = 32, history: History[IO] = locator.unsafeRunSync().get[History[IO]])(implicit config: FullConfig): Gen[List[SignedTransaction]] =
     for {
       size  <- Gen.chooseNum(min, max)
       txGen = TxGen[IO](testKeyPair :: Nil, history).unsafeRunSync()

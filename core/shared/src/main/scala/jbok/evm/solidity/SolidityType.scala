@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 
 import cats.implicits._
 import io.circe.Json
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.models.{Address, UInt256}
 import jbok.crypto._
 import scodec.bits.ByteVector
@@ -19,7 +19,7 @@ final case class InvalidValue(reason: String) extends AbiError
 final case class InvalidType(reason: String)  extends AbiError
 
 @JSExportAll
-@JsonCodec
+@ConfiguredJsonCodec
 sealed abstract class SolidityType {
   def encode(json: Json): Either[AbiError, List[ByteVector]]
 

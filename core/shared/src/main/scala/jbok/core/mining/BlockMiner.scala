@@ -7,6 +7,7 @@ import fs2._
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
 import jbok.core.NodeStatus
+import jbok.core.config.MiningConfig
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.TypedBlock._
@@ -26,6 +27,7 @@ import scala.concurrent.duration._
   * 4. submit the `MinedBlock` to `BlockExecutor`
   */
 final class BlockMiner[F[_]](
+    config: MiningConfig,
     consensus: Consensus[F],
     executor: BlockExecutor[F],
     txPool: TxPool[F],
@@ -63,15 +65,19 @@ final class BlockMiner[F[_]](
   def mineN(n: Int): F[List[MinedBlock]] =
     mine().replicateA(n)
 
-  val stream: Stream[F, MinedBlock] =
-    Stream.eval_(log.i(s"starting Core/BlockMiner")) ++
-      Stream
-        .eval(status.get)
-        .flatMap {
-          case NodeStatus.Done => Stream.eval(mine())
-          case _               => Stream.sleep_(5.seconds)
-        }
-        .repeat
+  val stream: Stream[F, Unit] =
+    if (config.enabled) {
+      Stream.eval_(log.i(s"starting Core/BlockMiner")) ++
+        Stream
+          .eval(status.get)
+          .flatMap {
+            case NodeStatus.Done => Stream.eval_(mine())
+            case _               => Stream.sleep_(5.seconds)
+          }
+          .repeat
+    } else {
+      Stream.empty
+    }
 
   /////////////////////////////////////
   /////////////////////////////////////

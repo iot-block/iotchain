@@ -8,7 +8,7 @@ import scodec.bits._
 
 import scala.concurrent.duration.Duration
 
-trait codecs {
+private[rlp] trait BasicCodecs {
   val ubigint: Codec[BigInt] = new Codec[BigInt] {
     val codec = codecs.bytes.xmap[BigInt](
       bytes => {

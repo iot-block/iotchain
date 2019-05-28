@@ -19,8 +19,8 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
     extends SingleColumnKVStore[F, K, V] {
   override def put(key: K, value: V): F[Unit] =
     for {
-      k       <- key.asValidBytes.pure[F]
-      v       <- value.asValidBytes.pure[F]
+      k       <- key.asBytes.pure[F]
+      v       <- value.asBytes.pure[F]
       hashOpt <- rootHash.get
       nibbles = HexPrefix.bytesToNibbles(k)
       _ <- hashOpt match {
@@ -40,7 +40,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
   override def get(key: K): F[Option[V]] =
     (for {
       root <- OptionT(getRootOpt)
-      nibbles = HexPrefix.bytesToNibbles(key.asValidBytes)
+      nibbles = HexPrefix.bytesToNibbles(key.asBytes)
       v     <- OptionT(getNodeValue(root, nibbles))
       value <- OptionT.liftF(F.fromEither(v.asEither[V]))
     } yield value).value
@@ -50,7 +50,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
       hashOpt <- rootHash.get
       _ <- hashOpt match {
         case Some(hash) if hash != MerklePatriciaTrie.emptyRootHash =>
-          val nibbles = HexPrefix.bytesToNibbles(key.asValidBytes)
+          val nibbles = HexPrefix.bytesToNibbles(key.asBytes)
           for {
             root        <- getRootOpt.flatMap(opt => F.fromOption(opt, DBErr.NotFound))
             newRootHash <- delNode(root, nibbles) >>= commitDel
@@ -116,7 +116,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
   }
 
   override def encodeTuple(kv: (K, V)): (ByteVector, ByteVector) =
-    (kv._1.asValidBytes, kv._2.asValidBytes)
+    (kv._1.asBytes, kv._2.asBytes)
 
   override def decodeTuple(kv: (ByteVector, ByteVector)): F[(K, V)] =
     for {
@@ -554,7 +554,7 @@ object MerklePatriciaTrie {
       root <- mpt.getRootHash
     } yield root
 
-  val emptyRootHash: ByteVector = ().asValidBytes.kec256
+  val emptyRootHash: ByteVector = ().asBytes.kec256
 
   val alphabet: Vector[String] = "0123456789abcdef".map(_.toString).toVector
 

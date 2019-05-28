@@ -1,6 +1,6 @@
 package jbok.core.api
 
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.models.Address
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
@@ -9,7 +9,7 @@ import jbok.network.rpc.PathName
 import scala.scalajs.js.annotation.JSExportAll
 
 @JSExportAll
-@JsonCodec
+@ConfiguredJsonCodec
 final case class CallTx(
     from: Option[Address],
     to: Option[Address],

@@ -1,7 +1,7 @@
 package jbok.core.models
 
 import cats.effect.Sync
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.crypto._
@@ -11,7 +11,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("BlockHeader")
 @JSExportAll
-@JsonCodec
+@ConfiguredJsonCodec
 final case class BlockHeader(
     parentHash: ByteVector,
     beneficiary: ByteVector,
@@ -26,7 +26,7 @@ final case class BlockHeader(
     unixTimestamp: Long,
     extra: ByteVector
 ) {
-  lazy val bytes: ByteVector = this.asValidBytes
+  lazy val bytes: ByteVector = this.asBytes
 
   lazy val hash: ByteVector = bytes.kec256
 

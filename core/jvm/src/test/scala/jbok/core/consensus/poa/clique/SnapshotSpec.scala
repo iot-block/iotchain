@@ -50,7 +50,7 @@ trait SnapshotFixture extends CoreSpec {
       .sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(miner), chainId)
       .unsafeRunSync()
     val extra      = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value.copy(signature = sig)
-    val extraBytes = extra.asValidBytes
+    val extraBytes = extra.asBytes
     val signed    = header.copy(extra = extraBytes)
     val recovered = Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get
     require(recovered == Address(accounts(miner)), s"recovered: ${recovered}, miner: ${accounts(miner)}")
@@ -79,7 +79,7 @@ class SnapshotSpec extends CoreSpec {
           CryptoSignature(ByteVector.fill(65)(0).toArray),
           Some(Proposal(coinbase, v.auth))
         )
-        val extraBytes = extra.asValidBytes
+        val extraBytes = extra.asBytes
         val header = random[BlockHeader]
           .copy(
             number = number,
@@ -111,7 +111,7 @@ class SnapshotSpec extends CoreSpec {
         CryptoSignature(ByteVector.fill(65)(0).toArray),
         Some(Proposal(coinbase, true))
       )
-      val extraBytes = extra.asValidBytes
+      val extraBytes = extra.asBytes
       val header     = random[BlockHeader].copy(extra = extraBytes)
       val signed     = sign(header, "A")(genesis.chainId)
       Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get shouldBe miner

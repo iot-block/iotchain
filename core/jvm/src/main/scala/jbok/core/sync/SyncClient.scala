@@ -42,7 +42,7 @@ final class SyncClient[F[_]](
         } yield status
     }
 
-  val stream: Stream[F, Block] =
+  val stream: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient")) ++
       Stream
         .eval(checkStatus)
@@ -50,7 +50,7 @@ final class SyncClient[F[_]](
         .flatMap {
           case _: NodeStatus.WaitForPeers     => Stream.sleep_(syncConfig.checkInterval)
           case NodeStatus.Done                => Stream.sleep_(syncConfig.checkInterval)
-          case syncing: NodeStatus.Syncing[F] => Stream.eval(requestHeaders(syncing.peer)).flatMap(Stream.emits)
+          case syncing: NodeStatus.Syncing[F] => Stream.eval_(requestHeaders(syncing.peer)).flatMap(Stream.emits)
         }
         .handleErrorWith(e => Stream.eval_(log.w(s"SyncClient failure, ${e}")))
         .repeat

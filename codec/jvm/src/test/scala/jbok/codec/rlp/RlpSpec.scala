@@ -10,37 +10,37 @@ class RlpSpec extends CommonSpec with testkit {
 
   "RLP Codec" should {
     "encode boolean" in {
-      false.asValidBytes shouldBe hex"0x00"
-      true.asValidBytes shouldBe hex"0x01"
+      false.asBytes shouldBe hex"0x00"
+      true.asBytes shouldBe hex"0x01"
 
       roundtrip(true)
       roundtrip(false)
     }
 
     "encode empty bytes" in {
-      ().asValidBytes shouldBe hex"0x80"
-      "".asValidBytes shouldBe hex"0x80"
+      ().asBytes shouldBe hex"0x80"
+      "".asBytes shouldBe hex"0x80"
       roundtrip("")
     }
 
     "encode scalar" in {
-      0.asValidBytes shouldBe hex"0x80"
-      0L.asValidBytes shouldBe hex"0x80"
-      BigInt(0).asValidBytes shouldBe hex"0x80"
+      0.asBytes shouldBe hex"0x80"
+      0L.asBytes shouldBe hex"0x80"
+      BigInt(0).asBytes shouldBe hex"0x80"
       roundtrip(0)
       roundtrip(0L)
       roundtrip(BigInt(0))
 
-      0.asValidBytes.length shouldBe 1
-      Int.MaxValue.asValidBytes.length shouldBe 5
+      0.asBytes.length shouldBe 1
+      Int.MaxValue.asBytes.length shouldBe 5
       roundtrip(Int.MaxValue)
 
-      0L.asValidBytes.length shouldBe 1
-      Long.MaxValue.asValidBytes.length shouldBe 9
+      0L.asBytes.length shouldBe 1
+      Long.MaxValue.asBytes.length shouldBe 9
       roundtrip(Long.MaxValue)
 
-      BigInt(0).asValidBytes.length shouldBe 1
-      BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935").asValidBytes.length shouldBe 33
+      BigInt(0).asBytes.length shouldBe 1
+      BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935").asBytes.length shouldBe 33
     }
 
     "encode scalar to the same value" in {
@@ -48,16 +48,16 @@ class RlpSpec extends CommonSpec with testkit {
         if (l >= 0) {
           if (l.isValidInt) {
             val i = l.toInt
-            i.asValidBytes shouldBe l.asValidBytes
-            i.asValidBytes shouldBe BigInt(i).asValidBytes
+            i.asBytes shouldBe l.asBytes
+            i.asBytes shouldBe BigInt(i).asBytes
             roundtrip(i)
           } else {
-            l.asValidBytes shouldBe BigInt(l).asValidBytes
+            l.asBytes shouldBe BigInt(l).asBytes
             roundtrip(l)
           }
         } else {
-          l.asBytes[IO].attempt.unsafeRunSync().isLeft shouldBe true
-          BigInt(l).asBytes[IO].attempt.unsafeRunSync().isLeft shouldBe true
+          IO(l.asBytes).attempt.unsafeRunSync().isLeft shouldBe true
+          IO(BigInt(l).asBytes).attempt.unsafeRunSync().isLeft shouldBe true
         }
       }
     }
@@ -72,19 +72,19 @@ class RlpSpec extends CommonSpec with testkit {
 
     "list codec" in {
       RlpCodec[List[Int]].prefixType shouldBe PrefixType.ListLenPrefix
-      List.empty[Int].asValidBytes shouldBe hex"0xc0"
-      List.empty[String].asValidBytes shouldBe hex"0xc0"
+      List.empty[Int].asBytes shouldBe hex"0xc0"
+      List.empty[String].asBytes shouldBe hex"0xc0"
       roundtripAndMatch(List(1, 2, 3), hex"0xc3010203")
     }
 
     "derive product(tuple) codec" in {
-      (1, "abc").asValidBytes shouldBe hex"0xc50183616263"
-      (1, 1024 * 1024, "abc").asValidBytes shouldBe hex"0xc9018310000083616263"
+      (1, "abc").asBytes shouldBe hex"0xc50183616263"
+      (1, 1024 * 1024, "abc").asBytes shouldBe hex"0xc9018310000083616263"
     }
 
     "derive product(case class) codec" in {
       case class Foo(a: Int, b: Int, c: String)
-      Foo(42, 1024 * 1024, "abc").asValidBytes shouldBe hex"0xc92a8310000083616263"
+      Foo(42, 1024 * 1024, "abc").asBytes shouldBe hex"0xc92a8310000083616263"
     }
 
     "derive coproduct(ADT) codec" in {
@@ -92,8 +92,8 @@ class RlpSpec extends CommonSpec with testkit {
       case object Leaf          extends Tree
       case class Branch(v: Int) extends Tree
 
-      Leaf.asValidBytes shouldBe hex"0xc0"
-      Branch(42).asValidBytes shouldBe hex"0xc12a"
+      Leaf.asBytes shouldBe hex"0xc0"
+      Branch(42).asBytes shouldBe hex"0xc12a"
 
       RlpCodec.encode[Tree](Leaf).require.bytes shouldBe hex"0x8200c0"
       RlpCodec.encode[Tree](Branch(42)).require.bytes shouldBe hex"0x8301c12a"
@@ -101,8 +101,8 @@ class RlpSpec extends CommonSpec with testkit {
 
     "derive value class" in {
       import RlpSpec._
-      WrappedInt(42).asValidBytes shouldBe hex"0x2a"
-      WrappedString("abc").asValidBytes shouldBe hex"0x83616263"
+      WrappedInt(42).asBytes shouldBe hex"0x2a"
+      WrappedString("abc").asBytes shouldBe hex"0x83616263"
     }
 
     "codec https://github.com/ethereum/wiki/wiki/RLP" in {

@@ -38,7 +38,7 @@ sealed trait Message[F[_]] {
 object Message {
   implicit def codec[G[_]]: RlpCodec[Message[G]] = RlpCodec.gen[Message[G]]
 
-  val emptyBody: ByteVector = ().asValidBytes
+  val emptyBody: ByteVector = ().asBytes
 
   def encodeBytes[F[_]: Sync](message: Message[F]): F[ByteVector] =
     Sync[F].delay(RlpCodec.encode(message).require.bytes)
@@ -138,7 +138,4 @@ object Response {
         bytes
       )
     }
-
-  def ok[F[_], A](id: UUID, a: A)(implicit F: Sync[F], C: RlpCodec[A]): F[Response[F]] =
-    a.asBytes[F].map(body => Response(id, Status.Ok.code, Status.Ok.reason, ContentType.Binary, body.toArray))
 }

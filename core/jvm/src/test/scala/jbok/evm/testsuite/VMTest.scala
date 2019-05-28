@@ -99,8 +99,6 @@ class VMTest extends CoreSpec {
       else
         BigInt(x))
 
-  implicit val bigIntEncoder: Encoder[BigInt] = Encoder[String].contramap[BigInt](_.toString(10))
-
   def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: BigInt): WorldState[IO] = {
     val accounts = json.map {
       case (addr, account) => (addr, Account(balance = UInt256(account.balance), nonce = UInt256(account.nonce)))
@@ -192,7 +190,7 @@ class VMTest extends CoreSpec {
 
       vmJson.gas.foreach(_ shouldBe result.gasRemaining)
       vmJson.out.foreach(_ shouldBe result.returnData)
-      vmJson.logs.foreach(_ shouldBe result.logs.asValidBytes.kec256)
+      vmJson.logs.foreach(_ shouldBe result.logs.asBytes.kec256)
 
       if (vmJson.gas.isEmpty) {
         vmJson.post.isEmpty shouldBe true

@@ -1,13 +1,13 @@
 package jbok.core.config
 import java.net.InetSocketAddress
 
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.peer.PeerUri
 
 import scala.concurrent.duration.FiniteDuration
 import jbok.codec.json.implicits._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class PeerConfig(
     host: String,
     port: Int,

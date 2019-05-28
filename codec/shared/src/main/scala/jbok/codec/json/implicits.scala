@@ -1,35 +1,28 @@
 package jbok.codec.json
 
 import io.circe._
-import io.circe.syntax._
 import scodec.bits.ByteVector
 import shapeless._
+import io.circe.generic.extras._
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.util.Try
 
 @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
 object implicits {
-  implicit val bytesDecoder: Decoder[ByteVector] = Decoder[String].emap(ByteVector.fromHexDescriptive(_))
+  implicit val config: Configuration = Configuration.default
 
-  implicit val bytesEncoder: Encoder[ByteVector] = Encoder.instance(bv => Json.fromString(bv.toHex))
+  implicit val bytesEncoder: Encoder[ByteVector] = Encoder.encodeString.contramap[ByteVector](_.toHex)
+  implicit val bytesDecoder: Decoder[ByteVector] = Decoder.decodeString.emap[ByteVector](ByteVector.fromHexDescriptive(_))
 
-  implicit val durationEncoder: Encoder[Duration] = Encoder.instance[Duration](d => s"${d.length}${d.unit}".asJson)
-
-  implicit val durationDecoder: Decoder[Duration] = Decoder[String].map(s => Duration.apply(s))
-
-  implicit val finiteDurationEncoder: Encoder[FiniteDuration] =
-    Encoder.instance[FiniteDuration](d => s"${d.length} ${d.unit.toString.toLowerCase}".asJson)
-
-  implicit val finiteDurationDecoder: Decoder[FiniteDuration] =
-    Decoder[String].map(s => Duration.apply(s).asInstanceOf[FiniteDuration])
+  implicit val finiteDurationEncoder: Encoder[FiniteDuration] = Encoder.encodeString.contramap[FiniteDuration](d => s"${d.length} ${d.unit.toString.toLowerCase}")
+  implicit val finiteDurationDecoder: Decoder[FiniteDuration] = Decoder.decodeString.emapTry[FiniteDuration](s => Try(Duration.apply(s).asInstanceOf[FiniteDuration]))
 
   implicit val bigIntEncoder: Encoder[BigInt] = Encoder.encodeString.contramap[BigInt](_.toString(10))
-
-  implicit val bigIntDecoder: Decoder[BigInt] = Decoder.decodeString.map[BigInt](BigInt.apply)
+  implicit val bigIntDecoder: Decoder[BigInt] = Decoder.decodeString.emapTry[BigInt](s => Try(BigInt.apply(s)))
 
   // key codecs
   implicit val bigIntKeyEncoder: KeyEncoder[BigInt] = KeyEncoder.encodeKeyString.contramap[BigInt](_.toString(10))
-
   implicit val bigIntKeyDecoder: KeyDecoder[BigInt] = KeyDecoder.decodeKeyString.map[BigInt](BigInt.apply)
 
   // codec for value classes

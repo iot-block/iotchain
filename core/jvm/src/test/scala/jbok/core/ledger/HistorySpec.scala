@@ -24,7 +24,7 @@ class HistorySpec extends CoreSpec {
     // accounts, storages and codes
     "put and get account node" in {
       forAll { (addr: Address, acc: Account) =>
-        val bytes = acc.asValidBytes
+        val bytes = acc.asBytes
         history.putMptNode(bytes.kec256, bytes).unsafeRunSync()
         history.getMptNode(bytes.kec256).unsafeRunSync() shouldBe bytes.some
       }
@@ -32,7 +32,7 @@ class HistorySpec extends CoreSpec {
 
     "put and get storage node" in {
       forAll { (k: UInt256, v: UInt256) =>
-        val bytes = v.asValidBytes
+        val bytes = v.asBytes
         history.putMptNode(bytes.kec256, bytes).unsafeRunSync()
         history.getMptNode(bytes.kec256).unsafeRunSync() shouldBe bytes.some
       }

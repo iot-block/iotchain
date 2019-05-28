@@ -8,7 +8,6 @@ import scala.scalajs.js.JSConverters._
 import _root_.io.circe.parser._
 import _root_.io.circe.syntax._
 import jbok.codec.json.implicits._
-import jbok.evm.solidity.ABIDescription.ContractDescription
 
 @JSExportTopLevel("JsonCodec")
 @JSExportAll

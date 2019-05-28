@@ -112,7 +112,7 @@ class BlockExecutorSpec extends CoreSpec {
         txs <- SignedTransaction.sign[IO](tx, testKeyPair).map(_ :: Nil)
         block = random[Block](genBlock(stxsOpt = Some(txs)))
         _ <- executor.executeBlock(block)
-        hash            = (testAllocAddress, UInt256(0)).asValidBytes.kec256
+        hash            = (testAllocAddress, UInt256(0)).asBytes.kec256
         contractAddress = Address.apply(hash)
         contract <- history.getAccount(contractAddress, BigInt(1)).map(_.get)
         code     <- history.getCode(contract.codeHash).map(_.get)

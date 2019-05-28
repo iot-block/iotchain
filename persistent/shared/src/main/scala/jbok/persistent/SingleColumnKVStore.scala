@@ -38,19 +38,19 @@ object SingleColumnKVStore {
     override def cf: ColumnFamily = columnFamily
 
     override def put(key: K, value: V): F[Unit] =
-      store.put(cf, key.asValidBytes, value.asValidBytes)
+      store.put(cf, key.asBytes, value.asBytes)
 
     override def get(key: K): F[Option[V]] =
-      store.getAs[V](cf, key.asValidBytes)
+      store.getAs[V](cf, key.asBytes)
 
     override def del(key: K): F[Unit] =
-      store.del(cf, key.asValidBytes)
+      store.del(cf, key.asBytes)
 
     override def writeBatch(puts: List[(K, V)], dels: List[K]): F[Unit] =
-      store.writeBatch(cf, puts.map(encodeTuple), dels.map(_.asValidBytes))
+      store.writeBatch(cf, puts.map(encodeTuple), dels.map(_.asBytes))
 
     override def writeBatch(ops: List[(K, Option[V])]): F[Unit] =
-      store.writeBatch(cf, ops.map { case (k, v) => k.asValidBytes -> v.map(_.asValidBytes) })
+      store.writeBatch(cf, ops.map { case (k, v) => k.asBytes -> v.map(_.asBytes) })
 
     override def toStream: Stream[F, (K, V)] =
       store.toStream(cf).evalMap(decodeTuple)
@@ -65,7 +65,7 @@ object SingleColumnKVStore {
       store.size(cf)
 
     override def encodeTuple(kv: (K, V)): (ByteVector, ByteVector) =
-      (kv._1.asValidBytes, kv._2.asValidBytes)
+      (kv._1.asBytes, kv._2.asBytes)
 
     override def decodeTuple(kv: (ByteVector, ByteVector)): F[(K, V)] =
       for {

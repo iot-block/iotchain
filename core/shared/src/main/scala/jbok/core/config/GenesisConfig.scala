@@ -1,13 +1,13 @@
 package jbok.core.config
 
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
 import jbok.core.consensus.poa.clique.Clique
 import jbok.core.models._
 import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import scodec.bits._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class GenesisConfig(
     chainId: BigInt = BigInt(0),
     alloc: Map[Address, BigInt] = Map.empty,

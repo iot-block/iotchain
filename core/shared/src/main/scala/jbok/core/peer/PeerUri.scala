@@ -3,9 +3,10 @@ package jbok.core.peer
 import java.net._
 
 import cats.implicits._
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
+import jbok.codec.json.implicits._
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class PeerUri(
     scheme: String,
     host: String,

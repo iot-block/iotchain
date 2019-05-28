@@ -40,7 +40,7 @@ final class Clique[F[_]](
     for {
       bytes      <- Clique.sigHash[F](header)
       signed     <- sign(bytes)
-      extraBytes <- proposal.get.map(CliqueExtra(Nil, signed, _).asValidBytes)
+      extraBytes <- proposal.get.map(CliqueExtra(Nil, signed, _).asBytes)
     } yield header.copy(extra = extraBytes)
 
   def clearProposalIfMine(header: BlockHeader): F[Unit] =
@@ -136,10 +136,10 @@ object Clique {
     } yield new Clique[F](config, store, history, proposal, keyPair)
 
   def fillExtraData(miners: List[Address]): ByteVector =
-    CliqueExtra(miners, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asValidBytes
+    CliqueExtra(miners, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asBytes
 
   def sigHash[F[_]](header: BlockHeader)(implicit F: Sync[F]): F[ByteVector] = F.delay {
-    val bytes = header.copy(extra = ByteVector.empty).asValidBytes
+    val bytes = header.copy(extra = ByteVector.empty).asBytes
     bytes.kec256
   }
 

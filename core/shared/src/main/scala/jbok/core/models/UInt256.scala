@@ -4,6 +4,7 @@ import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
 import scodec.bits.ByteVector
 import scodec.codecs
+import jbok.codec.json.implicits._
 
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 
@@ -156,9 +157,9 @@ final class UInt256 private (private val n: BigInt) extends Ordered[UInt256] {
 
 @JSExportTopLevel("UInt256")
 object UInt256 {
-  implicit val decodeUInt256: io.circe.Decoder[UInt256] = io.circe.Decoder.decodeBigInt.map(UInt256.apply)
+  implicit val decodeUInt256: io.circe.Decoder[UInt256] = bigIntDecoder.map(UInt256.apply)
 
-  implicit val encodeUInt256: io.circe.Encoder[UInt256] = io.circe.Encoder.encodeBigInt.contramap(_.toBigInt)
+  implicit val encodeUInt256: io.circe.Encoder[UInt256] = bigIntEncoder.contramap(_.toBigInt)
 
   implicit val codec: RlpCodec[UInt256] = rlp(codecs.bytes.xmap[UInt256](UInt256.apply, _.unpaddedBytes))
 

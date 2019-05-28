@@ -1,7 +1,9 @@
 package jbok.crypto.ssl
-import io.circe.generic.JsonCodec
 
-@JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
+import jbok.codec.json.implicits._
+
+@ConfiguredJsonCodec
 final case class SSLConfig(
     enabled: Boolean,
     keyStorePath: String,

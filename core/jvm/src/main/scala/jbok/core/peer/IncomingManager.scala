@@ -68,7 +68,7 @@ final class IncomingManager[F[_]](config: FullConfig, history: History[F], ssl: 
                 peer.queue.dequeue.through(Message.encodePipe[F]).through(socket.writes(None))
               ).parJoinUnbounded
           }
-          .handleErrorWith(e => Stream.eval(log.w(s"handle incoming peer failure", e)))
+          .handleErrorWith(e => Stream.eval(log.w(s"handle incoming peer failure: ${e}", e)))
       }
       .parJoin(config.peer.maxIncomingPeers)
 

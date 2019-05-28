@@ -1,12 +1,12 @@
 package jbok.core.api
 
-import io.circe.generic.JsonCodec
+import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.models.{Account, Address, SignedTransaction}
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
 import jbok.network.rpc.PathName
 
-@JsonCodec
+@ConfiguredJsonCodec
 final case class HistoryTransaction(
     txHash: ByteVector,
     nonce: BigInt,

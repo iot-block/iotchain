@@ -39,11 +39,11 @@ final case class CoreNode[F[_]](
 
   val stream: Stream[F, Unit] = Stream(
     peerManager.stream,
-    if (config.mining.enabled) miner.stream.drain else Stream.empty,
+    miner.stream,
     txPool.stream,
     executor.stream,
     handler.stream,
-    syncClient.stream.drain,
+    syncClient.stream,
     logStatus
   ).parJoinUnbounded
     .handleErrorWith(e => Stream.eval(log.e("CoreNode has an unhandled failure", e)))
