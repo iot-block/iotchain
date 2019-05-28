@@ -11,4 +11,6 @@ trait MinerAPI[F[_]] {
   def cancelBallot: F[Unit]
 
   def getBallot: F[Option[Proposal]]
+
+  def isMining: F[Boolean]
 }

@@ -8,6 +8,7 @@ import scribe.writer.FileWriter
 import scribe.writer.file.LogPath
 import cats.implicits._
 import jbok.common.FileUtil
+import scala.concurrent.duration._
 
 object LoggerPlatform {
   def initConfig[F[_]: Sync](config: LogConfig): F[Unit] = {
@@ -29,8 +30,7 @@ object LoggerPlatform {
     Logger.fileFormatter,
     FileWriter().nio
       .path(LogPath.simple("jbok.log", directory = directory))
-      .rolling(LogPath.daily(prefix = "jbok", directory = directory))
-      .maxLogs(15),
+      .rolling(LogPath.daily(prefix = "jbok", directory = directory)),
     minimumLevel.map(Logger.fromJbokLevel)
   )
 }

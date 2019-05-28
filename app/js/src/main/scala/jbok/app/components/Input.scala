@@ -19,12 +19,14 @@ final case class Input(
     onchange: String => Unit = (input: String) => (),
     disabled: Boolean = false,
     `type`: String = "text",
-    className: String = ""
+    className: String = "",
+    prefix: String = "",
+    suffix: String = "",
 ) {
   private val _value: Var[String]   = Var(defaultValue)
   private val _Syntax: Var[Boolean] = Var(true)
   val id                            = idOpt getOrElse UUID.randomUUID().toString
-  def value: String                 = _value.value
+  def value: String                 = prefix + _value.value + suffix
   def isValid: Boolean = {
     _Syntax.value = validator(_value.value)
     _Syntax.value

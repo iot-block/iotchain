@@ -36,8 +36,13 @@ final class AccountService[F[_]](config: HistoryConfig, history: History[F], txP
       storage <- history.getStorage(account.storageRoot, position)
     } yield storage
 
-  override def getTransactions(address: Address): F[List[HistoryTransaction]] =
-    txStore.findTransactionsByAddress(address.toString, 1, 1000)
+  override def getTransactions(address: Address, page: Int, size: Int): F[List[HistoryTransaction]] = {
+    val validSize = if (size < 0) 100 else 1000000.min(size)
+    txStore.findTransactionsByAddress(address.toString, page.max(1), validSize)
+  }
+
+  override def getTransactionsByNumber(number: Int): F[List[HistoryTransaction]] =
+    txStore.findTransactionsByNumber(number)
 
   override def getPendingTxs(address: Address): F[List[SignedTransaction]] =
     txPool.getPendingTransactions.map(_.keys.toList.filter(_.senderAddress.exists(_ == address)))
