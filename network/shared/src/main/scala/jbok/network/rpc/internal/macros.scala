@@ -37,7 +37,7 @@ class Translator[C <: blackbox.Context](val c: C) {
       .groupBy(m => methodPathPart(m._1))
       .map {
         case (_, x :: Nil) => Right(x)
-        case (k, ms)       => Left(s"""method $k is overloaded (rename the method or add a @PathName("other-name"))""")
+        case (k, _)        => Left(s"""method $k is overloaded (rename the method or add a @PathName("other-name"))""")
       }
       .toList
 
@@ -136,7 +136,7 @@ object RpcServiceMacro {
           val argParams: List[List[Tree]] = t.objectToParams(method, TermName("args"))
           val innerReturnType             = method.finalResultType.typeArgs.headOption.getOrElse(???)
           val payloadFunction =
-            q"""(payload: ${payloadTag.tpe}) => impl.execute[${paramsObject.tpe}, $innerReturnType]($path, payload) { args =>
+            q"""(payload: ${payloadTag.tpe}) => impl.execute[${paramsObject.tpe}, $innerReturnType](payload) { args =>
           value.${symbol.name.toTermName}(...$argParams)
         }"""
 

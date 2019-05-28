@@ -37,19 +37,19 @@ class PeerMessageHandler[F[_]](
 
   val consume: Stream[F, Unit] =
     peerManager.inbound.evalMap {
-      case (peer, req @ Request(id, NewBlockHashes.name, _, _)) =>
+      case (peer, req @ Request(_, NewBlockHashes.name, _, _)) =>
         for {
           hashes <- req.as[NewBlockHashes].map(_.hashes)
           _      <- onNewBlockHashes(peer, hashes)
         } yield ()
 
-      case (peer, req @ Request(id, NewBlock.name, _, _)) =>
+      case (peer, req @ Request(_, NewBlock.name, _, _)) =>
         for {
           block <- req.as[NewBlock].map(_.block)
           _     <- onNewBlock(peer, block)
         } yield ()
 
-      case (peer, req @ Request(id, SignedTransactions.name, _, _)) =>
+      case (peer, req @ Request(_, SignedTransactions.name, _, _)) =>
         for {
           stxs <- req.as[SignedTransactions]
           _    <- onSignedTransactions(peer, stxs)

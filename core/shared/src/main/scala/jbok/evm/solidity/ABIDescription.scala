@@ -129,7 +129,7 @@ object ABIDescription {
       } yield resultEither
 
     def decode(outputs: List[ParameterType], byteVector: ByteVector): Either[AbiError, Json] = {
-      val (staticSize, offsets) = outputs.foldLeft((0, List.empty[Int])) {
+      val (_, offsets) = outputs.foldLeft((0, List.empty[Int])) {
         case ((pre, offsets), output) =>
           output.size
             .map(s => (pre + s, offsets))

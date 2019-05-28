@@ -10,8 +10,9 @@ object Settings {
     version := Versions.version,
     licenses ++= Seq(("MIT", url("http://opensource.org/licenses/MIT"))),
     scalaVersion := Versions.scala212Version,
-    parallelExecution in test := false,
+    test / parallelExecution := false,
     scalacOptions ++= ScalacSettings.base ++ ScalacSettings.specificFor(scalaVersion.value) ++ ScalacSettings.strictBase ++ ScalacSettings.strictSpecificFor(scalaVersion.value),
+    scalacOptions in Test --= (ScalacSettings.strictBase ++ ScalacSettings.strictSpecificFor(scalaVersion.value)),
     javacOptions ++= JavacSettings.base ++ JavacSettings.specificFor(scalaVersion.value),
   )
 

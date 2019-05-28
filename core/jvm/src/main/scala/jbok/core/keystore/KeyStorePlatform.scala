@@ -60,7 +60,7 @@ final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) 
       key <- load(address)
       wallet <- key
         .decrypt(passphrase) match {
-        case Left(e)       => F.raiseError(KeyStoreError.DecryptionFailed)
+        case Left(_)       => F.raiseError(KeyStoreError.DecryptionFailed)
         case Right(secret) => Wallet.fromSecret[F](secret)
       }
     } yield wallet

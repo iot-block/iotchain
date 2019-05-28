@@ -66,7 +66,7 @@ object Ast {
 
     def variablesABI(contractDescriptions: List[ContractDescription] = List.empty) =
       parts.collect {
-        case StateVariableDef(name, typeName, Some(modifiers), expression)
+        case StateVariableDef(name, typeName, Some(modifiers), _)
             if modifiers.visibility.contains(Public) && !modifiers.stateMutability
               .contains(Constant) && !typeName.typeNameElement.isInstanceOf[FunctionType] && (!typeName.typeNameElement
               .isInstanceOf[UserDefinedType] || (typeName.typeNameElement
@@ -86,7 +86,7 @@ object Ast {
             }
 
             typeName.typeNameElement match {
-              case et: ElementaryType =>
+              case _: ElementaryType =>
                 (Nil,
                  List(ParameterDescription(None, typeName.parameterType(contractDescriptions, constantNumericMap))))
               case MappingType(et, tn) =>

@@ -103,7 +103,7 @@ object SolidityParser {
         m match {
           case sm: ModifierList.StateMutability => l.copy(stateMutability = Some(sm))
           case v: ModifierList.Visibility       => l.copy(visibility = Some(v))
-          case mi: ModifierList.Invocation      => l
+          case _: ModifierList.Invocation       => l
         }
       }
     }
@@ -217,7 +217,7 @@ object SolidityParser {
     P(
       typeName ~ storageLocation.?.! ~ identifier.!.?
     ).map {
-      case (tn, s, name) => Parameter(tn, name)
+      case (tn, _, name) => Parameter(tn, name)
     }
 
   def typeName[_: P]: P[TypeName] =

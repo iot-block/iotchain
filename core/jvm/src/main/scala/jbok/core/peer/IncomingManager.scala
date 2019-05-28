@@ -21,7 +21,7 @@ final class IncomingManager[F[_]](config: FullConfig, history: History[F], ssl: 
     implicit F: ConcurrentEffect[F],
     cs: ContextShift[F],
     acg: AsynchronousChannelGroup
-) extends BaseManager[F](config, history, ssl) {
+) extends BaseManager[F](config, history) {
   private val log = Logger[F]
 
   val localBindAddress: Deferred[F, InetSocketAddress] = Deferred.unsafe[F, InetSocketAddress]

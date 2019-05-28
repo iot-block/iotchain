@@ -11,9 +11,9 @@ final case class HistoryConfig(
     tangerineWhistleBlockNumber: BigInt,
     spuriousDragonBlockNumber: BigInt,
     byzantiumBlockNumber: BigInt,
-    constantinopleBlockNumber: BigInt = BigInt("1000000000000000000000"), // TBD on the Ethereum mainnet
-    difficultyBombPauseBlockNumber: BigInt = BigInt("3000000"),
-    difficultyBombContinueBlockNumber: BigInt = BigInt("5000000")
+    constantinopleBlockNumber: BigInt,
+    difficultyBombPauseBlockNumber: BigInt,
+    difficultyBombContinueBlockNumber: BigInt
 ) {
   val accountStartNonce: UInt256  = UInt256.Zero
   val maxCodeSize: Option[BigInt] = Some(24 * 1024)

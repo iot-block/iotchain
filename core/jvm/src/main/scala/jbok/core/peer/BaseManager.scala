@@ -6,16 +6,21 @@ import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2.io.tcp.Socket
-import javax.net.ssl.SSLContext
 import jbok.codec.rlp.implicits._
 import jbok.core.config.FullConfig
 import jbok.core.ledger.History
 import jbok.core.messages.Status
 import jbok.core.queue.Queue
-import jbok.network.{Message, Request}
 import jbok.network.tcp.implicits._
+import jbok.network.{Message, Request}
 
-abstract class BaseManager[F[_]](config: FullConfig, history: History[F], ssl: Option[SSLContext])(implicit F: Concurrent[F]) {
+import scala.util.control.NoStackTrace
+
+final case class Incompatible(local: Status, remote: Status) extends NoStackTrace {
+  override def toString: String = s"peer incompatible chainId:${local.chainId}/${remote.chainId} genesis:${local.genesisHash}/${remote.genesisHash}"
+}
+
+abstract class BaseManager[F[_]](config: FullConfig, history: History[F])(implicit F: Concurrent[F]) {
   def inbound: Queue[F, Peer[F], Message[F]]
 
   val connected: Ref[F, Map[PeerUri, (Peer[F], Socket[F])]] = Ref.unsafe(Map.empty)
@@ -41,7 +46,7 @@ abstract class BaseManager[F[_]](config: FullConfig, history: History[F], ssl: O
       remoteStatus <- socket.readMessage.flatMap(_.as[Status])
       remote       <- socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])
       peer <- if (!localStatus.isCompatible(remoteStatus)) {
-        F.raiseError(new Exception(s"incompatible peer: ${remoteStatus}"))
+        F.raiseError(Incompatible(localStatus, remoteStatus))
       } else {
         Peer[F](PeerUri.fromTcpAddr(remote), remoteStatus)
       }

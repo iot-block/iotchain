@@ -22,7 +22,7 @@ final class OutgoingManager[F[_]](config: FullConfig, history: History[F], ssl: 
     cs: ContextShift[F],
     T: Timer[F],
     acg: AsynchronousChannelGroup
-) extends BaseManager[F](config, history, ssl) {
+) extends BaseManager[F](config, history) {
   private val log = Logger[F]
 
   private[peer] def connectTo(peerUri: PeerUri): Resource[F, (Peer[F], Socket[F])] =
