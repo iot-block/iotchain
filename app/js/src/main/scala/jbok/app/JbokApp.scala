@@ -25,7 +25,6 @@ object JbokApp {
   val state  = AppState(Var(config))
   state.init()
 
-  val nodeSelect       = NodeSelect(state).render
   val statusView       = StatusView(state).render
   val accountsView     = AccountsView(state).render
   val blocksView       = BlocksView(state).render
@@ -55,7 +54,6 @@ object JbokApp {
 
   @dom val right: Binding[Node] =
     <div class="nav-right">
-      <div class ="tab searchbar">{nodeSelect.bind}</div>
       <div class="tab searchbar">{searchBar.bind}</div>
     </div>
 

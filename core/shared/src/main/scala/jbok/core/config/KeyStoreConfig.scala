@@ -5,5 +5,6 @@ import io.circe.generic.extras.ConfiguredJsonCodec
 
 @ConfiguredJsonCodec
 final case class KeyStoreConfig(
+    initkey: String,
     dir: String
 )

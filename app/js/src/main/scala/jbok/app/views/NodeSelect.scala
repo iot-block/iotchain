@@ -15,7 +15,7 @@ final case class NodeSelect(state: AppState) {
         case select: HTMLSelectElement =>
           val v = select.options(select.selectedIndex).value
           if (v == "default") {
-            state.clearSeletedNode()
+            state.clearSelectedNode()
           } else {
             state.selectNode(state.nodes.value.get(v).map(_.id))
           }

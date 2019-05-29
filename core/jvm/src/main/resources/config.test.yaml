@@ -20,10 +20,9 @@ history:
   spuriousDragonBlockNumber: "0"
   byzantiumBlockNumber: "0"
   constantinopleBlockNumber: "1000000000000000000000"
-  difficultyBombPauseBlockNumber: "3000000"
-  difficultyBombContinueBlockNumber: "5000000"
 
 keystore:
+  initkey: ""
   dir: ""
 
 peer:

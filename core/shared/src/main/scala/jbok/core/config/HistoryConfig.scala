@@ -11,9 +11,7 @@ final case class HistoryConfig(
     tangerineWhistleBlockNumber: BigInt,
     spuriousDragonBlockNumber: BigInt,
     byzantiumBlockNumber: BigInt,
-    constantinopleBlockNumber: BigInt,
-    difficultyBombPauseBlockNumber: BigInt,
-    difficultyBombContinueBlockNumber: BigInt
+    constantinopleBlockNumber: BigInt
 ) {
   val accountStartNonce: UInt256  = UInt256.Zero
   val maxCodeSize: Option[BigInt] = Some(24 * 1024)

@@ -13,7 +13,7 @@ import jbok.evm.solidity.SolidityParser
 import org.scalajs.dom.{Element, Event}
 import scodec.bits.ByteVector
 
-final case class WatchView(state: AppState) {
+final case class RegisterView(state: AppState) {
   val currentId = state.activeNode.value
 
   val contractAddress = Input("Address", "address", validator = InputValidator.isValidAddress)
@@ -61,12 +61,12 @@ final case class WatchView(state: AppState) {
       (r, i) =>
         currentId.foreach(id => {
           state.nodes.value.get(id).foreach(_.contractsABI.value += contractAddress -> Contract(contractAddress, r.contractDefs.last.toABI().methods))
-          statusMessage.value = Some("watch success.")
+          statusMessage.value = Some("register success.")
         })
     )
   }
 
-  val watchOnClick = (_: Event) => checkAndGenerateInput().leftMap(error => statusMessage.value = Some(error))
+  val registerOnClick = (_: Event) => checkAndGenerateInput().leftMap(error => statusMessage.value = Some(error))
 
   @binding.dom
   def render: Binding[Element] =
@@ -86,7 +86,7 @@ final case class WatchView(state: AppState) {
           <div style="padding-left: 10px">{status}</div>
         statusMessage.bind match {
           case None => <div/>
-          case Some(status) if status =="watch success." =>
+          case Some(status) if status =="register success." =>
             Notification.renderSuccess(content(status), onclose).bind
           case Some(status) =>
             Notification.renderWarning(content(status), onclose).bind
@@ -94,7 +94,7 @@ final case class WatchView(state: AppState) {
       }
 
       <div>
-        <button id="watch-contract" onclick={watchOnClick} style={"width: 100%"} >watch</button>
+        <button id="register-contract" onclick={registerOnClick} style={"width: 100%"} >register</button>
       </div>
     </div>
 
