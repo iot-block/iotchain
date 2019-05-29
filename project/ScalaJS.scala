@@ -7,6 +7,7 @@ import scoverage.ScoverageSbtPlugin.autoImport._
 
 object ScalaJS {
   val common = Seq(
+    coverageExcludedFiles := ".*",
     fork := false,
     fork in test := false,
     scalaJSUseMainModuleInitializer := false,

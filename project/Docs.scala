@@ -8,10 +8,10 @@ object Docs {
 
   private lazy val micrositeSettings = Seq(
     libraryDependencies += "com.47deg" %% "github4s" % "0.18.6",
-    micrositeName := "jbok",
+    micrositeName := "JBOK",
     micrositeBaseUrl := "/jbok",
     micrositeDescription := "Just a Bunch Of Keys",
-    micrositeAuthor := "siyan",
+    micrositeAuthor := "JBOK contributors",
     micrositeGithubOwner := "c-block",
     micrositeGithubRepo := "jbok",
     micrositeDocumentationUrl := "https://c-block.github.io/jbok",

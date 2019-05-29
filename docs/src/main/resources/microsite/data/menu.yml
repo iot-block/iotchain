@@ -1,0 +1,90 @@
+options:
+  - title: Guides
+    url: guides/
+    menu_section: guides
+
+    nested_options:
+      - title: Develop
+        url: guides/develop.html
+        menu_section: develop
+
+      - title: Deploy
+        url: guides/deploy.html
+        menu_section: deploy
+
+  - title: Modules
+    url: modules/
+    menu_section: modules
+
+    nested_options:
+      - title: Core
+        url: modules/core.html
+        menu_section: core
+
+      - title: Common
+        url: modules/common.html
+        menu_section: common
+
+      - title: Codec
+        url: modules/codec.html
+        menu_section: codec
+
+      - title: Crypto
+        url: modules/crypto.html
+        menu_section: crypto
+
+      - title: Network
+        url: modules/network.html
+        menu_section: network
+
+      - title: Persistent
+        url: modules/persistent.html
+        menu_section: persistent
+
+  - title: Components
+    url: components/
+    menu_section: components
+
+    nested_options:
+      - title: Consensus
+        url: components/consensus.html
+        menu_section: consensus
+
+      - title: BlockExecutor
+        url: components/executor.html
+        menu_section: executor
+
+      - title: BlockMiner
+        url: components/miner.html
+        menu_section: miner
+
+      - title: Pools
+        url: components/pools.html
+        menu_section: pools
+
+  - title: APIs
+    url: apis/
+    menu_section: apis
+
+    nested_options:
+      - title: account
+        url: apis/account.html
+        menu_section: account
+      - title: admin
+        url: apis/admin.html
+        menu_section: admin
+      - title: block
+        url: apis/block.html
+        menu_section: block
+      - title: contract
+        url: apis/contract.html
+        menu_section: contract
+      - title: miner
+        url: apis/miner.html
+        menu_section: miner
+      - title: personal
+        url: apis/personal.html
+        menu_section: personal
+      - title: transaction
+        url: apis/transaction.html
+        menu_section: transaction

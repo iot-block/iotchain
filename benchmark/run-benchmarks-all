@@ -1,9 +1,0 @@
-#!/usr/bin/env ruby
-
-Dir.chdir(File.absolute_path(File.join(File.dirname(__FILE__), "..")))
-
-Dir.entries("benchmark/src/test/scala/jbok/benchmark").each do |f|
-  if f =~ /^([^.]+)\.scala$/
-    system("./benchmark/run-benchmark #{$1}")
-  end
-end
