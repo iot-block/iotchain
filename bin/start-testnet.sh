@@ -2,8 +2,8 @@
 
 set -e
 
-echo "clean test files"
-rm -rf ~/.jbok/test-*
+echo "clean old testnet files"
+rm -rf ~/.jbok/node-*
 
 echo "build testnet"
 app/jvm/target/universal/stage/bin/network-builder-main
