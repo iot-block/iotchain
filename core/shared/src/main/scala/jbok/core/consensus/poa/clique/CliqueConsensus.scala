@@ -49,9 +49,6 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
         extra = ByteVector.empty
       )
 
-  override def postProcess(executed: ExecutedBlock[F]): F[ExecutedBlock[F]] =
-    F.pure(executed)
-
   override def mine(executed: ExecutedBlock[F]): F[MinedBlock] =
     if (executed.block.header.number == 0) {
       F.raiseError(new Exception("mining the genesis block is not supported"))

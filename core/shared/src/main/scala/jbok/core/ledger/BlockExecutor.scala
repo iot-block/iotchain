@@ -81,8 +81,7 @@ final class BlockExecutor[F[_]](
         result.receipts,
         currentTd + header.difficulty
       )
-      postProcessed <- consensus.postProcess(executed)
-      persisted     <- postProcessed.world.persisted
+      persisted <- executed.world.persisted
       header2 = header.copy(stateRoot = persisted.stateRootHash)
       block2  = executed.block.copy(header = header2)
     } yield executed.copy(block = block2, world = persisted)
@@ -136,20 +135,17 @@ final class BlockExecutor[F[_]](
   private[jbok] def executeBlock(block: Block): F[ExecutedBlock[F]] =
     for {
       (result, _) <- executeTransactions(block, shortCircuit = true)
-      parentTd <- history
-        .getTotalDifficultyByHash(block.header.parentHash)
-        .flatMap(opt => F.fromOption(opt, DBErr.NotFound))
+      parentTd    <- history.getTotalDifficultyByHash(block.header.parentHash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
       executed = ExecutedBlock(block, result.world, result.gasUsed, result.receipts, parentTd + block.header.difficulty)
-      postProcessed <- consensus.postProcess(executed)
-      persisted     <- postProcessed.world.persisted
+      persisted <- executed.world.persisted
       _ <- HeaderValidator.postExecValidate[F](
-        postProcessed.block.header,
+        executed.block.header,
         persisted.stateRootHash,
-        postProcessed.receipts,
-        postProcessed.gasUsed
+        executed.receipts,
+        executed.gasUsed
       )
-      _ <- history.putBlockAndReceipts(postProcessed.block, postProcessed.receipts, postProcessed.td)
-    } yield postProcessed
+      _ <- history.putBlockAndReceipts(executed.block, executed.receipts, executed.td)
+    } yield executed
 
   private def importBlock(block: Block): F[List[Block]] = {
     val greenLight = Resource.make(semaphore.acquire)(_ => semaphore.release)

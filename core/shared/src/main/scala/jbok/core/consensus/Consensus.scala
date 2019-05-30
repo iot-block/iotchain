@@ -8,7 +8,6 @@ import jbok.core.models.{Block, BlockHeader}
 /**
   * `Consensus` is mainly responsible for
   *   - prepareHeader: generate a `BlockHeader` with protocol-specific consensus fields
-  *   - postProcess: post process a `ExecutedBlock` such as paying reward
   *   - mine: seal a `ExecutedBlock` into a `MinedBlock`
   *   - verify: check a block fields validity
   *   - run: run a consensus upon a received `Block` and yield 4 possible `Result`s
@@ -20,8 +19,6 @@ import jbok.core.models.{Block, BlockHeader}
   */
 trait Consensus[F[_]] {
   def prepareHeader(parentOpt: Option[Block]): F[BlockHeader]
-
-  def postProcess(executed: ExecutedBlock[F]): F[ExecutedBlock[F]]
 
   def mine(executed: ExecutedBlock[F]): F[MinedBlock]
 
