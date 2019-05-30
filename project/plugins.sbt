@@ -36,3 +36,7 @@ addSbtPlugin("org.wartremover" % "sbt-wartremover" % "2.3.7")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.1")
 
 addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.9.2")
+
+// scalac
+addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat"        % "0.1.6")
+addSbtPlugin("org.lyranthe.sbt"          % "partial-unification" % "1.1.2")

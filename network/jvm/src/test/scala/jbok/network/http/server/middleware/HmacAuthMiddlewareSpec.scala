@@ -77,9 +77,9 @@ class HmacAuthMiddlewareSpec extends CommonSpec {
 
     "helper" in {
       val (sig, date) = sign("/v1/blocks")
-      println("Authorization", s"Bearer $sig")
-      println("X-Datetime", date)
-      println("Random key", ByteVector(MacSigningKey.toJavaKey[HMACSHA256](HMACSHA256.generateKey[Id]).getEncoded).toHex)
+      println(("Authorization", s"Bearer $sig"))
+      println(("X-Datetime", date))
+      println(("Random key", ByteVector(MacSigningKey.toJavaKey[HMACSHA256](HMACSHA256.generateKey[Id]).getEncoded).toHex))
     }
   }
 }
