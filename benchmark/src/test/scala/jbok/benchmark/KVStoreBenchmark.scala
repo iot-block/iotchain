@@ -10,7 +10,7 @@ import jbok.common.FileUtil
 import jbok.persistent.{ColumnFamily, MemoryKVStore}
 import jbok.persistent.rocksdb.RocksKVStore
 
-class KeyValueDBBenchmark extends JbokBenchmark {
+class KVStoreBenchmark extends JbokBenchmark {
   val size = 10000
 
   val blockHeaders = Gen.listOfN(size, arbBlockHeader.arbitrary).sample.get.toArray
