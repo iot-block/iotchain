@@ -3,7 +3,6 @@ package jbok.common.log
 import scribe.{Loggable, Position}
 
 import scala.annotation.compileTimeOnly
-//import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
 
 @compileTimeOnly("Enable macros to expand")

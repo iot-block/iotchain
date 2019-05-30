@@ -1,12 +1,12 @@
 package jbok.core.keystore
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Paths
 import java.security.SecureRandom
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneOffset, ZonedDateTime}
 
 import better.files._
-import cats.effect.Sync
+import cats.effect.{Resource, Sync}
 import cats.implicits._
 import io.circe.parser._
 import io.circe.syntax._
@@ -17,16 +17,15 @@ import jbok.core.keystore.KeyStoreError.KeyNotFound
 import jbok.core.models.Address
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
-import cats.effect.Resource
 
 import scala.util.Try
 
 final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) extends KeyStore[F] {
   private[this] val log = Logger[F]
 
-  private val keyStoreDir: Path = Paths.get(config.dir)
+  private val keyStoreDir = Paths.get(config.dir)
 
-  private val secureRandom: SecureRandom = new SecureRandom()
+  private val secureRandom = new SecureRandom()
 
   private val keyLength = 32
 
@@ -60,8 +59,7 @@ final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) 
   override def unlockAccount(address: Address, passphrase: String): F[Wallet] =
     for {
       key <- load(address)
-      wallet <- key
-        .decrypt(passphrase) match {
+      wallet <- key.decrypt(passphrase) match {
         case Left(_)       => F.raiseError(KeyStoreError.DecryptionFailed)
         case Right(secret) => Wallet.fromSecret[F](secret)
       }

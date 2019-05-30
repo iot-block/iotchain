@@ -3,18 +3,15 @@ import sbt.Keys._
 import sbt._
 import scalajsbundler.sbtplugin.ScalaJSBundlerPlugin.autoImport._
 import scalajsbundler.util.JSON
-import scoverage.ScoverageSbtPlugin.autoImport._
 
 object ScalaJS {
   val common = Seq(
-    coverageExcludedFiles := ".*",
     fork := false,
     fork in test := false,
     scalaJSUseMainModuleInitializer := false,
     scalaJSUseMainModuleInitializer in test := false,
     webpackBundlingMode := BundlingMode.LibraryOnly(),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
-    coverageEnabled := false, // workaround
     scalacOptions += "-P:scalajs:sjsDefinedByDefault"
   )
 

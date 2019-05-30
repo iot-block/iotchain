@@ -2,25 +2,11 @@ import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 
 lazy val jbok = project
   .in(file("."))
-  .aggregate(
-    common.js,
-    common.jvm,
-    codec.js,
-    codec.jvm,
-    persistent.js,
-    persistent.jvm,
-    crypto.js,
-    crypto.jvm,
-    network.js,
-    network.jvm,
-    core.js,
-    core.jvm,
-    sdk.jvm,
-    app.js,
-    app.jvm,
-    benchmark
-  )
+  .aggregate(jbokJVM, jbokJS)
   .settings(Publish.noPublishSettings)
+
+lazy val jbokJVM = project.aggregate(common.jvm, codec.jvm, persistent.jvm, crypto.jvm, network.jvm, core.jvm, app.jvm, benchmark)
+lazy val jbokJS  = project.aggregate(common.js, codec.js, persistent.js, crypto.js, network.js, core.js, app.js)
 
 lazy val common = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -71,9 +57,6 @@ lazy val appJS = app.js.settings(
 )
 
 lazy val appJVM = app.jvm.settings(
-  scalaJSProjects := Seq(appJS, sdk.js),
-  pipelineStages in Assets := Seq(scalaJSPipeline),
-  isDevMode in scalaJSPipeline := true,
   javaOptions in Universal ++= Seq(
     "-J-Xms2g",
     "-J-Xmx4g",
@@ -129,3 +112,8 @@ lazy val docs = project
   .dependsOn(core.jvm)
 
 lazy val CompileAndTest = "compile->compile;test->test"
+
+addCommandAlias("dev", ";project appJS;fastOptJS::startWebpackDevServer;~fastOptJS")
+addCommandAlias("buildJS", ";project appJS;fullOptJS::webpack")
+addCommandAlias("buildJVM", ";project appJVM;docker:publishLocal")
+addCommandAlias("ci", ";project jbokJS;clean;test;project jbokJVM;clean;coverage;test;coverageOff;coverageAggregate;coverageReport")
