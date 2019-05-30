@@ -150,7 +150,7 @@ class MerklePatriciaTrieSpec extends CommonSpec {
               for {
                 _     <- m1.toList.traverse { case (k, v) => mpt.put(k, v) }
                 root1 <- mpt.getRootHash
-                _     <- m2.toList.traverse { case (k, v) => mpt.del(k) }
+                _     <- m2.toList.traverse { case (k, _) => mpt.del(k) }
                 res   <- mpt.toMap.map(_.keySet)
                 _ = res shouldBe (m1.keySet -- m2.keySet)
                 _   <- mpt.rootHash.set(Some(root1))

@@ -56,7 +56,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
       for {
         snap <- clique.applyHeaders(executed.block.header.number - 1, executed.block.header.parentHash, Nil)
         mined <- if (!snap.miners.contains(clique.minerAddress)) {
-          F.raiseError(new Exception(s"unauthorized miner ${clique.minerAddress}"))
+          F.raiseError[MinedBlock](new Exception(s"unauthorized miner ${clique.minerAddress}"))
         } else {
           snap.recents.find(_._2 == clique.minerAddress) match {
             case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.miners.size) =>
@@ -89,7 +89,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
   override def verify(block: Block): F[Unit] =
     for {
       blockOpt <- pool.getBlockFromPoolOrHistory(block.header.hash)
-      _        <- if (blockOpt.isDefined) F.raiseError(new Exception("duplicate block")) else F.unit
+      _        <- if (blockOpt.isDefined) F.raiseError[Unit](new Exception("duplicate block")) else F.unit
       _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap[Unit] {
         case Some(parent) =>
           val result = for {
@@ -118,20 +118,19 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
       best   <- history.getBestBlock
       bestTd <- history.getTotalDifficultyByHash(best.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
       result <- if (block.header.number == best.header.number + 1) {
-        for {
+        (for {
           topBlockHash <- pool.addBlock(block).map {
             case Some(leaf) => leaf.hash
             case None       => ???
           }
           topBlocks <- pool.getBranch(topBlockHash, delete = true)
-        } yield Consensus.Forward(topBlocks)
+        } yield Consensus.Forward(topBlocks)).widen[Consensus.Result]
       } else {
         pool.addBlock(block).flatMap[Consensus.Result] {
           case Some(Leaf(leafHash, leafTd)) if leafTd > bestTd =>
             for {
               newBranch <- pool.getBranch(leafHash, delete = true)
-              staleBlocksWithReceiptsAndTDs <- removeBlocksUntil(newBranch.head.header.parentHash, best.header.number)
-                .map(_.reverse)
+              staleBlocksWithReceiptsAndTDs <- removeBlocksUntil(newBranch.head.header.parentHash, best.header.number).map(_.reverse)
               staleBlocks = staleBlocksWithReceiptsAndTDs.map(_._1)
               _ <- staleBlocks.traverse(block => pool.addBlock(block))
             } yield Consensus.Fork(staleBlocks, newBranch)
