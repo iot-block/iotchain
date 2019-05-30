@@ -19,6 +19,8 @@ import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 import scodec.bits.ByteVector
 import cats.effect.Resource
 
+import scala.util.Try
+
 final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) extends KeyStore[F] {
   private[this] val log = Logger[F]
 
@@ -131,11 +133,8 @@ final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) 
       }
     } yield key
 
-  private def fileName(encryptedKey: EncryptedKey): String = {
-    val dateStr = ZonedDateTime.now(ZoneOffset.UTC).format(DateTimeFormatter.ISO_DATE_TIME).replace(':', '-')
-    val addrStr = encryptedKey.address.bytes.toHex
-    s"UTC--$dateStr--$addrStr"
-  }
+  private def fileName(encryptedKey: EncryptedKey): String =
+    s"${encryptedKey.address.bytes.toHex}.json"
 
   private def listFiles(): F[List[File]] =
     FileUtil[F].open(keyStoreDir, asDirectory = true).flatMap { file =>
@@ -152,7 +151,7 @@ final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) 
   private def findKeyFile(address: Address): F[File] =
     for {
       files <- listFiles()
-      matching <- files.find(_.name.endsWith(address.bytes.toHex)) match {
+      matching <- files.find(_.name.startsWith(address.bytes.toHex)) match {
         case Some(file) => F.pure(file)
         case None       => F.raiseError(KeyNotFound)
       }
@@ -160,8 +159,29 @@ final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) 
 }
 
 object KeyStorePlatform {
+  def withInitKey[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]): F[KeyStorePlatform[F]] = {
+    val keyStorePlatform = new KeyStorePlatform(config)
+    val initKeyFile      = Try(Paths.get(config.initkey)).toOption
+
+    initKeyFile.fold(F.delay(keyStorePlatform)) { keyFile =>
+      for {
+        json <- FileUtil[F].read(keyFile)
+        key <- decode[EncryptedKey](json) match {
+          case Left(_)  => F.raiseError(KeyStoreError.InvalidKeyFormat)
+          case Right(k) => F.pure(k)
+        }
+        name = keyStorePlatform.fileName(key)
+        path = keyStorePlatform.keyStoreDir.resolve(name)
+        _ <- FileUtil[F].dump(json, path).attempt.flatMap {
+          case Left(e)  => F.raiseError[Unit](KeyStoreError.IOError(e.toString))
+          case Right(_) => F.unit
+        }
+      } yield keyStorePlatform
+    }
+  }
+
   def temporary[F[_]](implicit F: Sync[F]): Resource[F, KeyStore[F]] =
     FileUtil[F].temporaryDir().map { file =>
-      new KeyStorePlatform[F](KeyStoreConfig(file.pathAsString))
+      new KeyStorePlatform[F](KeyStoreConfig("", file.pathAsString))
     }
 }

@@ -31,7 +31,7 @@ object CoreSpecFixture {
     .set(testGenesis)
 
   val keystoreModule: ModuleDef = new ModuleDef {
-    make[KeyStore[IO]].fromEffect(MockingKeyStore[IO](testKeyPair :: Nil))
+    make[KeyStore[IO]].fromEffect(MockingKeyStore.withInitKeys[IO](testKeyPair :: Nil))
   }
 }
 

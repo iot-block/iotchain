@@ -26,7 +26,7 @@ final case class CallTxView(state: AppState) {
   val account: Var[Option[Account]]                       = Var(None)
   val to: Var[String]                                     = Var("")
   val toSyntax: Var[Boolean]                              = Var(true)
-  val passphase: Var[String]                              = Var("")
+  val passphrase: Var[String]                             = Var("")
   val rawResult: Var[ByteVector]                          = Var(ByteVector.empty)
   val result: Var[String]                                 = Var("")
   val contractAbi: Var[Option[List[FunctionDescription]]] = Var(None)
@@ -47,14 +47,14 @@ final case class CallTxView(state: AppState) {
 
   fetch()
 
-  private def reset() = {
+  private def reset(): Unit = {
     rawResult.value = ByteVector.empty
     result.value = ""
 
     val element = dom.document.getElementById("decodeSelect")
     element match {
       case x: HTMLSelectElement =>
-        x.value = "default"
+        x.value = "decode"
       case _ => ()
     }
   }
@@ -98,11 +98,14 @@ final case class CallTxView(state: AppState) {
           }
           function.value.map { f =>
             val t = f.inputs.map { p =>
-              val validator = (value: String) => {
-                val json = parse(s"[${value}]")
-                json.isRight
-              }
-              Input(p.name.getOrElse(""), p.parameterType.typeString, validator = validator)
+              val validator = InputValidator
+                .getValidator(p.parameterType)
+                .getOrElse((value: String) => {
+                  val json = parse(s"[${value}]")
+                  json.isRight
+                })
+              val (prefix, suffix) = InputValidator.getInputPrefixAndSuffix(p.parameterType)
+              Input(p.name.getOrElse(""), p.parameterType.typeString, validator = validator, prefix = prefix, suffix = suffix)
             }
             paramInputs.value.clear()
             paramInputs.value ++= t
@@ -113,21 +116,22 @@ final case class CallTxView(state: AppState) {
     }
   }
 
-  private val passphaseOnInput = { event: Event =>
+  private val passphraseOnInput = { event: Event =>
     event.currentTarget match {
-      case input: HTMLInputElement => passphase.value = input.value.trim
+      case input: HTMLInputElement => passphrase.value = input.value.trim
       case _                       =>
     }
   }
 
   private def decodeByteVector(d: String): String = d match {
     case "decode" => {
-      val result = function.value.get.decode(rawResult.value)
-      if (result.isRight) {
-        result.right.get.noSpaces
-      } else {
-        result.left.get.toString
-      }
+      function.value
+        .map { f =>
+          val result = f.decode(rawResult.value)
+          val prompt = f.outputs.map(_.parameterType.typeString).mkString("[", ",", "]")
+          result.fold(e => e.toString, v => s"${prompt}: ${v.noSpaces}")
+        }
+        .getOrElse("")
     }
     case _ => rawResult.value.toHex
   }
@@ -165,13 +169,13 @@ final case class CallTxView(state: AppState) {
       val p = for {
         ret <- client.get.contract.call(callTx, BlockTag.latest)
         _ = rawResult.value = ret
-        _ = result.value = ret.toHex
+        _ = result.value = decodeByteVector("decode")
         _ = txStatus.value = Some("call succcess")
       } yield ()
       txStatus.value = Some("wait for result...")
       p.unsafeToFuture()
     } else {
-      val password = if (passphase.value.isEmpty) "" else passphase.value
+      val password = if (passphrase.value.isEmpty) "" else passphrase.value
       val p = for {
         account <- client.get.account.getAccount(fromSubmit, BlockTag.latest)
         _ = txStatus.value = Some("estimate gas...")
@@ -182,7 +186,7 @@ final case class CallTxView(state: AppState) {
           .sendTransaction(fromSubmit, password, toSubmit, None, Some(gasLimit), Some(gasPrice), Some(account.nonce), Some(data))
         stx <- client.get.transaction.getTx(txHash)
         _ = stx.foreach(state.addStx(currentId.get, _))
-        _ = txStatus.value = Some(s"send transaction success: ${txHash}")
+        _ = txStatus.value = Some(s"send transaction success: ${txHash.toHex}")
       } yield ()
       p.unsafeToFuture()
     }
@@ -266,8 +270,8 @@ final case class CallTxView(state: AppState) {
               </b>
             </label>
             <select id="decodeSelect" class="autocomplete" onchange={onChangeHandlerDecode}>
-              <option value="default">raw</option>
               <option value="decode">decode</option>
+              <option value="default">raw</option>
             </select>
             <input type="text" placeholder="Click Call to Get Result" name="result" value={result.bind} class="valid" disabled={true}/>
           </div>
@@ -278,7 +282,7 @@ final case class CallTxView(state: AppState) {
                 passphase
               </b>
             </label>
-            <input type="password" name="passphase" oninput={passphaseOnInput} value={passphase.bind}/>
+            <input type="password" name="passphase" oninput={passphraseOnInput} value={passphrase.bind}/>
           </div>
         }
       }
@@ -289,10 +293,6 @@ final case class CallTxView(state: AppState) {
           <div style="padding-left: 10px">{status}</div>
         txStatus.bind match {
           case None => <div/>
-//          case Some(status) if status == "sending" =>
-//            Notification.renderInfo(content(status), onclose).bind
-//          case Some(status) if status == "send success." =>
-//            Notification.renderSuccess(content(status), (_: Event) => onclose).bind
           case Some(status) =>
             Notification.renderInfo(content(status), onclose).bind
         }

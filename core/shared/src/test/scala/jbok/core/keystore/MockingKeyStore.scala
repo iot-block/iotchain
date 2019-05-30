@@ -44,7 +44,7 @@ final class MockingKeyStore[F[_]](implicit F: Sync[F]) extends KeyStore[F] {
 }
 
 object MockingKeyStore {
-  def apply[F[_]: Sync](initKeys: List[KeyPair]): F[MockingKeyStore[F]] = {
+  def withInitKeys[F[_]: Sync](initKeys: List[KeyPair]): F[MockingKeyStore[F]] = {
     val keystore = new MockingKeyStore[F]()
     initKeys.traverse(kp => keystore.importPrivateKey(kp.secret.bytes, "")).as(keystore)
   }

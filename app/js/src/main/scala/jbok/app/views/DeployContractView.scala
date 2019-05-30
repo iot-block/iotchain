@@ -19,13 +19,13 @@ final case class DeployContractView(state: AppState) {
   val currentId                     = state.activeNode.value
   val client                        = currentId.flatMap(state.clients.value.get(_))
   val account: Var[Option[Account]] = Var(None)
-  val passphase: Var[String]        = Var("")
+  val passphrase: Var[String]        = Var("")
   val defaultGasLimit               = BigInt(4000000)
 
   val fromInput = AddressOptionInput(nodeAccounts, validator = InputValidator.isValidAddress, onchange = (address: String) => updateAccount(address))
 //  val valueInput = Input("value", "0.0", validator = (value: String) => InputValidator.isValidNumber(value) && account.value.forall(BigInt(value) <= _.balance.toBigInt))
   val dataInput = Input("data", "0x6060604052...", validator = InputValidator.isValidData, `type` = "textarea")
-  val password  = Input("passphase", `type` = "password")
+  val password  = Input("passphrase", `type` = "password")
 
   val statusMessage: Var[Option[String]] = Var(None)
 
@@ -42,8 +42,7 @@ final case class DeployContractView(state: AppState) {
   def checkAndGenerateInput() = {
     statusMessage.value = None
     for {
-      from <- if (fromInput.isValid) Right(fromInput.value) else Left("not valid from address.")
-//      value <- if (valueInput.isValid) Right(valueInput.value) else Left("not valid send value.")
+      from     <- if (fromInput.isValid) Right(fromInput.value) else Left("not valid from address.")
       data     <- if (dataInput.isValid) Right(dataInput.value) else Left("not valid data address.")
       password <- if (password.isValid) Right(password.value) else Left("not valid password.")
       _        <- if (client.nonEmpty) Right(()) else Left("no connect client.")
@@ -51,11 +50,8 @@ final case class DeployContractView(state: AppState) {
   }
 
   def sendTx(from: String, data: String, password: String) = {
-    val fromSubmit  = Address(ByteVector.fromValidHex(from))
-    val valueSubmit = None
-    //      val valueSubmit = if (valueInput.value.isEmpty) None else Some(BigInt(valueInput.value))
+    val fromSubmit = Address(ByteVector.fromValidHex(from))
     val dataSubmit = Some(ByteVector.fromValidHex(data))
-//    val txRequest  = TransactionRequest(fromSubmit, None, valueSubmit, None, None, None, dataSubmit)
     val callTx = CallTx(Some(fromSubmit), None, None, 1, 0, dataSubmit.get)
 
     client.foreach { client =>
@@ -64,7 +60,7 @@ final case class DeployContractView(state: AppState) {
         gasPrice <- client.contract.getGasPrice
         gasLimit <- client.contract.getEstimatedGas(callTx, BlockTag.latest)
         stx <- client.personal
-          .sendTransaction(fromSubmit, password, None, None, Some(defaultGasLimit), Some(gasPrice.max(1)), Some(account.nonce), dataSubmit) >>= client.transaction.getTx
+          .sendTransaction(fromSubmit, password, None, None, Some(defaultGasLimit), Some(gasPrice.max(1)), Some(account.nonce), dataSubmit) >>= client.transaction.getPendingTx
         address = ContractAddress.getContractAddress(fromSubmit, account.nonce)
         _ = stx.fold(
           statusMessage.value = Some("deploy failed.")
@@ -102,9 +98,9 @@ final case class DeployContractView(state: AppState) {
       </div>
 
       <div>
-        <label for="passphase">
+        <label for="passphrase">
           <b>
-            passphase
+            passphrase
           </b>
         </label>
         {password.render.bind}
@@ -116,10 +112,6 @@ final case class DeployContractView(state: AppState) {
           <div style="padding-left: 10px">{status}</div>
         statusMessage.bind match {
           case None => <div/>
-//          case Some(status) if status == "sending" =>
-//            Notification.renderInfo(content(status), onclose).bind
-//          case Some(status) if status == "send success." =>
-//            Notification.renderSuccess(content(status),onclose).bind
           case Some(status) =>
             Notification.renderWarning(content(status), onclose).bind
         }

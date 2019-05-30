@@ -2,6 +2,7 @@ package jbok.core.models
 
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
+import jbok.codec.json.implicits._
 import scodec.bits.ByteVector
 import scodec.codecs
 import jbok.codec.json.implicits._

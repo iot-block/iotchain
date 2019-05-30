@@ -12,7 +12,7 @@ import org.scalajs.dom._
 final case class ContractView(state: AppState) {
   val contractCallVisible: Var[Boolean] = Var(false)
   val deployVisible: Var[Boolean]       = Var(false)
-  val watchVisible: Var[Boolean]        = Var(false)
+  val registerVisible: Var[Boolean]        = Var(false)
 
   val callOnClick = (_: Event) => {
     contractCallVisible.value = true
@@ -22,8 +22,8 @@ final case class ContractView(state: AppState) {
     deployVisible.value = true
   }
 
-  val watchOnClick = (_: Event) => {
-    watchVisible.value = true
+  val registerOnClick = (_: Event) => {
+    registerVisible.value = true
   }
 
   val header: List[String] = List("Address", "Balance", "Nonce", "StorageRoot", "CodeHash")
@@ -78,15 +78,15 @@ final case class ContractView(state: AppState) {
         }
       }
       <div class="flex">
-        <button class="modal-open" onclick={watchOnClick}>Watch</button>
+        <button class="modal-open" onclick={registerOnClick}>Register</button>
         {
-          val visible = watchVisible.bind
+          val visible = registerVisible.bind
           val content = state.activeNode.bind match {
-            case Some(id) => WatchView(state).render
+            case Some(id) => RegisterView(state).render
             case _ => Modal.render(Modal.ModalInfo, "no node connect. please select node first!")
           }
 
-          val disappear = Some((_: Event) => watchVisible.value = false)
+          val disappear = Some((_: Event) => registerVisible.value = false)
           val modal     = Modal("send", content, visible, onOk = disappear, onCancel = disappear)
 
           modal.render().bind

@@ -2,8 +2,9 @@ package jbok.evm.solidity
 
 import jbok.common.CommonSpec
 import scodec.bits._
-import io.circe.Json
 import io.circe.syntax._
+import jbok.codec.json.implicits._
+
 
 class SolidityParserSpec extends CommonSpec {
   val code =
@@ -2096,18 +2097,18 @@ class SolidityParserSpec extends CommonSpec {
         .decode(
           hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c494f54206f6e20436861696e0000000000000000000000000000000000000000")
       name.isRight shouldBe true
-      name.right.get shouldBe List(Json.fromString("IOT on Chain")).asJson
+      name.right.get shouldBe List("IOT on Chain").asJson
 
       val symbol = erc20Methods("symbol")
         .decode(
           hex"0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000034954430000000000000000000000000000000000000000000000000000000000")
       symbol.isRight shouldBe true
-      symbol.right.get shouldBe List(Json.fromString("ITC")).asJson
+      symbol.right.get shouldBe List("ITC").asJson
 
       val totalSupply =
         erc20Methods("totalSupply").decode(hex"0x00000000000000000000000000000000000000000052b7d2dcc80cd2e4000000")
       totalSupply.isRight shouldBe true
-      totalSupply.right.get shouldBe List(Json.fromBigInt(BigInt(10).pow(26))).asJson
+      totalSupply.right.get shouldBe List(BigInt(10).pow(26)).asJson
 
       val balanceOfPayload = erc20Methods("balanceOf").encode("[\"0x1234567890123456789012345678901234567890\"]")
       balanceOfPayload.isRight shouldBe true
@@ -2153,7 +2154,7 @@ class SolidityParserSpec extends CommonSpec {
       val minter = vaccineMethods("minter")
         .decode(hex"0x0000000000000000000000001234567890123456789012345678901234567890")
       minter.isRight shouldBe true
-      minter.right.get shouldBe List(Json.fromString("0x1234567890123456789012345678901234567890")).asJson
+      minter.right.get shouldBe List("0x1234567890123456789012345678901234567890").asJson
 
       val setValue = vaccineMethods("setValue").encode("[\"key1\", \"12345678901234567890123456789088\"]")
       setValue.isRight shouldBe true
@@ -2162,12 +2163,12 @@ class SolidityParserSpec extends CommonSpec {
       val getValue = vaccineMethods("getValue").decode(
         hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c494f54206f6e20436861696e0000000000000000000000000000000000000000")
       getValue.isRight shouldBe true
-      getValue.right.get shouldBe List(Json.fromString("IOT on Chain")).asJson
+      getValue.right.get shouldBe List("IOT on Chain").asJson
 
       val getValue2 = vaccineMethods("getValue").decode(
         hex"0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000203132333435363738393031323334353637383930313233343536373839303838")
       getValue2.isRight shouldBe true
-      getValue2.right.get shouldBe List(Json.fromString("12345678901234567890123456789088")).asJson
+      getValue2.right.get shouldBe List("12345678901234567890123456789088").asJson
 
       val batchSetValues = vaccineMethods("batchSetValues").encode("[[\"key2\", \"key3\"], [\"value2\", \"value3\"]]")
       batchSetValues.isRight shouldBe true

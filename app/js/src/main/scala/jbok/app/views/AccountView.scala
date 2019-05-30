@@ -2,14 +2,31 @@ package jbok.app.views
 
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
+import com.thoughtworks.binding.Binding.Var
 import jbok.app.AppState
 import jbok.app.components.{TabPane, Tabs}
+import jbok.core.api.HistoryTransaction
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom._
 
 final case class AccountView(state: AppState, address: Address, account: Account) {
-  val stxsView = StxsView(state, List.empty)
+  val stxs: Var[List[HistoryTransaction]] = Var(List.empty)
+  val stxsView                            = StxsView(state, stxs)
 
+  private def fetch() = {
+    val nodeId = state.activeNode.value.getOrElse("")
+    val client = state.clients.value.get(nodeId)
+    client.foreach { jbokClient =>
+      val p = for {
+        txs <- jbokClient.account.getTransactions(address, 1, 100)
+        _ = stxs.value = txs
+      } yield ()
+
+      p.unsafeToFuture()
+    }
+  }
+
+  fetch()
 
   @binding.dom
   val overview: Binding[Element] =

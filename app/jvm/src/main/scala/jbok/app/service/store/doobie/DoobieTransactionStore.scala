@@ -32,6 +32,17 @@ final class DoobieTransactionStore[F[_]](xa: Transactor[F])(implicit F: Sync[F])
       .option
       .transact(xa)
 
+  override def findTransactionsByNumber(blockNumber: Int): F[List[HistoryTransaction]] =
+    sql"""
+       SELECT txHash, nonce, fromAddress, toAddress, value, payload, v, r, s, gasUsed, gasPrice, blockNumber, blockHash, location
+       FROM transactions
+       WHERE (blockNumber = ${blockNumber})
+       ORDER BY blockNumber, location DESC
+      """
+      .query[HistoryTransaction]
+      .to[List]
+      .transact(xa)
+
   override def delByBlockNumber(number: BigInt): F[Unit] =
     sql"""DELETE from transactions WHERE blockNumber = $number""".update.run.void.transact(xa)
 

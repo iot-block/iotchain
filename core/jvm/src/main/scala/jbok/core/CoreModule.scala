@@ -58,7 +58,7 @@ class CoreModule[F[_]: TagK](config: FullConfig)(implicit F: ConcurrentEffect[F]
   make[KVStore[F]].fromResource(KVStorePlatform.resource[F](config.persist))
   make[Metrics[F]].from(new PrometheusMetrics[F]())
   make[History[F]].from[HistoryImpl[F]]
-  make[KeyStore[F]].from[KeyStorePlatform[F]]
+  make[KeyStore[F]].fromEffect((config: KeyStoreConfig) => KeyStorePlatform.withInitKey[F](config))
   make[Clique[F]].fromEffect((config: FullConfig, store: KVStore[F], history: History[F], keystore: KeyStore[F]) => Clique[F](config.mining, config.genesis, store, history, keystore))
   make[Consensus[F]].from[CliqueConsensus[F]]
 

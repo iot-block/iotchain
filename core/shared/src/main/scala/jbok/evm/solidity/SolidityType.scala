@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets
 import cats.implicits._
 import io.circe.Json
 import io.circe.generic.extras.ConfiguredJsonCodec
+import io.circe.syntax._
 import jbok.core.models.{Address, UInt256}
 import jbok.crypto._
 import scodec.bits.ByteVector
@@ -40,7 +41,7 @@ final case class IntType(n: Int) extends SolidityType {
   override def decode(value: ByteVector): Either[AbiError, Json] =
     if (value.length == 32) {
       if (value.take(32 - n / 8).toArray.forall(b => b == 0.toByte || b == 255.toByte)) {
-        Json.fromBigInt(UInt256(value).toBigInt).asRight
+        UInt256(value).asJson.asRight
       } else { InvalidValue(s"type: int$n, value: $value").asLeft }
     } else { InvalidValue(s"int$n should have 32 bytes, but ${value.length}.").asLeft }
 
@@ -57,7 +58,7 @@ final case class UIntType(n: Int) extends SolidityType {
   override def decode(value: ByteVector): Either[AbiError, Json] =
     if (value.length == 32) {
       if (value.take(32 - n / 8).toArray.forall(_ == 0.toByte)) {
-        Json.fromBigInt(UInt256(value).toBigInt).asRight
+        UInt256(value).asJson.asRight
       } else { InvalidValue(s"type: uint$n, value: $value").asLeft }
     } else { InvalidValue(s"uint$n should have 32 bytes, but ${value.length}.").asLeft }
 
@@ -80,7 +81,7 @@ final case class AddressType() extends SolidityType {
   override def decode(value: ByteVector): Either[AbiError, Json] =
     if (value.length == 32) {
       if (value.take(12).toArray.forall(b => b == 0.toByte)) {
-        Json.fromString(Address(value).toString).asRight
+        Address(value).asJson.asRight
       } else { InvalidValue(s"type: address, value: $value").asLeft }
     } else { InvalidValue(s"address should have 32 bytes, but ${value.length}.").asLeft }
 
@@ -132,7 +133,7 @@ final case class BytesType() extends SolidityType {
       val size   = UInt256(l).toBigInt.toLong
       if (size <= r.length && r.takeRight(r.length - size).toArray.forall(_ == 0.toByte)) {
         val data = s"0x${r.take(size).toHex}"
-        Json.fromString(data).asRight
+        data.asJson.asRight
       } else { InvalidValue(s"type: bytes, cannot get string prefix length, value: $value").asLeft }
     } else { InvalidValue(s"type: bytes, value: $value should (length != 0 && length % 32 = 0)").asLeft }
 
@@ -151,7 +152,7 @@ final case class BytesNType(n: Int) extends SolidityType {
   override def decode(value: ByteVector): Either[AbiError, Json] =
     if (value.length == 32) {
       if (value.takeRight(32 - n).toArray.forall(b => b == 0.toByte)) {
-        Json.fromString(s"0x${value.take(n).toHex}").asRight
+        s"0x${value.take(n).toHex}".asJson.asRight
       } else { InvalidValue(s"type: bytes$n, value: $value").asLeft }
     } else { InvalidValue(s"bytes$n should have 32 bytes, but ${value.length}.").asLeft }
 
@@ -182,7 +183,7 @@ final case class StringType() extends SolidityType {
       if (size <= r.length && r.takeRight(r.length - size).toArray.forall(_ == 0.toByte)) {
         val codec = scodec.codecs.string(StandardCharsets.UTF_8)
         codec.decode(r.take(size).bits).toOption.map(_.value) match {
-          case Some(data) => Json.fromString(data).asRight
+          case Some(data) => data.asJson.asRight
           case None       => InvalidValue(s"type: string, invalid character in value: $value").asLeft
         }
       } else { InvalidValue(s"type: string, cannot get string prefix length, value: $value").asLeft }

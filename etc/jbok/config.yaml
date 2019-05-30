@@ -1,12 +1,12 @@
+rootPath: /var/lib/jbok
 genesis:
   chainId: '10'
   alloc:
-    '0xaa40236f83e948c5551b2d69373bb5a683c36bb8': '1000000000000000000000000000000'
+    '0x42405c55b353ff24e09b02374a0d8abdbf11d052': '1000000000000000000000000000000'
+    '0xa490d92a1945744acb9700e5c3df74d7ffffd1ba': '1000000000000000000000000000000'
   miners:
-    - '0x19744f6ff94f86d6976dbf969b0952f12e77618b'
-    - '0xd9b6cac0612033abe5c1b439e74ba438b01c933a'
-    - '0x5310053ea45f2a48c61efb42a45f85126f118a8a'
-  timestamp: 1558496897661
+    - '0xa490d92a1945744acb9700e5c3df74d7ffffd1ba'
+  timestamp: 1558964460504
   coinbase: '0x0000000000000000000000000000000000000000'
   difficulty: '0'
   gasLimit: '16716680'
@@ -14,15 +14,14 @@ log:
   logDir: /var/log/jbok
   level: INFO
 history:
-  frontierBlockNumber: '0'
-  homesteadBlockNumber: '0'
-  tangerineWhistleBlockNumber: '0'
-  spuriousDragonBlockNumber: '0'
-  byzantiumBlockNumber: '0'
-  constantinopleBlockNumber: '1000000000000000000000'
-  difficultyBombPauseBlockNumber: '3000000'
-  difficultyBombContinueBlockNumber: '5000000'
+    frontierBlockNumber: '0'
+    homesteadBlockNumber: '0'
+    tangerineWhistleBlockNumber: '0'
+    spuriousDragonBlockNumber: '0'
+    byzantiumBlockNumber: '0'
+    constantinopleBlockNumber: '1000000000000000000000'
 keystore:
+  initkey: /etc/jbok/init.key
   dir: /var/lib/jbok/keystore
 peer:
   host: 0.0.0.0
@@ -33,6 +32,7 @@ peer:
   updatePeersInterval: 10 seconds
   maxOutgoingPeers: 10
   maxIncomingPeers: 10
+  minPeers: 0
   bufferSize: 4194304
   timeout: 10 seconds
 sync:
@@ -50,14 +50,28 @@ blockPool:
   maxBlockBehind: 10
 mining:
   enabled: true
-  passphrase: ''
-  coinbase: '0x410be0ff99e37e82b2593f5ed4bd6316908f2b32'
-  period: 1000 milliseconds
+  address: '0xa490d92a1945744acb9700e5c3df74d7ffffd1ba'
+  passphrase: changeit
+  coinbase: '0xc0e5f5502f906c55382090448b4a122fdf7db192'
+  period: 5000 milliseconds
   epoch: 30000
   minBroadcastPeers: 4
 persist:
   driver: rocksdb
   path: /var/lib/jbok/data
+  columnFamilies:
+    - default
+    - BlockHeader
+    - BlockBody
+    - Receipts
+    - Snapshot
+    - Node
+    - Code
+    - TotalDifficulty
+    - AppState
+    - Peer
+    - NumberHash
+    - TxLocation
 ssl:
   enabled: false
   keyStorePath: /etc/jbok/server.jks

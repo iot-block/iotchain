@@ -97,7 +97,7 @@ final case class AppState(
     p.unsafeToFuture()
   }
 
-  def clearSeletedNode(): Unit = {
+  def clearSelectedNode(): Unit = {
     activeNode.value = None
     isLoading.setAll(false)
   }
@@ -161,8 +161,8 @@ final case class AppState(
     for {
       bestBlockNumber <- client.block.getBestBlockNumber
       block           <- client.block.getBlockByNumber(bestBlockNumber)
-      isMining = true
-      gasPrice <- client.contract.getGasPrice
+      isMining        <- client.miner.isMining
+      gasPrice        <- client.contract.getGasPrice
       miningStatus = if (isMining) "Mining" else "idle"
       gasLimit     = block.map(_.header.gasLimit).getOrElse(BigInt(0))
       _            = status.number.value = bestBlockNumber
@@ -225,8 +225,7 @@ final case class AppState(
       (for {
         currId <- activeNode.value
         node   <- nodes.value.get(currId)
-//        client <- clients.value.get(node.id)
-        client <- JbokClientPlatform.apply[IO](s"http://${node.interface}:${node.port}").some
+        client <- clients.value.get(node.id)
       } yield node -> client)
         .map {
           case (node, client) =>

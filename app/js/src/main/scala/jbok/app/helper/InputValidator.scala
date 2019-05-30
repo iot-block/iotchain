@@ -1,7 +1,8 @@
 package jbok.app.helper
 
 import jbok.core.models.Account
-import jbok.evm.solidity.SolidityParser
+import jbok.evm.solidity.ABIDescription.ParameterType
+import jbok.evm.solidity.{AddressType, BoolType, BytesNType, BytesType, IntType, SolidityParser, StringType, UIntType}
 
 import scala.util.matching.Regex
 
@@ -47,5 +48,33 @@ object InputValidator {
 
     val dataValid = data.forall(hex.contains(_))
     dataValid && length.map(value.length == _ * 2).getOrElse(value.length % 2 == 0)
+  }
+
+  def isValidString(data: String): Boolean =
+    data.length >= 2 && data.startsWith("\"") && data.endsWith("\"")
+
+  def getValidator(parameterType: ParameterType): Option[String => Boolean] =
+    parameterType.solidityType match {
+      case AddressType()            => Some(isValidAddress)
+      case UIntType(_) | IntType(_) => Some(isValidNumber)
+      case StringType()             => Some(isValidString)
+      case BoolType()               => Some(isValidBool)
+      case BytesType() =>
+        def isValidBytesNone(data: String) = isValidString(data) && isValidBytes(data.substring(1, data.length - 1))
+        Some(isValidBytesNone)
+      case BytesNType(n) =>
+        def isValidBytesN(data: String) = isValidString(data) && isValidBytes(data.substring(1, data.length - 1), Some(n))
+        Some(isValidBytesN)
+      case _ => None
+
+    }
+
+  def getInputPrefixAndSuffix(parameterType: ParameterType): (String, String) = {
+    val fix   = "\""
+    val empty = ""
+    parameterType.solidityType match {
+      case AddressType() | StringType() | BytesType() | BytesNType(_) => fix   -> fix
+      case _                                                          => empty -> empty
+    }
   }
 }
