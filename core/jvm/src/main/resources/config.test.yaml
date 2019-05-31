@@ -96,6 +96,8 @@ service:
   enableHttp2: true
   enableWebsockets: false
   secure: false
+  logHeaders: true
+  logBody: true
   host: localhost
   port: 30315
   apis:

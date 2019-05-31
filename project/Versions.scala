@@ -10,6 +10,6 @@ object Versions {
   val monocle         = "1.5.0"
   val prometheus      = "0.6.0"
   val doobie          = "0.7.0-M5"
-  val scribe          = "2.7.6"
+  val scribe          = "2.7.7"
   val izumi           = "0.7.0"
 }

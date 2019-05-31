@@ -57,3 +57,5 @@ services:
     ports:
       - 30314:30314
       - 30315:30315
+    depends_on:
+      - mysql

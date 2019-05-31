@@ -88,6 +88,8 @@ service:
   enableHttp2: true
   enableWebsockets: false
   secure: false
+  logHeaders: true
+  logBody: false
   host: 0.0.0.0
   port: 30315
   apis:

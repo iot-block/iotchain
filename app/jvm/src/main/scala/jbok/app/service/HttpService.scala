@@ -53,7 +53,7 @@ final class HttpService[F[_]](
     val httpApp = for {
       exportRoute <- MetricsMiddleware.exportService[F]
       withMetrics <- MetricsMiddleware[F](routes)
-      withLogger = LoggerMiddleware[F]((withMetrics <+> exportRoute).orNotFound)
+      withLogger = LoggerMiddleware[F](config.logHeaders, config.logBody)((withMetrics <+> exportRoute).orNotFound)
       withCORS   = CORS(withLogger)
       app        = GzipMiddleware[F](withCORS)
     } yield app

@@ -11,6 +11,8 @@ final case class ServiceConfig(
     enableHttp2: Boolean,
     enableWebsockets: Boolean,
     secure: Boolean,
+    logHeaders: Boolean,
+    logBody: Boolean,
     host: String,
     port: Int,
     apis: List[String]

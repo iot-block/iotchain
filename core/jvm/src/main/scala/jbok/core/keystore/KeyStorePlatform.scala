@@ -2,8 +2,6 @@ package jbok.core.keystore
 
 import java.nio.file.Paths
 import java.security.SecureRandom
-import java.time.format.DateTimeFormatter
-import java.time.{ZoneOffset, ZonedDateTime}
 
 import better.files._
 import cats.effect.{Resource, Sync}

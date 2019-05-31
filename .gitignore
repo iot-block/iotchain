@@ -29,6 +29,7 @@ project/plugins/project/
 .bloop
 .vscode
 project/.bloop
+.metals
 
 # project specific
 node_modules
