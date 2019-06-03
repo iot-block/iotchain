@@ -1,0 +1,36 @@
+notifiers:
+  - name: slack-bot
+    type: slack
+    uid: alert-slack
+    # either
+    org_id: 1
+    # or
+    # org_name: Main.
+    is_default: true
+    send_reminder: true
+    frequency: 1h
+    disable_resolve_message: false
+    # See `Supported Settings` section for settings supporter for each
+    # alert notification type.
+    settings:
+      recipient: "@playjokes"
+      username: JBOK
+      token: ""
+      url: https://hooks.slack.com/services/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
+      iconUrl: https://a.slack-edge.com/37d58/img/emoji_2017_12_06/apple/1f41e.png
+      uploadImage: true
+  - name: email-notifier
+    type: email
+    uid: alert-email
+    # either
+    org_id: 1
+    # or
+#    org_name: Main Org.
+    is_default: false
+    send_reminder: true
+    frequency: 1h
+    disable_resolve_message: false
+    # See `Supported Settings` section for settings supporter for each
+    # alert notification type.
+    settings:
+      addresses: example@jbok.com;test@jbok.com;
