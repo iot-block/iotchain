@@ -1,9 +1,7 @@
 package jbok.evm
 
-import jbok.common.CommonSpec
-import jbok.common.testkit._
-import jbok.evm.testkit._
-import org.scalacheck.Gen
+import jbok.common.{gen, CommonSpec}
+import org.scalacheck.Arbitrary
 import scodec.bits.ByteVector
 
 class ProgramSpec extends CommonSpec {
@@ -14,13 +12,13 @@ class ProgramSpec extends CommonSpec {
   val nonPushOp: Byte     = JUMP.code
   val invalidOpCode: Byte = 0xef.toByte
 
-  def positionsSetGen: Gen[Set[Int]] =
-    getListGen(minSize = 0, maxSize = PositionsSize, genT = intGen(0, CodeSize)).map(_.toSet)
+  implicit val arbPositionSet: Arbitrary[Set[Int]] =
+    Arbitrary(gen.boundedList(0, PositionsSize, gen.int(0, CodeSize)).map(_.toSet))
 
   "program" should {
 
     "detect all jump destinations if there are no push op" in {
-      forAll(positionsSetGen) { jumpDestLocations =>
+      forAll { jumpDestLocations: Set[Int] =>
         val code = ByteVector((0 to CodeSize).map { i =>
           if (jumpDestLocations.contains(i)) JUMPDEST.code
           else nonPushOp
@@ -31,7 +29,7 @@ class ProgramSpec extends CommonSpec {
     }
 
     "detect all jump destinations if there are push op" in {
-      forAll(positionsSetGen, positionsSetGen) { (jumpDestLocations, pushOpLocations) =>
+      forAll { (jumpDestLocations: Set[Int], pushOpLocations: Set[Int]) =>
         val code = ByteVector((0 to CodeSize).map { i =>
           if (jumpDestLocations.contains(i)) JUMPDEST.code
           else if (pushOpLocations.contains(i)) PUSH1.code
@@ -55,7 +53,7 @@ class ProgramSpec extends CommonSpec {
     }
 
     "detect all jump destinations if there are invalid ops" in {
-      forAll(positionsSetGen, positionsSetGen) { (jumpDestLocations, invalidOpLocations) =>
+      forAll { (jumpDestLocations: Set[Int], invalidOpLocations: Set[Int]) =>
         val code = ByteVector((0 to CodeSize).map { i =>
           if (jumpDestLocations.contains(i)) JUMPDEST.code
           else if (invalidOpLocations.contains(i)) invalidOpCode

@@ -4,6 +4,8 @@ import cats.effect.Sync
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common.ByteUtils
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.ledger.BloomFilter
 import jbok.core.models.{Address, BlockHeader, Receipt}
 import jbok.core.validators.HeaderInvalid._
@@ -18,7 +20,7 @@ object HeaderInvalid {
   final case object HeaderReceiptsHashInvalid   extends Exception("HeaderReceiptsHashInvalid")
   final case object HeaderLogBloomInvalid       extends Exception("HeaderLogBloomInvalid")
   final case object HeaderNumberInvalid         extends Exception("HeaderNumberInvalid")
-  final case class HeaderGasLimitInvalid(min: BigInt, max: BigInt, parent: BigInt, delta: BigInt, cur: BigInt)
+  final case class HeaderGasLimitInvalid(min: N, max: N, parent: N, delta: N, cur: N)
       extends Exception(s"HeaderGasLimitInvalid: min=${min}, max=${max}, parent=${parent}, delta=${delta}, cur=${cur}")
   final case object HeaderGasUsedInvalid   extends Exception("HeaderGasUsedInvalid")
   final case object HeaderTimestampInvalid extends Exception("HeaderTimestampInvalid")
@@ -26,8 +28,8 @@ object HeaderInvalid {
 
 object HeaderValidator {
   private val GasLimitBoundDivisor: Int = 1024
-  private val MinGasLimit: BigInt       = 5000
-  private val MaxGasLimit: BigInt       = BigInt(2).pow(63) - 1
+  private val MinGasLimit: N       = 5000
+  private val MaxGasLimit: N       = N(2).pow(63) - 1
 
   def preExecValidate[F[_]: Sync](parentOpt: F[Option[BlockHeader]], header: BlockHeader): F[Unit] =
     for {
@@ -51,7 +53,7 @@ object HeaderValidator {
       blockHeader: BlockHeader,
       stateRoot: ByteVector,
       receipts: List[Receipt],
-      gasUsed: BigInt
+      gasUsed: N
   ): F[Unit] =
     for {
       _ <- validateGasUsed[F](blockHeader, gasUsed)
@@ -68,7 +70,7 @@ object HeaderValidator {
     if (blockHeader.stateRoot == stateRoot) F.unit
     else F.raiseError(new Exception(s"expected stateRoot ${blockHeader.stateRoot}, actually ${stateRoot}"))
 
-  private[jbok] def validateGasUsed[F[_]](blockHeader: BlockHeader, gasUsed: BigInt)(implicit F: Sync[F]): F[Unit] =
+  private[jbok] def validateGasUsed[F[_]](blockHeader: BlockHeader, gasUsed: N)(implicit F: Sync[F]): F[Unit] =
     if (blockHeader.gasUsed == gasUsed) F.unit
     else F.raiseError(new Exception(s"expected gasUsed ${blockHeader.gasUsed}, actually ${gasUsed}"))
 
@@ -107,7 +109,7 @@ object HeaderValidator {
     if (beneficiary.length == Address.numBytes || beneficiary.isEmpty) F.unit
     else F.raiseError(HeaderBeneficiaryInvalid)
 
-  private def validateNumber[F[_]](number: BigInt, parentNumber: BigInt)(implicit F: Sync[F]): F[Unit] =
+  private def validateNumber[F[_]](number: N, parentNumber: N)(implicit F: Sync[F]): F[Unit] =
     if (number == parentNumber + 1) F.unit
     else F.raiseError(HeaderNumberInvalid)
 
@@ -115,8 +117,8 @@ object HeaderValidator {
     if (timestamp > parentTimestamp) F.unit
     else F.raiseError(HeaderTimestampInvalid)
 
-  private def validateGasLimit[F[_]](gasLimit: BigInt, parentGasLimit: BigInt)(implicit F: Sync[F]): F[Unit] = {
-    val delta: BigInt = BigDecimal(parentGasLimit / GasLimitBoundDivisor).setScale(0, RoundingMode.FLOOR).toBigInt
+  private def validateGasLimit[F[_]](gasLimit: N, parentGasLimit: N)(implicit F: Sync[F]): F[Unit] = {
+    val delta: BigInt = (parentGasLimit / GasLimitBoundDivisor).toBigDecimal.setScale(0, RoundingMode.FLOOR).toBigInt
     if (gasLimit > MaxGasLimit)
       F.raiseError(HeaderGasLimitInvalid(MinGasLimit, MaxGasLimit, parentGasLimit, delta, gasLimit))
     else {
@@ -126,7 +128,7 @@ object HeaderValidator {
     }
   }
 
-  private def validateGasUsed[F[_]](gasUsed: BigInt, gasLimit: BigInt)(implicit F: Sync[F]): F[Unit] =
+  private def validateGasUsed[F[_]](gasUsed: N, gasLimit: N)(implicit F: Sync[F]): F[Unit] =
     if (gasUsed < gasLimit) F.unit
     else F.raiseError(HeaderGasUsedInvalid)
 }

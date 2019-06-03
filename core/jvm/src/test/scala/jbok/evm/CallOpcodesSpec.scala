@@ -40,7 +40,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 1" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.One
+        call.stateOut.stack.pop._1 shouldBe UInt256.one
       }
 
       "should store contract's return data in memory" in {
@@ -71,7 +71,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume correct gas (refund call gas)" in {
@@ -89,7 +89,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume correct gas (refund call gas)" in {
@@ -117,7 +117,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume all call gas" in {
@@ -142,7 +142,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 1" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.One
+        call.stateOut.stack.pop._1 shouldBe UInt256.one
       }
 
       "consume correct gas (refund call gas, add new account modifier)" in {
@@ -177,7 +177,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 1" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.One
+        call.stateOut.stack.pop._1 shouldBe UInt256.one
       }
 
       "update precompiled contract's balance" in {
@@ -210,7 +210,7 @@ class CallOpcodesSpec extends CoreSpec {
       "destruct ether if own address equals refund address" in {
         val context = fxt.context.copy(world = fxt.worldWithSelfDestructSelfProgram)
         val call    = fxt.CallResult(op = CALL, context)
-        call.stateOut.world.getAccount(fxt.extAddr).unsafeRunSync().balance shouldBe UInt256.Zero
+        call.stateOut.world.getAccount(fxt.extAddr).unsafeRunSync().balance shouldBe UInt256.zero
         call.stateOut.addressesToDelete.contains(fxt.extAddr) shouldBe true
       }
     }
@@ -244,7 +244,7 @@ class CallOpcodesSpec extends CoreSpec {
         fxt.CallResult(
           op = CALL,
           context = context,
-          inOffset = UInt256.Zero,
+          inOffset = UInt256.zero,
           inSize = fxt.inputData.size,
           outOffset = fxt.inputData.size,
           outSize = gasFailingBeforeEIP150Fix
@@ -256,7 +256,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "cap the provided gas after EIP-150" in {
-        call(EvmConfig.TangerineWhistleConfigBuilder(None)).stateOut.stack.pop._1 shouldBe UInt256.One
+        call(EvmConfig.TangerineWhistleConfigBuilder(None)).stateOut.stack.pop._1 shouldBe UInt256.one
       }
 
       "go OOG before EIP-150 becaouse of extensive memory cost" in {
@@ -265,7 +265,7 @@ class CallOpcodesSpec extends CoreSpec {
 
       "cap memory cost post EIP-150" in {
         val CallResult = callVarMemCost(EvmConfig.TangerineWhistleConfigBuilder(None))
-        CallResult.stateOut.stack.pop._1 shouldBe UInt256.One
+        CallResult.stateOut.stack.pop._1 shouldBe UInt256.one
       }
     }
   }
@@ -280,7 +280,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "not update any account's balance" in {
-        call.extBalance shouldBe UInt256.Zero
+        call.extBalance shouldBe UInt256.zero
         call.ownBalance shouldBe fxt.initialBalance
       }
 
@@ -323,7 +323,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume correct gas (refund call gas)" in {
@@ -341,7 +341,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume correct gas (refund call gas)" in {
@@ -368,7 +368,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume all call gas" in {
@@ -422,7 +422,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 1" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.One
+        call.stateOut.stack.pop._1 shouldBe UInt256.one
       }
 
       "not update precompiled contract's balance" in {
@@ -469,7 +469,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "cap the provided gas after EIP-150" in {
-        call(EvmConfig.TangerineWhistleConfigBuilder(None)).stateOut.stack.pop._1 shouldBe UInt256.One
+        call(EvmConfig.TangerineWhistleConfigBuilder(None)).stateOut.stack.pop._1 shouldBe UInt256.one
       }
     }
   }
@@ -484,7 +484,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "not update any account's balance" in {
-        call.extBalance shouldBe UInt256.Zero
+        call.extBalance shouldBe UInt256.zero
         call.ownBalance shouldBe fxt.initialBalance
       }
 
@@ -527,7 +527,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume correct gas (refund call gas)" in {
@@ -545,7 +545,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume all call gas" in {
@@ -598,7 +598,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "return 1" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.One
+        call.stateOut.stack.pop._1 shouldBe UInt256.one
       }
 
       "not update precompiled contract's balance" in {
@@ -645,7 +645,7 @@ class CallOpcodesSpec extends CoreSpec {
       }
 
       "cap the provided gas after EIP-150" in {
-        call(EvmConfig.TangerineWhistleConfigBuilder(None)).stateOut.stack.pop._1 shouldBe UInt256.One
+        call(EvmConfig.TangerineWhistleConfigBuilder(None)).stateOut.stack.pop._1 shouldBe UInt256.one
       }
     }
   }
@@ -671,7 +671,7 @@ class CallOpcodesSpec extends CoreSpec {
       op = DELEGATECALL,
       gas = gas,
       context = context,
-      outOffset = UInt256.Zero
+      outOffset = UInt256.zero
     )
     "return an OutOfGas error" in {
       call.stateOut.error shouldBe Some(OutOfGas)

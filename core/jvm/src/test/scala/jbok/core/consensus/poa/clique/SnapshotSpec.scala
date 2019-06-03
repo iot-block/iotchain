@@ -2,13 +2,11 @@ package jbok.core.consensus.poa.clique
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
-import jbok.codec.rlp.implicits._
-import jbok.common.testkit._
+import jbok.codec.rlp.RlpCodec
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
-import jbok.core.models.{Address, BlockHeader}
+import jbok.core.models.{Address, BlockHeader, ChainId}
 import jbok.core.store.ColumnFamilies
-import jbok.core.testkit._
 import jbok.crypto.signature.{CryptoSignature, ECDSA, KeyPair, Signature}
 import jbok.persistent.{MemoryKVStore, SingleColumnKVStore}
 import scodec.bits.ByteVector
@@ -42,12 +40,12 @@ trait SnapshotFixture extends CoreSpec {
     Address(accounts(account))
   }
 
-  def sign(header: BlockHeader, miner: String)(implicit chainId: BigInt): BlockHeader = {
+  def sign(header: BlockHeader, miner: String)(implicit chainId: ChainId): BlockHeader = {
     if (!accounts.contains(miner)) {
       accounts += (miner -> Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync())
     }
     val sig = Signature[ECDSA]
-      .sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(miner), chainId)
+      .sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(miner), chainId.value.toBigInt)
       .unsafeRunSync()
     val extra      = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value.copy(signature = sig)
     val extraBytes = extra.asBytes

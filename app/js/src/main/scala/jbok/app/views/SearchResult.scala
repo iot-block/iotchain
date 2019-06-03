@@ -8,6 +8,7 @@ import jbok.app.components.Skeleton
 import jbok.app.execution._
 import jbok.app.{AppState, Search}
 import jbok.common.log.Logger
+import jbok.common.math.N
 import jbok.core.models.{Account, Address, Block, SignedTransaction}
 import org.scalajs.dom._
 import scodec.bits.ByteVector
@@ -20,14 +21,14 @@ final case class SearchResult(state: AppState, search: Search) {
   val stx: Var[Option[SignedTransaction]] = Var(None)
   val failed: Var[Boolean]                = Var(false)
 
-  def fetch() {
+  def fetch(): Unit = {
     val nodeId = state.activeNode.value.getOrElse("")
     val client = state.clients.value.get(nodeId)
     client.foreach { client =>
       search.searchType match {
         case "blockNumber" =>
           val p = for {
-            blockOpt <- client.block.getBlockByNumber(search.keyword.toInt)
+            blockOpt <- client.block.getBlockByNumber(N(search.keyword))
             _ = if (blockOpt.nonEmpty) {
               log.d(s"nonempty: ${search.keyword.toInt}, ${blockOpt}")
               block.value = blockOpt
@@ -36,7 +37,7 @@ final case class SearchResult(state: AppState, search: Search) {
             }
           } yield ()
           p.timeout(state.config.value.clientTimeout)
-            .handleErrorWith((e: Throwable) => IO.delay { failed.value = true })
+            .handleErrorWith((_: Throwable) => IO.delay { failed.value = true })
             .unsafeToFuture()
         case "blockHash" =>
           val p = for {
@@ -48,11 +49,13 @@ final case class SearchResult(state: AppState, search: Search) {
             }
           } yield ()
           p.timeout(state.config.value.clientTimeout)
-            .handleErrorWith((e: Throwable) =>
-              for {
-                _ <- IO.delay(e.printStackTrace())
-                _ <- IO.delay { failed.value = true }
-              } yield ())
+            .handleErrorWith(
+              (e: Throwable) =>
+                for {
+                  _ <- IO.delay(e.printStackTrace())
+                  _ <- IO.delay { failed.value = true }
+                } yield ()
+            )
             .unsafeToFuture()
         case "txHash" =>
           val p = for {
@@ -87,33 +90,33 @@ final case class SearchResult(state: AppState, search: Search) {
         <h2>Search Result:</h2>
       </div>
       {
-        if (failed.bind) {
-          <div>
+      if (failed.bind) {
+        <div>
             cannot find data.
           </div>
-        } else {
-          search.searchType match {
-            case "blockNumber" | "blockHash" =>
-              block.bind match {
-                case Some(block) => BlockView(state, block).render.bind
-                case None => Skeleton.renderTable(3, 3).bind
-              }
-            case "txHash" =>
-              stx.bind match {
-                case Some(stx) => TxView.render(state, stx).bind
-                case None => Skeleton.renderTable(2, 5).bind
-              }
-            case "account" =>
-              account.bind match {
-                case Some(account) => AccountView(state, Address.fromHex(search.keyword), account).render.bind
-                case None => Skeleton.renderTable(2, 5).bind
-              }
-            case _ =>
-              <div>
+      } else {
+        search.searchType match {
+          case "blockNumber" | "blockHash" =>
+            block.bind match {
+              case Some(block) => BlockView(state, block).render.bind
+              case None        => Skeleton.renderTable(3, 3).bind
+            }
+          case "txHash" =>
+            stx.bind match {
+              case Some(stx) => TxView.render(state, stx).bind
+              case None      => Skeleton.renderTable(2, 5).bind
+            }
+          case "account" =>
+            account.bind match {
+              case Some(account) => AccountView(state, Address.fromHex(search.keyword), account).render.bind
+              case None          => Skeleton.renderTable(2, 5).bind
+            }
+          case _ =>
+            <div>
                 404
               </div>
-          }
         }
       }
+    }
     </div>
 }

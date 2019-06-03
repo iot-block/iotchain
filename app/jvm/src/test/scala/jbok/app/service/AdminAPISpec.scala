@@ -4,9 +4,7 @@ import cats.effect.IO
 import jbok.app.AppSpec
 import jbok.core.peer.{PeerManager, PeerUri}
 import jbok.core.api.AdminAPI
-import jbok.common.testkit._
 import jbok.core.config.FullConfig
-import jbok.core.testkit._
 
 class AdminAPISpec extends AppSpec {
   "AdminAPI" should {

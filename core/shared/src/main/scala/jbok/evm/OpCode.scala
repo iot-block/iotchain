@@ -8,6 +8,8 @@ import jbok.crypto._
 import jbok.common._
 import UInt256._
 import cats.data.OptionT
+import jbok.common.math.N
+import jbok.common.math.implicits._
 
 object OpCodes {
 
@@ -170,7 +172,7 @@ sealed abstract class OpCode(
     val code: Byte,
     val delta: Int,
     val alpha: Int,
-    val constGasFn: FeeSchedule => BigInt
+    val constGasFn: FeeSchedule => N
 ) {
   def execute[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] =
     if (state.stack.size < delta)
@@ -178,7 +180,7 @@ sealed abstract class OpCode(
     else if (state.stack.size - delta + alpha > state.stack.maxSize)
       state.withError(StackOverflow).pure[F]
     else {
-      val constGas: BigInt = constGasFn(state.config.feeSchedule)
+      val constGas: N = constGasFn(state.config.feeSchedule)
       for {
         vg <- varGas(state)
         gas = constGas + vg
@@ -190,19 +192,16 @@ sealed abstract class OpCode(
       } yield s
     }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt]
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N]
 
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]]
 }
 
-sealed trait ConstGas {
-  self: OpCode =>
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = BigInt(0).pure[F]
+sealed trait ConstGas { self: OpCode =>
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = N(0).pure[F]
 }
 
-sealed abstract class UnaryOp(code: Int, constGasFn: FeeSchedule => BigInt)(val f: UInt256 => UInt256)
-    extends OpCode(code.toByte, 1, 1, constGasFn)
-    with ConstGas {
+sealed abstract class UnaryOp(code: Int, constGasFn: FeeSchedule => N)(val f: UInt256 => UInt256) extends OpCode(code.toByte, 1, 1, constGasFn) with ConstGas {
 
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].delay {
     val (a, stack1) = state.stack.pop
@@ -212,8 +211,7 @@ sealed abstract class UnaryOp(code: Int, constGasFn: FeeSchedule => BigInt)(val 
   }
 }
 
-sealed abstract class BinaryOp(code: Int, constGasFn: FeeSchedule => BigInt)(val f: (UInt256, UInt256) => UInt256)
-    extends OpCode(code.toByte, 2, 1, constGasFn) {
+sealed abstract class BinaryOp(code: Int, constGasFn: FeeSchedule => N)(val f: (UInt256, UInt256) => UInt256) extends OpCode(code.toByte, 2, 1, constGasFn) {
 
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].delay {
     val (Seq(a, b), stack1) = state.stack.pop(2)
@@ -223,9 +221,7 @@ sealed abstract class BinaryOp(code: Int, constGasFn: FeeSchedule => BigInt)(val
   }
 }
 
-sealed abstract class TernaryOp(code: Int, constGasFn: FeeSchedule => BigInt)(
-    val f: (UInt256, UInt256, UInt256) => UInt256)
-    extends OpCode(code.toByte, 3, 1, constGasFn) {
+sealed abstract class TernaryOp(code: Int, constGasFn: FeeSchedule => N)(val f: (UInt256, UInt256, UInt256) => UInt256) extends OpCode(code.toByte, 3, 1, constGasFn) {
 
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].delay {
     val (Seq(a, b, c), stack1) = state.stack.pop(3)
@@ -271,7 +267,7 @@ case object ADDMOD extends TernaryOp(0x08, _.G_mid)(_.addmod(_, _)) with ConstGa
 case object MULMOD extends TernaryOp(0x09, _.G_mid)(_.mulmod(_, _)) with ConstGas
 
 case object EXP extends BinaryOp(0x0a, _.G_exp)(_ ** _) {
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (Seq(_, m: UInt256), _) = state.stack.pop(2)
     (state.config.feeSchedule.G_expbyte * m.byteSize).pure[F]
   }
@@ -323,7 +319,7 @@ case object SHA3 extends OpCode(0x20, 2, 1, _.G_sha3) {
     state.withStack(stack2).withMemory(mem1).step()
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (Seq(offset, size), _) = state.stack.pop(2)
     val memCost                = state.config.calcMemCost(state.memory.size, offset, size)
     val shaCost                = state.config.feeSchedule.G_sha3word * wordsForBytes(size)
@@ -342,7 +338,7 @@ case object BALANCE extends OpCode(0x31, 1, 1, _.G_balance) with ConstGas {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (accountAddress, stack1) = state.stack.pop
     for {
-      accountBalance <- state.world.getBalance(Address(accountAddress mod UInt256(BigInt(2).pow(160))))
+      accountBalance <- state.world.getBalance(Address(accountAddress mod UInt256(N(2).pow(160))))
       stack2 = stack1.push(accountBalance)
       s      = state.withStack(stack2).step()
     } yield s
@@ -382,7 +378,7 @@ case object CALLDATACOPY extends OpCode(0x37, 3, 0, _.G_verylow) {
     state.withStack(stack1).withMemory(mem1).step().pure[F]
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (Seq(offset, _, size), _) = state.stack.pop(3)
     val memCost                   = state.config.calcMemCost(state.memory.size, offset, size)
     val copyCost                  = state.config.feeSchedule.G_copy * wordsForBytes(size)
@@ -402,7 +398,7 @@ case object CODECOPY extends OpCode(0x39, 3, 0, _.G_verylow) {
     state.withStack(stack1).withMemory(mem1).step().pure[F]
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (Seq(offset, _, size), _) = state.stack.pop(3)
     val memCost                   = state.config.calcMemCost(state.memory.size, offset, size)
     val copyCost                  = state.config.feeSchedule.G_copy * wordsForBytes(size)
@@ -435,7 +431,7 @@ case object EXTCODECOPY extends OpCode(0x3c.toByte, 4, 0, _.G_extcodecopy) {
     }
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (Seq(_, memOffset, _, size), _) = state.stack.pop(4)
     val memCost                         = state.config.calcMemCost(state.memory.size, memOffset, size)
     val copyCost                        = state.config.feeSchedule.G_copy * wordsForBytes(size)
@@ -450,7 +446,7 @@ case object RETURNDATASIZE extends ConstOp(0x3d) {
 case object RETURNDATACOPY extends OpCode(0x3e.toByte, 3, 0, _.G_verylow) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].pure {
     val (Seq(memOffset, dataOffset, size), stack1) = state.stack.pop(3)
-    val end: BigInt                                = dataOffset.toBigInt + size.toBigInt
+    val end: N                                     = dataOffset.toN + size.toN
     if (end.bitLength > 64 || state.returnData.size < end) {
       state.withError(ReturnDataOutOfBounds)
     } else {
@@ -460,7 +456,7 @@ case object RETURNDATACOPY extends OpCode(0x3e.toByte, 3, 0, _.G_verylow) {
     }
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (Seq(offset, _, size), _) = state.stack.pop(3)
     val memCost                   = state.config.calcMemCost(state.memory.size, offset, size)
     val copyCost                  = state.config.feeSchedule.G_copy * wordsForBytes(size)
@@ -474,7 +470,7 @@ case object EXTCODEHASH extends OpCode(0x3f.toByte, 1, 1, _.G_extcodehash) with 
 
     for {
       accountOpt <- state.world.getAccountOpt(Address(address)).value
-      codeHash = accountOpt.map(a => UInt256(a.codeHash)).getOrElse(UInt256.Zero)
+      codeHash = accountOpt.map(a => UInt256(a.codeHash)).getOrElse(UInt256.zero)
       stack2   = stack1.push(codeHash)
     } yield state.withStack(stack2).step()
   }
@@ -489,8 +485,8 @@ case object BLOCKHASH extends OpCode(0x40, 1, 1, _.G_blockhash) with ConstGas {
 
     val outOfLimits = state.env.blockHeader.number - blockNumber > 256 || blockNumber >= state.env.blockHeader.number
     for {
-      hash <- if (outOfLimits) UInt256.Zero.pure[F]
-      else OptionT(state.world.getBlockHash(blockNumber)).getOrElse(UInt256.Zero)
+      hash <- if (outOfLimits) UInt256.zero.pure[F]
+      else OptionT(state.world.getBlockHash(blockNumber)).getOrElse(UInt256.zero)
       stack2 = stack1.push(hash)
     } yield state.withStack(stack2).step()
   }
@@ -534,9 +530,9 @@ case object MLOAD extends OpCode(0x51, 1, 1, _.G_verylow) {
     state.withStack(stack2).withMemory(mem1).step().pure[F]
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (offset, _) = state.stack.pop
-    state.config.calcMemCost(state.memory.size, offset, UInt256.Size).pure[F]
+    state.config.calcMemCost(state.memory.size, offset, UInt256.size).pure[F]
   }
 }
 
@@ -547,9 +543,9 @@ case object MSTORE extends OpCode(0x52, 2, 0, _.G_verylow) {
     state.withStack(stack1).withMemory(updatedMem).step().pure[F]
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (offset, _) = state.stack.pop
-    state.config.calcMemCost(state.memory.size, offset, UInt256.Size).pure[F]
+    state.config.calcMemCost(state.memory.size, offset, UInt256.size).pure[F]
   }
 }
 
@@ -569,12 +565,12 @@ case object SLOAD extends OpCode(0x54, 1, 1, _.G_sload) with ConstGas {
 case object MSTORE8 extends OpCode(0x53, 2, 0, _.G_verylow) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].delay {
     val (Seq(offset, value), stack1) = state.stack.pop(2)
-    val valueToByte                  = (value mod 256).toByte
+    val valueToByte                  = (value mod UInt256(256)).toByte
     val updatedMem                   = state.memory.store(offset, valueToByte)
     state.withStack(stack1).withMemory(updatedMem).step()
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (offset, _) = state.stack.pop
     state.config.calcMemCost(state.memory.size, offset, 1).pure[F]
   }
@@ -587,18 +583,18 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
     } else {
       val (Seq(offset, value), stack1) = state.stack.pop(2)
       for {
-        refund  <- gasMetering(state).map(_._2)
-        storage <- state.storage
+        refund         <- gasMetering(state).map(_._2)
+        storage        <- state.storage
         updatedStorage <- storage.store(offset, value)
       } yield {
         state.withStack(stack1).withStorage(updatedStorage).refundGas(refund).step()
       }
     }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] =
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] =
     gasMetering(state).map(_._1)
 
-  private def gasMetering[F[_]: Sync](state: ProgramState[F]): F[(BigInt, BigInt)] = {
+  private def gasMetering[F[_]: Sync](state: ProgramState[F]): F[(N, N)] = {
     val (Seq(offset, value), _) = state.stack.pop(2)
     for {
       storage         <- state.storage
@@ -607,19 +603,19 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
       original        <- originalStorage.load(offset)
     } yield {
       if (!state.config.sstoreGasMetering) {
-        if (current.isZero && !value.isZero) state.config.feeSchedule.G_sset -> 0.toBigInt
+        if (current.isZero && !value.isZero) state.config.feeSchedule.G_sset -> 0.toN
         else if (!current.isZero && value.isZero)
           state.config.feeSchedule.G_sreset    -> state.config.feeSchedule.R_sclear
-        else state.config.feeSchedule.G_sreset -> 0.toBigInt
+        else state.config.feeSchedule.G_sreset -> 0.toN
       } else {
         if (current == value) {
-          state.config.feeSchedule.G_snoop -> 0.toBigInt
+          state.config.feeSchedule.G_snoop -> 0.toN
         } else {
           if (current == original) {
             if (original.isZero) {
-              state.config.feeSchedule.G_sset -> 0.toBigInt
+              state.config.feeSchedule.G_sset -> 0.toN
             } else {
-              val refund = if (value.isZero) state.config.feeSchedule.R_sclear else 0.toBigInt
+              val refund = if (value.isZero) state.config.feeSchedule.R_sclear else 0.toN
               state.config.feeSchedule.G_sfresh -> refund
             }
           } else {
@@ -632,7 +628,7 @@ case object SSTORE extends OpCode(0x55, 2, 0, _.G_zero) {
             } else if (!original.isZero && original == value) {
               state.config.feeSchedule.R_sreset
             } else {
-              0.toBigInt
+              0.toN
             }
             state.config.feeSchedule.G_sdirty -> refund
           }
@@ -675,7 +671,7 @@ case object PC extends ConstOp(0x58) {
 case object MSIZE extends ConstOp(0x59) {
 
   override def f[F[_]: Sync](state: ProgramState[F]): UInt256 =
-    (BigInt(UInt256.Size) * wordsForBytes(state.memory.size)).toUInt256
+    (N(UInt256.size) * wordsForBytes(state.memory.size)).toUInt256
 }
 
 case object GAS extends ConstOp(0x5a) {
@@ -770,9 +766,7 @@ case object PUSH32 extends PushOp(0x7f)
 ///////////////////////////
 // Duplicate Operations
 ///////////////////////////
-sealed abstract class DupOp private (code: Int, val i: Int)
-    extends OpCode(code.toByte, i + 1, i + 2, _.G_verylow)
-    with ConstGas {
+sealed abstract class DupOp private (code: Int, val i: Int) extends OpCode(code.toByte, i + 1, i + 2, _.G_verylow) with ConstGas {
   def this(code: Int) = this(code, code - 0x80)
 
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].pure {
@@ -816,9 +810,7 @@ case object DUP16 extends DupOp(0x8f)
 ///////////////////////////
 // Exchange Operations
 ///////////////////////////
-sealed abstract class SwapOp(code: Int, val i: Int)
-    extends OpCode(code.toByte, i + 2, i + 2, _.G_verylow)
-    with ConstGas {
+sealed abstract class SwapOp(code: Int, val i: Int) extends OpCode(code.toByte, i + 2, i + 2, _.G_verylow) with ConstGas {
   def this(code: Int) = this(code, code - 0x90)
 
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = Sync[F].pure {
@@ -877,7 +869,7 @@ sealed abstract class LogOp(code: Int, val i: Int) extends OpCode(code.toByte, i
     }
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = Sync[F].pure {
     val (Seq(offset, size, _*), _) = state.stack.pop(delta)
     val memCost                    = state.config.calcMemCost(state.memory.size, offset, size)
     val logCost                    = state.config.feeSchedule.G_logdata * size + i * state.config.feeSchedule.G_logtopic
@@ -898,8 +890,7 @@ case object LOG4 extends LogOp(0xa4)
 ///////////////////////////
 // System
 ///////////////////////////
-sealed abstract class CreateOp(code: Int, delta: Int, alpha: Int)
-    extends OpCode(code.toByte, delta, alpha, _.G_create) {
+sealed abstract class CreateOp(code: Int, delta: Int, alpha: Int) extends OpCode(code.toByte, delta, alpha, _.G_create) {
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] =
     if (state.context.readOnly) {
       Sync[F].pure(state.withError(WriteProtectionError))
@@ -965,7 +956,7 @@ sealed abstract class CreateOp(code: Int, delta: Int, alpha: Int)
                 .step()
             } else {
               if (creationFailed) {
-                val stack2 = stack1.push(UInt256.Zero)
+                val stack2 = stack1.push(UInt256.zero)
                 state
                   .withWorld(world1) // if creation fails at this point we still leave the creators nonce incremented
                   .withStack(stack2)
@@ -1003,13 +994,13 @@ sealed abstract class CreateOp(code: Int, delta: Int, alpha: Int)
           }
         },
         ifFalse = {
-          val stack2 = stack1.push(UInt256.Zero)
+          val stack2 = stack1.push(UInt256.zero)
           state.withStack(stack2).step().pure[F]
         }
       )
     }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = Sync[F].pure {
     val (Seq(_, inOffset, inSize), _) = state.stack.pop(3)
     val gas                           = state.config.calcMemCost(state.memory.size, inOffset, inSize)
     if (this == CREATE) {
@@ -1028,18 +1019,18 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
   def exec[F[_]: Sync](state: ProgramState[F]): F[ProgramState[F]] = {
     val (params @ Seq(_, to, callValue, inOffset, inSize, outOffset, outSize), stack1) = getParams(state)
 
-    if (this == CALL && callValue != UInt256.Zero && state.context.readOnly) {
+    if (this == CALL && callValue != UInt256.zero && state.context.readOnly) {
       Sync[F].pure(state.withError(WriteProtectionError))
     } else {
       val (inputData, mem1) = state.memory.load(inOffset, inSize)
-      val endowment         = if (this == DELEGATECALL) UInt256.Zero else callValue
+      val endowment         = if (this == DELEGATECALL) UInt256.zero else callValue
       val toAddr            = Address(to)
 
       if (state.env.noSelfCall) {
         for {
           startGas <- calcStartGas(state, params, endowment)
         } yield {
-          val stack2 = stack1.push(UInt256.One)
+          val stack2 = stack1.push(UInt256.one)
 
           state
             .withStack(stack2)
@@ -1087,7 +1078,7 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
           val validCall = state.env.callDepth < EvmConfig.MaxCallDepth && endowment <= ownBalance
 
           if (!validCall) {
-            val stack2 = stack1.push(UInt256.Zero)
+            val stack2 = stack1.push(UInt256.zero)
             val mem2   = mem1.expand(outOffset, outSize)
 
             state
@@ -1096,7 +1087,7 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
               .spendGas(-startGas)
               .step()
           } else if (result.error.isDefined) {
-            val stack2 = stack1.push(UInt256.Zero)
+            val stack2 = stack1.push(UInt256.zero)
             val mem2   = mem1.expand(outOffset, outSize)
             val word1  = state.world.combineTouchedAccounts(result.world)
 
@@ -1106,7 +1097,7 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
               .withWorld(word1)
               .step()
           } else if (result.isRevert) {
-            val stack2  = stack1.push(UInt256.Zero)
+            val stack2  = stack1.push(UInt256.zero)
             val sizeCap = outSize.min(result.returnData.size).toInt
             val output  = result.returnData.take(sizeCap)
             val mem2    = mem1.store(outOffset, output).expand(outOffset, outSize)
@@ -1117,7 +1108,7 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
               .withReturnData(result.returnData)
               .step()
           } else {
-            val stack2     = stack1.push(UInt256.One)
+            val stack2     = stack1.push(UInt256.one)
             val sizeCap    = outSize.min(result.returnData.size).toInt
             val output     = result.returnData.take(sizeCap)
             val mem2       = mem1.store(outOffset, output).expand(outOffset, outSize)
@@ -1143,7 +1134,7 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
   def internalTransaction(
       env: ExecEnv,
       callee: UInt256,
-      startGas: BigInt,
+      startGas: N,
       inputData: ByteVector,
       endowment: UInt256
   ): InternalTransaction = {
@@ -1152,16 +1143,16 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
     InternalTransaction(this, from, Some(to), startGas, inputData, endowment)
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (Seq(gas, to, callValue, inOffset, inSize, outOffset, outSize), _) = getParams(state)
-    val endowment                                                          = if (this == DELEGATECALL || this == STATICCALL) UInt256.Zero else callValue
+    val endowment                                                          = if (this == DELEGATECALL || this == STATICCALL) UInt256.zero else callValue
     val memCost                                                            = calcMemCost(state, inOffset, inSize, outOffset, outSize)
 
     // FIXME: these are calculated twice (for gas and exec), especially account existence. Can we do better? [EC-243]
     for {
       gExtra <- gasExtra(state, endowment, Address(to))
     } yield {
-      val gCap: BigInt = gasCap(state, gas, gExtra + memCost)
+      val gCap: N = gasCap(state, gas, gExtra + memCost)
       memCost + gCap + gExtra
     }
   }
@@ -1172,7 +1163,7 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
       inSize: UInt256,
       outOffset: UInt256,
       outSize: UInt256
-  ): BigInt = {
+  ): N = {
 
     val memCostIn  = state.config.calcMemCost(state.memory.size, inOffset, inSize)
     val memCostOut = state.config.calcMemCost(state.memory.size, outOffset, outSize)
@@ -1183,13 +1174,13 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
     val (Seq(gas, to), stack1) = state.stack.pop(2)
     val (value, stack2) =
       if (this == DELEGATECALL) (state.env.value, stack1)
-      else if (this == STATICCALL) (UInt256.Zero, stack1)
+      else if (this == STATICCALL) (UInt256.zero, stack1)
       else stack1.pop
     val (Seq(inOffset, inSize, outOffset, outSize), stack3) = stack2.pop(4)
     Seq(gas, to, value, inOffset, inSize, outOffset, outSize) -> stack3
   }
 
-  def calcStartGas[F[_]: Sync](state: ProgramState[F], params: Seq[UInt256], endowment: UInt256): F[BigInt] = {
+  def calcStartGas[F[_]: Sync](state: ProgramState[F], params: Seq[UInt256], endowment: UInt256): F[N] = {
     val Seq(gas, to, _, inOffset, inSize, outOffset, outSize) = params
     val memCost                                               = calcMemCost(state, inOffset, inSize, outOffset, outSize)
 
@@ -1201,13 +1192,13 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
     }
   }
 
-  private def gasCap[F[_]: Sync](state: ProgramState[F], g: BigInt, consumedGas: BigInt): BigInt =
+  private def gasCap[F[_]: Sync](state: ProgramState[F], g: N, consumedGas: N): N =
     if (state.config.subGasCapDivisor.isDefined && state.gas >= consumedGas)
       g min state.config.gasCap(state.gas - consumedGas)
     else
       g
 
-  private def gasExtra[F[_]: Sync](state: ProgramState[F], endowment: UInt256, to: Address): F[BigInt] = {
+  private def gasExtra[F[_]: Sync](state: ProgramState[F], endowment: UInt256, to: Address): F[N] = {
     val isValueTransfer = endowment > 0
 
     def postEip161CostCondition: F[Boolean] =
@@ -1219,8 +1210,8 @@ sealed abstract class CallOp(code: Int, delta: Int, alpha: Int) extends OpCode(c
     for {
       b <- state.config.noEmptyAccounts.pure[F] && postEip161CostCondition || !state.config.noEmptyAccounts
         .pure[F] && preEip161CostCondition
-      c_new: BigInt  = if (b) state.config.feeSchedule.G_newaccount else 0
-      c_xfer: BigInt = if (endowment.isZero) 0 else state.config.feeSchedule.G_callvalue
+      c_new: N  = if (b) state.config.feeSchedule.G_newaccount else 0
+      c_xfer: N = if (endowment.isZero) 0 else state.config.feeSchedule.G_callvalue
     } yield state.config.feeSchedule.G_call + c_xfer + c_new
   }
 }
@@ -1240,7 +1231,7 @@ case object RETURN extends OpCode(0xf3.toByte, 2, 0, _.G_zero) {
     state.withStack(stack1).withReturnData(ret).withMemory(mem1).halt
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = Sync[F].pure {
     val (Seq(offset, size), _) = state.stack.pop(2)
     state.config.calcMemCost(state.memory.size, offset, size)
   }
@@ -1253,7 +1244,7 @@ case object REVERT extends OpCode(0xfd.toByte, 2, 0, _.G_zero) {
     state.withStack(stack1).withReturnData(ret).withMemory(mem1).revert
   }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = Sync[F].pure {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = Sync[F].pure {
     val (Seq(offset, size), _) = state.stack.pop(2)
     state.config.calcMemCost(state.memory.size, offset, size)
   }
@@ -1271,7 +1262,7 @@ case object SELFDESTRUCT extends OpCode(0xff.toByte, 1, 0, _.G_selfdestruct) {
     } else {
       val (refund, stack1)    = state.stack.pop
       val refundAddr: Address = Address(refund)
-      val gasRefund: BigInt =
+      val gasRefund: N =
         if (state.addressesToDelete contains state.ownAddress) 0 else state.config.feeSchedule.R_selfdestruct
 
       for {
@@ -1290,7 +1281,7 @@ case object SELFDESTRUCT extends OpCode(0xff.toByte, 1, 0, _.G_selfdestruct) {
       }
     }
 
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[BigInt] = {
+  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = {
     val (refundAddr, _) = state.stack.pop
     val refundAddress   = Address(refundAddr)
 

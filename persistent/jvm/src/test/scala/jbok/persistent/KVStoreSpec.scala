@@ -4,7 +4,6 @@ import cats.effect.{IO, Resource}
 import cats.implicits._
 import jbok.common.CommonSpec
 import scodec.bits.ByteVector
-import jbok.common.testkit._
 import jbok.persistent.testkit._
 
 class KVStoreSpec extends CommonSpec {

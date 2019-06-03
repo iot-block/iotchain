@@ -28,7 +28,7 @@ final case class Memory(underlying: ByteVector) extends AnyVal {
   }
 
   def load(offset: UInt256): (UInt256, Memory) =
-    doLoad(offset, UInt256.Size) match {
+    doLoad(offset, UInt256.size) match {
       case (bs, memory) => (UInt256(bs), memory)
     }
 

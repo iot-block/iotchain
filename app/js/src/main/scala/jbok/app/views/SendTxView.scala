@@ -9,6 +9,8 @@ import jbok.app.AppState
 import jbok.app.components.{AddressOptionInput, Input, Notification}
 import jbok.app.execution._
 import jbok.app.helper.InputValidator
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.api.BlockTag
 import jbok.core.models.{Account, Address}
 import org.scalajs.dom.raw.HTMLButtonElement
@@ -31,11 +33,11 @@ final case class SendTxView(state: AppState) {
 
   val statusMessage: Var[Option[String]] = Var(None)
 
-  val regularGasLimit = BigInt(21000)
-  val callGasLimit    = BigInt(4000000)
+  val regularGasLimit = N(21000)
+  val callGasLimit    = N(4000000)
 
   private def isValidValue(value: String) =
-    InputValidator.isValidNumber(value) && account.value.forall(BigInt(value) <= _.balance.toBigInt)
+    InputValidator.isValidNumber(value) && account.value.forall(N(value) <= _.balance.toN)
 
   private def updateAccount(address: String) = {
     val p = for {
@@ -67,11 +69,11 @@ final case class SendTxView(state: AppState) {
     } yield sendTx(from, to, value, extra._1, extra._2, passphraseInput.value)
   }
 
-  def sendTx(from: String, to: String, value: String, gasLimit: BigInt, data: Option[String], password: String): Unit = {
+  def sendTx(from: String, to: String, value: String, gasLimit: N, data: Option[String], password: String): Unit = {
     statusMessage.value = Some("sending")
     val fromSubmit     = Address(ByteVector.fromValidHex(from))
     val toSubmit       = Some(Address(ByteVector.fromValidHex(to)))
-    val valueSubmit    = Some(BigInt(value))
+    val valueSubmit    = Some(N(value))
     val gasLimitSubmit = Some(gasLimit)
     val dataSubmit     = data.map(ByteVector.fromValidHex(_))
 

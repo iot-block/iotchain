@@ -2,13 +2,12 @@ package jbok.core.validators
 
 import cats.effect.IO
 import cats.implicits._
-import jbok.common.CommonSpec
 import jbok.core.models._
 import jbok.core.validators.BodyInvalid.BodyTransactionsHashInvalid
 import scodec.bits._
-import jbok.codec.rlp.implicits._
+import jbok.core.CoreSpec
 
-class BodyValidatorSpec extends CommonSpec {
+class BodyValidatorSpec extends CoreSpec {
   val validBlockHeader = BlockHeader(
     parentHash = hex"8345d132564b3660aa5f27c9415310634b50dbc92579c65a0825d9a255227a71",
     beneficiary = hex"df7d7e053933b5cc24372f878c90e62dadad5d42",
@@ -36,7 +35,7 @@ class BodyValidatorSpec extends CommonSpec {
       ),
       0x9d.toByte,
       hex"5b496e526a65eac3c4312e683361bfdb873741acd3714c3bf1bcd7f01dd57ccb",
-      hex"3a30af5f529c7fc1d43cfed773275290475337c5e499f383afd012edcc8d7299",
+      hex"3a30af5f529c7fc1d43cfed773275290475337c5e499f383afd012edcc8d7299"
     ),
     SignedTransaction(
       Transaction(
@@ -49,7 +48,7 @@ class BodyValidatorSpec extends CommonSpec {
       ),
       0x9d.toByte,
       hex"377e542cd9cd0a4414752a18d0862a5d6ced24ee6dba26b583cd85bc435b0ccf",
-      hex"579fee4fd96ecf9a92ec450be3c9a139a687aa3c72c7e43cfac8c1feaf65c4ac",
+      hex"579fee4fd96ecf9a92ec450be3c9a139a687aa3c72c7e43cfac8c1feaf65c4ac"
     ),
     SignedTransaction(
       Transaction(
@@ -62,7 +61,7 @@ class BodyValidatorSpec extends CommonSpec {
       ),
       0x9d.toByte,
       hex"a70267341ba0b33f7e6f122080aa767d52ba4879776b793c35efec31dc70778d",
-      hex"3f66ed7f0197627cbedfe80fd8e525e8bc6c5519aae7955e7493591dcdf1d6d2",
+      hex"3f66ed7f0197627cbedfe80fd8e525e8bc6c5519aae7955e7493591dcdf1d6d2"
     ),
     SignedTransaction(
       Transaction(
@@ -75,7 +74,7 @@ class BodyValidatorSpec extends CommonSpec {
       ),
       0x9d.toByte,
       hex"beb8226bdb90216ca29967871a6663b56bdd7b86cf3788796b52fd1ea3606698",
-      hex"2446994156bc1780cb5806e730b171b38307d5de5b9b0d9ad1f9de82e00316b5",
+      hex"2446994156bc1780cb5806e730b171b38307d5de5b9b0d9ad1f9de82e00316b5"
     )
   )
 
@@ -127,8 +126,7 @@ class BodyValidatorSpec extends CommonSpec {
   "BodyValidator" should {
     "return a failure if a block body doesn't corresponds to a block header due to wrong tx hash" in {
       BodyValidator
-        .validate[IO](
-          Block(validBlockHeader, validBlockBody.copy(transactionList = validBlockBody.transactionList.reverse)))
+        .validate[IO](Block(validBlockHeader, validBlockBody.copy(transactionList = validBlockBody.transactionList.reverse)))
         .attempt
         .unsafeRunSync() shouldBe Left(BodyTransactionsHashInvalid)
     }

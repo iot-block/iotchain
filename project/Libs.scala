@@ -7,7 +7,7 @@ object Libs {
   lazy val common: Seq[Setting[_]] = di ++ logging ++ prometheus ++ circe ++ scodec ++ graph ++ test ++ typelevel ++ enumeratum ++ monocle ++ (libraryDependencies ++= Seq(
     "com.github.pathikrit" %% "better-files"  % "3.5.0",
     "com.propensive"       %%% "magnolia"     % "0.10.0",
-    "org.scala-js"         %% "scalajs-stubs" % "0.6.26",
+    "org.scala-js"         %% "scalajs-stubs" % "0.6.26"
   ))
 
   lazy val terminal = libraryDependencies ++= Seq(
@@ -45,7 +45,7 @@ object Libs {
     "io.github.jmcardon" %% "tsec-password",
     "io.github.jmcardon" %% "tsec-jwt-mac",
     "io.github.jmcardon" %% "tsec-jwt-sig",
-    "io.github.jmcardon" %% "tsec-http4s",
+    "io.github.jmcardon" %% "tsec-http4s"
   ).map(_ % Versions.tsec)
 
   lazy val http4s = libraryDependencies ++= Seq(
@@ -62,18 +62,20 @@ object Libs {
     "org.typelevel"    %%% "cats-effect"            % Versions.catsEffect,
     "co.fs2"           %%% "fs2-core"               % Versions.fs2,
     "co.fs2"           %% "fs2-io"                  % Versions.fs2,
+    "org.typelevel"    %%% "spire"                  % Versions.spire,
+    "org.typelevel"    %% "spire-laws"              % Versions.spire % Test,
     "com.github.cb372" %%% "cats-retry-cats-effect" % "0.2.5"
   )
 
   private lazy val enumeratum = libraryDependencies ++= Seq(
     "com.beachape" %% "enumeratum"            % Versions.enumeratum,
     "com.beachape" %% "enumeratum-cats"       % "1.5.15",
-    "com.beachape" %% "enumeratum-scalacheck" % Versions.enumeratum,
+    "com.beachape" %% "enumeratum-scalacheck" % Versions.enumeratum
   )
 
   private lazy val monocle = libraryDependencies ++= Seq(
     "com.github.julien-truffaut" %% "monocle-core"  % Versions.monocle,
-    "com.github.julien-truffaut" %% "monocle-macro" % Versions.monocle,
+    "com.github.julien-truffaut" %% "monocle-macro" % Versions.monocle
   )
 
   private lazy val graph = libraryDependencies ++= Seq(
@@ -86,7 +88,7 @@ object Libs {
     "io.circe" %%% "circe-parser"         % Versions.circe,
     "io.circe" %%% "circe-generic"        % Versions.circe,
     "io.circe" %%% "circe-generic-extras" % Versions.circe,
-    "io.circe" %% "circe-yaml"            % "0.10.0",
+    "io.circe" %% "circe-yaml"            % "0.10.0"
   )
 
   private lazy val scodec = libraryDependencies ++= Seq(

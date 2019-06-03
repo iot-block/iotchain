@@ -4,6 +4,7 @@ import cats.effect.Sync
 import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
+import jbok.common.math.N
 import jbok.crypto._
 import scodec.bits._
 
@@ -19,10 +20,10 @@ final case class BlockHeader(
     transactionsRoot: ByteVector,
     receiptsRoot: ByteVector,
     logsBloom: ByteVector,
-    difficulty: BigInt,
-    number: BigInt,
-    gasLimit: BigInt,
-    gasUsed: BigInt,
+    difficulty: N,
+    number: N,
+    gasLimit: N,
+    gasUsed: N,
     unixTimestamp: Long,
     extra: ByteVector
 ) {

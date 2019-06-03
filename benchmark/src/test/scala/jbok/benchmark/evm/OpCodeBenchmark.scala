@@ -4,17 +4,19 @@ import jbok.benchmark.JbokBenchmark
 import jbok.core.CoreSpec
 import jbok.core.models.{Address, UInt256}
 import jbok.evm._
-import jbok.evm.testkit._
 import org.openjdk.jmh.annotations.Benchmark
 import scodec.bits._
 
 class OpCodeBenchmark extends JbokBenchmark {
-  val config = EvmConfig.ConstantinopleConfigBuilder(None)
-  val fixture = CreateOpFixture(config)
-  val header = CoreSpec.genesis.header
-  val env = ExecEnv(ownerAddr, callerAddr, callerAddr, 0, ByteVector.empty, 0, Program(ByteVector.empty), header, 0)
-  val context = ProgramContext(env, Address(1024), UInt256.MaxValue, fixture.initWorld, config)
-  val state   = ProgramState(context)
+  val config      = EvmConfig.ConstantinopleConfigBuilder(None)
+  val fixture     = CreateOpFixture(config)
+  val header      = CoreSpec.genesis.header
+  val ownerAddr   = Address(0x123456)
+  val callerAddr  = Address(0xabcdef)
+  val receiveAddr = Address(0x654321)
+  val env         = ExecEnv(ownerAddr, callerAddr, callerAddr, 0, ByteVector.empty, 0, Program(ByteVector.empty), header, 0)
+  val context     = ProgramContext(env, Address(1024), UInt256.MaxValue, fixture.initWorld, config)
+  val state       = ProgramState(context)
 
   val a = UInt256(hex"802431afcbce1fc194c9eaa417b2fb67dc75a95db0bc7ec6b1c8af11df6a1da9")
   val b = UInt256(hex"a1f5aac137876480252e5dcac62c354ec0d42b76b0642b6181ed099849ea1d57")

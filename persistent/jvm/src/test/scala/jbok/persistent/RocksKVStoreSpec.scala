@@ -6,6 +6,7 @@ import fs2._
 import jbok.common.testkit._
 import jbok.persistent.testkit._
 import scodec.bits.ByteVector
+import jbok.common.CommonArb._
 
 object RocksKVStoreSpec extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {

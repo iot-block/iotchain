@@ -2,12 +2,11 @@ package jbok.app.service
 
 import cats.effect.IO
 import jbok.app.AppSpec
-import jbok.common.testkit._
+import jbok.core.StatefulGen
 import jbok.core.api.{BlockTag, TransactionAPI}
 import jbok.core.ledger.History
 import jbok.core.mining.BlockMiner
 import jbok.core.models.{Address, SignedTransaction, Transaction}
-import jbok.core.testkit._
 import scodec.bits.ByteVector
 
 class TransactionAPISpec extends AppSpec {
@@ -16,7 +15,7 @@ class TransactionAPISpec extends AppSpec {
       val history     = objects.get[History[IO]]
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
-      val txs         = random[List[SignedTransaction]](genTxs(10, 10))
+      val txs         = random(StatefulGen.transactions(10, 10))
       val stx         = txs.head
 
       for {
@@ -51,7 +50,7 @@ class TransactionAPISpec extends AppSpec {
       val tx = Transaction(1, 1, 21000, Some(Address.empty), 100000, ByteVector.empty)
 
       for {
-        stx <- SignedTransaction.sign[IO](tx, testKeyPair)
+        stx <- SignedTransaction.sign[IO](tx, testKeyPair, chainId)
         _   <- transaction.sendTx(stx)
         res <- transaction.getTx(stx.hash)
         _ = res shouldBe None
@@ -72,7 +71,7 @@ class TransactionAPISpec extends AppSpec {
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
 
-      val stx = random[List[SignedTransaction]](genTxs(1, 1)).head
+      val stx = random(StatefulGen.transactions(1, 1)).head
 
       for {
         res <- transaction.sendTx(stx)
@@ -88,7 +87,7 @@ class TransactionAPISpec extends AppSpec {
       val miner       = objects.get[BlockMiner[IO]]
       val transaction = objects.get[TransactionAPI[IO]]
 
-      val stx = random[List[SignedTransaction]](genTxs(1, 1)).head
+      val stx = random(StatefulGen.transactions(1, 1)).head
 
       for {
         res <- transaction.sendRawTx(stx.bytes)

@@ -2,12 +2,10 @@ package jbok.core.pool
 
 import cats.effect.IO
 import cats.implicits._
-import jbok.common.testkit._
-import jbok.core.CoreSpec
+import jbok.core.{CoreSpec, StatefulGen}
 import jbok.core.ledger.History
 import jbok.core.messages.SignedTransactions
-import jbok.core.models.SignedTransaction
-import jbok.core.testkit._
+import jbok.core.models.{SignedTransaction, Transaction}
 import jbok.crypto.signature.KeyPair
 import jbok.crypto.testkit._
 import monocle.macros.syntax.lens._
@@ -19,7 +17,7 @@ class TxPoolSpec extends CoreSpec {
     "store pending transactions" in check { objects =>
       val txPool = objects.get[TxPool[IO]]
       val history = objects.get[History[IO]]
-      val txs    = random[List[SignedTransaction]](genTxs(1, 10, history))
+      val txs    = random(StatefulGen.transactions(1, 10, history))
       for {
         _   <- txPool.addTransactions(SignedTransactions(txs))
         res <- txPool.getPendingTransactions.map(_.keys)
@@ -30,7 +28,7 @@ class TxPoolSpec extends CoreSpec {
     "ignore known transactions" in check { objects =>
       val txPool = objects.get[TxPool[IO]]
       val history = objects.get[History[IO]]
-      val txs    = random[List[SignedTransaction]](genTxs(1, 10, history))
+      val txs    = random(StatefulGen.transactions(1, 10, history))
       val stxs   = SignedTransactions(txs)
       for {
         _   <- txPool.addTransactions(stxs)
@@ -42,16 +40,16 @@ class TxPoolSpec extends CoreSpec {
 
     "override transactions with the same sender and nonce" in check { objects =>
       val txPool = objects.get[TxPool[IO]]
-      val tx1    = genTx.sample.get
-      val tx2    = genTx.sample.get
-      val tx3    = genTx.sample.get
+      val tx1    = random[Transaction]
+      val tx2    = random[Transaction]
+      val tx3    = random[Transaction]
 
       val kp1 = random[KeyPair]
       val kp2 = random[KeyPair]
 
-      val first  = SignedTransaction.sign[IO](tx1, kp1).unsafeRunSync()
-      val second = SignedTransaction.sign[IO](tx2.copy(nonce = tx1.nonce), kp1).unsafeRunSync()
-      val other  = SignedTransaction.sign[IO](tx3, kp2).unsafeRunSync()
+      val first  = SignedTransaction.sign[IO](tx1, kp1, chainId).unsafeRunSync()
+      val second = SignedTransaction.sign[IO](tx2.copy(nonce = tx1.nonce), kp1, chainId).unsafeRunSync()
+      val other  = SignedTransaction.sign[IO](tx3, kp2, chainId).unsafeRunSync()
 
       for {
         _ <- txPool.addOrUpdateTransaction(first)
@@ -65,7 +63,7 @@ class TxPoolSpec extends CoreSpec {
     "remove transaction on timeout" in check(config.lens(_.txPool.transactionTimeout).set(100.millis)) { objects =>
       val txPool = objects.get[TxPool[IO]]
       val history = objects.get[History[IO]]
-      val stx    = random[List[SignedTransaction]](genTxs(1, 1, history)).head
+      val stx    = random(StatefulGen.transactions(1, 1, history)).head
       for {
         _  <- txPool.addTransactions(SignedTransactions(stx :: Nil))
         p1 <- txPool.getPendingTransactions

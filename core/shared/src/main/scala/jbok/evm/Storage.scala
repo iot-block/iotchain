@@ -5,18 +5,17 @@ import cats.implicits._
 import jbok.core.models.UInt256
 import jbok.core.store.ColumnFamilies
 import jbok.persistent._
-import jbok.codec.rlp.implicits._
 
 final case class Storage[F[_]: Sync](store: StageKVStore[F, UInt256, UInt256]) {
   def store(offset: UInt256, value: UInt256): F[Storage[F]] = Sync[F].pure {
-    if (value == UInt256.Zero) {
+    if (value == UInt256.zero) {
       this.copy(store = store.del(offset))
     } else {
       this.copy(store = store.put(offset, value))
     }
   }
 
-  def load(offset: UInt256): F[UInt256] = store.get(offset).map(_.getOrElse(UInt256.Zero))
+  def load(offset: UInt256): F[UInt256] = store.get(offset).map(_.getOrElse(UInt256.zero))
 
   def commit: F[Storage[F]] = store.commit.map(db2 => this.copy(store = db2))
 

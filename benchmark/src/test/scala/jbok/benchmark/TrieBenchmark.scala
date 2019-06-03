@@ -3,7 +3,7 @@ package jbok.benchmark
 import cats.effect.IO
 import jbok.codec.HexPrefix
 import jbok.codec.rlp.implicits._
-import jbok.common.testkit._
+import jbok.common.gen
 import jbok.core.store.ColumnFamilies
 import jbok.crypto.authds.mpt.MptNode.LeafNode
 import jbok.crypto.authds.mpt.{MerklePatriciaTrie, MptNode}
@@ -24,8 +24,8 @@ class TrieBenchmark extends JbokBenchmark {
 
   val (keys, values) =
     (for {
-      keys   <- Gen.listOfN(size, genBoundedByteVector(0, 100)).map(_.toArray)
-      values <- Gen.listOfN(size, genBoundedByteVector(0, 100)).map(_.toArray)
+      keys   <- Gen.listOfN(size, gen.boundedByteVector(0, 100)).map(_.toArray)
+      values <- Gen.listOfN(size, gen.boundedByteVector(0, 100)).map(_.toArray)
     } yield (keys, values)).sample.get
 
 //  @Benchmark

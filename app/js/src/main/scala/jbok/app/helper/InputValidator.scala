@@ -26,7 +26,7 @@ object InputValidator {
   def isValidNumber(n: String): Boolean = n.length > 0 && n.forall(number.contains(_))
 
   def isValidValue(value: String, account: Option[Account]): Boolean =
-    value.forall(number.contains(_)) && account.forall(_.balance.toBigInt >= BigInt(value))
+    value.forall(number.contains(_)) && account.forall(_.balance.toN >= BigInt(value))
 
   def isValidData(data: String): Boolean = {
     val value = getHexValue(data)

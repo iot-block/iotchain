@@ -3,10 +3,11 @@ package jbok.core.messages
 import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.rlp.implicits._
 import jbok.codec.json.implicits._
+import jbok.common.math.N
 import jbok.core.models.Block
 import scodec.bits.ByteVector
 
-@ConfiguredJsonCodec final case class BlockHash(hash: ByteVector, number: BigInt)
+@ConfiguredJsonCodec final case class BlockHash(hash: ByteVector, number: N)
 object BlockHash {
   val name = "BlockHash"
 

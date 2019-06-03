@@ -6,6 +6,7 @@ import cats.implicits._
 import fs2._
 import javax.net.ssl.SSLContext
 import jbok.common.log.Logger
+import jbok.common.math.N
 import jbok.core.NodeStatus
 import jbok.core.api.{JbokClient, JbokClientPlatform}
 import jbok.core.config.{PeerConfig, SyncConfig}
@@ -33,7 +34,7 @@ final class SyncClient[F[_]](
       case xs if xs.length >= peerConfig.minPeers =>
         for {
           current <- history.getBestBlockNumber
-          td      <- history.getTotalDifficultyByNumber(current).map(_.getOrElse(BigInt(0)))
+          td      <- history.getTotalDifficultyByNumber(current).map(_.getOrElse(N(0)))
           peerOpt <- PeerSelector.bestPeer[F](td).run(xs).map(_.headOption)
           status = peerOpt match {
             case Some(peer) => NodeStatus.Syncing(peer)
@@ -61,13 +62,13 @@ final class SyncClient[F[_]](
   def requestHeaders(peer: Peer[F]): F[List[Block]] = mkClient(peer).use { client =>
     for {
       current <- history.getBestBlockNumber
-      start = BigInt(1).max(current + 1 - syncConfig.offset)
+      start = N(1).max(current + 1 - syncConfig.offset)
       headers  <- client.block.getBlockHeadersByNumber(start, syncConfig.maxBlockHeadersPerRequest)
       imported <- handleBlockHeaders(peer, start, headers)
     } yield imported
   }
 
-  private def handleBlockHeaders(peer: Peer[F], startNumber: BigInt, headers: List[BlockHeader]): F[List[Block]] =
+  private def handleBlockHeaders(peer: Peer[F], startNumber: N, headers: List[BlockHeader]): F[List[Block]] =
     if (headers.isEmpty) {
       log.debug(s"got empty headers from ${peer.uri}, retry in ${syncConfig.checkInterval}").as(Nil)
     } else if (headers.headOption.map(_.number).contains(startNumber)) {

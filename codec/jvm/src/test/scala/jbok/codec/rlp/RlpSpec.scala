@@ -1,10 +1,11 @@
 package jbok.codec.rlp
 
 import cats.effect.IO
-import jbok.common.CommonSpec
 import jbok.codec.rlp.implicits._
 import jbok.codec.testkit
+import jbok.common.CommonSpec
 import scodec.bits._
+import spire.math.SafeLong
 
 class RlpSpec extends CommonSpec with testkit {
 
@@ -41,6 +42,9 @@ class RlpSpec extends CommonSpec with testkit {
 
       BigInt(0).asBytes.length shouldBe 1
       BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935").asBytes.length shouldBe 33
+
+      SafeLong.zero.asBytes.length shouldBe 1
+      SafeLong(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935")).asBytes.length shouldBe 33
     }
 
     "encode scalar to the same value" in {
@@ -118,11 +122,11 @@ class RlpSpec extends CommonSpec with testkit {
       roundtripAndMatch(100, hex"0x64")
       roundtripAndMatch(1000, hex"0x8203e8")
       roundtripAndMatch(
-        BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935"),
+        SafeLong(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935")),
         hex"0xa0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
       )
       roundtripAndMatch(
-        BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639936"),
+        SafeLong(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639936")),
         hex"0xa1010000000000000000000000000000000000000000000000000000000000000000"
       )
     }

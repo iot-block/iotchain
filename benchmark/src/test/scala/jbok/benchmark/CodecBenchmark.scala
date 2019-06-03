@@ -2,15 +2,15 @@ package jbok.benchmark
 
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
+import jbok.core.StatelessGen
 import jbok.core.models.BlockHeader
-import jbok.core.testkit._
 import org.openjdk.jmh.annotations._
 import org.scalacheck.Gen
 
 class CodecBenchmark extends JbokBenchmark {
   val size = 10000
 
-  val xs = Gen.listOfN(size, arbBlockHeader.arbitrary).sample.get.toArray
+  val xs = Gen.listOfN(size, StatelessGen.blockHeader).sample.get.toArray
 
   var i = 0
 

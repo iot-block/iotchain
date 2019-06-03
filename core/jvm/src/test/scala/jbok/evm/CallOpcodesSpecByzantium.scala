@@ -22,7 +22,7 @@ class CallOpcodesSpecByzantium extends CoreSpec {
       val call    = fxt.CallResult(op = STATICCALL, context)
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
     }
 
@@ -52,7 +52,7 @@ class CallOpcodesSpecByzantium extends CoreSpec {
       }
 
       "return 1" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.One
+        call.stateOut.stack.pop._1 shouldBe UInt256.one
       }
 
       "update precompiled contract's balance" in {
@@ -65,7 +65,7 @@ class CallOpcodesSpecByzantium extends CoreSpec {
       val call    = fxt.CallResult(op = STATICCALL, context)
 
       "return 0" in {
-        call.stateOut.stack.pop._1 shouldBe UInt256.Zero
+        call.stateOut.stack.pop._1 shouldBe UInt256.zero
       }
 
       "consume correct gas" in {

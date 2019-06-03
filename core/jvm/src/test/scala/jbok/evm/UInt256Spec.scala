@@ -1,14 +1,12 @@
 package jbok.evm
 
-import jbok.common.testkit._
+import jbok.common.gen
 import jbok.core.models.UInt256
 import jbok.core.models.UInt256._
-import jbok.core.testkit._
-import org.scalatest.FunSuite
-import org.scalatest.prop.PropertyChecks
+import jbok.core.{CoreSpec, StatelessGen}
 import scodec.bits.ByteVector
 
-class UInt256Spec extends FunSuite with PropertyChecks {
+class UInt256Spec extends CoreSpec {
 
   val Modulus: BigInt        = UInt256.MaxValue.toBigInt + 1
   val MaxSignedValue: BigInt = Modulus / 2 - 1
@@ -28,11 +26,11 @@ class UInt256Spec extends FunSuite with PropertyChecks {
   def toUnsignedBigInt(n: BigInt): BigInt = if (n < 0) n + Modulus else n
 
   /** For each operation (op) tests check a following property:
-   For two BigInts (n1, n2):
-   UInt256(n1) op UInt256(n2) == UInt256(n1 op n2)
+    *For two BigInts (n1, n2):
+    *UInt256(n1) op UInt256(n2) == UInt256(n1 op n2)
     */
-  test("&") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "&" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert((UInt256(n1) & UInt256(n2)) == UInt256(n1 & n2))
     }
     forAll(specialCases) { (n1: BigInt, n2: BigInt) =>
@@ -40,8 +38,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("|") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "|" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert((UInt256(n1) | UInt256(n2)) == UInt256(n1 | n2))
     }
     forAll(specialCases) { (n1: BigInt, n2: BigInt) =>
@@ -49,8 +47,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("^") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "^" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert((UInt256(n1) ^ UInt256(n2)) == UInt256(n1 ^ n2))
     }
     forAll(specialCases) { (n1: BigInt, n2: BigInt) =>
@@ -58,8 +56,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("~") {
-    forAll(bigIntGen) { n: BigInt =>
+  "~" in {
+    forAll { n: BigInt =>
       assert(~UInt256(n) == UInt256(~n))
     }
     forAll(Table("n", specialNumbers: _*)) { n: BigInt =>
@@ -67,20 +65,20 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("negation") {
-    forAll(bigIntGen) { (n: BigInt) =>
+  "negation" in {
+    forAll { n: BigInt =>
       assert(-UInt256(n) == UInt256(-n))
     }
-    forAll(Table("n", specialNumbers: _*)) { (n: BigInt) =>
+    forAll(Table("n", specialNumbers: _*)) { n: BigInt =>
       assert(-UInt256(n) == UInt256(-n))
     }
     assert(-UInt256(1) == UInt256(-1))
     assert(-UInt256(-1) == UInt256(1))
-    assert(-UInt256.Zero == UInt256.Zero)
+    assert(-UInt256.zero == UInt256.zero)
   }
 
-  test("+") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "+" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert(UInt256(n1) + UInt256(n2) == UInt256(n1 + n2))
     }
     forAll(specialCases) { (n1: BigInt, n2: BigInt) =>
@@ -88,8 +86,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("-") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "-" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert(UInt256(n1) - UInt256(n2) == UInt256(n1 - n2))
     }
     forAll(specialCases) { (n1: BigInt, n2: BigInt) =>
@@ -97,8 +95,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("*") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "*" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert(UInt256(n1) * UInt256(n2) == UInt256(n1 * n2))
     }
     forAll(specialCases) { (n1: BigInt, n2: BigInt) =>
@@ -106,8 +104,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("/") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "/" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert(UInt256(n1) * UInt256(n2) == UInt256(n1 * n2))
     }
     forAll(specialCases) { (n1: BigInt, n2: BigInt) =>
@@ -115,8 +113,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("div") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "div" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       whenever(n2 != 0) {
         assert((UInt256(n1) div UInt256(n2)) == UInt256(n1 / n2))
       }
@@ -126,71 +124,71 @@ class UInt256Spec extends FunSuite with PropertyChecks {
         assert((UInt256(n1) div UInt256(n2)) == UInt256(n1 / n2))
       }
     }
-    assert((UInt256(1) div Zero) == Zero)
+    assert((UInt256(1) div zero) == zero)
   }
 
-  test("sdiv") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "sdiv" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       whenever(n2 != 0) {
         val expected: BigInt = toUnsignedBigInt(toSignedBigInt(n1) / toSignedBigInt(n2))
         assert((UInt256(n1) sdiv UInt256(n2)) == UInt256(expected))
       }
     }
     assert((UInt256(-1) sdiv UInt256(-MaxValue.toBigInt)) == UInt256(-1))
-    assert((UInt256(-1) sdiv Zero) == Zero)
+    assert((UInt256(-1) sdiv zero) == zero)
   }
 
-  test("mod") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "mod" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       whenever(n2 != 0) {
         assert((UInt256(n1) mod UInt256(n2)) == UInt256(n1 mod n2))
       }
     }
-    assert((UInt256(-1) mod UInt256(MaxValue.toBigInt)) == Zero)
-    assert((UInt256(1) mod Zero) == Zero)
+    assert((UInt256(-1) mod UInt256(MaxValue.toBigInt)) == zero)
+    assert((UInt256(1) mod zero) == zero)
   }
 
-  test("smod") {
+  "smod" in {
     assert((UInt256(Modulus - 1) smod UInt256(3)) == UInt256(Modulus - 1))
-    assert((UInt256(-1) smod UInt256(MaxValue.toBigInt)) == Zero)
-    assert((UInt256(1) smod Zero) == Zero)
+    assert((UInt256(-1) smod UInt256(MaxValue.toBigInt)) == zero)
+    assert((UInt256(1) smod zero) == zero)
   }
 
-  test("addmod") {
-    forAll(bigIntGen, bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt, n3: BigInt) =>
+  "addmod" in {
+    forAll { (n1: BigInt, n2: BigInt, n3: BigInt) =>
       whenever(n3 != 0) {
         assert(UInt256(n1).addmod(UInt256(n2), UInt256(n3)) == UInt256((n1 + n2) mod n3))
       }
     }
-    assert(UInt256(42).addmod(UInt256(42), Zero) == Zero)
+    assert(UInt256(42).addmod(UInt256(42), zero) == zero)
   }
 
-  test("mulmod") {
-    forAll(bigIntGen, bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt, n3: BigInt) =>
+  "mulmod" in {
+    forAll { (n1: BigInt, n2: BigInt, n3: BigInt) =>
       whenever(n3 != 0) {
         assert(UInt256(n1).mulmod(UInt256(n2), UInt256(n3)) == UInt256((n1 * n2) mod n3))
       }
     }
-    assert(UInt256(42).mulmod(UInt256(42), Zero) == Zero)
+    assert(UInt256(42).mulmod(UInt256(42), zero) == zero)
   }
 
-  test("**") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "**" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert(UInt256(n1) ** UInt256(n2) == UInt256(n1.modPow(n2, Modulus)))
     }
   }
 
-  test("signExtend") {
+  "signExtend" in {
     val testData = Table[UInt256, UInt256, UInt256](
       ("value", "extension", "result"),
       (42, 3, 42),
       (42, 1, 42),
       (42, -1, 42),
       (42, 0, 42),
-      (42, Size, 42),
-      (42, Size + 1, 42),
-      (-42, Size, -42),
-      (-42, Size + 1, -42),
+      (42, UInt256.size, 42),
+      (42, UInt256.size + 1, 42),
+      (-42, UInt256.size, -42),
+      (-42, UInt256.size + 1, -42),
       (-42, -11, -42),
       (-1, 1, -1),
       (-1, 1, -1),
@@ -204,8 +202,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("slt") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "slt" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert((UInt256(n1) slt UInt256(n2)) == (toSignedBigInt(n1) < toSignedBigInt(n2)))
     }
 
@@ -216,8 +214,8 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("sgt") {
-    forAll(bigIntGen, bigIntGen) { (n1: BigInt, n2: BigInt) =>
+  "sgt" in {
+    forAll { (n1: BigInt, n2: BigInt) =>
       assert((UInt256(n1) sgt UInt256(n2)) == (toSignedBigInt(n1) > toSignedBigInt(n2)))
     }
 
@@ -229,15 +227,15 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("getByte") {
+  "getByte" in {
     val v1 = UInt256(ByteVector((100 to 131).map(_.toByte).toArray))
 
     val testData = Table[UInt256, UInt256, UInt256](
       ("value", "idx", "result"),
-      (42, -1, Zero),
-      (42, Size, Zero),
-      (42, Size + 1, Zero),
-      (1, 287, Zero),
+      (42, -1, zero),
+      (42, UInt256.size, zero),
+      (42, UInt256.size + 1, zero),
+      (1, 287, zero),
       (v1, 0, 100),
       (v1, 1, 101),
       (v1, 30, 130),
@@ -250,7 +248,7 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("<<") {
+  "<<" in {
     val v1 = UInt256(Byte.MinValue +: Array.fill[Byte](31)(0))
     val v2 = UInt256(Byte.MaxValue +: Array.fill[Byte](31)(255.toByte))
     val testData = Table[UInt256, UInt256, UInt256](
@@ -273,7 +271,7 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test(">>") {
+  ">>" in {
     val v1 = UInt256(Byte.MinValue +: Array.fill[Byte](31)(0))
     val v2 = UInt256(64.toByte +: Array.fill[Byte](31)(0))
     val v3 = UInt256(Byte.MaxValue +: Array.fill[Byte](31)(255.toByte))
@@ -302,7 +300,7 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test(">>>") {
+  ">>>" in {
     val v1 = UInt256(Byte.MinValue +: Array.fill[Byte](31)(0))
     val v2 = UInt256(64.toByte +: Array.fill[Byte](31)(0))
     val v3 = UInt256(Byte.MaxValue +: Array.fill[Byte](31)(255.toByte))
@@ -326,11 +324,11 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("intValue") {
+  "intValue" in {
     assert(specialNumbers.map(UInt256(_).toInt) == Seq(Int.MaxValue, 0, 1, Int.MaxValue, 1, 2))
   }
 
-  test("comparison") {
+  "comparison" in {
     type CFUI = (UInt256, UInt256) => Boolean
     type CFBI = (BigInt, BigInt) => Boolean
     case class Cmp(uint: CFUI, bi: CFBI)
@@ -340,7 +338,7 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     val comparators    = cmpFuncUInt256.zip(cmpFuncBigInt).map(Cmp.tupled)
 
     forAll(Table("comparators", comparators: _*)) { cmp =>
-      forAll(uint256Gen(), uint256Gen()) { (a, b) =>
+      forAll { (a: UInt256, b: UInt256) =>
         assert(cmp.uint(a, b) == cmp.bi(a.toBigInt, b.toBigInt))
       }
 
@@ -351,50 +349,40 @@ class UInt256Spec extends FunSuite with PropertyChecks {
     }
   }
 
-  test("Passing too long ByteVector should throw an exception") {
+  "Passing too long ByteVector should throw an exception" in {
     assertThrows[IllegalArgumentException] {
-      UInt256(ByteVector(Array.fill(Size + 1)(1.toByte)))
+      UInt256(ByteVector(Array.fill(UInt256.size + 1)(1.toByte)))
     }
   }
 
-  test("UInt256 converted to a byte array should always have length 32 bytes") {
-    forAll(bigIntGen) { n =>
+  "UInt256 converted to a byte array should always have length 32 bytes" in {
+    forAll { n: BigInt =>
       assert(UInt256(n).bytes.size == 32)
     }
     // regression
-    assert(
-      UInt256(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935")).bytes.size == 32)
+    assert(UInt256(BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935")).bytes.size == 32)
   }
 
-  test("2-way bytes conversion") {
-    forAll(uint256Gen()) { x =>
+  "2-way bytes conversion" in {
+    forAll { x: UInt256 =>
       val y = UInt256(x.bytes)
       assert(x === y)
     }
 
-    forAll(genBoundedByteVector(0, 32)) { xs =>
+    forAll(gen.boundedByteVector(0, 32)) { xs =>
       val ys = UInt256(xs).bytes
       assert(xs.dropWhile(_ == 0) === ys.dropWhile(_ == 0))
     }
   }
 
-  test("byteSize") {
-    val table = Table[BigInt, Int](("x", "expected"),
-                                   (0, 0),
-                                   (1, 1),
-                                   (255, 1),
-                                   (256, 2),
-                                   (65535, 2),
-                                   (65536, 3),
-                                   (BigInt(2).pow(256) - 1, 32),
-                                   (BigInt(2).pow(256), 0))
+  "byteSize" in {
+    val table = Table[BigInt, Int](("x", "expected"), (0, 0), (1, 1), (255, 1), (256, 2), (65535, 2), (65536, 3), (BigInt(2).pow(256) - 1, 32), (BigInt(2).pow(256), 0))
     forAll(table) { (x, expected) =>
       assert(UInt256(x).byteSize === expected)
     }
 
-    forAll(uint256Gen(min = UInt256(1))) { x =>
-      import math._
-      val byteSize = 1 + floor(log(x.doubleValue) / log(256)).toInt
+    forAll(StatelessGen.uint256(min = UInt256(1))) { x =>
+      val byteSize = 1 + math.floor(math.log(x.toBigInt.doubleValue()) / math.log(256)).toInt
       assert(x.byteSize === byteSize)
     }
   }

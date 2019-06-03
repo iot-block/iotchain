@@ -1,6 +1,7 @@
 package jbok.evm
 
 import cats.effect.Sync
+import jbok.common.math.N
 import jbok.core.models.{Address, BlockHeader, SignedTransaction, UInt256}
 import scodec.bits.ByteVector
 
@@ -53,7 +54,7 @@ object ProgramContext {
 final case class ProgramContext[F[_]: Sync](
     env: ExecEnv,
     receivingAddr: Address,
-    startGas: BigInt,
+    startGas: N,
     world: WorldState[F],
     config: EvmConfig,
     initialAddressesToDelete: Set[Address] = Set.empty,

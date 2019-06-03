@@ -2,10 +2,13 @@ package jbok.app.service
 
 import cats.effect.Sync
 import cats.implicits._
+import jbok.common.math.N
 import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.models.{Address, Block, SignedTransaction, Transaction}
 import jbok.core.api.{BlockTag, CallTx, ContractAPI}
 import scodec.bits.ByteVector
+import spire.syntax.all._
+import spire.compat._
 
 final class ContractService[F[_]](history: History[F], executor: BlockExecutor[F], helper: ServiceHelper[F])(implicit F: Sync[F]) extends ContractAPI[F] {
 //  override def getABI(address: Address): F[Option[Ast.ContractDef]] = ???
@@ -18,25 +21,25 @@ final class ContractService[F[_]](history: History[F], executor: BlockExecutor[F
       txResult     <- executor.simulateTransaction(stx, callTx.from.getOrElse(Address.empty), block.header)
     } yield txResult.vmReturnData
 
-  override def getEstimatedGas(callTx: CallTx, tag: BlockTag): F[BigInt] =
+  override def getEstimatedGas(callTx: CallTx, tag: BlockTag): F[N] =
     for {
       (stx, block) <- doCall(callTx, tag)
       gas          <- executor.binarySearchGasEstimation(stx, callTx.from.getOrElse(Address.empty), block.header)
     } yield gas
 
-  override def getGasPrice: F[BigInt] = {
-    val blockDifference = BigInt(30)
+  override def getGasPrice: F[N] = {
+    val blockDifference = N(30)
     for {
       bestBlock <- history.getBestBlockNumber
-      gasPrices <- ((bestBlock - blockDifference) to bestBlock)
-        .filter(_ >= BigInt(0))
-        .toList
+      gasPrices <- List
+        .range(bestBlock - blockDifference, bestBlock)
+        .filter(_ >= N(0))
         .traverse(history.getBlockByNumber)
         .map(_.flatten.flatMap(_.body.transactionList).map(_.gasPrice))
       gasPrice = if (gasPrices.nonEmpty) {
-        gasPrices.sum / gasPrices.length
+        gasPrices.qsum / gasPrices.length
       } else {
-        BigInt(0)
+        N(0)
       }
     } yield gasPrice
   }
@@ -54,9 +57,9 @@ final class ContractService[F[_]](history: History[F], executor: BlockExecutor[F
       tx = Transaction(0, callTx.gasPrice, gasLimit, callTx.to, callTx.value, callTx.data)
     } yield SignedTransaction(tx, 0.toByte, ByteVector(0), ByteVector(0))
 
-  private def getGasLimit(callTx: CallTx, tag: BlockTag): F[BigInt] =
+  private def getGasLimit(callTx: CallTx, tag: BlockTag): F[N] =
     callTx.gas match {
       case Some(gas) => gas.pure[F]
-      case None      => helper.resolveBlock(tag).map(_.map(_.header.gasLimit).getOrElse(BigInt(0)))
+      case None      => helper.resolveBlock(tag).map(_.map(_.header.gasLimit).getOrElse(N(0)))
     }
 }

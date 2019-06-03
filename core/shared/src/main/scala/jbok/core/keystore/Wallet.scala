@@ -2,12 +2,12 @@ package jbok.core.keystore
 
 import cats.effect.Sync
 import cats.implicits._
-import jbok.core.models.{Address, SignedTransaction, Transaction}
+import jbok.core.models.{Address, ChainId, SignedTransaction, Transaction}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 
 final case class Wallet(address: Address, keyPair: KeyPair) {
-  def signTx[F[_]: Sync](tx: Transaction)(implicit chainId: BigInt): F[SignedTransaction] =
-    SignedTransaction.sign[F](tx, keyPair)
+  def signTx[F[_]: Sync](tx: Transaction, chainId: ChainId): F[SignedTransaction] =
+    SignedTransaction.sign[F](tx, keyPair, chainId)
 }
 
 object Wallet {

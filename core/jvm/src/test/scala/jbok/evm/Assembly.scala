@@ -1,5 +1,6 @@
 package jbok.evm
 
+import jbok.common.math.N
 import jbok.evm.Assembly._
 import scodec.bits.ByteVector
 
@@ -29,7 +30,7 @@ final case class Assembly(byteCode: ByteCode*) {
 
   val program: Program = Program(code)
 
-  def linearConstGas(config: EvmConfig): BigInt = byteCode.foldLeft(BigInt(0)) {
+  def linearConstGas(config: EvmConfig): N = byteCode.foldLeft(N(0)) {
     case (g, b: OpCodeAsByteCode) => g + b.op.constGasFn(config.feeSchedule)
     case (g, _)                   => g
   }

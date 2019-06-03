@@ -33,13 +33,13 @@ final case class Account(
     * According to EIP161: An account is considered empty when it has no code and zero nonce and zero balance.
     * An account's storage is not relevant when determining emptiness.
     */
-  def isEmpty(startNonce: UInt256 = UInt256.Zero): Boolean =
-    nonce == startNonce && balance == UInt256.Zero && codeHash == Account.EmptyCodeHash
+  def isEmpty(startNonce: UInt256 = UInt256.zero): Boolean =
+    nonce == startNonce && balance == UInt256.zero && codeHash == Account.EmptyCodeHash
 
   /**
     * Under EIP-684 if this evaluates to true then we have a conflict when creating a new account
     */
-  def nonEmptyCodeOrNonce(startNonce: UInt256 = UInt256.Zero): Boolean =
+  def nonEmptyCodeOrNonce(startNonce: UInt256 = UInt256.zero): Boolean =
     nonce != startNonce || codeHash != Account.EmptyCodeHash
 }
 
@@ -48,6 +48,6 @@ object Account {
 
   val EmptyCodeHash: ByteVector = ByteVector.empty.kec256
 
-  def empty(startNonce: UInt256 = UInt256.Zero): Account =
+  def empty(startNonce: UInt256 = UInt256.zero): Account =
     Account(nonce = startNonce, storageRoot = EmptyStorageRootHash, codeHash = EmptyCodeHash)
 }

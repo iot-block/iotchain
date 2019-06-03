@@ -2,9 +2,7 @@ package jbok.core.peer
 
 import cats.effect.IO
 import cats.implicits._
-import jbok.common.testkit._
 import jbok.core.CoreSpec
-import jbok.core.testkit._
 import org.scalacheck.Gen
 
 class PeerStoreSpec extends CoreSpec {

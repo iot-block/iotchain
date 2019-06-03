@@ -6,6 +6,8 @@ import cats.implicits._
 import io.circe.syntax._
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.common.metrics.Metrics
 import jbok.common.metrics.implicits._
 import jbok.core.config.GenesisConfig
@@ -16,16 +18,14 @@ import jbok.evm.WorldState
 import jbok.persistent._
 import scodec.bits._
 
-final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F: Sync[F], c: BigInt, T: Timer[F]) extends History[F] {
+final class HistoryImpl[F[_]](val chainId: ChainId, store: KVStore[F], metrics: Metrics[F])(implicit F: Sync[F], T: Timer[F]) extends History[F] {
   private[this] val log = Logger[F]
 
   implicit private val m = metrics
 
-  override val chainId: BigInt = c
-
   override def initGenesis(config: GenesisConfig): F[Unit] =
     for {
-      _ <- getBlockHeaderByNumber(0)
+      _ <- getBlockHeaderByNumber(0L)
         .map(_.isDefined)
         .ifM(F.raiseError(new Exception("genesis already defined")), F.unit)
       _     <- log.d(s"init with genesis config:\n${config.asJson.spaces2}")
@@ -44,7 +44,7 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
   override def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]] =
     store.getAs[BlockHeader](ColumnFamilies.BlockHeader, hash.asBytes).observed("getBlockHeaderByHash")
 
-  override def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]] =
+  override def getBlockHeaderByNumber(number: N): F[Option[BlockHeader]] =
     (for {
       hash   <- OptionT(getHashByBlockNumber(number))
       header <- OptionT(getBlockHeaderByHash(hash))
@@ -105,13 +105,13 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
       body   <- OptionT(getBlockBodyByHash(hash))
     } yield Block(header, body)).value.observed("getBlockByHash")
 
-  override def getBlockByNumber(number: BigInt): F[Option[Block]] =
+  override def getBlockByNumber(number: N): F[Option[Block]] =
     (for {
       hash  <- OptionT(getHashByBlockNumber(number))
       block <- OptionT(getBlockByHash(hash))
     } yield block).value.observed("getBlockByNumber")
 
-  override def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: BigInt): F[Unit] =
+  override def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: N): F[Unit] =
     (putBlockHeader(block.header) >>
       putBlockBody(block.header.hash, block.body) >>
       putReceipts(block.header.hash, receipts) >>
@@ -158,17 +158,17 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
   override def putMptNode(hash: ByteVector, bytes: ByteVector): F[Unit] =
     store.put(ColumnFamilies.Node, hash.asBytes, bytes.asBytes).observed("putMptNode")
 
-  override def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]] =
+  override def getAccount(address: Address, blockNumber: N): F[Option[Account]] =
     (for {
       header  <- OptionT(getBlockHeaderByNumber(blockNumber))
       mpt     <- OptionT.liftF(MerklePatriciaTrie[F, Address, Account](ColumnFamilies.Node, store, Some(header.stateRoot)))
       account <- OptionT(mpt.get(address))
     } yield account).value.observed("getAccount")
 
-  override def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector] =
+  override def getStorage(rootHash: ByteVector, position: N): F[ByteVector] =
     (for {
       mpt   <- MerklePatriciaTrie[F, UInt256, UInt256](ColumnFamilies.Node, store, Some(rootHash))
-      bytes <- mpt.get(UInt256(position)).map(_.getOrElse(UInt256.Zero).bytes)
+      bytes <- mpt.get(UInt256(position)).map(_.getOrElse(UInt256.zero).bytes)
     } yield bytes).observed("getStorage")
 
   override def getCode(hash: ByteVector): F[Option[ByteVector]] =
@@ -199,16 +199,16 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
       )
 
   // helpers
-  override def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]] =
+  override def getTotalDifficultyByNumber(blockNumber: N): F[Option[N]] =
     (for {
       hash <- OptionT(getHashByBlockNumber(blockNumber))
       td   <- OptionT(getTotalDifficultyByHash(hash))
     } yield td).value.observed("getTotalDifficultyByNumber")
 
-  override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]] =
-    store.getAs[BigInt](ColumnFamilies.TotalDifficulty, blockHash.asBytes).observed("getTotalDifficultyByHash")
+  override def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[N]] =
+    store.getAs[N](ColumnFamilies.TotalDifficulty, blockHash.asBytes).observed("getTotalDifficultyByHash")
 
-  override def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]] =
+  override def getHashByBlockNumber(number: N): F[Option[ByteVector]] =
     store.getAs[ByteVector](ColumnFamilies.NumberHash, number.asBytes).observed("getHashByBlockNumber")
 
   override def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]] =
@@ -228,10 +228,10 @@ final class HistoryImpl[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F
         case None        => F.raiseError(new Exception(s"best block at ${bn} does not exist"))
     })
 
-  override def getBestBlockNumber: F[BigInt] =
-    store.getAs[BigInt](ColumnFamilies.AppState, "BestBlockNumber".asBytes).map(_.getOrElse(BigInt(0))).observed("getBestBlockNumber")
+  override def getBestBlockNumber: F[N] =
+    store.getAs[N](ColumnFamilies.AppState, "BestBlockNumber".asBytes).map(_.getOrElse(N(0))).observed("getBestBlockNumber")
 
-  override def putBestBlockNumber(number: BigInt): F[Unit] =
+  override def putBestBlockNumber(number: N): F[Unit] =
     store
       .put(ColumnFamilies.AppState, "BestBlockNumber".asBytes, number.asBytes)
       .observed("putBestBlockNumber") <* metrics.set("BestBlockNumber")(number.toDouble)

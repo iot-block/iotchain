@@ -2,22 +2,20 @@ package jbok.core.pool
 
 import cats.effect.IO
 import cats.implicits._
-import jbok.common.testkit._
-import jbok.core.CoreSpec
+import jbok.core.{CoreSpec, StatefulGen}
 import jbok.core.ledger.History
 import jbok.core.mining.BlockMiner
-import jbok.core.models.{Block, SignedTransaction}
 import jbok.core.pool.BlockPool.Leaf
-import jbok.core.testkit._
+import spire.syntax.all._
 
 class BlockPoolSpec extends CoreSpec {
   "BlockPool" should {
-    def randomTx = random[List[SignedTransaction]](genTxs(1, 1)).some
+    def randomTx = random(StatefulGen.transactions(1, 1)).some
 
     "ignore block if it's already in" in check { objects =>
       val history = objects.get[History[IO]]
       val pool    = objects.get[BlockPool[IO]]
-      val block   = random[List[Block]](genBlocks(1, 1)).head
+      val block   = random(StatefulGen.block())
 
       for {
         genesisDifficulty <- history.genesisHeader.map(_.difficulty)
@@ -33,7 +31,7 @@ class BlockPoolSpec extends CoreSpec {
     "ignore blocks outside of range" in check { objects =>
       val history = objects.get[History[IO]]
       val pool    = objects.get[BlockPool[IO]]
-      val blocks  = random[List[Block]](genBlocks(30, 30))
+      val blocks  = random(StatefulGen.blocks(30, 30))
       for {
         _   <- history.putBestBlockNumber(15)
         _   <- pool.addBlock(blocks.head)
@@ -48,7 +46,7 @@ class BlockPoolSpec extends CoreSpec {
     "remove the blocks that fall out of range" in check { objects =>
       val history = objects.get[History[IO]]
       val pool    = objects.get[BlockPool[IO]]
-      val blocks  = random[List[Block]](genBlocks(20, 20))
+      val blocks  = random(StatefulGen.blocks(20, 20))
 
       for {
         _   <- pool.addBlock(blocks.head)
@@ -75,7 +73,7 @@ class BlockPoolSpec extends CoreSpec {
         _       <- pool.addBlock(block1)
         _       <- pool.addBlock(block2a)
         _       <- pool.addBlock(block2b)
-        expectedTd = List(block1, block2a, block3).map(_.header.difficulty).sum
+        expectedTd = List(block1, block2a, block3).map(_.header.difficulty).qsum
         res <- pool.addBlock(block3)
         _ = res shouldBe Some(Leaf(block3.header.hash, expectedTd))
       } yield ()
@@ -83,7 +81,7 @@ class BlockPoolSpec extends CoreSpec {
 
     "pool an orphaned block" in check { objects =>
       val pool  = objects.get[BlockPool[IO]]
-      val block = random[List[Block]](genBlocks(2, 2)).last
+      val block = random(StatefulGen.blocks(2, 2)).last
 
       for {
         res <- pool.addBlock(block)
@@ -120,7 +118,7 @@ class BlockPoolSpec extends CoreSpec {
       val pool    = objects.get[BlockPool[IO]]
       val miner   = objects.get[BlockMiner[IO]]
       val history = objects.get[History[IO]]
-      val txs     = random[List[SignedTransaction]](genTxs(2, 2, history))
+      val txs     = random(StatefulGen.transactions(2, 2, history))
 
       for {
         genesis <- history.getBestBlock

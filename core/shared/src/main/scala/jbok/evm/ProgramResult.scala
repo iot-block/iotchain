@@ -1,5 +1,6 @@
 package jbok.evm
 
+import jbok.common.math.N
 import jbok.core.models.{Address, TxLogEntry}
 import scodec.bits.ByteVector
 
@@ -15,12 +16,12 @@ import scodec.bits.ByteVector
   */
 final case class ProgramResult[F[_]](
     returnData: ByteVector,
-    gasRemaining: BigInt,
+    gasRemaining: N,
     world: WorldState[F],
     addressesToDelete: Set[Address],
     logs: List[TxLogEntry],
     internalTxs: List[InternalTransaction],
-    gasRefund: BigInt,
+    gasRefund: N,
     error: Option[ProgramError],
     isRevert: Boolean = false,
     contractAddress: Option[Address] = None,

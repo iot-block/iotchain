@@ -1,18 +1,15 @@
 package jbok.evm
 
 import cats.effect.IO
+import jbok.common.math.N
 import jbok.core.models.UInt256
 import jbok.core.models.UInt256._
-import jbok.evm.testkit._
-import org.scalatest.prop.PropertyChecks
-import org.scalatest.{FunSuite, Matchers}
-import jbok.common.testkit._
 
-class OpCodeGasSpecConstantinople extends FunSuite with OpCodeTesting with Matchers with PropertyChecks {
-  implicit override val config = EvmConfig.ConstantinopleConfigBuilder(None)
+class OpCodeGasSpecConstantinople extends OpCodeSpec {
+  implicit override val evmConfig: EvmConfig = EvmConfig.ConstantinopleConfigBuilder(None)
 
   test(SSTORE) { op =>
-    val table = Table[BigInt, BigInt, UInt256, UInt256, UInt256](
+    val table = Table[N, N, UInt256, UInt256, UInt256](
       ("expectedGas", "expectedRefund", "original", "current", "value"),
       (200, 0, 0, 0, 0),
       (20000, 0, 0, 0, 1),
@@ -30,7 +27,7 @@ class OpCodeGasSpecConstantinople extends FunSuite with OpCodeTesting with Match
       (5000, 0, 1, 1, 2),
       (200, 0, 1, 1, 1)
     )
-    val offset = UInt256.Zero
+    val offset = UInt256.zero
 
     forAll(table) { (expectedGas, expectedRefund, original, current, value) =>
       val state      = random[ProgramState[IO]]

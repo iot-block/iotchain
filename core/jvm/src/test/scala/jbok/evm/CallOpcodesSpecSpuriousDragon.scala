@@ -22,7 +22,7 @@ class CallOpcodesSpecSpuriousDragon extends CoreSpec {
       val call    = fxt.CallResult(op = CALL, context = context)
 
       "not modify world state" in {
-        call.world shouldEqual fxt.worldWithExtAccount
+        call.world shouldBe fxt.worldWithExtAccount
       }
     }
 
@@ -31,7 +31,7 @@ class CallOpcodesSpecSpuriousDragon extends CoreSpec {
       val call = fxt.CallResult(op = CALL, value = fxt.initialBalance + 1)
 
       "not modify world state" in {
-        call.world shouldEqual fxt.worldWithExtAccount
+        call.world shouldBe fxt.worldWithExtAccount
       }
     }
 
@@ -41,7 +41,7 @@ class CallOpcodesSpecSpuriousDragon extends CoreSpec {
       val call    = fxt.CallResult(op = CALL, context)
 
       "modify only touched accounts in world state" in {
-        call.world shouldEqual fxt.worldWithInvalidProgram.touchAccounts(fxt.ownerAddr, fxt.extAddr)
+        call.world shouldBe fxt.worldWithInvalidProgram.touchAccounts(fxt.ownerAddr, fxt.extAddr)
       }
     }
 
@@ -49,18 +49,18 @@ class CallOpcodesSpecSpuriousDragon extends CoreSpec {
 
       val contextEmptyAccount = fxt.context.copy(world = fxt.worldWithExtEmptyAccount)
       val callEmptyAccount    = fxt.CallResult(op = CALL, contextEmptyAccount)
-      val callZeroTransfer    = fxt.CallResult(op = CALL, contextEmptyAccount, value = UInt256.Zero)
+      val callZeroTransfer    = fxt.CallResult(op = CALL, contextEmptyAccount, value = UInt256.zero)
 
       "consume correct gas (refund call gas, add new account modifier) when transferring value to Empty Account" in {
         val expectedGas = G_call + G_callvalue + G_newaccount - G_callstipend + fxt.expectedMemCost
-        callEmptyAccount.stateOut.gasUsed shouldEqual expectedGas
-        callEmptyAccount.world.touchedAccounts.size shouldEqual 2
+        callEmptyAccount.stateOut.gasUsed shouldBe expectedGas
+        callEmptyAccount.world.touchedAccounts.size shouldBe 2
       }
 
       "consume correct gas when transferring no value to Empty Account" in {
         val expectedGas = G_call + fxt.expectedMemCost
-        callZeroTransfer.stateOut.gasUsed shouldEqual expectedGas
-        callZeroTransfer.world.touchedAccounts.size shouldEqual 2
+        callZeroTransfer.stateOut.gasUsed shouldBe expectedGas
+        callZeroTransfer.world.touchedAccounts.size shouldBe 2
       }
     }
   }

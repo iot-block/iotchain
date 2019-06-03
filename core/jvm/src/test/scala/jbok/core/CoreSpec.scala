@@ -3,15 +3,18 @@ package jbok.core
 import cats.effect.{IO, Resource}
 import com.github.pshirshov.izumi.distage.model.definition.ModuleDef
 import distage.{Injector, Locator}
+import jbok.codec.rlp
+import jbok.codec.json
 import jbok.common.CommonSpec
+import jbok.common.math.N
 import jbok.core.config.{FullConfig, GenesisBuilder}
 import jbok.core.keystore.{KeyStore, MockingKeyStore}
-import jbok.core.models.Address
+import jbok.core.models.{Address, ChainId}
 import jbok.crypto.signature.KeyPair
 import monocle.macros.syntax.lens._
 
 object CoreSpecFixture {
-  val chainId = BigInt(1)
+  val chainId: ChainId = ChainId(1)
 
   val testKeyPair = KeyPair(
     KeyPair.Public("a4991b82cb3f6b2818ce8fedc00ef919ba505bf9e67d96439b63937d24e4d19d509dd07ac95949e815b307769f4e4d6c3ed5d6bd4883af23cb679b251468a8bc"),
@@ -35,7 +38,7 @@ object CoreSpecFixture {
   }
 }
 
-trait CoreSpec extends CommonSpec {
+trait CoreSpec extends CommonSpec with N.implicits with StatelessArb with StatefulArb with rlp.implicits with json.implicits {
   implicit val chainId = CoreSpecFixture.chainId
 
   implicit val config = CoreSpecFixture.config

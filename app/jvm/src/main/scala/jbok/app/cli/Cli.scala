@@ -5,6 +5,7 @@ import java.time.{Instant, LocalDateTime, ZoneId}
 import cats.effect._
 import cats.implicits._
 import fs2._
+import jbok.common.math.N
 import jbok.core.api.JbokClient
 import jbok.core.models.Address
 import net.team2xh.onions.components._
@@ -47,7 +48,7 @@ final class Cli[F[_]](client: JbokClient[F])(implicit F: ConcurrentEffect[F], T:
     } yield {
       bestBlockNumber.text := s"bestBlockNumber: ${bestBlock.header.number}"
       bestBlockHash.text := s"bestBlockHash: ${bestBlock.header.hash.toHex}"
-      totalDifficulty.text := s"totalDifficulty: ${td.getOrElse(BigInt(0))}"
+      totalDifficulty.text := s"totalDifficulty: ${td.getOrElse(N(0))}"
       pendingTransactions.text := s"pendingTxs: ${txs.size}"
       ()
     }

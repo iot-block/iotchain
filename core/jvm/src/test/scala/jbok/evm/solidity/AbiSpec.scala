@@ -3,13 +3,12 @@ package jbok.evm.solidity
 import io.circe.Json
 import io.circe.parser._
 import io.circe.syntax._
-import jbok.common.CommonSpec
+import jbok.core.CoreSpec
 import scodec.bits._
 import jbok.evm.solidity.ABIDescription._
-import jbok.codec.json.implicits._
 import jbok.core.models.Address
 
-class AbiSpec extends CommonSpec {
+class AbiSpec extends CoreSpec {
   "encode solidity type" should {
     "encode int32" in {
       val param  = parse("-2").getOrElse(Json.Null)

@@ -1,6 +1,7 @@
 package jbok.core.ledger
 
 import cats.effect.{Sync, Timer}
+import jbok.common.math.N
 import jbok.common.metrics.Metrics
 import jbok.core.config.GenesisConfig
 import jbok.core.models._
@@ -9,7 +10,7 @@ import jbok.persistent.KVStore
 import scodec.bits._
 
 trait History[F[_]] {
-  def chainId: BigInt
+  def chainId: ChainId
 
   // init
   def initGenesis(config: GenesisConfig): F[Unit]
@@ -17,7 +18,7 @@ trait History[F[_]] {
   // header
   def getBlockHeaderByHash(hash: ByteVector): F[Option[BlockHeader]]
 
-  def getBlockHeaderByNumber(number: BigInt): F[Option[BlockHeader]]
+  def getBlockHeaderByNumber(number: N): F[Option[BlockHeader]]
 
   def putBlockHeader(blockHeader: BlockHeader): F[Unit]
 
@@ -34,9 +35,9 @@ trait History[F[_]] {
   // block
   def getBlockByHash(hash: ByteVector): F[Option[Block]]
 
-  def getBlockByNumber(number: BigInt): F[Option[Block]]
+  def getBlockByNumber(number: N): F[Option[Block]]
 
-  def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: BigInt): F[Unit]
+  def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: N): F[Unit]
 
   def delBlock(hash: ByteVector): F[Unit]
 
@@ -45,44 +46,47 @@ trait History[F[_]] {
 
   def putMptNode(hash: ByteVector, bytes: ByteVector): F[Unit]
 
-  def getAccount(address: Address, blockNumber: BigInt): F[Option[Account]]
+  def getAccount(address: Address, blockNumber: N): F[Option[Account]]
 
-  def getStorage(rootHash: ByteVector, position: BigInt): F[ByteVector]
+  def getStorage(rootHash: ByteVector, position: N): F[ByteVector]
 
   def getCode(codeHash: ByteVector): F[Option[ByteVector]]
 
   def putCode(hash: ByteVector, evmCode: ByteVector): F[Unit]
 
   def getWorldState(
-      accountStartNonce: UInt256 = UInt256.Zero,
-      stateRootHash: Option[ByteVector] = None,
-      noEmptyAccounts: Boolean = true
+                     accountStartNonce: UInt256 = UInt256.zero,
+                     stateRootHash: Option[ByteVector] = None,
+                     noEmptyAccounts: Boolean = true
   ): F[WorldState[F]]
 
   // helpers
-  def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[BigInt]]
+  def getTotalDifficultyByHash(blockHash: ByteVector): F[Option[N]]
 
-  def getTotalDifficultyByNumber(blockNumber: BigInt): F[Option[BigInt]]
+  def getTotalDifficultyByNumber(blockNumber: N): F[Option[N]]
 
   def getTransactionLocation(txHash: ByteVector): F[Option[TransactionLocation]]
 
-  def getBestBlockNumber: F[BigInt]
+  def getBestBlockNumber: F[N]
 
   def getBestBlockHeader: F[BlockHeader]
 
   def getBestBlock: F[Block]
 
-  def putBestBlockNumber(number: BigInt): F[Unit]
+  def putBestBlockNumber(number: N): F[Unit]
 
-  def getHashByBlockNumber(number: BigInt): F[Option[ByteVector]]
+  def getHashByBlockNumber(number: N): F[Option[ByteVector]]
 
   def genesisHeader: F[BlockHeader]
 }
 
 object History {
-  def apply[F[_]](store: KVStore[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F]): History[F] =
-    new HistoryImpl[F](store, Metrics.nop[F])
+  def apply[F[_]](store: KVStore[F])(implicit F: Sync[F], chainId: ChainId, T: Timer[F]): History[F] =
+    new HistoryImpl[F](chainId, store, Metrics.nop[F])
 
-  def apply[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F: Sync[F], chainId: BigInt, T: Timer[F]): History[F] =
-    new HistoryImpl[F](store, metrics)
+  def apply[F[_]](store: KVStore[F], chainId: ChainId)(implicit F: Sync[F], T: Timer[F]): History[F] =
+    new HistoryImpl[F](chainId, store, Metrics.nop[F])
+
+  def apply[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F: Sync[F], chainId: ChainId, T: Timer[F]): History[F] =
+    new HistoryImpl[F](chainId, store, metrics)
 }

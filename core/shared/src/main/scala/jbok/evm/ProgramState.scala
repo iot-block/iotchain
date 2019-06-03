@@ -1,6 +1,8 @@
 package jbok.evm
 
 import cats.effect.Sync
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.models.{Address, TxLogEntry, UInt256}
 import scodec.bits.ByteVector
 
@@ -21,13 +23,13 @@ import scodec.bits.ByteVector
   */
 final case class ProgramState[F[_]: Sync](
     context: ProgramContext[F],
-    gas: BigInt,
+    gas: N,
     world: WorldState[F],
     stack: Stack = Stack.empty(),
     memory: Memory = Memory.empty,
     pc: Int = 0,
     returnData: ByteVector = ByteVector.empty,
-    gasRefund: BigInt = 0,
+    gasRefund: N = 0,
     addressesToDelete: Set[Address] = Set.empty,
     internalTxs: List[InternalTransaction] = Nil,
     logs: List[TxLogEntry] = Nil,
@@ -46,7 +48,7 @@ final case class ProgramState[F[_]: Sync](
 
   def storage: F[Storage[F]] = world.getStorage(ownAddress)
 
-  def gasUsed: BigInt = context.startGas - gas
+  def gasUsed: N = context.startGas - gas
 
   def withWorld(updated: WorldState[F]): ProgramState[F] =
     copy(world = updated)
@@ -58,10 +60,10 @@ final case class ProgramState[F[_]: Sync](
 
   def inputData: ByteVector = env.inputData
 
-  def spendGas(amount: BigInt): ProgramState[F] =
+  def spendGas(amount: N): ProgramState[F] =
     copy(gas = gas - amount)
 
-  def refundGas(amount: BigInt): ProgramState[F] =
+  def refundGas(amount: N): ProgramState[F] =
     copy(gasRefund = gasRefund + amount)
 
   def step(i: Int = 1): ProgramState[F] =

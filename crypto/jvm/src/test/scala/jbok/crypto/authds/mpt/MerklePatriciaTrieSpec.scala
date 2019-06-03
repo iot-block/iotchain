@@ -4,12 +4,11 @@ import cats.effect.{IO, Resource}
 import cats.implicits._
 import jbok.codec.rlp.RlpCodec
 import jbok.codec.rlp.implicits._
-import jbok.common.testkit._
+import jbok.common.gen
 import jbok.common.{CommonSpec, FileUtil}
 import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
 import jbok.persistent.rocksdb.RocksKVStore
 import jbok.persistent.{ColumnFamily, MemoryKVStore}
-import org.scalacheck.Gen
 import scodec.bits._
 
 import scala.util.Random
@@ -54,7 +53,7 @@ class MerklePatriciaTrieSpec extends CommonSpec {
 
         kvs.foreach { case (k, v) => mpt.put(k, v).unsafeRunSync() }
         kvs.foreach { case (k, v) => mpt.get(k).unsafeRunSync() shouldBe Some(v) }
-        mpt.toMap.map(_ shouldBe kvs.toMap)
+        mpt.toMap.map(_ shouldBe kvs.toMap).void
       }
 
       "mustGet empty root & hash" in withResource(resource) { mpt =>
@@ -74,8 +73,8 @@ class MerklePatriciaTrieSpec extends CommonSpec {
       }
 
       "put large key and value" in withResource(resource) { mpt =>
-        val key   = genHex(0, 1024).sample.get
-        val value = genHex(1024, 2048).sample.get
+        val key   = random[String](gen.hex(0, 1024))
+        val value = random[String](gen.hex(1024, 2048))
         for {
           _   <- mpt.put(key, value)
           res <- mpt.get(key)
@@ -112,7 +111,7 @@ class MerklePatriciaTrieSpec extends CommonSpec {
 
       "remove key from an empty tree" in withResource(resource) { mpt =>
         mpt.del("1").unsafeRunSync()
-        mpt.getRootHash.map(_ shouldBe MerklePatriciaTrie.emptyRootHash)
+        mpt.getRootHash.map(_ shouldBe MerklePatriciaTrie.emptyRootHash).void
       }
 
       "remove a key that does not exist" in withResource(resource) { mpt =>

@@ -2,6 +2,7 @@ package jbok.evm.solidity
 
 import fastparse.ScalaWhitespace._
 import fastparse._
+import scala.language.postfixOps
 
 import scala.util.Try
 

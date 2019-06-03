@@ -37,7 +37,7 @@ class AesSpec extends CommonSpec {
       )
 
       forAll(testVectors) {
-        case (k, i, plaintext, c) =>
+        case (k, i, plaintext, _) =>
           val key    = ByteVector.fromValidHex(k)
           val iv     = ByteVector.fromValidHex(i)
           val jcaKey = AES128CBC.buildKey[IO](key.toArray).unsafeRunSync()

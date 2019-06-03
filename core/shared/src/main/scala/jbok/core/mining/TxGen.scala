@@ -4,6 +4,8 @@ import cats.effect.Sync
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common.log.Logger
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.api.JbokClient
 import jbok.core.ledger.History
 import jbok.core.mining.TxGen.SimAccount
@@ -13,7 +15,7 @@ import scodec.bits.ByteVector
 
 import scala.util.Random
 
-final class TxGen[F[_]] private (accounts: Ref[F, Map[Address, SimAccount]], readAccount: Address => F[Account])(implicit F: Sync[F], chainId: BigInt) {
+final class TxGen[F[_]] private (accounts: Ref[F, Map[Address, SimAccount]], readAccount: Address => F[Account])(implicit F: Sync[F], chainId: ChainId) {
   import TxGen._
 
   private[this] val log = Logger[F]
@@ -32,14 +34,13 @@ final class TxGen[F[_]] private (accounts: Ref[F, Map[Address, SimAccount]], rea
   def updateAccount(account: SimAccount): F[Unit] =
     accounts.update(_ + (account.address -> account))
 
-  val gasPrice: BigInt = BigInt("1")
+  val gasPrice: N = N("1")
 
-  val gasLimit: BigInt = BigInt(21000)
+  val gasLimit: N = N(21000)
 
-  val minBalance: BigInt = BigInt(100000)
+  val minBalance: N = N(100000)
 
-  def genValue(account: SimAccount): BigInt =
-    BigInt(25000)
+  def genValue(account: SimAccount): N = N(25000)
 
   def getValidSenderReceiver: F[(SimAccount, SimAccount)] =
     for {
@@ -66,7 +67,7 @@ final class TxGen[F[_]] private (accounts: Ref[F, Map[Address, SimAccount]], rea
     )
 
     for {
-      stx <- SignedTransaction.sign[F](tx, sender.keyPair)
+      stx <- SignedTransaction.sign[F](tx, sender.keyPair, chainId)
       _   <- updateAccount(sender.balanceChanged(-value).nonceIncreased)
     } yield stx
   }
@@ -186,7 +187,7 @@ final class TxGen[F[_]] private (accounts: Ref[F, Map[Address, SimAccount]], rea
 }
 
 object TxGen {
-  def apply[F[_]](keyPairs: List[KeyPair], readAccount: Address => F[Account])(implicit F: Sync[F], chainId: BigInt): F[TxGen[F]] =
+  def apply[F[_]](keyPairs: List[KeyPair], readAccount: Address => F[Account])(implicit F: Sync[F], chainId: ChainId): F[TxGen[F]] =
     for {
       ref <- Ref.of[F, Map[Address, SimAccount]](Map.empty)
       _   <- ref.update(_ ++ keyPairs.map(kp => Address(kp) -> SimAccount(kp, 0, 0)))
@@ -194,20 +195,20 @@ object TxGen {
       _ <- txGen.updateAccounts
     } yield txGen
 
-  def apply[F[_]](keyPairs: List[KeyPair], history: History[F])(implicit F: Sync[F], chainId: BigInt): F[TxGen[F]] =
+  def apply[F[_]](keyPairs: List[KeyPair], history: History[F])(implicit F: Sync[F], chainId: ChainId): F[TxGen[F]] =
     apply(keyPairs, address => history.getBestBlockNumber.flatMap(n => history.getAccount(address, n).map(_.getOrElse(Account.empty()))))
 
-  def apply[F[_]](keyPairs: List[KeyPair], client: JbokClient[F])(implicit F: Sync[F], chainId: BigInt): F[TxGen[F]] =
+  def apply[F[_]](keyPairs: List[KeyPair], client: JbokClient[F])(implicit F: Sync[F], chainId: ChainId): F[TxGen[F]] =
     apply(keyPairs, address => client.account.getAccount(address))
 
-  final case class SimAccount(keyPair: KeyPair, balance: BigInt, nonce: BigInt) {
+  final case class SimAccount(keyPair: KeyPair, balance: N, nonce: N) {
     val address: Address = Address(keyPair)
 
     def nonceIncreased: SimAccount = this.copy(nonce = this.nonce + 1)
 
-    def balanceChanged(delta: BigInt): SimAccount = this.copy(balance = this.balance + delta)
+    def balanceChanged(delta: N): SimAccount = this.copy(balance = this.balance + delta)
 
     def fromAccount(account: Account): SimAccount =
-      copy(nonce = account.nonce.toBigInt, balance = account.balance.toBigInt)
+      copy(nonce = account.nonce.toN, balance = account.balance.toN)
   }
 }

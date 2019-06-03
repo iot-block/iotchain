@@ -1,5 +1,6 @@
 package jbok.app.service.store
 
+import jbok.common.math.N
 import jbok.core.api.HistoryTransaction
 import jbok.core.models.{Block, Receipt}
 
@@ -10,7 +11,7 @@ trait TransactionStore[F[_]] {
 
   def findTransactionsByNumber(blockNumber: Int): F[List[HistoryTransaction]]
 
-  def delByBlockNumber(number: BigInt): F[Unit]
+  def delByBlockNumber(number: N): F[Unit]
 
   def insertBlockTransactions(block: Block, receipts: List[Receipt]): F[Unit]
 }

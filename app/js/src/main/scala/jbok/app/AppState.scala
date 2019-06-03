@@ -6,6 +6,7 @@ import com.thoughtworks.binding.Binding.{Var, Vars}
 import fs2.Stream
 import jbok.app.execution._
 import jbok.common.log.Logger
+import jbok.common.math.N
 import jbok.core.api.{BlockTag, JbokClient}
 import jbok.core.models._
 import jbok.evm.solidity.ABIDescription.FunctionDescription
@@ -26,7 +27,7 @@ object execution {
   implicit val CE: ConcurrentEffect[IO] = IO.ioConcurrentEffect(CS)
 }
 
-final case class ClientStatus(number: Var[BigInt] = Var(0), gasPrice: Var[BigInt] = Var(0), gasLimit: Var[BigInt] = Var(0), miningStatus: Var[String] = Var("idle"))
+final case class ClientStatus(number: Var[N] = Var(0), gasPrice: Var[N] = Var(0), gasLimit: Var[N] = Var(0), miningStatus: Var[String] = Var("idle"))
 
 final case class BlockHistory(history: Vars[Block] = Vars.empty) {
   def bestBlockNumber(): Int = history.value.lastOption.map(_.header.number.toInt).getOrElse(-1)
@@ -115,9 +116,9 @@ final case class AppState(
       if (activeNode.value === None) {
         selectNode(Some(id))
       } else {
-        None
+        ()
       }
-    } else {}
+    } else ()
 
   def activeSearchView(f: () => Unit): Unit =
     activeSearchViewFunc.value = f
@@ -164,7 +165,7 @@ final case class AppState(
       isMining        <- client.miner.isMining
       gasPrice        <- client.contract.getGasPrice
       miningStatus = if (isMining) "Mining" else "idle"
-      gasLimit     = block.map(_.header.gasLimit).getOrElse(BigInt(0))
+      gasLimit     = block.map(_.header.gasLimit).getOrElse(N(0))
       _            = status.number.value = bestBlockNumber
       _            = status.miningStatus.value = miningStatus
       _            = status.gasPrice.value = gasPrice
@@ -178,7 +179,7 @@ final case class AppState(
       expire               = bestBlockNumber - config.value.blockHistorySize
       start                = (localBestBlockNumber + 1).max(expire.toInt)
       xs <- (start.toInt to bestBlockNumber.toInt)
-        .map(BigInt(_))
+        .map(N(_))
         .toList
         .traverse(client.block.getBlockByNumber)
       _ = blockHistory.history.value --= blockHistory.history.value.filter(_.header.number < expire)

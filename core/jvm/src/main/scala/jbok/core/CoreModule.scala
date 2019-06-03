@@ -17,7 +17,7 @@ import jbok.core.keystore.{KeyStore, KeyStorePlatform}
 import jbok.core.ledger.{BlockExecutor, History, HistoryImpl}
 import jbok.core.messages.SignedTransactions
 import jbok.core.mining.BlockMiner
-import jbok.core.models.Block
+import jbok.core.models.{Block, ChainId}
 import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.core.peer._
 import jbok.core.pool.{BlockPool, TxPool}
@@ -40,7 +40,7 @@ class CoreModule[F[_]: TagK](config: FullConfig)(implicit F: ConcurrentEffect[F]
   addImplicit[ConcurrentEffect[F]]
   addImplicit[AsynchronousChannelGroup]
   make[FullConfig].from(config)
-  make[BigInt].from((config: FullConfig) => config.genesis.chainId)
+  make[ChainId].from((config: FullConfig) => config.genesis.chainId)
 
   LoggerPlatform.initConfig[IO](config.log).unsafeRunSync()
 

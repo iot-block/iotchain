@@ -4,6 +4,7 @@ import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.core.models.Address
 import scodec.bits.ByteVector
 import jbok.codec.json.implicits._
+import jbok.common.math.N
 import jbok.network.rpc.PathName
 
 import scala.scalajs.js.annotation.JSExportAll
@@ -13,9 +14,9 @@ import scala.scalajs.js.annotation.JSExportAll
 final case class CallTx(
     from: Option[Address],
     to: Option[Address],
-    gas: Option[BigInt],
-    gasPrice: BigInt,
-    value: BigInt,
+    gas: Option[N],
+    gasPrice: N,
+    value: N,
     data: ByteVector
 )
 
@@ -27,7 +28,7 @@ trait ContractAPI[F[_]] {
 
   def call(callTx: CallTx, tag: BlockTag = BlockTag.latest): F[ByteVector]
 
-  def getEstimatedGas(callTx: CallTx, tag: BlockTag = BlockTag.latest): F[BigInt]
+  def getEstimatedGas(callTx: CallTx, tag: BlockTag = BlockTag.latest): F[N]
 
-  def getGasPrice: F[BigInt]
+  def getGasPrice: F[N]
 }

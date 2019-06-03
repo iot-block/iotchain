@@ -15,7 +15,7 @@ class Stack private (private val underlying: List[UInt256], val maxSize: Int) {
       (word, copy(underlying.drop(1)))
 
     case None =>
-      (UInt256.Zero, this)
+      (UInt256.zero, this)
   }
 
   def pop(n: Int): (List[UInt256], Stack) = {
@@ -23,7 +23,7 @@ class Stack private (private val underlying: List[UInt256], val maxSize: Int) {
     if (popped.length == n)
       (popped, copy(left))
     else
-      (List.fill(n)(UInt256.Zero), this)
+      (List.fill(n)(UInt256.zero), this)
   }
 
   def push(word: UInt256): Stack =

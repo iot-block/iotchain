@@ -6,6 +6,8 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.config.{GenesisConfig, MiningConfig}
 import jbok.core.keystore.KeyStore
 import jbok.core.ledger.History
@@ -34,7 +36,7 @@ final class Clique[F[_]](
   val minerAddress: Address = Address(keyPair)
 
   def sign(bv: ByteVector): F[CryptoSignature] =
-    Signature[ECDSA].sign[F](bv.toArray, keyPair, history.chainId)
+    Signature[ECDSA].sign[F](bv.toArray, keyPair, history.chainId.value.toBigInt)
 
   def fillExtraData(header: BlockHeader): F[BlockHeader] =
     for {
@@ -62,7 +64,7 @@ final class Clique[F[_]](
   def getProposal: F[Option[Proposal]] = proposal.get
 
   def applyHeaders(
-      number: BigInt,
+      number: N,
       hash: ByteVector,
       parents: List[BlockHeader],
       headers: List[BlockHeader] = Nil
@@ -109,8 +111,8 @@ final class Clique[F[_]](
 }
 
 object Clique {
-  val diffInTurn = BigInt(11) // Block difficulty for in-turn signatures
-  val diffNoTurn = BigInt(10) // Block difficulty for out-of-turn signatures
+  val diffInTurn = N(11) // Block difficulty for in-turn signatures
+  val diffNoTurn = N(10) // Block difficulty for out-of-turn signatures
 
   val inMemorySnapshots: Int     = 128
   val inMemorySignatures: Int    = 1024
@@ -144,12 +146,12 @@ object Clique {
   }
 
   /** Retrieve the signature from the header extra-data */
-  def ecrecover[F[_]](header: BlockHeader, chainId: BigInt)(implicit F: Sync[F]): F[Option[Address]] =
+  def ecrecover[F[_]](header: BlockHeader, chainId: ChainId)(implicit F: Sync[F]): F[Option[Address]] =
     for {
       extra <- header.extraAs[F, CliqueExtra]
       sig = extra.signature
       hash <- sigHash[F](header)
     } yield {
-      Signature[ECDSA].recoverPublic(hash.toArray, sig, chainId).map(pub => Address(pub.bytes.kec256))
+      Signature[ECDSA].recoverPublic(hash.toArray, sig, chainId.value.toBigInt).map(pub => Address(pub.bytes.kec256))
     }
 }

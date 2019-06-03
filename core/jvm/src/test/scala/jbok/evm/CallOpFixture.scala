@@ -1,11 +1,13 @@
 package jbok.evm
 
 import cats.effect.IO
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.common.testkit._
 import jbok.core.models.{Account, Address, UInt256}
-import jbok.core.testkit._
 import jbok.crypto._
 import scodec.bits.ByteVector
+import jbok.core.StatelessArb._
 
 class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
   import config.feeSchedule._
@@ -159,10 +161,10 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
       op: CallOp,
       context: ProgramContext[IO] = context,
       inputData: ByteVector = inputData,
-      gas: BigInt = requiredGas + gasMargin,
+      gas: N = requiredGas + gasMargin,
       to: Address = extAddr,
       value: UInt256 = initialBalance / 2,
-      inOffset: UInt256 = UInt256.Zero,
+      inOffset: UInt256 = UInt256.zero,
       inSize: UInt256 = inputData.size,
       outOffset: UInt256 = inputData.size,
       outSize: UInt256 = inputData.size / 2
@@ -171,7 +173,7 @@ class CallOpFixture(val config: EvmConfig, val startState: WorldState[IO]) {
     private val paramsForDelegateAndStatic = params.take(4) ++ params.drop(5)
     private val stack =
       Stack.empty().push(if (op == DELEGATECALL || op == STATICCALL) paramsForDelegateAndStatic else params)
-    private val mem = Memory.empty.store(UInt256.Zero, inputData)
+    private val mem = Memory.empty.store(UInt256.zero, inputData)
 
     val stateIn  = ProgramState[IO](context).withStack(stack).withMemory(mem)
     val stateOut = op.execute(stateIn).unsafeRunSync()

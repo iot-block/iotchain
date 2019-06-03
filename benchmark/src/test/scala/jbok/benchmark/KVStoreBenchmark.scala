@@ -1,24 +1,23 @@
 package jbok.benchmark
 
 import cats.effect.IO
-import jbok.common.testkit._
-import jbok.core.testkit._
 import org.openjdk.jmh.annotations.{Benchmark, OperationsPerInvocation, TearDown}
 import org.scalacheck.Gen
 import cats.implicits._
-import jbok.common.FileUtil
+import jbok.common.{gen, FileUtil}
+import jbok.core.StatelessGen
 import jbok.persistent.{ColumnFamily, MemoryKVStore}
 import jbok.persistent.rocksdb.RocksKVStore
 
 class KVStoreBenchmark extends JbokBenchmark {
   val size = 10000
 
-  val blockHeaders = Gen.listOfN(size, arbBlockHeader.arbitrary).sample.get.toArray
+  val blockHeaders = Gen.listOfN(size, StatelessGen.blockHeader).sample.get.toArray
 
   var i = 0
 
-  val keyGen   = genBoundedByteVector(16, 16)
-  val valueGen = genBoundedByteVector(100, 100)
+  val keyGen   = gen.sizedByteVector(16)
+  val valueGen = gen.sizedByteVector(100)
 
   val keys   = Gen.listOfN(size, keyGen).sample.get
   val values = Gen.listOfN(size, valueGen).sample.get

@@ -1,17 +1,18 @@
 package jbok.core.config
 
-import jbok.core.models.Address
+import jbok.common.math.N
+import jbok.core.models.{Address, ChainId}
 
 final case class GenesisBuilder(
     base: GenesisConfig = GenesisConfig(),
-    alloc: Map[Address, BigInt] = Map.empty,
+    alloc: Map[Address, N] = Map.empty,
     miners: List[Address] = Nil,
-    chainId: BigInt = BigInt(1)
+    chainId: ChainId = ChainId(1)
 ) {
-  def withChainId(id: BigInt): GenesisBuilder =
+  def withChainId(id: ChainId): GenesisBuilder =
     copy(chainId = id)
 
-  def addAlloc(address: Address, amount: BigInt): GenesisBuilder =
+  def addAlloc(address: Address, amount: N): GenesisBuilder =
     copy(alloc = alloc + (address -> amount))
 
   def addMiner(address: Address): GenesisBuilder =
@@ -21,7 +22,7 @@ final case class GenesisBuilder(
     base.copy(
       miners = miners,
       alloc = alloc,
-      chainId = this.chainId,
+      chainId = chainId,
       timestamp = System.currentTimeMillis()
     )
 }

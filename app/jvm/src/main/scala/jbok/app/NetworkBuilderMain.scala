@@ -4,9 +4,10 @@ import java.nio.file.Paths
 
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
+import jbok.common.math.N
 import jbok.core.CoreModule
 import jbok.core.config.{GenesisBuilder, NetworkBuilder}
-import jbok.core.models.Address
+import jbok.core.models.{Address, ChainId}
 import jbok.crypto.signature.{ECDSA, KeyPair, Signature}
 
 object NetworkBuilderMain extends IOApp {
@@ -28,9 +29,9 @@ object NetworkBuilderMain extends IOApp {
     )
 
     val genesis = GenesisBuilder()
-      .withChainId(10)
-      .addAlloc(Address(alloc), BigInt("1" + "0" * 30))
-      .addAlloc(Address(miner0), BigInt("1" + "0" * 30))
+      .withChainId(ChainId(10))
+      .addAlloc(Address(alloc), N("1" + "0" * 30))
+      .addAlloc(Address(miner0), N("1" + "0" * 30))
       .addMiner(Address(miner0))
 //      .addMiner(Address(miner1))
 //      .addMiner(Address(miner2))

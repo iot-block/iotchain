@@ -27,8 +27,8 @@ trait testkit extends Matchers {
     val encoded = codec.encode(value)
     encoded.isSuccessful shouldBe true
     val Attempt.Successful(DecodeResult(decoded, remainder)) = codec.decode(encoded.require)
-    remainder shouldEqual BitVector.empty
-    decoded shouldEqual value
+    remainder shouldBe BitVector.empty
+    decoded shouldBe value
     ()
   }
 

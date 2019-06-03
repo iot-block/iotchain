@@ -3,6 +3,7 @@ package jbok.core.peer
 import cats.data.Kleisli
 import cats.effect.Sync
 import cats.implicits._
+import jbok.common.math.N
 import jbok.core.messages.SignedTransactions
 import jbok.core.models.Block
 
@@ -44,7 +45,7 @@ object PeerSelector {
       .map(_.flatten)
   }
 
-  def bestPeer[F[_]: Sync](minTD: BigInt): PeerSelector[F] = PeerSelector { peers =>
+  def bestPeer[F[_]: Sync](minTD: N): PeerSelector[F] = PeerSelector { peers =>
     peers
       .traverse(p => p.status.get.map(_.td).map(td => td -> p))
       .map(_.filter(_._1 > minTD).sortBy(-_._1).map(_._2))

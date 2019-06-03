@@ -130,7 +130,7 @@ final case class BytesType() extends SolidityType {
   override def decode(value: ByteVector): Either[AbiError, Json] =
     if (value.length != 0 && value.length % 32 == 0) {
       val (l, r) = value.splitAt(32)
-      val size   = UInt256(l).toBigInt.toLong
+      val size   = UInt256(l).toN.toLong
       if (size <= r.length && r.takeRight(r.length - size).toArray.forall(_ == 0.toByte)) {
         val data = s"0x${r.take(size).toHex}"
         data.asJson.asRight
@@ -179,7 +179,7 @@ final case class StringType() extends SolidityType {
   override def decode(value: ByteVector): Either[AbiError, Json] =
     if (value.length != 0 && value.length % 32 == 0) {
       val (l, r) = value.splitAt(32)
-      val size   = UInt256(l).toBigInt.toLong
+      val size   = UInt256(l).toN.toLong
       if (size <= r.length && r.takeRight(r.length - size).toArray.forall(_ == 0.toByte)) {
         val codec = scodec.codecs.string(StandardCharsets.UTF_8)
         codec.decode(r.take(size).bits).toOption.map(_.value) match {

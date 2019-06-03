@@ -5,32 +5,33 @@ import cats.implicits._
 import doobie.implicits._
 import doobie.util.transactor.Transactor
 import jbok.app.service.store.BlockStore
+import jbok.common.math.N
 import scodec.bits.ByteVector
 
 final class DoobieBlockStore[F[_]](xa: Transactor[F])(implicit F: Sync[F]) extends BlockStore[F] with DoobieSupport {
-  override def getBestBlockNumber: F[Option[BigInt]] =
+  override def getBestBlockNumber: F[Option[N]] =
     sql"""
       SELECT blockNumber
       FROM blocks
       ORDER BY blockNumber DESC
       LIMIT 1
       """
-      .query[BigInt]
+      .query[N]
       .option
       .transact(xa)
 
-  override def getBestBlockNumberAndHash: F[(BigInt, ByteVector)] =
+  override def getBestBlockNumberAndHash: F[(N, ByteVector)] =
     sql"""
       SELECT blockNumber, blockHash
       FROM blocks
       ORDER BY blockNumber DESC
       LIMIT 1
       """
-      .query[(BigInt, ByteVector)]
+      .query[(N, ByteVector)]
       .unique
       .transact(xa)
 
-  override def getBlockHashByNumber(number: BigInt): F[Option[ByteVector]] =
+  override def getBlockHashByNumber(number: N): F[Option[ByteVector]] =
     sql"""
       SELECT blockHash
       FROM blocks
@@ -40,14 +41,14 @@ final class DoobieBlockStore[F[_]](xa: Transactor[F])(implicit F: Sync[F]) exten
       .option
       .transact(xa)
 
-  override def delByBlockNumber(number: BigInt): F[Unit] =
+  override def delByBlockNumber(number: N): F[Unit] =
     sql"""
       DELETE FROM blocks where blockNumber = $number
       """.update.run
       .transact(xa)
       .void
 
-  override def insert(number: BigInt, hash: ByteVector): F[Unit] =
+  override def insert(number: N, hash: ByteVector): F[Unit] =
     sql"""
       INSERT INTO blocks (blockNumber, blockHash) VALUES ($number, $hash)
       """.update.run.void.transact(xa)

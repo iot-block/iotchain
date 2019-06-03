@@ -7,6 +7,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import fs2.io.tcp.Socket
 import jbok.codec.rlp.implicits._
+import jbok.common.math.N
 import jbok.core.config.FullConfig
 import jbok.core.ledger.History
 import jbok.core.messages.Status
@@ -35,7 +36,7 @@ abstract class BaseManager[F[_]](config: FullConfig, history: History[F])(implic
     for {
       genesis <- history.genesisHeader
       number  <- history.getBestBlockNumber
-      td      <- history.getTotalDifficultyByNumber(number).map(_.getOrElse(BigInt(0)))
+      td      <- history.getTotalDifficultyByNumber(number).map(_.getOrElse(N(0)))
     } yield Status(history.chainId, genesis.hash, number, td, config.service.uri)
 
   def handshake(socket: Socket[F]): F[Peer[F]] =

@@ -2,6 +2,8 @@ package jbok.evm
 
 import cats.effect.Sync
 import cats.implicits._
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.models._
 import jbok.crypto._
 import jbok.crypto.bn256.{BN256, CurvePoint, TwistPoint}
@@ -41,12 +43,12 @@ object PrecompiledContracts {
 
   sealed trait PrecompiledContract {
     protected def exec(inputData: ByteVector): ByteVector
-    protected def gas(inputData: ByteVector): BigInt
+    protected def gas(inputData: ByteVector): N
 
     def run[F[_]: Sync](context: ProgramContext[F]): ProgramResult[F] = {
       val g = gas(context.env.inputData)
 
-      val (result, error, gasRemaining): (ByteVector, Option[ProgramError], BigInt) =
+      val (result, error, gasRemaining): (ByteVector, Option[ProgramError], N) =
         if (g <= context.startGas)
           (exec(context.env.inputData), None, context.startGas - g)
         else
@@ -86,7 +88,7 @@ object PrecompiledContracts {
         ByteVector.empty
     }
 
-    def gas(inputData: ByteVector): BigInt =
+    def gas(inputData: ByteVector): N =
       3000
 
     private def hasOnlyLastByteSet(v: ByteVector): Boolean =
@@ -97,7 +99,7 @@ object PrecompiledContracts {
     def exec(inputData: ByteVector): ByteVector =
       inputData.sha256
 
-    def gas(inputData: ByteVector): BigInt =
+    def gas(inputData: ByteVector): N =
       60 + 12 * wordsForBytes(inputData.size)
   }
 
@@ -105,7 +107,7 @@ object PrecompiledContracts {
     def exec(inputData: ByteVector): ByteVector =
       inputData.ripemd160
 
-    def gas(inputData: ByteVector): BigInt =
+    def gas(inputData: ByteVector): N =
       600 + 120 * wordsForBytes(inputData.size)
   }
 
@@ -113,16 +115,16 @@ object PrecompiledContracts {
     def exec(inputData: ByteVector): ByteVector =
       inputData
 
-    def gas(inputData: ByteVector): BigInt =
+    def gas(inputData: ByteVector): N =
       15 + 3 * wordsForBytes(inputData.size)
   }
 
   object ExpMod extends PrecompiledContract {
     def exec(inputData: ByteVector): ByteVector = {
       val data    = if (inputData.length < 96) inputData.padRight(96) else inputData
-      val baseLen = BigInt(1, data.slice(0, 32).toArray).toLong
-      val expLen  = BigInt(1, data.slice(32, 64).toArray).toLong
-      val modLen  = BigInt(1, data.slice(64, 96).toArray).toLong
+      val baseLen = N(data.slice(0, 32).toArray).toLong
+      val expLen  = N(data.slice(32, 64).toArray).toLong
+      val modLen  = N(data.slice(64, 96).toArray).toLong
 
       if (baseLen == 0 && modLen == 0) {
         ByteVector.empty
@@ -130,25 +132,25 @@ object PrecompiledContracts {
         val inputT = if (data.length > 96) data.drop(96) else ByteVector.empty
         val input =
           if (inputT.length < baseLen + expLen + modLen) inputT.padRight(baseLen + expLen + modLen) else inputT
-        val base = if (baseLen != 0) BigInt(1, input.slice(0, baseLen).toArray) else BigInt(0)
-        val exp  = if (expLen != 0) BigInt(1, input.slice(baseLen, baseLen + expLen).toArray) else BigInt(0)
+        val base = if (baseLen != 0) N(input.slice(0, baseLen).toArray) else N(0)
+        val exp  = if (expLen != 0) N(input.slice(baseLen, baseLen + expLen).toArray) else N(0)
         val mod =
-          if (modLen != 0) BigInt(1, input.slice(baseLen + expLen, baseLen + expLen + modLen).toArray) else BigInt(0)
+          if (modLen != 0) N(input.slice(baseLen + expLen, baseLen + expLen + modLen).toArray) else N(0)
 
         if (mod == 0) {
           ByteVector.empty
         } else {
-          val r = ByteVector(base.modPow(exp, mod).toByteArray)
+          val r = ByteVector(base.toBigInt.modPow(exp.toBigInt, mod.toBigInt).toByteArray)
           if (r.length < modLen) r.padLeft(modLen) else r.takeRight(modLen)
         }
       }
     }
 
-    def gas(inputData: ByteVector): BigInt = {
+    def gas(inputData: ByteVector): N = {
       val data    = if (inputData.length < 96) inputData.padRight(96) else inputData
-      val baseLen = BigInt(data.slice(0, 32).toArray).toLong
-      val expLen  = BigInt(data.slice(32, 64).toArray).toLong
-      val modLen  = BigInt(data.slice(64, 96).toArray).toLong
+      val baseLen = N(data.slice(0, 32).toArray).toLong
+      val expLen  = N(data.slice(32, 64).toArray).toLong
+      val modLen  = N(data.slice(64, 96).toArray).toLong
 
       val input = if (data.length > 96) data.drop(96) else ByteVector.empty
 
@@ -158,15 +160,15 @@ object PrecompiledContracts {
         case x              => x * x / 16 + 480 * x - 199680
       }
 
-      val expHead: BigInt =
+      val expHead: N =
         if (input.length <= baseLen) 0
-        else BigInt(1, input.slice(baseLen, baseLen + expLen.min(32)).toArray)
+        else N(input.slice(baseLen, baseLen + expLen.min(32)).toArray)
 
       val msb       = if (expHead.bitLength > 0) expHead.bitLength - 1 else 0
       val adjExpLen = (if (expLen > 32) (expLen + 32) * 8 else 0) + msb
 
       val gas = f(modLen.max(baseLen)) * adjExpLen.max(1) / 20
-      if (gas >= BigInt(2).pow(65)) BigInt(2).pow(65) - 1
+      if (gas >= N(2).pow(65)) N(2).pow(65) - 1
       else gas
     }
   }
@@ -188,7 +190,7 @@ object PrecompiledContracts {
         .getOrElse(ByteVector.empty.padTo(32))
     }
 
-    def gas(inputData: ByteVector): BigInt =
+    def gas(inputData: ByteVector): N =
       500
   }
 
@@ -201,14 +203,14 @@ object PrecompiledContracts {
 
       CurvePoint(x, y)
         .map { p =>
-          val affine = (p * BigInt(1, s)).makeAffine()
+          val affine = (p * N(s).toBigInt).makeAffine()
           val (x, y) = if (affine.isInfinity) (BigInt(0), BigInt(0)) else (affine.x, affine.y)
           ByteVector(x.toByteArray).padLeft(32) ++ ByteVector(y.toByteArray).padLeft(32)
         }
         .getOrElse(ByteVector.empty.padTo(32))
     }
 
-    def gas(inputData: ByteVector): BigInt =
+    def gas(inputData: ByteVector): N =
       40000
   }
 
@@ -239,7 +241,7 @@ object PrecompiledContracts {
       }
     }
 
-    def gas(inputData: ByteVector): BigInt =
+    def gas(inputData: ByteVector): N =
       100000 + inputData.length / 192 * 80000
   }
 }

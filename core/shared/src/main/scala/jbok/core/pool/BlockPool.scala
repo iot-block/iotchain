@@ -6,6 +6,8 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import jbok.common._
 import jbok.common.log.Logger
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.config.BlockPoolConfig
 import jbok.core.ledger.History
 import jbok.core.models.Block
@@ -128,7 +130,7 @@ final class BlockPool[F[_]](
     } yield ()
 
   /** Removes stale blocks - too old or too young in relation the current best block number */
-  private def cleanStaleBlocks(bestBlockNumber: BigInt): F[Unit] =
+  private def cleanStaleBlocks(bestBlockNumber: N): F[Unit] =
     for {
       m <- blocks.get
       staleHashes = m.values.toList.collect {
@@ -191,7 +193,7 @@ final class BlockPool[F[_]](
     blocks.get.flatMap(blockMap => go(blockMap, block))
   }
 
-  private def addBlock(block: Block, parentTd: Option[BigInt]): F[Unit] = {
+  private def addBlock(block: Block, parentTd: Option[N]): F[Unit] = {
     val td = parentTd.map(_ + block.header.difficulty)
     for {
       _        <- blocks.update(_ + (block.header.hash -> PooledBlock(block, td)))
@@ -200,12 +202,12 @@ final class BlockPool[F[_]](
     } yield ()
   }
 
-  private def isNumberOutOfRange(blockNumber: BigInt, bestBlockNumber: BigInt): Boolean =
+  private def isNumberOutOfRange(blockNumber: N, bestBlockNumber: N): Boolean =
     (blockNumber - bestBlockNumber > config.maxBlockAhead) ||
       (bestBlockNumber - blockNumber > config.maxBlockBehind)
 }
 
 object BlockPool {
-  final case class PooledBlock(block: Block, totalDifficulty: Option[BigInt])
-  final case class Leaf(hash: ByteVector, totalDifficulty: BigInt)
+  final case class PooledBlock(block: Block, totalDifficulty: Option[N])
+  final case class Leaf(hash: ByteVector, totalDifficulty: N)
 }

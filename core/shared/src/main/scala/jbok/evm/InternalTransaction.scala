@@ -1,5 +1,6 @@
 package jbok.evm
 
+import jbok.common.math.N
 import jbok.core.models.Address
 import scodec.bits.ByteVector
 
@@ -18,7 +19,7 @@ final case class InternalTransaction(
     opcode: OpCode,
     from: Address,
     to: Option[Address],
-    gasLimit: BigInt,
+    gasLimit: N,
     data: ByteVector,
-    value: BigInt
+    value: N
 )

@@ -6,6 +6,7 @@ import cats.implicits._
 import fs2._
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
+import jbok.common.math.N
 import jbok.core.NodeStatus
 import jbok.core.config.MiningConfig
 import jbok.core.consensus.Consensus
@@ -82,7 +83,7 @@ final class BlockMiner[F[_]](
   /////////////////////////////////////
   /////////////////////////////////////
 
-  private[jbok] def prepareTransactions(stxs: List[SignedTransaction], blockGasLimit: BigInt): F[List[SignedTransaction]] = {
+  private[jbok] def prepareTransactions(stxs: List[SignedTransaction], blockGasLimit: N): F[List[SignedTransaction]] = {
     val sortedByPrice = stxs
       .groupBy(_.senderAddress.getOrElse(Address.empty))
       .values
@@ -106,7 +107,7 @@ final class BlockMiner[F[_]](
       .flatMap { case (_, txs) => txs }
 
     val transactionsForBlock = sortedByPrice
-      .scanLeft((BigInt(0), None: Option[SignedTransaction])) {
+      .scanLeft((N(0), None: Option[SignedTransaction])) {
         case ((accGas, _), stx) => (accGas + stx.gasLimit, Some(stx))
       }
       .collect { case (gas, Some(stx)) => (gas, stx) }

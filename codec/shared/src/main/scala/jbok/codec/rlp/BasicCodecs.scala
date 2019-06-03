@@ -5,10 +5,20 @@ import java.util.concurrent.TimeUnit
 
 import scodec._
 import scodec.bits._
+import spire.math.SafeLong
 
 import scala.concurrent.duration.Duration
 
 private[rlp] trait BasicCodecs {
+  val uSafeLong: Codec[SafeLong] = codecs.bytes.xmap[SafeLong](
+    bytes => if (bytes.isEmpty) SafeLong.zero else SafeLong(BigInt(1, bytes.toArray)),
+    safeLong => {
+      require(safeLong >= SafeLong.zero, "unsigned codec cannot encode negative values")
+      val bytes = safeLong.toBigInt.toByteArray
+      ByteVector(if (bytes.head == 0) bytes.tail else bytes)
+    }
+  )
+
   val ubigint: Codec[BigInt] = new Codec[BigInt] {
     val codec = codecs.bytes.xmap[BigInt](
       bytes => {
@@ -74,3 +84,5 @@ private[rlp] trait BasicCodecs {
   def rlplist[A](implicit codec: Codec[A]): RlpCodec[A] =
     RlpCodec[A](PrefixType.ListLenPrefix, codec)
 }
+
+object BasicCodecs extends BasicCodecs

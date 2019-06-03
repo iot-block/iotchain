@@ -203,7 +203,7 @@ class CreateOpcodeSpec extends CommonSpec {
       val context = fxt.contextForCreate.copy(world = world)
       val result  = CreateResult(context, fxt.endowment, fxt.createCode.code)
 
-      result.returnValue shouldBe UInt256.Zero
+      result.returnValue shouldBe UInt256.zero
       result.world.getAccount(fxt.newAddrByCreate).unsafeRunSync() shouldBe accountNonEmptyCode
       result.world.getCode(fxt.newAddrByCreate).unsafeRunSync() shouldBe ByteVector.empty
     }
@@ -217,7 +217,7 @@ class CreateOpcodeSpec extends CommonSpec {
       val context = fxt.contextForCreate.copy(world = world)
       val result  = CreateResult(context, fxt.endowment, fxt.createCode.code)
 
-      result.returnValue shouldBe UInt256.Zero
+      result.returnValue shouldBe UInt256.zero
       result.world.getAccount(fxt.newAddrByCreate).unsafeRunSync() shouldBe accountNonZeroNonce
       result.world.getCode(fxt.newAddrByCreate).unsafeRunSync() shouldBe ByteVector.empty
     }

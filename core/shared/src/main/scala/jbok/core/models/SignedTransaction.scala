@@ -5,6 +5,8 @@ import cats.implicits._
 import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.validators.TxInvalid.TxSignatureInvalid
 import jbok.crypto._
 import jbok.crypto.signature._
@@ -16,21 +18,21 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 @JSExportAll
 @ConfiguredJsonCodec
 final case class SignedTransaction(
-    nonce: BigInt,
-    gasPrice: BigInt,
-    gasLimit: BigInt,
+    nonce: N,
+    gasPrice: N,
+    gasLimit: N,
     receivingAddress: Address,
-    value: BigInt,
+    value: N,
     payload: ByteVector,
-    v: BigInt,
-    r: BigInt,
-    s: BigInt
+    v: N,
+    r: N,
+    s: N
 ) {
   lazy val bytes: ByteVector = this.asBytes
 
   lazy val hash: ByteVector = bytes.kec256
 
-  lazy val chainIdOpt: Option[BigInt] = ECDSACommon.getChainId(v)
+  lazy val chainIdOpt: Option[ChainId] = ECDSACommon.getChainId(v.toBigInt).map(bi => ChainId(bi))
 
   lazy val senderAddress: Option[Address] = chainIdOpt.flatMap(chainId => SignedTransaction.getSender(this, chainId))
 
@@ -44,9 +46,9 @@ final case class SignedTransaction(
 object SignedTransaction {
   def apply(
       tx: Transaction,
-      v: BigInt,
-      r: BigInt,
-      s: BigInt
+      v: N,
+      r: N,
+      s: N
   ): SignedTransaction = SignedTransaction(
     tx.nonce,
     tx.gasPrice,
@@ -64,9 +66,9 @@ object SignedTransaction {
       v: Byte,
       r: ByteVector,
       s: ByteVector
-  ): SignedTransaction = apply(tx, BigInt(1, Array(v)), BigInt(1, r.toArray), BigInt(1, s.toArray))
+  ): SignedTransaction = apply(tx, N(Array(v)), N(r.toArray), N(s.toArray))
 
-  def sign[F[_]: Sync](tx: Transaction, keyPair: KeyPair)(implicit chainId: BigInt): F[SignedTransaction] = {
+  def sign[F[_]: Sync](tx: Transaction, keyPair: KeyPair, chainId: ChainId): F[SignedTransaction] = {
     val stx = new SignedTransaction(
       tx.nonce,
       tx.gasPrice,
@@ -74,25 +76,25 @@ object SignedTransaction {
       tx.receivingAddress.getOrElse(Address(ByteVector.empty)),
       tx.value,
       tx.payload,
-      BigInt(0),
-      BigInt(0),
-      BigInt(0)
+      N(0),
+      N(0),
+      N(0)
     )
     val bytes = bytesToSign(stx, chainId)
-    Signature[ECDSA].sign[F](bytes.toArray, keyPair, chainId).map(sig => stx.copy(v = sig.v, r = sig.r, s = sig.s))
+    Signature[ECDSA].sign[F](bytes.toArray, keyPair, chainId.value.toBigInt).map(sig => stx.copy(v = sig.v, r = sig.r, s = sig.s))
   }
 
-  private def bytesToSign(stx: SignedTransaction, chainId: BigInt): ByteVector =
-    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId, BigInt(0), BigInt(0)).asBytes.kec256
+  private def bytesToSign(stx: SignedTransaction, chainId: ChainId): ByteVector =
+    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId.value, N(0), N(0)).asBytes.kec256
 
-  private def recoverPublicKey(stx: SignedTransaction, chainId: BigInt): Option[KeyPair.Public] = {
+  private def recoverPublicKey(stx: SignedTransaction, chainId: ChainId): Option[KeyPair.Public] = {
     val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)
-    val txSig       = CryptoSignature(stx.r, stx.s, stx.v)
+    val txSig       = CryptoSignature(stx.r.toBigInt, stx.s.toBigInt, stx.v.toBigInt)
 
-    Signature[ECDSA].recoverPublic(bytesToSign.toArray, txSig, chainId)
+    Signature[ECDSA].recoverPublic(bytesToSign.toArray, txSig, chainId.value.toBigInt)
   }
 
-  private def getSender(stx: SignedTransaction, chainId: BigInt): Option[Address] =
+  private def getSender(stx: SignedTransaction, chainId: ChainId): Option[Address] =
     recoverPublicKey(stx, chainId).map(pk => Address(pk.bytes.kec256))
 
 }

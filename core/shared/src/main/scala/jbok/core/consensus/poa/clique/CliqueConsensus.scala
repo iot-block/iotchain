@@ -5,6 +5,8 @@ import cats.effect.{Sync, Timer}
 import cats.implicits._
 import jbok.common._
 import jbok.common.log.Logger
+import jbok.common.math.N
+import jbok.common.math.implicits._
 import jbok.core.config.MiningConfig
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.History
@@ -16,9 +18,11 @@ import jbok.core.validators.BlockValidator
 import jbok.core.validators.HeaderInvalid.HeaderParentNotFoundInvalid
 import jbok.persistent.DBErr
 import scodec.bits.ByteVector
+import spire.syntax.all._
 
 import scala.concurrent.duration._
 import scala.util.Random
+import scala.math
 
 final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], clique: Clique[F], pool: BlockPool[F])(
     implicit F: Sync[F],
@@ -61,18 +65,17 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
           snap.recents.find(_._2 == clique.minerAddress) match {
             case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.miners.size) =>
               // If we're amongst the recent miners, wait for the next block
-              val wait = (snap.miners.size / 2 + 1 - (executed.block.header.number - seen).toInt)
-                .max(0) * config.period.toMillis
-              val delay = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
+              val wait: Long = math.max(0, snap.miners.size / 2 + 1 - (executed.block.header.number - seen).toInt) * config.period.toMillis
+              val delay: Long = math.max(0, executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
 
               log.i(s"mined recently, sleep (${delay}) millis") >> T.sleep(delay.millis) >> mine(executed)
 
             case _ =>
-              val wait = 0L.max(executed.block.header.unixTimestamp - System.currentTimeMillis())
+              val wait: Long = math.max(0L, executed.block.header.unixTimestamp - System.currentTimeMillis())
               for {
                 delay <- if (executed.block.header.difficulty == Clique.diffNoTurn) {
                   // It's not our turn explicitly to sign, delay it a bit
-                  val wiggle = Random.nextLong().abs % ((snap.miners.size / 2 + 1) * Clique.wiggleTime.toMillis)
+                  val wiggle: Long = math.abs(Random.nextLong()) % ((snap.miners.size / 2 + 1) * Clique.wiggleTime.toMillis)
                   log.trace(s"${clique.minerAddress} it is not our turn, delay ${wiggle}").as(wait + wiggle)
                 } else {
                   log.trace(s"${clique.minerAddress} it is our turn, mine immediately").as(wait)
@@ -163,8 +166,8 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
 
           val oldBranch = a.takeWhile(_.isDefined).collect { case Some(b) => b }
 
-          val currentBranchDifficulty = oldBranch.map(_.header.difficulty).sum
-          val newBranchDifficulty     = newBranch.map(_.difficulty).sum
+          val currentBranchDifficulty = oldBranch.map(_.header.difficulty).qsum
+          val newBranchDifficulty     = newBranch.map(_.difficulty).qsum
           if (currentBranchDifficulty < newBranchDifficulty) {
             Consensus.BetterBranch(NonEmptyList.fromListUnsafe(newBranch))
           } else {
@@ -184,8 +187,8 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
       Left(message)
     }
 
-  private def removeBlocksUntil(parent: ByteVector, fromNumber: BigInt): F[List[(Block, List[Receipt], BigInt)]] =
-    history.getBlockByNumber(fromNumber).flatMap[List[(Block, List[Receipt], BigInt)]] {
+  private def removeBlocksUntil(parent: ByteVector, fromNumber: N): F[List[(Block, List[Receipt], N)]] =
+    history.getBlockByNumber(fromNumber).flatMap[List[(Block, List[Receipt], N)]] {
       case Some(block) if block.header.hash == parent =>
         F.pure(Nil)
 
@@ -220,14 +223,14 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
       case Nil => F.pure(false)
     }
 
-  private def calcDifficulty(snapshot: Snapshot, miner: Address, number: BigInt): BigInt =
+  private def calcDifficulty(snapshot: Snapshot, miner: Address, number: N): N =
     if (snapshot.inturn(number, miner)) Clique.diffInTurn else Clique.diffNoTurn
 
-  private def calcGasLimit(parentGas: BigInt): BigInt =
+  private def calcGasLimit(parentGas: N): N =
     parentGas
 
-  private def amongstRecent(currentNumber: BigInt, seen: BigInt, N: Int): Boolean = {
-    val limit = N / 2 + 1
+  private def amongstRecent(currentNumber: N, seen: N, minerSize: Int): Boolean = {
+    val limit = minerSize / 2 + 1
     currentNumber < limit || seen > currentNumber - limit
   }
 }

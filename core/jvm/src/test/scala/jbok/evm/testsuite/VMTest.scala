@@ -5,8 +5,7 @@ import cats.effect.IO
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.parser._
-import jbok.codec.json.implicits._
-import jbok.codec.rlp.implicits._
+import jbok.common.math.N
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
 import jbok.core.store.ColumnFamilies
@@ -34,7 +33,7 @@ final case class VMJson(
     exec: ExecJson,
     pre: Map[Address, PrePostJson],
     callcreates: Option[List[CallCreateJson]],
-    gas: Option[BigInt],
+    gas: Option[N],
     logs: Option[ByteVector],
     out: Option[ByteVector],
     post: Option[Map[Address, PrePostJson]]
@@ -49,10 +48,10 @@ final case class VMJson(
 
 final case class EnvJson(
     currentCoinbase: Address,
-    currentDifficulty: BigInt,
-    currentGasLimit: BigInt,
-    currentNumber: BigInt,
-    currentTimestamp: BigInt
+    currentDifficulty: N,
+    currentGasLimit: N,
+    currentNumber: N,
+    currentTimestamp: N
 )
 
 //balance: The balance of the account.
@@ -60,7 +59,7 @@ final case class EnvJson(
 //code: The body code of the account, given as an array of byte values. See $DATA_ARRAY.
 //storage: The account’s storage, given as a mapping of keys to values. For key used notion of string as digital or hex number e.g: "1200" or "0x04B0" For values used $DATA_ARRAY.
 
-final case class PrePostJson(balance: BigInt, nonce: BigInt, code: ByteVector, storage: Map[ByteVector, ByteVector])
+final case class PrePostJson(balance: N, nonce: N, code: ByteVector, storage: Map[ByteVector, ByteVector])
 
 //address: The address of the account under which the code is executing, to be returned by the ADDRESS instruction.
 //origin: The address of the execution’s origin, to be returned by the ORIGIN instruction.
@@ -75,11 +74,11 @@ final case class ExecJson(
     address: Address,
     origin: Address,
     caller: Address,
-    value: BigInt,
+    value: N,
     data: ByteVector,
     code: ByteVector,
-    gasPrice: BigInt,
-    gas: BigInt
+    gasPrice: N,
+    gas: N
 )
 
 //data: An array of bytes specifying the data with which the CALL or CREATE operation was made. In the case of CREATE, this would be the (initialisation) code. See $DATA_ARRAY.
@@ -87,19 +86,17 @@ final case class ExecJson(
 //gasLimit: The amount of gas with which the operation was made.
 //value: The value or endowment with which the operation was made.
 
-final case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLimit: BigInt, value: BigInt)
+final case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLimit: N, value: N)
 
 final case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
 class VMTest extends CoreSpec {
-  implicit val bigIntDecoder: Decoder[BigInt] = Decoder[String].map[BigInt](
-    x =>
-      if (x.startsWith("0x"))
-        BigInt(x.substring(2, x.length), 16)
-      else
-        BigInt(x))
+  implicit private val bytesKeyDecoder =
+    KeyDecoder.instance[ByteVector](s => ByteVector.fromHexDescriptive(s).fold(_ => None, Some.apply))
+  implicit private val addressKeyDecoder =
+    bytesKeyDecoder.map(x => Address(x))
 
-  def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: BigInt): WorldState[IO] = {
+  def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: N): WorldState[IO] = {
     val accounts = json.map {
       case (addr, account) => (addr, Account(balance = UInt256(account.balance), nonce = UInt256(account.nonce)))
     }
@@ -108,7 +105,7 @@ class VMTest extends CoreSpec {
       case (addr, account) => (addr, account.code)
     }
 
-    val store      = MemoryKVStore[IO].unsafeRunSync()
+    val store   = MemoryKVStore[IO].unsafeRunSync()
     val history = History(store)
 
     val storages = json.map {
@@ -127,12 +124,12 @@ class VMTest extends CoreSpec {
       Set.empty,
       storages,
       accountCodes,
-      UInt256.Zero,
+      UInt256.zero,
       noEmptyAccounts = true
     )
   }
 
-  def check(label: String, vmJson: VMJson) =
+  def check(label: String, vmJson: VMJson): Unit =
     s"pass test suite ${label}" in {
       val config   = EvmConfig.HomesteadConfigBuilder(None)
       val preState = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
@@ -146,7 +143,7 @@ class VMTest extends CoreSpec {
         vmJson.env.currentDifficulty,
         vmJson.env.currentNumber,
         vmJson.env.currentGasLimit,
-        BigInt(0),
+        N(0),
         vmJson.env.currentTimestamp.toLong,
         ByteVector.empty
       )
@@ -170,21 +167,21 @@ class VMTest extends CoreSpec {
         val postState = loadMockWorldState(post, vmJson.env.currentNumber)
         val world = if (result.addressesToDelete.nonEmpty) {
           result.world.contractCodes
-            .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
+            .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldBe postState.contractCodes.filter(!_._2.isEmpty)
           result.world.delAccount(result.addressesToDelete.head)
         } else {
-          result.world.contractCodes.filter(!_._2.isEmpty) shouldEqual postState.contractCodes.filter(!_._2.isEmpty)
+          result.world.contractCodes.filter(!_._2.isEmpty) shouldBe postState.contractCodes.filter(!_._2.isEmpty)
           result.world
         }
 
-        world.accountProxy.toMap.unsafeRunSync() shouldEqual postState.accountProxy.toMap.unsafeRunSync()
+        world.accountProxy.toMap.unsafeRunSync() shouldBe postState.accountProxy.toMap.unsafeRunSync()
         for {
           contractStorages <- postState.contractStorages
           address = contractStorages._1
           storage = contractStorages._2.data.unsafeRunSync()
           if storage.nonEmpty
         } {
-          world.contractStorages.get(address).map(_.data.unsafeRunSync()).getOrElse(Map.empty[UInt256, UInt256]) shouldEqual storage
+          world.contractStorages.get(address).map(_.data.unsafeRunSync()).getOrElse(Map.empty[UInt256, UInt256]) shouldBe storage
         }
       }
 
@@ -205,10 +202,7 @@ class VMTest extends CoreSpec {
   "load and run official json test files" should {
     val file = File(Resource.getUrl("VMTests"))
     val fileList = file.listRecursively
-      .filter(
-        f =>
-          f.name.endsWith(".json") &&
-            !f.path.toString.contains("vmPerformance"))
+      .filter(f => f.name.endsWith(".json") && !f.path.toString.contains("vmPerformance"))
       .toList
 
     val sources = for {

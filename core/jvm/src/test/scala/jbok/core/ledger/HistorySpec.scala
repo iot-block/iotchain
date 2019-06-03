@@ -2,11 +2,8 @@ package jbok.core.ledger
 
 import cats.effect.IO
 import cats.implicits._
-import jbok.codec.rlp.implicits._
-import jbok.common.testkit._
-import jbok.core.CoreSpec
+import jbok.core.{CoreSpec, StatefulGen}
 import jbok.core.models._
-import jbok.core.testkit._
 import jbok.crypto._
 import scodec.bits.ByteVector
 
@@ -51,8 +48,8 @@ class HistorySpec extends CoreSpec {
     }
 
     "put block body should update tx location mapping" in {
-      val txs   = random[List[SignedTransaction]](genTxs(1, 1, history))
-      val block = random[Block](genBlock(stxsOpt = txs.some))
+      val txs   = random(StatefulGen.transactions(1, 1, history))
+      val block = random(StatefulGen.block(None, txs.some))
       history.putBlockBody(block.header.hash, block.body).unsafeRunSync()
       val location = history.getTransactionLocation(txs.head.hash).unsafeRunSync()
       location shouldBe Some(TransactionLocation(block.header.hash, 0))

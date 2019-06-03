@@ -7,17 +7,18 @@ import cats.data.OptionT
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.implicits._
 import jbok.core.consensus.poa.clique.Snapshot._
-import jbok.core.models.{Address, BlockHeader}
+import jbok.core.models.{Address, BlockHeader, ChainId}
 import jbok.persistent.SingleColumnKVStore
 import scodec.bits._
 import cats.implicits._
 import io.circe.generic.extras.ConfiguredJsonCodec
+import jbok.common.math.N
 import jbok.core.config.MiningConfig
 
 @ConfiguredJsonCodec
 final case class Vote(
     miner: Address, // Authorized miner that cast this vote
-    block: BigInt, // Block number the vote was cast in (expire old votes)
+    block: N, // Block number the vote was cast in (expire old votes)
     address: Address, // Account being voted on to change its authorization
     authorize: Boolean // Whether to authorize or deauthorize the voted account
 )
@@ -35,10 +36,10 @@ final case class Tally(
 @ConfiguredJsonCodec
 final case class Snapshot(
     config: MiningConfig,
-    number: BigInt, // Block number where the snapshot was created
+    number: N, // Block number where the snapshot was created
     hash: ByteVector, // Block hash where the snapshot was created
     miners: Set[Address], // Set of authorized miners at this moment
-    recents: Map[BigInt, Address] = Map.empty, // Set of recent miners for spam protections
+    recents: Map[N, Address] = Map.empty, // Set of recent miners for spam protections
     votes: List[Vote] = Nil, // List of votes cast in chronological order
     tally: Map[Address, Tally] = Map.empty // Current vote tally to avoid recalculating
 ) {
@@ -87,15 +88,15 @@ final case class Snapshot(
   def sortedMiners: List[Address] = miners.toList.sorted
 
   /** inturn returns if a miner at a given block height is in-turn or not. */
-  def inturn(number: BigInt, miner: Address): Boolean = {
+  def inturn(number: N, miner: Address): Boolean = {
     val miners = sortedMiners
     val offset = miners.zipWithIndex.collectFirst {
       case (address, index) if address == miner => index
     }
-    offset.exists(i => number % BigInt(miners.length) == BigInt(i))
+    offset.exists(i => number % N(miners.length) == N(i))
   }
 
-  def clearStaleVotes(number: BigInt): Snapshot =
+  def clearStaleVotes(number: N): Snapshot =
     if (number % config.epoch == 0) {
       copy(votes = Nil, tally = Map.empty)
     } else {
@@ -103,8 +104,8 @@ final case class Snapshot(
     }
 
   /** Delete the oldest miner from the recent list to allow it signing again */
-  def deleteOldestRecent(number: BigInt): Snapshot = {
-    val limit = BigInt(miners.size / 2 + 1)
+  def deleteOldestRecent(number: N): Snapshot = {
+    val limit = N(miners.size / 2 + 1)
     if (number >= limit) {
       copy(recents = this.recents - (number - limit))
     } else {
@@ -119,7 +120,7 @@ final case class Snapshot(
       votes = this.votes.filter(_.address != address)
     )
 
-  def deauthorized(address: Address, number: BigInt): Snapshot = {
+  def deauthorized(address: Address, number: N): Snapshot = {
     // miner list shrunk, delete any leftover recent caches
     val uncasted =
       votes
@@ -151,7 +152,7 @@ object Snapshot {
     } yield snap).value
 
   /** apply creates a new authorization snapshot by applying the given headers to the original one */
-  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader], chainId: BigInt)(implicit F: Sync[F]): F[Snapshot] =
+  def applyHeaders[F[_]](snapshot: Snapshot, headers: List[BlockHeader], chainId: ChainId)(implicit F: Sync[F]): F[Snapshot] =
     if (headers.isEmpty) {
       snapshot.pure[F]
     } else {
@@ -174,7 +175,7 @@ object Snapshot {
     }
 
   /** create a new snapshot by applying a given header */
-  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader, chainId: BigInt)(implicit F: Sync[F]): F[Snapshot] = {
+  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader, chainId: ChainId)(implicit F: Sync[F]): F[Snapshot] = {
     val number = header.number
     val extra  = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value
     Clique.ecrecover[F](header, chainId).map {

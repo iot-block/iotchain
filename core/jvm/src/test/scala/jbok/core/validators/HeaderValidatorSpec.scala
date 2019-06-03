@@ -1,7 +1,7 @@
 package jbok.core.validators
 
 import cats.effect.IO
-import jbok.common.testkit._
+import jbok.common.math.N
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.BlockHeader
@@ -38,7 +38,7 @@ class HeaderValidatorSpec extends CoreSpec {
     gasLimit = 131749155,
     gasUsed = 0,
     unixTimestamp = 1486752440,
-    extra = ByteVector.empty,
+    extra = ByteVector.empty
   )
 
   history.putBlockHeader(validParent).unsafeRunSync()
@@ -49,18 +49,18 @@ class HeaderValidatorSpec extends CoreSpec {
     }
 
     "return a failure if created based on invalid gas used" in {
-      forAll(bigIntGen) { gasUsed =>
+      forAll { gasUsed: N =>
         val gasUsedHeader = validHeader.copy(gasUsed = gasUsed)
         val result        = HeaderValidator.preExecValidate[IO](validParent, gasUsedHeader).attempt.unsafeRunSync()
-        if (gasUsed <= validHeader.gasLimit) result shouldBe Right(gasUsedHeader)
+        if (gasUsed <= validHeader.gasLimit) result shouldBe Right(())
         else result shouldBe Left(HeaderGasUsedInvalid)
       }
     }
 
     "return a failure if created based on invalid gas limit" in {
-      val lowerGasLimit = BigInt(5000).max(validParent.gasLimit - validParent.gasLimit / 1024 + 1)
-      val upperGasLimit = validParent.gasLimit + validParent.gasLimit / 1024 - 1
-      forAll(bigIntGen) { gasLimit =>
+      val lowerGasLimit: N = BigInt(5000).max(validParent.gasLimit - validParent.gasLimit / 1024 + 1)
+      val upperGasLimit: N = validParent.gasLimit + validParent.gasLimit / 1024 - 1
+      forAll { gasLimit: N =>
         val gasLimitHeader = validHeader.copy(gasLimit = gasLimit)
         val result         = HeaderValidator.preExecValidate[IO](validParent, gasLimitHeader).attempt.unsafeRunSync()
         if (gasLimit <= upperGasLimit && gasLimit >= lowerGasLimit) result shouldBe Right(gasLimitHeader)
@@ -69,7 +69,7 @@ class HeaderValidatorSpec extends CoreSpec {
     }
 
     "return a failure if created based on invalid number" in {
-      forAll(bigIntGen) { number =>
+      forAll { number: N =>
         val invalidNumberHeader = validHeader.copy(number = number)
         val result              = HeaderValidator.preExecValidate[IO](validParent, invalidNumberHeader).attempt.unsafeRunSync()
         if (number == validHeader.number + 1) result shouldBe Right(invalidNumberHeader)
@@ -78,8 +78,7 @@ class HeaderValidatorSpec extends CoreSpec {
     }
 
     "return a failure if the parent's header is not in storage" in {
-      HeaderValidator.preExecValidate[IO](IO.pure(None), validHeader).attempt.unsafeRunSync() shouldBe Left(
-        HeaderParentNotFoundInvalid)
+      HeaderValidator.preExecValidate[IO](IO.pure(None), validHeader).attempt.unsafeRunSync() shouldBe Left(HeaderParentNotFoundInvalid)
     }
 
     "return a failure if created based on invalid receipts header" in {

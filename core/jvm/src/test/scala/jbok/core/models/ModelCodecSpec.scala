@@ -1,8 +1,6 @@
 package jbok.core.models
 
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
-import jbok.core.testkit._
 import jbok.codec.testkit._
 import jbok.core.CoreSpec
 
@@ -28,6 +26,12 @@ class ModelCodecSpec extends CoreSpec {
     }
 
     "roundtrip Transaction" in {
+      forAll { tx: Transaction =>
+        roundtrip(tx)
+      }
+    }
+
+    "roundtrip SignedTransaction" in {
       forAll { tx: SignedTransaction =>
         val r        = tx.r.asBytes
         val s        = tx.s.asBytes

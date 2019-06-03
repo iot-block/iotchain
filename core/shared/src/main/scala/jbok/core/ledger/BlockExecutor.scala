@@ -23,6 +23,8 @@ import jbok.persistent.DBErr
 import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
+import jbok.common.math.N
+import jbok.common.math.implicits._
 
 import scala.concurrent.duration._
 
@@ -95,7 +97,7 @@ final class BlockExecutor[F[_]](
       (senderAccount, world2) <- world1
         .getAccountOpt(senderAddress)
         .map(a => (a, world1))
-        .getOrElse((Account.empty(UInt256.Zero), world1.putAccount(senderAddress, Account.empty(UInt256.Zero))))
+        .getOrElse((Account.empty(UInt256.zero), world1.putAccount(senderAddress, Account.empty(UInt256.zero))))
       world3  <- updateSenderAccountBeforeExecution(senderAddress, stx, world2)
       context <- prepareProgramContext(stx, senderAddress, blockHeader, world2, vmConfig)
       result  <- runVM(stx, context, vmConfig)
@@ -105,7 +107,7 @@ final class BlockExecutor[F[_]](
     }
   }
 
-  def binarySearchGasEstimation(stx: SignedTransaction, senderAddress: Address, blockHeader: BlockHeader): F[BigInt] = {
+  def binarySearchGasEstimation(stx: SignedTransaction, senderAddress: Address, blockHeader: BlockHeader): F[N] = {
     val lowLimit  = EvmConfig.forBlock(blockHeader.number, config).feeSchedule.G_transaction
     val highLimit = stx.gasLimit
 
@@ -186,7 +188,7 @@ final class BlockExecutor[F[_]](
       header: BlockHeader,
       world: WorldState[F],
       shortCircuit: Boolean,
-      accGas: BigInt = 0,
+      accGas: N = 0,
       accReceipts: List[Receipt] = Nil,
       accExecuted: List[SignedTransaction] = Nil,
   ): F[(BlockExecResult[F], List[SignedTransaction])] = transactions match {
@@ -241,7 +243,7 @@ final class BlockExecutor[F[_]](
       stx: SignedTransaction,
       header: BlockHeader,
       world: WorldState[F],
-      accGas: BigInt
+      accGas: N
   ): F[TxExecResult[F]] =
     for {
       senderAddress <- stx.getSenderOrThrow[F]
@@ -251,7 +253,7 @@ final class BlockExecutor[F[_]](
       (senderAccount, worldForTx) <- world
         .getAccountOpt(senderAddress)
         .map(a => (a, world))
-        .getOrElse((Account.empty(UInt256.Zero), world.putAccount(senderAddress, Account.empty(UInt256.Zero))))
+        .getOrElse((Account.empty(UInt256.zero), world.putAccount(senderAddress, Account.empty(UInt256.zero))))
       upfrontCost = calculateUpfrontCost(stx)
       _                    <- txValidator.validate(stx, senderAccount, header, upfrontCost, accGas)
       checkpointWorldState <- updateSenderAccountBeforeExecution(senderAddress, stx, worldForTx)
@@ -354,7 +356,7 @@ final class BlockExecutor[F[_]](
   private def calculateUpfrontGas(stx: SignedTransaction): UInt256 =
     UInt256(stx.gasLimit * stx.gasPrice)
 
-  private def calcTotalGasToRefund(stx: SignedTransaction, result: ProgramResult[F]): BigInt =
+  private def calcTotalGasToRefund(stx: SignedTransaction, result: ProgramResult[F]): N =
     if (result.error.isEmpty || result.isRevert) {
       val gasUsed = stx.gasLimit - result.gasRemaining
       // remaining gas plus some allowance
@@ -378,7 +380,7 @@ final class BlockExecutor[F[_]](
       .map(_.clearTouchedAccounts)
   }
 
-  private def binaryChop[E](min: BigInt, max: BigInt)(f: BigInt => F[Option[E]]): F[BigInt] = {
+  private def binaryChop[E](min: N, max: N)(f: N => F[Option[E]]): F[N] = {
     assert(min <= max)
     if (min == max)
       F.pure(max)
@@ -399,13 +401,13 @@ final class BlockExecutor[F[_]](
 object BlockExecutor {
   final case class BlockExecResult[F[_]](
       world: WorldState[F],
-      gasUsed: BigInt = 0,
+      gasUsed: N = 0,
       receipts: List[Receipt] = Nil
   )
 
   final case class TxExecResult[F[_]](
       world: WorldState[F],
-      gasUsed: BigInt,
+      gasUsed: N,
       logs: List[TxLogEntry],
       vmReturnData: ByteVector,
       vmError: Option[ProgramError],

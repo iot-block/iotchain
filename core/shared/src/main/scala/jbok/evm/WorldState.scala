@@ -23,7 +23,7 @@ final case class WorldState[F[_]](
     touchedAccounts: Set[Address] = Set.empty[Address],
     contractStorages: Map[Address, Storage[F]] = Map.empty[Address, Storage[F]],
     contractCodes: Map[Address, ByteVector] = Map.empty[Address, ByteVector],
-    accountStartNonce: UInt256 = UInt256.Zero,
+    accountStartNonce: UInt256 = UInt256.zero,
     noEmptyAccounts: Boolean = true
 )(implicit F: Sync[F]) {
   def getBlockHash(number: UInt256): F[Option[UInt256]] =
@@ -89,7 +89,7 @@ final case class WorldState[F[_]](
     getAccountOpt(address).isDefined
 
   def getBalance(address: Address): F[UInt256] =
-    getAccountOpt(address).map(a => UInt256(a.balance)).getOrElse(UInt256.Zero)
+    getAccountOpt(address).map(a => UInt256(a.balance)).getOrElse(UInt256.zero)
 
   def transfer(from: Address, to: Address, value: UInt256): F[WorldState[F]] =
     Sync[F].ifM((from == to).pure[F] || isZeroValueTransferToNonExistentAccount(to, value))(

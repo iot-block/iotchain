@@ -6,6 +6,7 @@ import doobie.implicits._
 import doobie.util.transactor.Transactor
 import doobie.util.update.Update
 import jbok.app.service.store.TransactionStore
+import jbok.common.math.N
 import jbok.core.api.HistoryTransaction
 import jbok.core.models.{Receipt, Block => CoreBlock}
 
@@ -43,7 +44,7 @@ final class DoobieTransactionStore[F[_]](xa: Transactor[F])(implicit F: Sync[F])
       .to[List]
       .transact(xa)
 
-  override def delByBlockNumber(number: BigInt): F[Unit] =
+  override def delByBlockNumber(number: N): F[Unit] =
     sql"""DELETE from transactions WHERE blockNumber = $number""".update.run.void.transact(xa)
 
   def insertBlockTransactions(block: CoreBlock, receipts: List[Receipt]): F[Unit] = {

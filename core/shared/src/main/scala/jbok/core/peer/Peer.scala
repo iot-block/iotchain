@@ -8,6 +8,7 @@ import jbok.core.messages.{SignedTransactions, Status}
 import jbok.network.Message
 import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
+import jbok.common.math.N
 import jbok.crypto._
 
 final case class Peer[F[_]](
@@ -25,7 +26,7 @@ final case class Peer[F[_]](
   def hasTxs(stxs: SignedTransactions): F[Boolean] =
     knownTxs.get.map(_.contains(stxs.asBytes.kec256))
 
-  def markBlock(blockHash: ByteVector, number: BigInt): F[Unit] =
+  def markBlock(blockHash: ByteVector, number: N): F[Unit] =
     knownBlocks.update(s => s.take(MaxKnownBlocks - 1) + blockHash) >>
       status.update(s => s.copy(bestNumber = s.bestNumber.max(number)))
 

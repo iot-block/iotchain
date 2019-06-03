@@ -6,6 +6,8 @@ import jbok.core.models._
 import jbok.core.validators.TxInvalid._
 import jbok.evm.EvmConfig
 import cats.implicits._
+import jbok.common.math.N
+import jbok.common.math.implicits._
 
 object TxInvalid {
   final case object TxSignatureInvalid             extends Exception("SignedTransactionInvalid")
@@ -14,7 +16,7 @@ object TxInvalid {
       extends Exception(
         s"TxNonceInvalid(got tx nonce $txNonce but sender nonce in mpt is: $senderNonce)"
       )
-  final case class TxNotEnoughGasForIntrinsicInvalid(txGasLimit: BigInt, txIntrinsicGas: BigInt)
+  final case class TxNotEnoughGasForIntrinsicInvalid(txGasLimit: N, txIntrinsicGas: N)
       extends Exception(
         s"TxNotEnoughGasForIntrinsicInvalid(xx gas limit ($txGasLimit) < tx intrinsic gas ($txIntrinsicGas))"
       )
@@ -22,13 +24,13 @@ object TxInvalid {
       extends Exception(
         s"TxSenderCantPayUpfrontCostInvalid(upfrontcost ($upfrontCost) > sender balance ($senderBalance))"
       )
-  final case class TrxGasLimitTooBigInvalid(txGasLimit: BigInt, accumGasUsed: BigInt, blockGasLimit: BigInt)
+  final case class TrxGasLimitTooBigInvalid(txGasLimit: N, accumGasUsed: N, blockGasLimit: N)
       extends Exception(
         s"TxGasLimitTooBigInvalid(tx gas limit ($txGasLimit) + acc gas ($accumGasUsed) > block gas limit ($blockGasLimit))"
       )
 }
 
-final class TxValidator[F[_]](historyConfig: HistoryConfig)(implicit F: Sync[F], chainId: BigInt) {
+final class TxValidator[F[_]](historyConfig: HistoryConfig)(implicit F: Sync[F], chainId: ChainId) {
   import TxValidator._
 
   def validate(
@@ -36,7 +38,7 @@ final class TxValidator[F[_]](historyConfig: HistoryConfig)(implicit F: Sync[F],
       senderAccount: Account,
       blockHeader: BlockHeader,
       upfrontGasCost: UInt256,
-      accGasUsed: BigInt
+      accGasUsed: N
   ): F[Unit] =
     for {
       _ <- checkSyntacticValidity[F](stx, chainId)
@@ -52,7 +54,7 @@ final class TxValidator[F[_]](historyConfig: HistoryConfig)(implicit F: Sync[F],
     * @param nonce       Transaction.nonce to validate
     * @param senderNonce Nonce of the sender of the transaction
     */
-  private def validateNonce(nonce: BigInt, senderNonce: UInt256): F[Unit] =
+  private def validateNonce(nonce: N, senderNonce: UInt256): F[Unit] =
     if (senderNonce == UInt256(nonce)) F.unit
     else F.raiseError(TxNonceInvalid(UInt256(nonce), senderNonce))
 
@@ -74,8 +76,7 @@ final class TxValidator[F[_]](historyConfig: HistoryConfig)(implicit F: Sync[F],
     * @param blockHeaderNumber Number of the block where the stx transaction was included
     * @return Either the validated transaction or a TransactionNotEnoughGasForIntrinsicError
     */
-  private def validateGasLimitEnoughForIntrinsicGas(stx: SignedTransaction,
-                                                    blockHeaderNumber: BigInt): F[SignedTransaction] = {
+  private def validateGasLimitEnoughForIntrinsicGas(stx: SignedTransaction, blockHeaderNumber: N): F[SignedTransaction] = {
     val config         = EvmConfig.forBlock(blockHeaderNumber, historyConfig)
     val txIntrinsicGas = config.calcTransactionIntrinsicGas(stx.payload, stx.isContractInit)
     if (stx.gasLimit >= txIntrinsicGas) F.pure(stx)
@@ -90,21 +91,19 @@ final class TxValidator[F[_]](historyConfig: HistoryConfig)(implicit F: Sync[F],
     * @param accGasUsed    Gas spent within tx container block prior executing stx
     * @param blockGasLimit Block gas limit
     */
-  private def validateBlockHasEnoughGasLimitForTx(gasLimit: BigInt,
-                                                  accGasUsed: BigInt,
-                                                  blockGasLimit: BigInt): F[BigInt] =
+  private def validateBlockHasEnoughGasLimitForTx(gasLimit: N, accGasUsed: N, blockGasLimit: N): F[N] =
     if (gasLimit + accGasUsed <= blockGasLimit) F.pure(gasLimit)
     else F.raiseError(TrxGasLimitTooBigInvalid(gasLimit, accGasUsed, blockGasLimit))
 }
 
 object TxValidator {
-  val secp256k1n: BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337")
-  val maxNonceValue = BigInt(2).pow(8 * 32) - 1
-  val maxGasValue   = BigInt(2).pow(8 * 32) - 1
-  val maxValue      = BigInt(2).pow(8 * 32) - 1
+  val secp256k1n: N    = N("115792089237316195423570985008687907852837564279074904382605163141518161494337")
+  val maxNonceValue: N = N(2).pow(8 * 32) - 1
+  val maxGasValue: N   = N(2).pow(8 * 32) - 1
+  val maxValue: N      = N(2).pow(8 * 32) - 1
 
   /** Validates if the transaction is syntactically valid (lengths of the transaction fields are correct) */
-  def checkSyntacticValidity[F[_]](stx: SignedTransaction, chainId: BigInt)(implicit F: Sync[F]): F[Unit] = {
+  def checkSyntacticValidity[F[_]](stx: SignedTransaction, chainId: ChainId)(implicit F: Sync[F]): F[Unit] = {
     import stx._
 
     val validR = r > 0 && r < secp256k1n
@@ -118,8 +117,10 @@ object TxValidator {
       F.raiseError(TxSyntaxInvalid(s"Invalid gasPrice: $gasPrice > $maxGasValue"))
     else if (value > maxValue)
       F.raiseError(TxSyntaxInvalid(s"Invalid value: $value > $maxValue"))
-    else if (!validR || !validS)
-      F.raiseError(TxSignatureInvalid)
+    else if (!validR)
+      F.raiseError(TxSyntaxInvalid(s"Invalid r: ${r}"))
+    else if (!validS)
+      F.raiseError(TxSyntaxInvalid(s"Invalid s: ${s}"))
     else if (stx.senderAddress.isEmpty || !stx.chainIdOpt.contains(chainId))
       F.raiseError(TxSignatureInvalid)
     else

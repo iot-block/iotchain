@@ -3,14 +3,13 @@ package jbok.core.keystore
 import java.security.SecureRandom
 
 import cats.effect.IO
-import jbok.common.CommonSpec
 import io.circe.parser._
 import jbok.crypto._
-import jbok.codec.json.implicits._
 import jbok.crypto.signature.KeyPair
 import io.circe.syntax._
+import jbok.core.CoreSpec
 
-class EncryptedKeySpec extends CommonSpec {
+class EncryptedKeySpec extends CoreSpec {
 
   val gethKey =
     """{
@@ -44,11 +43,11 @@ class EncryptedKeySpec extends CommonSpec {
 
     "securely store private keys" in {
       val secureRandom = new SecureRandom
-      val prvKey = KeyPair.Secret(randomByteString(secureRandom, 32))
-      val passphrase = "P4S5W0rd"
-      val encKey = EncryptedKey[IO](prvKey, passphrase, secureRandom).unsafeRunSync()
+      val prvKey       = KeyPair.Secret(randomByteString(secureRandom, 32))
+      val passphrase   = "P4S5W0rd"
+      val encKey       = EncryptedKey[IO](prvKey, passphrase, secureRandom).unsafeRunSync()
 
-      val json = encKey.asJson.spaces2
+      val json    = encKey.asJson.spaces2
       val decoded = decode[EncryptedKey](json)
 
       decoded shouldBe Right(encKey)

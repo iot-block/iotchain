@@ -2,11 +2,11 @@ package jbok.evm
 
 import jbok.common.CommonSpec
 import jbok.core.models.UInt256
-import jbok.core.testkit._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen._
 import org.scalacheck.{Arbitrary, Gen}
 import scodec.bits.ByteVector
+import jbok.core.StatelessGen.uint256
 
 class MemorySpec extends CommonSpec {
 
@@ -23,7 +23,7 @@ class MemorySpec extends CommonSpec {
       ByteVector((start until (start + size)).map(_.toByte): _*)
 
   def randomSizeByteArrayGen(minSize: Int, maxSize: Int): Gen[Array[Byte]] =
-    Gen.choose(minSize, maxSize).flatMap(byteArrayOfNItemsGen(_))
+    Gen.choose(minSize, maxSize).flatMap(byteArrayOfNItemsGen)
 
   def byteArrayOfNItemsGen(n: Int): Gen[Array[Byte]] = Gen.listOfN(n, Arbitrary.arbitrary[Byte]).map(_.toArray)
 
@@ -39,22 +39,22 @@ class MemorySpec extends CommonSpec {
           val expectedSize     = math.max(initialMemorySize, idx + 1)
           val expectedContents = zeros(expectedSize).update(idx, b)
 
-          memory.size shouldEqual expectedSize
-          memory.load(0, memory.size)._1 shouldEqual expectedContents
+          memory.size shouldBe expectedSize
+          memory.load(0, memory.size)._1 shouldBe expectedContents
         }
       }
     }
 
     "Store an UInt256" in {
-      forAll(choose(10, 100), uint256Gen(), choose(0, 200)) { (initialMemorySize, uint, idx) =>
+      forAll(choose(10, 100), uint256(), choose(0, 200)) { (initialMemorySize, uint, idx) =>
         whenever(initialMemorySize >= 0 && idx >= 0) {
           val memory = Memory.empty.store(0, zeros(initialMemorySize)).store(idx, uint)
 
-          val expectedSize     = math.max(initialMemorySize, idx + UInt256.Size)
-          val expectedContents = zeros(idx) ++ uint.bytes ++ zeros(memory.size - idx - UInt256.Size)
+          val expectedSize     = math.max(initialMemorySize, idx + UInt256.size)
+          val expectedContents = zeros(idx) ++ uint.bytes ++ zeros(memory.size - idx - UInt256.size)
 
-          memory.size shouldEqual expectedSize
-          memory.load(0, memory.size)._1 shouldEqual expectedContents
+          memory.size shouldBe expectedSize
+          memory.load(0, memory.size)._1 shouldBe expectedContents
         }
       }
     }
@@ -72,8 +72,8 @@ class MemorySpec extends CommonSpec {
             else
               zeros(idx) ++ ByteVector(arr) ++ zeros(memory.size - idx - arr.length)
 
-          memory.size shouldEqual expectedSize
-          memory.load(0, memory.size)._1 shouldEqual expectedContents
+          memory.size shouldBe expectedSize
+          memory.load(0, memory.size)._1 shouldBe expectedContents
         }
       }
     }
@@ -92,8 +92,8 @@ class MemorySpec extends CommonSpec {
             else
               zeros(idx) ++ ByteVector(arr) ++ zeros(memory.size - idx - bs.size.toInt)
 
-          memory.size shouldEqual expectedSize
-          memory.load(0, memory.size)._1 shouldEqual expectedContents
+          memory.size shouldBe expectedSize
+          memory.load(0, memory.size)._1 shouldBe expectedContents
         }
       }
     }
@@ -104,20 +104,20 @@ class MemorySpec extends CommonSpec {
           val initialMemory  = Memory.empty.store(0, consecutiveBytes(initialMemorySize))
           val (uint, memory) = initialMemory.load(idx)
 
-          val expectedMemorySize = math.max(initialMemorySize, idx + UInt256.Size)
+          val expectedMemorySize = math.max(initialMemorySize, idx + UInt256.size)
           val expectedContents   = consecutiveBytes(initialMemorySize) ++ zeros(expectedMemorySize - initialMemorySize)
           val expectedResult = UInt256(
             if (idx >= initialMemorySize)
-              zeros(UInt256.Size)
-            else if (idx + UInt256.Size > initialMemorySize)
-              consecutiveBytes(initialMemorySize - idx, idx) ++ zeros(idx + UInt256.Size - initialMemorySize)
+              zeros(UInt256.size)
+            else if (idx + UInt256.size > initialMemorySize)
+              consecutiveBytes(initialMemorySize - idx, idx) ++ zeros(idx + UInt256.size - initialMemorySize)
             else
-              consecutiveBytes(UInt256.Size, idx)
+              consecutiveBytes(UInt256.size, idx)
           )
 
-          memory.size shouldEqual expectedMemorySize
-          memory.load(0, memory.size)._1 shouldEqual expectedContents
-          uint shouldEqual expectedResult
+          memory.size shouldBe expectedMemorySize
+          memory.load(0, memory.size)._1 shouldBe expectedContents
+          uint shouldBe expectedResult
         }
       }
     }
@@ -139,9 +139,9 @@ class MemorySpec extends CommonSpec {
             else
               consecutiveBytes(size, idx)
 
-          memory.size shouldEqual expectedMemorySize
-          memory.load(0, memory.size)._1 shouldEqual expectedContents
-          bs shouldEqual expectedResult
+          memory.size shouldBe expectedMemorySize
+          memory.load(0, memory.size)._1 shouldBe expectedContents
+          bs shouldBe expectedResult
         }
       }
     }
@@ -162,7 +162,7 @@ class MemorySpec extends CommonSpec {
       forAll(table) { (initialSize, offset, dataSize, expectedDelta) =>
         val initMem    = Memory.empty.store(0, zeros(initialSize))
         val updatedMem = initMem.store(offset, consecutiveBytes(dataSize))
-        (updatedMem.size - initMem.size) shouldEqual expectedDelta
+        (updatedMem.size - initMem.size) shouldBe expectedDelta
       }
 
     }
@@ -183,7 +183,7 @@ class MemorySpec extends CommonSpec {
       forAll(table) { (initialSize, offset, dataSize, expectedDelta) =>
         val initMem    = Memory.empty.store(0, zeros(initialSize))
         val updatedMem = initMem.load(offset, dataSize)._2
-        (updatedMem.size - initMem.size) shouldEqual expectedDelta
+        (updatedMem.size - initMem.size) shouldBe expectedDelta
       }
     }
 
@@ -203,7 +203,7 @@ class MemorySpec extends CommonSpec {
       forAll(table) { (initialSize, offset, dataSize, expectedDelta) =>
         val initMem    = Memory.empty.store(0, zeros(initialSize))
         val updatedMem = initMem.expand(offset, dataSize)
-        (updatedMem.size - initMem.size) shouldEqual expectedDelta
+        (updatedMem.size - initMem.size) shouldBe expectedDelta
       }
     }
   }

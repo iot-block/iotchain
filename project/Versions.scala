@@ -4,6 +4,7 @@ object Versions {
   val catsEffect      = "1.3.0"
   val fs2             = "1.0.4"
   val circe           = "0.11.1"
+  val spire           = "0.16.2"
   val tsec            = "0.1.0"
   val http4s          = "0.20.1"
   val enumeratum      = "1.5.13"

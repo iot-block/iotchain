@@ -1,10 +1,8 @@
 package jbok.core.ledger
 
 import cats.effect.IO
-import jbok.common.testkit._
 import jbok.core.CoreSpec
 import jbok.core.models.{Account, Address, UInt256}
-import jbok.core.testkit._
 import jbok.evm.WorldState
 import jbok.persistent.MemoryKVStore
 import scodec.bits._
@@ -15,7 +13,7 @@ class WorldStateSpec extends CoreSpec {
   val address3 = Address(0xfedcba)
 
   trait Fixture {
-    val store      = MemoryKVStore[IO].unsafeRunSync()
+    val store   = MemoryKVStore[IO].unsafeRunSync()
     val history = History(store)
 
     val world = history
@@ -33,14 +31,14 @@ class WorldStateSpec extends CoreSpec {
     }
 
     "put then get code" in new Fixture {
-      forAll(genBoundedByteVector(0, 1024)) { code =>
+      forAll { code: ByteVector =>
         world.putCode(address1, code).getCode(address1).unsafeRunSync() shouldBe code
       }
     }
 
     "put then get storage" in new Fixture {
-      val addr  = uint256Gen().sample.getOrElse(UInt256.MaxValue)
-      val value = uint256Gen().sample.getOrElse(UInt256.MaxValue)
+      val addr  = random[UInt256]
+      val value = random[UInt256]
 
       val storage = world
         .getStorage(address1)
@@ -53,13 +51,13 @@ class WorldStateSpec extends CoreSpec {
         .getStorage(address1)
         .unsafeRunSync()
         .load(addr)
-        .unsafeRunSync() shouldEqual value
+        .unsafeRunSync() shouldBe value
     }
 
     "put then get original storage" in new Fixture {
-      val addr     = UInt256.Zero
-      val original = uint256Gen().sample.getOrElse(UInt256.MaxValue)
-      val current  = uint256Gen().sample.getOrElse(UInt256.MaxValue)
+      val addr     = UInt256.zero
+      val original = random[UInt256]
+      val current  = random[UInt256]
       val account  = Account(0, 100)
       val world1   = world.putAccount(address1, account).persisted.unsafeRunSync()
 
@@ -82,14 +80,14 @@ class WorldStateSpec extends CoreSpec {
         .getStorage(address1)
         .unsafeRunSync()
         .load(addr)
-        .unsafeRunSync() shouldEqual current
+        .unsafeRunSync() shouldBe current
 
       world2
         .putStorage(address1, currentStorage)
         .getOriginalStorage(address1)
         .unsafeRunSync()
         .load(addr)
-        .unsafeRunSync() shouldEqual original
+        .unsafeRunSync() shouldBe original
     }
 
     "transfer value to other address" in new Fixture {
@@ -110,12 +108,14 @@ class WorldStateSpec extends CoreSpec {
       val world1  = world.putAccount(address1, account).persisted.unsafeRunSync()
       val world2 =
         world1
-          .putStorage(address1,
-                      world
-                        .getStorage(address1)
-                        .unsafeRunSync()
-                        .store(UInt256.One, UInt256.Zero)
-                        .unsafeRunSync())
+          .putStorage(
+            address1,
+            world
+              .getStorage(address1)
+              .unsafeRunSync()
+              .store(UInt256.one, UInt256.zero)
+              .unsafeRunSync()
+          )
           .persisted
           .unsafeRunSync()
 
@@ -132,7 +132,7 @@ class WorldStateSpec extends CoreSpec {
             world
               .getStorage(address1)
               .unsafeRunSync()
-              .store(UInt256.One, UInt256.One)
+              .store(UInt256.one, UInt256.one)
               .unsafeRunSync()
           )
           .persisted
@@ -142,12 +142,14 @@ class WorldStateSpec extends CoreSpec {
 
       val world3 =
         world1
-          .putStorage(address1,
-                      world
-                        .getStorage(address1)
-                        .unsafeRunSync()
-                        .store(UInt256.One, UInt256.Zero)
-                        .unsafeRunSync())
+          .putStorage(
+            address1,
+            world
+              .getStorage(address1)
+              .unsafeRunSync()
+              .store(UInt256.one, UInt256.zero)
+              .unsafeRunSync()
+          )
           .persisted
           .unsafeRunSync()
 
@@ -156,7 +158,7 @@ class WorldStateSpec extends CoreSpec {
 
     "be able to persist changes and continue working after that" in new Fixture {
       val account = Account(0, 100)
-      val addr    = UInt256.Zero
+      val addr    = UInt256.zero
       val value   = UInt256.MaxValue
       val code    = hex"deadbeefdeadbeefdeadbeef"
 
@@ -164,7 +166,7 @@ class WorldStateSpec extends CoreSpec {
         ws.accountExists(address1).unsafeRunSync() shouldBe true
         ws.accountExists(address2).unsafeRunSync() shouldBe true
         ws.getCode(address1).unsafeRunSync() shouldBe code
-        ws.getStorage(address1).unsafeRunSync().load(addr).unsafeRunSync() shouldEqual value
+        ws.getStorage(address1).unsafeRunSync().load(addr).unsafeRunSync() shouldBe value
         ws.getAccount(address1).unsafeRunSync().balance shouldBe 0
         ws.getAccount(address2).unsafeRunSync().balance shouldBe account.balance
       }
@@ -173,12 +175,14 @@ class WorldStateSpec extends CoreSpec {
       val afterUpdatesWorldState = world
         .putAccount(address1, account)
         .putCode(address1, code)
-        .putStorage(address1,
-                    world
-                      .getStorage(address1)
-                      .unsafeRunSync()
-                      .store(addr, value)
-                      .unsafeRunSync())
+        .putStorage(
+          address1,
+          world
+            .getStorage(address1)
+            .unsafeRunSync()
+            .store(addr, value)
+            .unsafeRunSync()
+        )
         .newEmptyAccount(address2)
         .transfer(address1, address2, UInt256(account.balance))
         .unsafeRunSync()
@@ -213,7 +217,7 @@ class WorldStateSpec extends CoreSpec {
 
     "not allow transfer to create empty accounts post EIP161" in new Fixture {
       val account         = Account(0, 100)
-      val zeroTransfer    = UInt256.Zero
+      val zeroTransfer    = UInt256.zero
       val nonZeroTransfer = account.balance - 20
 
       val worldStateAfterEmptyTransfer = postEIP161WorldState
@@ -232,12 +236,12 @@ class WorldStateSpec extends CoreSpec {
 
       val secondAccount = finalWorldState.getAccount(address2).unsafeRunSync()
       secondAccount.balance shouldBe nonZeroTransfer
-      secondAccount.nonce shouldBe UInt256.Zero
+      secondAccount.nonce shouldBe UInt256.zero
     }
 
     "update touched accounts using combineTouchedAccounts method" in new Fixture {
       val account         = Account(0, 100)
-      val zeroTransfer    = UInt256.Zero
+      val zeroTransfer    = UInt256.zero
       val nonZeroTransfer = account.balance - 80
 
       val worldAfterSelfTransfer = postEIP161WorldState
@@ -271,14 +275,14 @@ class WorldStateSpec extends CoreSpec {
 
     "remove all ether from existing account" in new Fixture {
       val startValue = 100
-      val account    = Account(UInt256.One, startValue)
+      val account    = Account(UInt256.one, startValue)
 
       val initialWorld           = world.putAccount(address1, account).persisted.unsafeRunSync()
       val worldAfterEtherRemoval = initialWorld.removeAllEther(address1).unsafeRunSync()
       val acc1                   = worldAfterEtherRemoval.getAccount(address1).unsafeRunSync()
 
-      acc1.nonce shouldBe UInt256.One
-      acc1.balance shouldBe UInt256.Zero
+      acc1.nonce shouldBe UInt256.one
+      acc1.balance shouldBe UInt256.zero
     }
 
     "get old state" in new Fixture {
@@ -308,34 +312,48 @@ class WorldStateSpec extends CoreSpec {
 
     "create contract address" in new Fixture {
       val testcases: List[(Address, ByteVector, ByteVector, Address)] = List(
-        (Address(hex"0x0000000000000000000000000000000000000000"),
-         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
-         hex"0x00",
-         Address(hex"0x4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38")),
-        (Address(hex"0xdeadbeef00000000000000000000000000000000"),
-         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
-         hex"0x00",
-         Address(hex"0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3")),
-        (Address(hex"0xdeadbeef00000000000000000000000000000000"),
-         hex"0x000000000000000000000000feed000000000000000000000000000000000000",
-         hex"0x00",
-         Address(hex"0xD04116cDd17beBE565EB2422F2497E06cC1C9833")),
-        (Address(hex"0x0000000000000000000000000000000000000000"),
-         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
-         hex"0xdeadbeef",
-         Address(hex"0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e")),
-        (Address(hex"0x00000000000000000000000000000000deadbeef"),
-         hex"0x00000000000000000000000000000000000000000000000000000000cafebabe",
-         hex"0xdeadbeef",
-         Address(hex"0x60f3f640a8508fC6a86d45DF051962668E1e8AC7")),
-        (Address(hex"0x00000000000000000000000000000000deadbeef"),
-         hex"0x00000000000000000000000000000000000000000000000000000000cafebabe",
-         hex"0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-         Address(hex"0x1d8bfDC5D46DC4f61D6b6115972536eBE6A8854C")),
-        (Address(hex"0x0000000000000000000000000000000000000000"),
-         hex"0x0000000000000000000000000000000000000000000000000000000000000000",
-         hex"0x",
-         Address(hex"0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0"))
+        (
+          Address(hex"0x0000000000000000000000000000000000000000"),
+          hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+          hex"0x00",
+          Address(hex"0x4D1A2e2bB4F88F0250f26Ffff098B0b30B26BF38")
+        ),
+        (
+          Address(hex"0xdeadbeef00000000000000000000000000000000"),
+          hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+          hex"0x00",
+          Address(hex"0xB928f69Bb1D91Cd65274e3c79d8986362984fDA3")
+        ),
+        (
+          Address(hex"0xdeadbeef00000000000000000000000000000000"),
+          hex"0x000000000000000000000000feed000000000000000000000000000000000000",
+          hex"0x00",
+          Address(hex"0xD04116cDd17beBE565EB2422F2497E06cC1C9833")
+        ),
+        (
+          Address(hex"0x0000000000000000000000000000000000000000"),
+          hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+          hex"0xdeadbeef",
+          Address(hex"0x70f2b2914A2a4b783FaEFb75f459A580616Fcb5e")
+        ),
+        (
+          Address(hex"0x00000000000000000000000000000000deadbeef"),
+          hex"0x00000000000000000000000000000000000000000000000000000000cafebabe",
+          hex"0xdeadbeef",
+          Address(hex"0x60f3f640a8508fC6a86d45DF051962668E1e8AC7")
+        ),
+        (
+          Address(hex"0x00000000000000000000000000000000deadbeef"),
+          hex"0x00000000000000000000000000000000000000000000000000000000cafebabe",
+          hex"0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+          Address(hex"0x1d8bfDC5D46DC4f61D6b6115972536eBE6A8854C")
+        ),
+        (
+          Address(hex"0x0000000000000000000000000000000000000000"),
+          hex"0x0000000000000000000000000000000000000000000000000000000000000000",
+          hex"0x",
+          Address(hex"0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0")
+        )
       )
       val w1 = history.getWorldState().unsafeRunSync()
 

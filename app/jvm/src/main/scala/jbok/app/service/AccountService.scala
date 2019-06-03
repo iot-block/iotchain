@@ -3,6 +3,7 @@ package jbok.app.service
 import cats.effect.Sync
 import cats.implicits._
 import jbok.app.service.store.TransactionStore
+import jbok.common.math.N
 import jbok.core.config.HistoryConfig
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, SignedTransaction}
@@ -25,12 +26,12 @@ final class AccountService[F[_]](config: HistoryConfig, history: History[F], txP
       code  <- world.getCode(address)
     } yield code
 
-  override def getBalance(address: Address, tag: BlockTag): F[BigInt] =
+  override def getBalance(address: Address, tag: BlockTag): F[N] =
     for {
       account <- helper.resolveAccount(address, tag)
-    } yield account.balance.toBigInt
+    } yield account.balance.toN
 
-  override def getStorageAt(address: Address, position: BigInt, tag: BlockTag): F[ByteVector] =
+  override def getStorageAt(address: Address, position: N, tag: BlockTag): F[ByteVector] =
     for {
       account <- helper.resolveAccount(address, tag)
       storage <- history.getStorage(account.storageRoot, position)
@@ -47,7 +48,7 @@ final class AccountService[F[_]](config: HistoryConfig, history: History[F], txP
   override def getPendingTxs(address: Address): F[List[SignedTransaction]] =
     txPool.getPendingTransactions.map(_.keys.toList.filter(_.senderAddress.exists(_ == address)))
 
-  override def getEstimatedNonce(address: Address): F[BigInt] =
+  override def getEstimatedNonce(address: Address): F[N] =
     for {
       pending <- txPool.getPendingTransactions
       latestNonceOpt = scala.util
@@ -56,8 +57,8 @@ final class AccountService[F[_]](config: HistoryConfig, history: History[F], txP
         }.max)
         .toOption
       bn              <- history.getBestBlockNumber
-      currentNonceOpt <- history.getAccount(address, bn).map(_.map(_.nonce.toBigInt))
-      defaultNonce     = config.accountStartNonce.toBigInt
+      currentNonceOpt <- history.getAccount(address, bn).map(_.map(_.nonce.toN))
+      defaultNonce     = config.accountStartNonce.toN
       maybeNextTxNonce = latestNonceOpt.map(_ + 1).getOrElse(defaultNonce) max currentNonceOpt.getOrElse(defaultNonce)
     } yield maybeNextTxNonce
 }

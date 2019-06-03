@@ -2,6 +2,7 @@ package jbok.app.service
 
 import cats.effect.Sync
 import cats.implicits._
+import jbok.common.math.N
 import jbok.core.api.PersonalAPI
 import jbok.core.config.HistoryConfig
 import jbok.core.keystore.KeyStore
@@ -17,7 +18,8 @@ final class PersonalService[F[_]](
     keyStore: KeyStore[F],
     history: History[F],
     txPool: TxPool[F]
-)(implicit F: Sync[F]) extends PersonalAPI[F] {
+)(implicit F: Sync[F])
+    extends PersonalAPI[F] {
 
   override def importRawKey(privateKey: ByteVector, passphrase: String): F[Address] =
     keyStore.importPrivateKey(privateKey, passphrase)
@@ -35,17 +37,15 @@ final class PersonalService[F[_]](
       from: Address,
       passphrase: String,
       to: Option[Address],
-      value: Option[BigInt],
-      gasLimit: Option[BigInt],
-      gasPrice: Option[BigInt],
-      nonce: Option[BigInt],
-      data: Option[ByteVector],
+      value: Option[N],
+      gasLimit: Option[N],
+      gasPrice: Option[N],
+      nonce: Option[N],
+      data: Option[ByteVector]
   ): F[ByteVector] = {
 
-    val defaultGasPrice: BigInt = 2 * BigInt(10).pow(10)
-    val defaultGasLimit: BigInt = 90000
-
-    implicit val chainId: BigInt = history.chainId
+    val defaultGasPrice: N = 2 * N(10).pow(10)
+    val defaultGasLimit: N = N(90000)
 
     for {
       wallet  <- keyStore.unlockAccount(from, passphrase)
@@ -54,17 +54,17 @@ final class PersonalService[F[_]](
         case (stx, _) if stx.senderAddress.contains(wallet.address) => stx.nonce
       }.max).toOption
       bn              <- history.getBestBlockNumber
-      currentNonceOpt <- history.getAccount(from, bn).map(_.map(_.nonce.toBigInt))
+      currentNonceOpt <- history.getAccount(from, bn).map(_.map(_.nonce.toN))
       maybeNextTxNonce = latestNonceOpt.map(_ + 1).orElse(currentNonceOpt)
       tx = Transaction(
         nonce = nonce.getOrElse(maybeNextTxNonce.getOrElse(historyConfig.accountStartNonce)),
         gasPrice = gasPrice.getOrElse(defaultGasPrice),
         gasLimit = gasLimit.getOrElse(defaultGasLimit),
         receivingAddress = to,
-        value = value.getOrElse(BigInt(0)),
+        value = value.getOrElse(N(0)),
         payload = data.getOrElse(ByteVector.empty)
       )
-      stx <- wallet.signTx[F](tx)
+      stx <- wallet.signTx[F](tx, history.chainId)
       _   <- txPool.addOrUpdateTransaction(stx)
     } yield stx.hash
   }

@@ -11,7 +11,7 @@ object Settings {
     licenses ++= Seq(("MIT", url("http://opensource.org/licenses/MIT"))),
     scalaVersion := Versions.scala212Version,
     test / parallelExecution := false,
-    scalacOptions -= "-Xfatal-warnings"
+    scalacOptions --= Seq("-Xfatal-warnings", "-Ywarn-numeric-widen")
   )
 
   lazy val jvmCommon = Seq(

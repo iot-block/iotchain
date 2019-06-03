@@ -1,5 +1,6 @@
 package jbok.core.ledger
 
+import jbok.common.math.N
 import jbok.core.models.{Block, Receipt}
 import jbok.core.peer.Peer
 import jbok.evm.WorldState
@@ -14,9 +15,9 @@ import jbok.evm.WorldState
   */
 sealed trait TypedBlock
 object TypedBlock {
-  final case class ExecutedBlock[F[_]](block: Block, world: WorldState[F], gasUsed: BigInt, receipts: List[Receipt], td: BigInt) extends TypedBlock
-  final case class MinedBlock(block: Block, receipts: List[Receipt])                                                             extends TypedBlock
-  final case class ReceivedBlock[F[_]](block: Block, peer: Peer[F])                                                              extends TypedBlock
-  final case class SyncBlocks[F[_]](blocks: List[Block], peerOpt: Option[Peer[F]])                                               extends TypedBlock
-  final case class PendingBlock(block: Block)                                                                                    extends TypedBlock
+  final case class ExecutedBlock[F[_]](block: Block, world: WorldState[F], gasUsed: N, receipts: List[Receipt], td: N) extends TypedBlock
+  final case class MinedBlock(block: Block, receipts: List[Receipt])                                                   extends TypedBlock
+  final case class ReceivedBlock[F[_]](block: Block, peer: Peer[F])                                                    extends TypedBlock
+  final case class SyncBlocks[F[_]](blocks: List[Block], peerOpt: Option[Peer[F]])                                     extends TypedBlock
+  final case class PendingBlock(block: Block)                                                                          extends TypedBlock
 }

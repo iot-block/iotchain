@@ -3,12 +3,11 @@ package jbok.common.log
 import java.nio.file.{Path, Paths}
 
 import cats.effect.Sync
+import cats.implicits._
+import jbok.common.FileUtil
 import scribe.handler.LogHandler
 import scribe.writer.FileWriter
 import scribe.writer.file.LogPath
-import cats.implicits._
-import jbok.common.FileUtil
-import scala.concurrent.duration._
 
 object LoggerPlatform {
   def initConfig[F[_]: Sync](config: LogConfig): F[Unit] = {

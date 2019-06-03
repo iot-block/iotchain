@@ -5,6 +5,7 @@ import java.util.UUID
 
 import scodec.bits.ByteVector
 import scodec.codecs
+import spire.math.SafeLong
 
 import scala.concurrent.duration.Duration
 
@@ -16,6 +17,8 @@ trait RlpCodecInstances extends BasicCodecs {
   implicit val rlpULongCodec: RlpCodec[Long] = rlp(ulong)
 
   implicit val rlpUIntCodec: RlpCodec[Int] = rlp(uint)
+
+  implicit val rlpUSafeLong: RlpCodec[SafeLong] = rlp(uSafeLong)
 
   implicit val rlpBoolCodec: RlpCodec[Boolean] = rlp(bool)
 
