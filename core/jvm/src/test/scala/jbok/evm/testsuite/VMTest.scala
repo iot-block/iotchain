@@ -5,16 +5,18 @@ import cats.effect.IO
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.parser._
+import jbok.codec.json.implicits._
+import jbok.codec.rlp.RlpEncoded
 import jbok.common.math.N
+import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, BlockHeader, UInt256}
 import jbok.core.store.ColumnFamilies
 import jbok.crypto._
-import jbok.crypto.authds.mpt.MerklePatriciaTrie
 import jbok.evm._
+import jbok.persistent.mpt.MerklePatriciaTrie
 import jbok.persistent.{MemoryKVStore, StageKVStore}
 import scodec.bits.ByteVector
-import jbok.core.CoreSpec
 
 import scala.collection.JavaConverters._
 
@@ -91,12 +93,7 @@ final case class CallCreateJson(data: ByteVector, destination: ByteVector, gasLi
 final case class InfoJson(comment: String, filledwith: String, lllcversion: String, source: String, sourceHash: String)
 
 class VMTest extends CoreSpec {
-  implicit private val bytesKeyDecoder =
-    KeyDecoder.instance[ByteVector](s => ByteVector.fromHexDescriptive(s).fold(_ => None, Some.apply))
-  implicit private val addressKeyDecoder =
-    bytesKeyDecoder.map(x => Address(x))
-
-  def loadMockWorldState(json: Map[Address, PrePostJson], currentNumber: N): WorldState[IO] = {
+  def loadMockWorldState(json: Map[Address, PrePostJson]): WorldState[IO] = {
     val accounts = json.map {
       case (addr, account) => (addr, Account(balance = UInt256(account.balance), nonce = UInt256(account.nonce)))
     }
@@ -106,7 +103,7 @@ class VMTest extends CoreSpec {
     }
 
     val store   = MemoryKVStore[IO].unsafeRunSync()
-    val history = History(store)
+    val history = History(store, chainId)
 
     val storages = json.map {
       case (addr, account) =>
@@ -132,7 +129,7 @@ class VMTest extends CoreSpec {
   def check(label: String, vmJson: VMJson): Unit =
     s"pass test suite ${label}" in {
       val config   = EvmConfig.HomesteadConfigBuilder(None)
-      val preState = loadMockWorldState(vmJson.pre, vmJson.env.currentNumber)
+      val preState = loadMockWorldState(vmJson.pre)
       val currentBlockHeader = BlockHeader(
         ByteVector.empty,
         vmJson.env.currentCoinbase.bytes,
@@ -145,7 +142,7 @@ class VMTest extends CoreSpec {
         vmJson.env.currentGasLimit,
         N(0),
         vmJson.env.currentTimestamp.toLong,
-        ByteVector.empty
+        RlpEncoded.emptyList
       )
       val env = ExecEnv(
         vmJson.exec.address,
@@ -164,7 +161,7 @@ class VMTest extends CoreSpec {
       val result = VM.run(context).unsafeRunSync()
 
       vmJson.post.foreach { post =>
-        val postState = loadMockWorldState(post, vmJson.env.currentNumber)
+        val postState = loadMockWorldState(post)
         val world = if (result.addressesToDelete.nonEmpty) {
           result.world.contractCodes
             .filter(!_._2.isEmpty) - result.addressesToDelete.head shouldBe postState.contractCodes.filter(!_._2.isEmpty)
@@ -187,7 +184,7 @@ class VMTest extends CoreSpec {
 
       vmJson.gas.foreach(_ shouldBe result.gasRemaining)
       vmJson.out.foreach(_ shouldBe result.returnData)
-      vmJson.logs.foreach(_ shouldBe result.logs.asBytes.kec256)
+      vmJson.logs.foreach(_ shouldBe result.logs.encoded.bytes.kec256)
 
       if (vmJson.gas.isEmpty) {
         vmJson.post.isEmpty shouldBe true
@@ -209,6 +206,8 @@ class VMTest extends CoreSpec {
       file <- fileList
       lines = file.lines.mkString("\n")
     } yield file.path.iterator().asScala.toList.takeRight(2).mkString("/") -> lines
+
+    implicit val bytesKeyDecoder = KeyDecoder.decodeKeyString.map[ByteVector](ByteVector.fromValidHex(_))
 
     for {
       (name, json) <- sources

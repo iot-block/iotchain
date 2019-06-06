@@ -1,29 +1,27 @@
 package jbok.persistent
 
 import fs2._
-import jbok.codec.rlp.RlpCodec
-import scodec.bits.ByteVector
 
 trait KVStore[F[_]] {
-  def put(cf: ColumnFamily, key: ByteVector, value: ByteVector): F[Unit]
+  // write
+  def put(cf: ColumnFamily, key: Array[Byte], value: Array[Byte]): F[Unit]
 
-  def get(cf: ColumnFamily, key: ByteVector): F[Option[ByteVector]]
+  def del(cf: ColumnFamily, key: Array[Byte]): F[Unit]
 
-  def getAs[A: RlpCodec](cf: ColumnFamily, key: ByteVector): F[Option[A]]
+  def writeBatch(cf: ColumnFamily, puts: List[(Array[Byte], Array[Byte])], dels: List[Array[Byte]]): F[Unit]
 
-  def del(cf: ColumnFamily, key: ByteVector): F[Unit]
-
-  def writeBatch(cf: ColumnFamily, puts: List[(ByteVector, ByteVector)], dels: List[ByteVector]): F[Unit]
-
-  def writeBatch(cf: ColumnFamily, ops: List[(ByteVector, Option[ByteVector])]): F[Unit]
+  def writeBatch(cf: ColumnFamily, ops: List[(Array[Byte], Option[Array[Byte]])]): F[Unit]
 
   def writeBatch(puts: List[Put], dels: List[Del]): F[Unit]
 
-  def toStream(cf: ColumnFamily): Stream[F, (ByteVector, ByteVector)]
+  // read
+  def get(cf: ColumnFamily, key: Array[Byte]): F[Option[Array[Byte]]]
 
-  def toList(cf: ColumnFamily): F[List[(ByteVector, ByteVector)]]
+  def toStream(cf: ColumnFamily): Stream[F, (Array[Byte], Array[Byte])]
 
-  def toMap(cf: ColumnFamily): F[Map[ByteVector, ByteVector]]
+  def toList(cf: ColumnFamily): F[List[(Array[Byte], Array[Byte])]]
+
+  def toMap(cf: ColumnFamily): F[Map[Array[Byte], Array[Byte]]]
 
   def size(cf: ColumnFamily): F[Int]
 }

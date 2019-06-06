@@ -1,7 +1,6 @@
 package jbok.core.models
 
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
 import jbok.codec.json.implicits._
 import scodec.bits.ByteVector
 import scodec.codecs
@@ -159,7 +158,7 @@ object UInt256 {
 
   implicit val encodeUInt256: io.circe.Encoder[UInt256] = bigIntJsonEncoder.contramap[UInt256](_.n)
 
-  implicit val codec: RlpCodec[UInt256] = rlp(codecs.bytes.xmap[UInt256](UInt256.apply, _.unpaddedBytes))
+  implicit val codec: RlpCodec[UInt256] = RlpCodec.rlp(codecs.bytes.xmap[UInt256](UInt256.apply, _.unpaddedBytes))
 
   /** Size of UInt256 byte representation */
   val size: Int = 32

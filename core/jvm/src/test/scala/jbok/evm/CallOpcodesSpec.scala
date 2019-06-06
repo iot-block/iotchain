@@ -9,9 +9,9 @@ import jbok.persistent.MemoryKVStore
 import scodec.bits.ByteVector
 
 class CallOpcodesSpec extends CoreSpec {
-  val evmConfig     = EvmConfig.FrontierConfigBuilder(None)
-  val store            = MemoryKVStore[IO].unsafeRunSync()
-  val history       = History(store)
+  val evmConfig  = EvmConfig.FrontierConfigBuilder(None)
+  val store      = MemoryKVStore[IO].unsafeRunSync()
+  val history    = History(store, chainId)
   val startState = history.getWorldState(noEmptyAccounts = false).unsafeRunSync()
   import evmConfig.feeSchedule._
 
@@ -404,14 +404,7 @@ class CallOpcodesSpec extends CoreSpec {
       val inputData       = ByteVector(Array.fill(128)(1.toByte))
       val world           = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
       val context         = fxt.context.copy(world = world)
-      val call = fxt.CallResult(op = CALLCODE,
-                                context = context,
-                                to = contractAddress,
-                                inputData = inputData,
-                                inOffset = 0,
-                                inSize = 128,
-                                outOffset = 128,
-                                outSize = 32)
+      val call            = fxt.CallResult(op = CALLCODE, context = context, to = contractAddress, inputData = inputData, inOffset = 0, inSize = 128, outOffset = 128, outSize = 32)
 
       "compute a correct result" in {
         val memory      = call.stateOut.memory
@@ -581,14 +574,7 @@ class CallOpcodesSpec extends CoreSpec {
       val inputData       = ByteVector(Array.fill(128)(1.toByte))
       val world           = fxt.worldWithoutExtAccount.putAccount(contractAddress, Account(balance = 1))
       val context         = fxt.context.copy(world = world)
-      val call = fxt.CallResult(op = DELEGATECALL,
-                                context = context,
-                                to = contractAddress,
-                                inputData = inputData,
-                                inOffset = 0,
-                                inSize = 128,
-                                outOffset = 128,
-                                outSize = 32)
+      val call            = fxt.CallResult(op = DELEGATECALL, context = context, to = contractAddress, inputData = inputData, inOffset = 0, inSize = 128, outOffset = 128, outSize = 32)
 
       "compute a correct result" in {
         val (result, _) = call.stateOut.memory.load(call.outOffset, call.outSize)
@@ -662,7 +648,6 @@ class CallOpcodesSpec extends CoreSpec {
     */
   "gas cost bigger than available gas DELEGATECALL" should {
 
-    val memCost  = 0
     val c_extra  = evmConfig.feeSchedule.G_call
     val startGas = c_extra - 1
     val gas      = UInt256.MaxValue - c_extra + 1 //u_s[0]

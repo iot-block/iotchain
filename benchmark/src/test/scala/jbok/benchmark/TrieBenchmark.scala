@@ -5,17 +5,16 @@ import jbok.codec.HexPrefix
 import jbok.codec.rlp.implicits._
 import jbok.common.gen
 import jbok.core.store.ColumnFamilies
-import jbok.crypto.authds.mpt.MptNode.LeafNode
-import jbok.crypto.authds.mpt.{MerklePatriciaTrie, MptNode}
+import jbok.persistent.mpt.MptNode.LeafNode
+import jbok.persistent.mpt.{MerklePatriciaTrie, MptNode}
 import jbok.persistent.{MemoryKVStore, StageKVStore}
 import org.openjdk.jmh.annotations._
 import org.scalacheck.Gen
-import scodec.bits.ByteVector
 
 class TrieBenchmark extends JbokBenchmark {
 
-  val store    = MemoryKVStore[IO].unsafeRunSync()
-  val mpt   = MerklePatriciaTrie[IO, ByteVector, ByteVector](ColumnFamilies.Node, store).unsafeRunSync()
+  val store = MemoryKVStore[IO].unsafeRunSync()
+  val mpt   = MerklePatriciaTrie[IO, Array[Byte], Array[Byte]](ColumnFamilies.Node, store).unsafeRunSync()
   var stage = StageKVStore(mpt)
 
   val size = 100000
@@ -24,8 +23,8 @@ class TrieBenchmark extends JbokBenchmark {
 
   val (keys, values) =
     (for {
-      keys   <- Gen.listOfN(size, gen.boundedByteVector(0, 100)).map(_.toArray)
-      values <- Gen.listOfN(size, gen.boundedByteVector(0, 100)).map(_.toArray)
+      keys   <- Gen.listOfN(size, gen.boundedByteArray(0, 100))
+      values <- Gen.listOfN(size, gen.boundedByteArray(0, 100))
     } yield (keys, values)).sample.get
 
 //  @Benchmark
@@ -45,9 +44,9 @@ class TrieBenchmark extends JbokBenchmark {
     for (_ <- 0 until 100) {
       val key   = keys(i)
       val value = values(i)
-      val node  = LeafNode(HexPrefix.bytesToNibbles(key), value)
+      val node  = LeafNode(HexPrefix.encodedToNibbles(key.encoded), value.encoded)
       val bytes = node.bytes
-      MptNode.nodeCodec.decode(bytes.bits).require.value
+      bytes.decoded[MptNode]
       i = (i + 1) % size
     }
 

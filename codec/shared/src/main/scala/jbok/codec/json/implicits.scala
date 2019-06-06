@@ -2,6 +2,7 @@ package jbok.codec.json
 
 import io.circe._
 import io.circe.generic.extras._
+import jbok.codec.rlp.RlpEncoded
 import scodec.bits.ByteVector
 import shapeless._
 import spire.math.SafeLong
@@ -15,6 +16,9 @@ trait implicits {
 
   implicit val bytesJsonEncoder: Encoder[ByteVector] = Encoder.encodeString.contramap[ByteVector](_.toHex)
   implicit val bytesJsonDecoder: Decoder[ByteVector] = Decoder.decodeString.emap[ByteVector](ByteVector.fromHexDescriptive(_))
+
+  implicit val rlpJsonEncoder: Encoder[RlpEncoded] = bytesJsonEncoder.contramap(_.bytes)
+  implicit val rlpJsonDecoder: Decoder[RlpEncoded] = bytesJsonDecoder.map(bytes => RlpEncoded.coerce(bytes.bits))
 
   implicit val finiteDurationJsonEncoder: Encoder[FiniteDuration] = Encoder.encodeString.contramap[FiniteDuration](d => s"${d.length} ${d.unit.toString.toLowerCase}")
   implicit val finiteDurationJsonDecoder: Decoder[FiniteDuration] = Decoder.decodeString.emapTry[FiniteDuration](s => Try(Duration.apply(s).asInstanceOf[FiniteDuration]))

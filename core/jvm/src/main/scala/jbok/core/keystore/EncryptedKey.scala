@@ -40,7 +40,7 @@ final case class EncryptedKey(
     crypto: CryptoSpec,
     version: Int
 ) {
-  private implicit val encryptor = AES128CTR.genEncryptor[IO]
+  implicit private val encryptor = AES128CTR.genEncryptor[IO]
 
   def decrypt(passphrase: String): Either[String, KeyPair.Secret] = {
     val dk         = deriveKey(passphrase, crypto.kdfparams)
@@ -64,10 +64,9 @@ final case class EncryptedKey(
 }
 
 object EncryptedKey {
-  private implicit val encryptor = AES128CTR.genEncryptor[IO]
+  implicit private val encryptor = AES128CTR.genEncryptor[IO]
 
-  def apply[F[_]](prvKey: KeyPair.Secret, passphrase: String, secureRandom: SecureRandom)(
-      implicit F: Sync[F]): F[EncryptedKey] = {
+  def apply[F[_]](prvKey: KeyPair.Secret, passphrase: String, secureRandom: SecureRandom)(implicit F: Sync[F]): F[EncryptedKey] = {
     val version = 3
     for {
       uuid   <- F.delay(UUID.randomUUID())

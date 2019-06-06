@@ -32,11 +32,20 @@ object gen {
   val bigInt: Gen[BigInt] =
     arbitrary[BigInt].map(_.abs)
 
+  val byteArray: Gen[Array[Byte]] =
+    Gen.listOf(arbitrary[Byte]).map(_.toArray)
+
   val byteVector: Gen[ByteVector] =
-    arbitrary[String].map(s => ByteVector(s.getBytes))
+    byteArray.map(ByteVector.apply)
+
+  def boundedByteArray(l: Int, u: Int): Gen[Array[Byte]] =
+    Gen.choose(l, u).flatMap(size => sizedByteArray(size))
 
   def boundedByteVector(l: Int, u: Int): Gen[ByteVector] =
     Gen.choose(l, u).flatMap(size => sizedByteVector(size))
+
+  def sizedByteArray(size: Int): Gen[Array[Byte]] =
+    Gen.listOfN(size, arbitrary[Byte]).map(_.toArray)
 
   def sizedByteVector(size: Int): Gen[ByteVector] =
     Gen.listOfN(size, arbitrary[Byte]).map(ByteVector.apply)

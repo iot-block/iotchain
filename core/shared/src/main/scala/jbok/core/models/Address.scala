@@ -2,11 +2,10 @@ package jbok.core.models
 
 import io.circe.{Decoder, Encoder, KeyDecoder, KeyEncoder}
 import jbok.codec.rlp.RlpCodec
-import jbok.codec.rlp.implicits._
 import jbok.crypto._
 import jbok.crypto.signature.KeyPair
-import scodec.codecs
 import scodec.bits.ByteVector
+import scodec.codecs
 
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 
@@ -24,7 +23,7 @@ object Address {
 
   val empty: Address = Address(ByteVector.empty)
 
-  implicit val codec: RlpCodec[Address] = rlp(codecs.bytes.xmap[Address](Address.apply, _.bytes))
+  implicit val codec: RlpCodec[Address] = RlpCodec.rlp(codecs.bytes.xmap[Address](Address.apply, _.bytes))
 
   implicit val addressEncoder: Encoder[Address] = Encoder.encodeString.contramap[Address](_.toString)
 

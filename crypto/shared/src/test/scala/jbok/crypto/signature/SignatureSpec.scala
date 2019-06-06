@@ -9,7 +9,7 @@ import scodec.bits.ByteVector
 import scala.math.BigInt
 
 class SignatureSpec extends CommonSpec {
-  val hash = "jbok".utf8bytes.kec256.toArray
+  val hash = ByteVector("jbok".getBytes).kec256.toArray
 
   val chainId: BigInt = 61
   "ECDSA" should {

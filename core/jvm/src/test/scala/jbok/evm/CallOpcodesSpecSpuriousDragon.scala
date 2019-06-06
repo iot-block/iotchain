@@ -8,8 +8,8 @@ import jbok.persistent.MemoryKVStore
 
 class CallOpcodesSpecSpuriousDragon extends CoreSpec {
   val evmConfig  = EvmConfig.SpuriousDragonConfigBuilder(None)
-  val store            = MemoryKVStore[IO].unsafeRunSync()
-  val history       = History(store)
+  val store      = MemoryKVStore[IO].unsafeRunSync()
+  val history    = History(store, chainId)
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
   import evmConfig.feeSchedule._
 

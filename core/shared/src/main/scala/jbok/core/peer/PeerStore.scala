@@ -4,7 +4,6 @@ import cats.effect.Concurrent
 import cats.implicits._
 import fs2._
 import fs2.concurrent.Queue
-import jbok.codec.rlp.implicits._
 import jbok.core.store.ColumnFamilies
 import jbok.persistent.{KVStore, SingleColumnKVStore}
 

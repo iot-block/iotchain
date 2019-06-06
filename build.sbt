@@ -31,7 +31,7 @@ lazy val crypto = crossProject(JSPlatform, JVMPlatform)
   .jvmSettings(Settings.jvmCommon)
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
   .jsSettings(ScalaJS.common ++ Libs.js.crypto)
-  .dependsOn(common % CompileAndTest, codec, persistent)
+  .dependsOn(common % CompileAndTest, codec)
 
 lazy val codec = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -47,22 +47,19 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
   .settings(Settings.common)
   .settings(name := "jbok-app")
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin, ScalaJSWeb))
-  .jsSettings(ScalaJS.common ++ ScalaJS.webpackSettings)
-  .jvmSettings(Settings.jvmCommon ++ DockerSettings.settings ++ Libs.sql ++ Libs.terminal)
-  .dependsOn(core % CompileAndTest, common % CompileAndTest, sdk % CompileAndTest)
-
-// for integrating with sbt-web
-lazy val appJS = app.js.settings(
-  scalaJSUseMainModuleInitializer := true
-)
-
-lazy val appJVM = app.jvm.settings(
-  javaOptions in Universal ++= Seq(
-    "-J-Xms2g",
-    "-J-Xmx4g",
-    "-J-XX:+HeapDumpOnOutOfMemoryError"
+  .jsSettings(
+    ScalaJS.common ++ ScalaJS.webpackSettings,
+    scalaJSUseMainModuleInitializer := true
   )
-)
+  .jvmSettings(
+    Settings.jvmCommon ++ DockerSettings.settings ++ Libs.sql ++ Libs.terminal,
+    javaOptions in Universal ++= Seq(
+      "-J-Xms2g",
+      "-J-Xmx4g",
+      "-J-XX:+HeapDumpOnOutOfMemoryError"
+    )
+  )
+  .dependsOn(core % CompileAndTest, common % CompileAndTest, sdk % CompileAndTest)
 
 lazy val sdk = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
@@ -79,7 +76,8 @@ lazy val macros = crossProject(JVMPlatform, JSPlatform)
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % Versions.catsEffect,
       "com.outr"      %%% "scribe"      % Versions.scribe
-    ))
+    )
+  )
   .settings(name := "jbok-macros")
 
 lazy val network = crossProject(JVMPlatform, JSPlatform)
@@ -87,7 +85,7 @@ lazy val network = crossProject(JVMPlatform, JSPlatform)
   .settings(Settings.common ++ Libs.http4s ++ Libs.network)
   .settings(name := "jbok-network")
   .jsConfigure(_.enablePlugins(ScalaJSBundlerPlugin))
-  .jsSettings(ScalaJS.common ++ Libs.js.network)
+  .jsSettings(ScalaJS.common ++ Libs.js.common ++ Libs.js.network)
   .jvmSettings(Settings.jvmCommon)
   .dependsOn(common % CompileAndTest, crypto)
 
@@ -97,7 +95,7 @@ lazy val persistent = crossProject(JSPlatform, JVMPlatform)
   .settings(name := "jbok-persistent")
   .jsSettings(ScalaJS.common ++ Libs.js.common)
   .jvmSettings(Settings.jvmCommon)
-  .dependsOn(common % CompileAndTest, codec)
+  .dependsOn(common % CompileAndTest, crypto, codec % CompileAndTest)
 
 lazy val benchmark = project
   .settings(Settings.common ++ Settings.jvmCommon ++ Publish.noPublishSettings ++ Benchmark.settings)

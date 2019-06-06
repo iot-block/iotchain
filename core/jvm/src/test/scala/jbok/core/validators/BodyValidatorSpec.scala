@@ -2,6 +2,7 @@ package jbok.core.validators
 
 import cats.effect.IO
 import cats.implicits._
+import jbok.codec.rlp.RlpEncoded
 import jbok.core.models._
 import jbok.core.validators.BodyInvalid.BodyTransactionsHashInvalid
 import scodec.bits._
@@ -20,7 +21,7 @@ class BodyValidatorSpec extends CoreSpec {
     gasLimit = 4699996,
     gasUsed = 84000,
     unixTimestamp = 1486131165,
-    extra = ByteVector.empty
+    extra = RlpEncoded.emptyList
   )
 
   val txs = List[SignedTransaction](

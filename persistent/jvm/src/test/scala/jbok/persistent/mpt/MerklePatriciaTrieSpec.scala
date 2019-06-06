@@ -1,37 +1,32 @@
-package jbok.crypto.authds.mpt
+package jbok.persistent.mpt
 
 import cats.effect.{IO, Resource}
 import cats.implicits._
-import jbok.codec.rlp.RlpCodec
+import jbok.codec.HexPrefix.Nibbles
 import jbok.codec.rlp.implicits._
-import jbok.common.gen
+import jbok.codec.testkit._
 import jbok.common.{CommonSpec, FileUtil}
-import jbok.crypto.authds.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
+import jbok.persistent.mpt.MptNode.{BranchNode, ExtensionNode, LeafNode}
 import jbok.persistent.rocksdb.RocksKVStore
 import jbok.persistent.{ColumnFamily, MemoryKVStore}
+import org.scalacheck.Gen
 import scodec.bits._
 
 import scala.util.Random
 
 class MerklePatriciaTrieSpec extends CommonSpec {
 
-  def test(name: String, resource: Resource[IO, MerklePatriciaTrie[IO, String, String]]): Unit = {
+  def test(name: String, resource: Resource[IO, MerklePatriciaTrie[IO, ByteVector, ByteVector]]): Unit = {
     s"MPT ${name}" should {
       "codec round trip" in {
-        val leafNode = LeafNode("dead", hex"beef")
-        RlpCodec.decode[MptNode](leafNode.bytes.bits).require.value shouldBe leafNode
-        leafNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + 2)
+        val leafNode: MptNode = LeafNode(Nibbles.coerce("dead"), hex"beef".encoded)
+        roundtripAndMatch(leafNode, hex"0xc78320dead82beef")
 
-        val extNode = ExtensionNode("babe", leafNode.entry)
-        RlpCodec.decode[MptNode](extNode.bytes.bits).require.value shouldBe extNode
-        RlpCodec.decode[MptNode](extNode.bytes.bits).require.value.asInstanceOf[ExtensionNode].child shouldBe Right(leafNode)
-        extNode.bytes.length shouldBe 1 + (1 + 1 + 2) + (1 + leafNode.bytes.length)
+        val extNode: MptNode = ExtensionNode(Nibbles.coerce("babe"), leafNode.entry)
+        roundtripAndMatch(extNode, hex"0xcc8300babec78320dead82beef")
 
-        val branchNode = BranchNode.withSingleBranch('a', extNode.entry, Some(hex"c0de"))
-        val bn         = RlpCodec.decode[MptNode](branchNode.bytes.bits).require.value.asInstanceOf[BranchNode]
-        bn shouldBe branchNode
-        bn.branchAt('a') shouldBe Some(extNode.entry)
-        bn.bytes.length shouldBe 1 + (15 * 1) + (1 + extNode.bytes.length) + (1 + 2)
+        val branchNode: MptNode = BranchNode.withSingleBranch('a', extNode.entry, hex"c0de".encoded.some)
+        roundtripAndMatch(branchNode, hex"0xdf80808080808080808080cc8300babec78320dead82beef808080808082c0de")
       }
 
       "put and get" in withResource(resource) { mpt =>
@@ -49,14 +44,14 @@ class MerklePatriciaTrieSpec extends CommonSpec {
           "7"    -> "f",
           "3"    -> "",
           "d"    -> "8491"
-        )
+        ).map { case (k, v) => ByteVector.fromValidHex(k) -> ByteVector.fromValidHex(v) }
 
         kvs.foreach { case (k, v) => mpt.put(k, v).unsafeRunSync() }
         kvs.foreach { case (k, v) => mpt.get(k).unsafeRunSync() shouldBe Some(v) }
         mpt.toMap.map(_ shouldBe kvs.toMap).void
       }
 
-      "mustGet empty root & hash" in withResource(resource) { mpt =>
+      "get empty root & hash" in withResource(resource) { mpt =>
         for {
           hash <- mpt.getRootHash
           _ = hash shouldBe MerklePatriciaTrie.emptyRootHash
@@ -66,15 +61,15 @@ class MerklePatriciaTrieSpec extends CommonSpec {
 
       "put leaf node when empty" in withResource(resource) { mpt =>
         for {
-          _   <- mpt.put("leafKey", "leafValue")
-          res <- mpt.get("leafKey")
-          _ = res shouldBe Some("leafValue")
+          _   <- mpt.put(hex"cafe", hex"babe")
+          res <- mpt.get(hex"cafe")
+          _ = res shouldBe Some(hex"babe")
         } yield ()
       }
 
       "put large key and value" in withResource(resource) { mpt =>
-        val key   = random[String](gen.hex(0, 1024))
-        val value = random[String](gen.hex(1024, 2048))
+        val key   = ByteVector(random[List[Byte]](Gen.listOfN(4096, arbByte.arbitrary)))
+        val value = ByteVector(random[List[Byte]](Gen.listOfN(2048, arbByte.arbitrary)))
         for {
           _   <- mpt.put(key, value)
           res <- mpt.get(key)
@@ -82,17 +77,17 @@ class MerklePatriciaTrieSpec extends CommonSpec {
         } yield ()
       }
 
-      "put and mustGet empty key" in withResource(resource) { mpt =>
+      "put and get empty key" in withResource(resource) { mpt =>
         for {
-          _   <- mpt.put("", "")
-          _   <- mpt.put("", "1")
-          res <- mpt.get("")
-          _ = res shouldBe Some("1")
+          _   <- mpt.put(ByteVector.empty, ByteVector.empty)
+          _   <- mpt.put(ByteVector.empty, hex"1")
+          res <- mpt.get(ByteVector.empty)
+          _ = res shouldBe Some(hex"1")
         } yield ()
       }
 
       "have same root on different orders of insertion" in {
-        forAll { m: Map[String, String] =>
+        forAll { m: Map[ByteVector, ByteVector] =>
           val kvs = m.toList
           resource
             .use { mpt =>
@@ -110,21 +105,21 @@ class MerklePatriciaTrieSpec extends CommonSpec {
       }
 
       "remove key from an empty tree" in withResource(resource) { mpt =>
-        mpt.del("1").unsafeRunSync()
+        mpt.del(hex"1").unsafeRunSync()
         mpt.getRootHash.map(_ shouldBe MerklePatriciaTrie.emptyRootHash).void
       }
 
       "remove a key that does not exist" in withResource(resource) { mpt =>
         for {
-          _ <- mpt.put("1", "5")
-          _ <- mpt.get("1").map(_ shouldBe Some("5"))
-          _ <- mpt.del("2")
-          _ <- mpt.get("1").map(_ shouldBe Some("5"))
+          _ <- mpt.put(hex"1", hex"5")
+          _ <- mpt.get(hex"1").map(_ shouldBe Some(hex"5"))
+          _ <- mpt.del(hex"2")
+          _ <- mpt.get(hex"1").map(_ shouldBe Some(hex"5"))
         } yield ()
       }
 
       "perform as an immutable data structure" in {
-        forAll { (m1: Map[String, String], m2: Map[String, String]) =>
+        forAll { (m1: Map[ByteVector, ByteVector], m2: Map[ByteVector, ByteVector]) =>
           resource
             .use { mpt =>
               for {
@@ -143,7 +138,7 @@ class MerklePatriciaTrieSpec extends CommonSpec {
       }
 
       "perform as an immutable data structure with deletion" in {
-        forAll { (m1: Map[String, String], m2: Map[String, String]) =>
+        forAll { (m1: Map[ByteVector, ByteVector], m2: Map[ByteVector, ByteVector]) =>
           resource
             .use { mpt =>
               for {
@@ -165,13 +160,13 @@ class MerklePatriciaTrieSpec extends CommonSpec {
 
   val memory = Resource.liftF(for {
     store <- MemoryKVStore[IO]
-    mpt   <- MerklePatriciaTrie[IO, String, String](ColumnFamily.default, store)
+    mpt   <- MerklePatriciaTrie[IO, ByteVector, ByteVector](ColumnFamily.default, store)
   } yield mpt)
 
   val rocksdb = for {
     file  <- FileUtil[IO].temporaryDir()
     store <- RocksKVStore.resource[IO](file.path, List(ColumnFamily.default))
-    mpt   <- Resource.liftF(MerklePatriciaTrie[IO, String, String](ColumnFamily.default, store))
+    mpt   <- Resource.liftF(MerklePatriciaTrie[IO, ByteVector, ByteVector](ColumnFamily.default, store))
   } yield mpt
 
   test("memory", memory)

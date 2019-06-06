@@ -1,6 +1,6 @@
 package jbok.core.models
 
-import jbok.codec.rlp.RlpCodec
+import jbok.codec.rlp.RlpCodecHelper
 import jbok.codec.testkit._
 import jbok.core.CoreSpec
 
@@ -33,17 +33,18 @@ class ModelCodecSpec extends CoreSpec {
 
     "roundtrip SignedTransaction" in {
       forAll { tx: SignedTransaction =>
-        val r        = tx.r.asBytes
-        val s        = tx.s.asBytes
-        val v        = tx.v.asBytes
-        val p        = tx.payload.asBytes
-        val nonce    = tx.nonce.asBytes
-        val price    = tx.gasPrice.asBytes
-        val limit    = tx.gasLimit.asBytes
-        val value    = tx.value.asBytes
-        val address  = tx.receivingAddress.asBytes
-        val size     = nonce.length + price.length + limit.length + address.length + value.length + v.length + r.length + s.length + p.length
-        val listSize = size + RlpCodec.listLength.encode(size).require.bytes.length
+        val r       = tx.r.encoded
+        val s       = tx.s.encoded
+        val v       = tx.v.encoded
+        val p       = tx.payload.encoded
+        val nonce   = tx.nonce.encoded
+        val price   = tx.gasPrice.encoded
+        val limit   = tx.gasLimit.encoded
+        val value   = tx.value.encoded
+        val address = tx.receivingAddress.encoded
+        val size = List(r, s, v, p, nonce, price, limit, value, address)
+          .foldLeft(0L)(_ + _.bytes.length)
+        val listSize = size + RlpCodecHelper.listLengthCodec.encode(size).require.bytes.length
         roundtripLen(tx, listSize.toInt)
       }
     }

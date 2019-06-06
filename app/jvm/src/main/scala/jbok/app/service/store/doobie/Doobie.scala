@@ -13,10 +13,10 @@ object Doobie {
       xa <- HikariTransactor.newHikariTransactor[F](
         config.driver,
         config.url,
-        config.user, // username
+        config.user,     // username
         config.password, // password
-        ce, // await connection here
-        te // execute JDBC operations here
+        ce,              // await connection here
+        te               // execute JDBC operations here
       )
     } yield xa
 }

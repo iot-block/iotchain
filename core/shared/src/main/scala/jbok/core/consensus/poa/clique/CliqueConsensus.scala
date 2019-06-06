@@ -3,6 +3,7 @@ package jbok.core.consensus.poa.clique
 import cats.data.NonEmptyList
 import cats.effect.{Sync, Timer}
 import cats.implicits._
+import jbok.codec.rlp.RlpEncoded
 import jbok.common._
 import jbok.common.log.Logger
 import jbok.common.math.N
@@ -50,7 +51,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
         gasLimit = calcGasLimit(parent.header.gasLimit),
         gasUsed = 0,
         unixTimestamp = timestamp,
-        extra = ByteVector.empty
+        extra = RlpEncoded.emptyList
       )
 
   override def mine(executed: ExecutedBlock[F]): F[MinedBlock] =
@@ -65,7 +66,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
           snap.recents.find(_._2 == clique.minerAddress) match {
             case Some((seen, _)) if amongstRecent(executed.block.header.number, seen, snap.miners.size) =>
               // If we're amongst the recent miners, wait for the next block
-              val wait: Long = math.max(0, snap.miners.size / 2 + 1 - (executed.block.header.number - seen).toInt) * config.period.toMillis
+              val wait: Long  = math.max(0, snap.miners.size / 2 + 1 - (executed.block.header.number - seen).toInt) * config.period.toMillis
               val delay: Long = math.max(0, executed.block.header.unixTimestamp - System.currentTimeMillis()) + wait
 
               log.i(s"mined recently, sleep (${delay}) millis") >> T.sleep(delay.millis) >> mine(executed)
@@ -132,7 +133,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
         pool.addBlock(block).flatMap[Consensus.Result] {
           case Some(Leaf(leafHash, leafTd)) if leafTd > bestTd =>
             for {
-              newBranch <- pool.getBranch(leafHash, delete = true)
+              newBranch                     <- pool.getBranch(leafHash, delete = true)
               staleBlocksWithReceiptsAndTDs <- removeBlocksUntil(newBranch.head.header.parentHash, best.header.number).map(_.reverse)
               staleBlocks = staleBlocksWithReceiptsAndTDs.map(_._1)
               _ <- staleBlocks.traverse(block => pool.addBlock(block))

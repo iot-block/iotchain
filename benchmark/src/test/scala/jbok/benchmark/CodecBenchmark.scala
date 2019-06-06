@@ -18,7 +18,7 @@ class CodecBenchmark extends JbokBenchmark {
   @OperationsPerInvocation(1000)
   def derive_1k() =
     (0 until 1000).foreach { _ =>
-      xs(i).asBytes
+      xs(i).encoded
       i = (i + 1) % size
     }
 
@@ -27,7 +27,7 @@ class CodecBenchmark extends JbokBenchmark {
   @OperationsPerInvocation(1000)
   def derive_cached_1k() =
     (0 until 1000).foreach { _ =>
-      xs(i).asBytes(codec)
+      xs(i).encoded(codec)
       i = (i + 1) % size
     }
 }

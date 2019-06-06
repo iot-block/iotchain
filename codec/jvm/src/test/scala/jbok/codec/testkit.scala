@@ -1,35 +1,32 @@
 package jbok.codec
 
 import jbok.codec.rlp.RlpCodec
-import org.scalacheck.Gen
-import org.scalatest.Matchers
+import jbok.codec.rlp.implicits._
+import org.scalatest.{Assertion, Matchers}
 import scodec.bits.{BitVector, ByteVector}
 import scodec.{Attempt, DecodeResult, Err}
 
-import scala.concurrent.duration.{FiniteDuration, _}
-
 object testkit extends testkit
 trait testkit extends Matchers {
-  def roundtripAndMatch[A](a: A, expected: ByteVector)(implicit c: RlpCodec[A]) = {
+  def roundtripAndMatch[A](a: A, expected: ByteVector)(implicit c: RlpCodec[A]): Assertion = {
     roundtrip[A](a)
-    c.encode(a).require.bytes shouldBe expected
+    a.encoded.bits.bytes shouldBe expected
   }
 
-  def roundtripLen[A](a: A, expectedLen: Int)(implicit c: RlpCodec[A]) = {
+  def roundtripLen[A](a: A, expectedNumBytes: Int)(implicit c: RlpCodec[A]): Assertion = {
     roundtrip[A](a)
-    c.encode(a).require.bytes.length shouldBe expectedLen
+    a.encoded.bits.bytes.length shouldBe expectedNumBytes
   }
 
-  def roundtrip[A](a: A)(implicit c: RlpCodec[A]): Unit =
+  def roundtrip[A](a: A)(implicit c: RlpCodec[A]): Assertion =
     roundtrip(c, a)
 
-  def roundtrip[A](codec: RlpCodec[A], value: A): Unit = {
+  def roundtrip[A](codec: RlpCodec[A], value: A): Assertion = {
     val encoded = codec.encode(value)
     encoded.isSuccessful shouldBe true
     val Attempt.Successful(DecodeResult(decoded, remainder)) = codec.decode(encoded.require)
     remainder shouldBe BitVector.empty
     decoded shouldBe value
-    ()
   }
 
   def roundtripAll[A](codec: RlpCodec[A], as: collection.Iterable[A]): Unit =
@@ -37,29 +34,14 @@ trait testkit extends Matchers {
       roundtrip(codec, a)
     }
 
-  def encodeError[A](codec: RlpCodec[A], a: A, err: Err) = {
+  def encodeError[A](codec: RlpCodec[A], a: A, err: Err): Assertion = {
     val encoded = codec.encode(a)
     encoded shouldBe Attempt.Failure(err)
   }
 
-  def shouldDecodeFullyTo[A](codec: RlpCodec[A], buf: BitVector, expected: A) = {
+  def shouldDecodeFullyTo[A](codec: RlpCodec[A], buf: BitVector, expected: A): Assertion = {
     val Attempt.Successful(DecodeResult(actual, rest)) = codec decode buf
     rest shouldBe BitVector.empty
     actual shouldBe expected
   }
-
-  def time[A](f: => A): (A, FiniteDuration) = {
-    val start   = System.nanoTime
-    val result  = f
-    val elapsed = (System.nanoTime - start).nanos
-    (result, elapsed)
-  }
-
-  def samples[A](gen: Gen[A]): Stream[Option[A]] =
-    Stream.continually(gen.sample)
-
-  def definedSamples[A](gen: Gen[A]): Stream[A] =
-    samples(gen).flatMap { x =>
-      x
-    }
 }

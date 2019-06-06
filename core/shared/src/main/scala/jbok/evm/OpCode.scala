@@ -198,7 +198,7 @@ sealed abstract class OpCode(
 }
 
 sealed trait ConstGas { self: OpCode =>
-  def varGas[F[_]: Sync](state: ProgramState[F]): F[N] = N(0).pure[F]
+  override def varGas[F[_]: Sync](@unused state: ProgramState[F]): F[N] = N(0).pure[F]
 }
 
 sealed abstract class UnaryOp(code: Int, constGasFn: FeeSchedule => N)(val f: UInt256 => UInt256) extends OpCode(code.toByte, 1, 1, constGasFn) with ConstGas {

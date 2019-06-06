@@ -20,7 +20,7 @@ class PeerManagerSpec extends CoreSpec {
           val pm3 = obj3.get[PeerManager[IO]]
 
           List(pm1, pm2, pm3).traverse(_.resource).use {
-            case List(uri1, uri2, uri3) =>
+            case List(uri1, _, _) =>
               for {
                 _        <- pm2.outgoing.store.add(uri1)
                 _        <- pm3.outgoing.store.add(uri1)
@@ -41,7 +41,7 @@ class PeerManagerSpec extends CoreSpec {
           val pm3 = obj3.get[PeerManager[IO]]
 
           List(pm1, pm2, pm3).traverse(_.resource).use {
-            case List(uri1, uri2, uri3) =>
+            case List(_, uri2, uri3) =>
               for {
                 _        <- pm1.outgoing.store.add(uri2, uri3)
                 _        <- timer.sleep(2.seconds)
@@ -61,7 +61,7 @@ class PeerManagerSpec extends CoreSpec {
           val pm3 = obj3.get[PeerManager[IO]]
 
           List(pm1, pm2, pm3).traverse(_.resource).use {
-            case List(uri1, uri2, uri3) =>
+            case List(uri1, _, _) =>
               for {
                 _        <- pm2.outgoing.store.add(uri1)
                 _        <- timer.sleep(2.seconds)
@@ -81,7 +81,7 @@ class PeerManagerSpec extends CoreSpec {
           val pm3 = obj3.get[PeerManager[IO]]
 
           List(pm1, pm2, pm3).traverse(_.resource).use {
-            case List(uri1, uri2, uri3) =>
+            case List(uri1, _, _) =>
               for {
                 _        <- pm2.outgoing.store.add(uri1)
                 _        <- timer.sleep(1.seconds)

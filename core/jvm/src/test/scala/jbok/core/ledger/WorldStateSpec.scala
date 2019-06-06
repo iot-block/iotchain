@@ -14,7 +14,7 @@ class WorldStateSpec extends CoreSpec {
 
   trait Fixture {
     val store   = MemoryKVStore[IO].unsafeRunSync()
-    val history = History(store)
+    val history = History(store, chainId)
 
     val world = history
       .getWorldState(noEmptyAccounts = false)
@@ -296,12 +296,11 @@ class WorldStateSpec extends CoreSpec {
 
       val w2 = history.getWorldState().unsafeRunSync()
 
-      val root2 =
-        w2.putAccount(address1, Account(0, 999))
-          .putAccount(address2, Account(0, 998))
-          .persisted
-          .unsafeRunSync()
-          .stateRootHash
+      w2.putAccount(address1, Account(0, 999))
+        .putAccount(address2, Account(0, 998))
+        .persisted
+        .unsafeRunSync()
+        .stateRootHash
 
       history
         .getWorldState(stateRootHash = Some(root))

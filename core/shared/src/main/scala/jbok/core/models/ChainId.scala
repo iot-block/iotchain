@@ -1,15 +1,15 @@
 package jbok.core.models
 
 import io.circe.generic.extras.ConfiguredJsonCodec
-import jbok.common.math.N
 import jbok.codec.json.implicits._
-import jbok.codec.rlp.implicits._
+import jbok.codec.rlp.RlpCodec
+import jbok.common.math.N
 
 @ConfiguredJsonCodec
 final case class ChainId(value: N) extends AnyVal
 
 object ChainId {
-  implicit val rlpCodec: RlpCodec[ChainId] = RlpCodec.gen
+  implicit val rlpCodec: RlpCodec[ChainId] = RlpCodec.gen[ChainId]
 
   def apply(i: Int): ChainId = ChainId(N(i))
 

@@ -3,6 +3,7 @@ package jbok.core
 import java.net.InetSocketAddress
 
 import cats.effect.{Concurrent, IO}
+import jbok.codec.rlp.RlpEncoded
 import jbok.common.gen
 import jbok.core.config.FullConfig
 import jbok.core.ledger.History
@@ -13,7 +14,6 @@ import jbok.crypto.signature.{ECDSA, Signature}
 import jbok.evm._
 import jbok.persistent.MemoryKVStore
 import org.scalacheck.Gen
-import scodec.bits.ByteVector
 
 object StatelessGen {
   // models
@@ -83,7 +83,7 @@ object StatelessGen {
         gasLimit = gasLimit,
         gasUsed = gasUsed,
         unixTimestamp = unixTimestamp,
-        extra = ByteVector.empty
+        extra = RlpEncoded.emptyList
       )
 
   val blockBody: Gen[BlockBody] =

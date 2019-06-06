@@ -7,7 +7,6 @@ import jbok.core.api.MinerAPI
 import jbok.core.consensus.poa.clique.{CliqueExtra, Proposal}
 import jbok.core.mining.BlockMiner
 import jbok.core.models.Address
-import jbok.codec.rlp.implicits._
 
 class MinerAPISpec extends AppSpec {
   "MinerAPI" should {
@@ -24,7 +23,7 @@ class MinerAPISpec extends AppSpec {
         _ = proposal shouldBe expectedProposal
         minedBlock <- miner.mine()
 
-        extra <- minedBlock.block.header.extraAs[IO, CliqueExtra]
+        extra <- IO.fromEither(minedBlock.block.header.extraAs[CliqueExtra])
         _ = extra.proposal shouldBe expectedProposal
 
         _         <- miner.prepare(minedBlock.block.some)
@@ -47,7 +46,7 @@ class MinerAPISpec extends AppSpec {
         proposal2 <- minerAPI.getBallot
         _ = proposal2 shouldBe None
         minedBlock <- miner.mine()
-        extra      <- minedBlock.block.header.extraAs[IO, CliqueExtra]
+        extra      <- IO.fromEither(minedBlock.block.header.extraAs[CliqueExtra])
         _ = extra.proposal shouldBe None
       } yield ()
     }

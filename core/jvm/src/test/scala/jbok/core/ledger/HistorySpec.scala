@@ -2,10 +2,11 @@ package jbok.core.ledger
 
 import cats.effect.IO
 import cats.implicits._
-import jbok.core.{CoreSpec, StatefulGen}
+import jbok.core.ledger.TypedBlock.MinedBlock
 import jbok.core.models._
-import jbok.crypto._
+import jbok.core.{CoreSpec, StatefulGen}
 import scodec.bits.ByteVector
+import jbok.crypto._
 
 class HistorySpec extends CoreSpec {
   "History" should {
@@ -18,27 +19,11 @@ class HistorySpec extends CoreSpec {
       accounts.length shouldBe addresses.length
     }
 
-    // accounts, storages and codes
-    "put and get account node" in {
-      forAll { (addr: Address, acc: Account) =>
-        val bytes = acc.asBytes
-        history.putMptNode(bytes.kec256, bytes).unsafeRunSync()
-        history.getMptNode(bytes.kec256).unsafeRunSync() shouldBe bytes.some
-      }
-    }
-
-    "put and get storage node" in {
-      forAll { (k: UInt256, v: UInt256) =>
-        val bytes = v.asBytes
-        history.putMptNode(bytes.kec256, bytes).unsafeRunSync()
-        history.getMptNode(bytes.kec256).unsafeRunSync() shouldBe bytes.some
-      }
-    }
-
+    // storage and codes
     "put and get code" in {
-      forAll { (k: ByteVector, v: ByteVector) =>
-        history.putCode(k, v).unsafeRunSync()
-        history.getCode(k).unsafeRunSync() shouldBe v.some
+      forAll { code: ByteVector =>
+        history.putCode(code).unsafeRunSync()
+        history.getCode(code.kec256).unsafeRunSync().getOrElse(ByteVector.empty) shouldBe code
       }
     }
 
@@ -53,6 +38,56 @@ class HistorySpec extends CoreSpec {
       history.putBlockBody(block.header.hash, block.body).unsafeRunSync()
       val location = history.getTransactionLocation(txs.head.hash).unsafeRunSync()
       location shouldBe Some(TransactionLocation(block.header.hash, 0))
+    }
+
+    "delBlock should delete all relevant parts" in check { objects =>
+      val history = objects.get[History[IO]]
+      val mined   = random[MinedBlock](StatefulGen.minedBlock())
+      for {
+        _ <- history.putBlockAndReceipts(mined.block, mined.receipts)
+
+        res <- history.getBlockHeaderByHash(mined.block.header.hash)
+        _ = res shouldBe Some(mined.block.header)
+
+        res <- history.getBlockBodyByHash(mined.block.header.hash)
+        _ = res shouldBe Some(mined.block.body)
+
+        res <- history.getBlockByHash(mined.block.header.hash)
+        _ = res shouldBe Some(mined.block)
+
+        res <- history.getReceiptsByHash(mined.block.header.hash)
+        _ = res shouldBe Some(mined.receipts)
+
+        res <- history.getBestBlockNumber
+        _ = res shouldBe mined.block.header.number
+
+        res <- history.getTotalDifficultyByHash(mined.block.header.hash)
+        _ = res shouldBe Some(mined.block.header.difficulty)
+
+        res <- history.getHashByBlockNumber(mined.block.header.number)
+        _ = res shouldBe Some(mined.block.header.hash)
+
+        // del
+        _ <- history.delBlock(mined.block.header.hash)
+
+        res <- history.getBlockHeaderByHash(mined.block.header.hash)
+        _ = res shouldBe None
+
+        res <- history.getBlockBodyByHash(mined.block.header.hash)
+        _ = res shouldBe None
+
+        res <- history.getBlockByHash(mined.block.header.hash)
+        _ = res shouldBe None
+
+        res <- history.getReceiptsByHash(mined.block.header.hash)
+        _ = res shouldBe None
+
+        res <- history.getTotalDifficultyByHash(mined.block.header.hash)
+        _ = res shouldBe None
+
+        res <- history.getHashByBlockNumber(mined.block.header.number)
+        _ = res shouldBe None
+      } yield ()
     }
   }
 }

@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
+import jbok.codec.rlp.RlpEncoded
 import jbok.codec.rlp.implicits._
 import jbok.common.math.N
 import jbok.common.math.implicits._
@@ -28,9 +29,9 @@ final case class SignedTransaction(
     r: N,
     s: N
 ) {
-  lazy val bytes: ByteVector = this.asBytes
+  lazy val bytes: RlpEncoded = this.encoded
 
-  lazy val hash: ByteVector = bytes.kec256
+  lazy val hash: ByteVector = bytes.bytes.kec256
 
   lazy val chainIdOpt: Option[ChainId] = ECDSACommon.getChainId(v.toBigInt).map(bi => ChainId(bi))
 
@@ -85,7 +86,7 @@ object SignedTransaction {
   }
 
   private def bytesToSign(stx: SignedTransaction, chainId: ChainId): ByteVector =
-    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId.value, N(0), N(0)).asBytes.kec256
+    (stx.nonce, stx.gasPrice, stx.gasLimit, stx.receivingAddress, stx.value, stx.payload, chainId.value, N(0), N(0)).encoded.bytes.kec256
 
   private def recoverPublicKey(stx: SignedTransaction, chainId: ChainId): Option[KeyPair.Public] = {
     val bytesToSign = SignedTransaction.bytesToSign(stx, chainId)

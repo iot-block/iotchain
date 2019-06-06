@@ -42,7 +42,7 @@ abstract class BaseManager[F[_]](config: FullConfig, history: History[F])(implic
   def handshake(socket: Socket[F]): F[Peer[F]] =
     for {
       localStatus <- localStatus
-      request = Request.binary[F, Status](Status.name, localStatus.asBytes)
+      request = Request.binary[F, Status](Status.name, localStatus.encoded)
       _            <- socket.writeMessage(request)
       remoteStatus <- socket.readMessage.flatMap(_.as[Status])
       remote       <- socket.remoteAddress.map(_.asInstanceOf[InetSocketAddress])

@@ -12,7 +12,8 @@ object ScalaJS {
     scalaJSUseMainModuleInitializer in test := false,
     webpackBundlingMode := BundlingMode.LibraryOnly(),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
-    scalacOptions += "-P:scalajs:sjsDefinedByDefault"
+    scalacOptions += "-P:scalajs:sjsDefinedByDefault",
+    scalacOptions -= "-Ywarn-unused:params"
   )
 
   val webpackSettings = Seq(

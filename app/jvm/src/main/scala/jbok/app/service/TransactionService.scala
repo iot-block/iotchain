@@ -3,7 +3,7 @@ package jbok.app.service
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.implicits._
-import jbok.codec.rlp.implicits._
+import jbok.codec.rlp.RlpEncoded
 import jbok.core.ledger.History
 import jbok.core.models.{Receipt, SignedTransaction}
 import jbok.core.pool.TxPool
@@ -45,9 +45,9 @@ final class TransactionService[F[_]](history: History[F], txPool: TxPool[F], hel
   override def sendTx(stx: SignedTransaction): F[ByteVector] =
     txPool.addOrUpdateTransaction(stx).as(stx.hash)
 
-  override def sendRawTx(data: ByteVector): F[ByteVector] =
+  override def sendRawTx(data: RlpEncoded): F[ByteVector] =
     for {
-      stx <- F.fromEither(data.asEither[SignedTransaction])
+      stx <- F.fromEither(data.decoded[SignedTransaction])
       _   <- txPool.addOrUpdateTransaction(stx)
     } yield stx.hash
 }

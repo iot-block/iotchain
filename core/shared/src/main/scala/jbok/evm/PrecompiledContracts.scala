@@ -25,20 +25,19 @@ object PrecompiledContracts {
     EcDsaRecAddr -> EllipticCurveRecovery,
     Sha256Addr   -> Sha256,
     Rip160Addr   -> Ripemd160,
-    IdAddr       -> Identity,
+    IdAddr       -> Identity
   )
 
-  private val bn256Constracts = Map(
+  private val bn256Contracts = Map(
     ExpModAddr       -> ExpMod,
     BN256AddAddr     -> BN256Add,
     BN256MulAddr     -> BN256Mul,
     BN256PairingAddr -> BN256Pairing
   )
 
-  val ByzantiumContracts = FrontierContracts ++ bn256Constracts
+  val ByzantiumContracts = FrontierContracts ++ bn256Contracts
 
-  def runOptionally[F[_]: Sync](contracts: Map[Address, PrecompiledContract],
-                                context: ProgramContext[F]): Option[ProgramResult[F]] =
+  def runOptionally[F[_]: Sync](contracts: Map[Address, PrecompiledContract], context: ProgramContext[F]): Option[ProgramResult[F]] =
     contracts.get(context.receivingAddr).map(_.run(context))
 
   sealed trait PrecompiledContract {
@@ -215,7 +214,7 @@ object PrecompiledContracts {
   }
 
   object BN256Pairing extends PrecompiledContract {
-    def exec(inputData: ByteVector): ByteVector = {
+    def exec(inputData: ByteVector): ByteVector =
       if (inputData.length % 192 != 0) {
         ByteVector.empty.padTo(32)
       } else {
@@ -239,7 +238,6 @@ object PrecompiledContracts {
           .map(ps => ByteVector(if (BN256.pairingCheck(ps)) 1 else 0).padLeft(32))
           .getOrElse(ByteVector.empty.padTo(32))
       }
-    }
 
     def gas(inputData: ByteVector): N =
       100000 + inputData.length / 192 * 80000

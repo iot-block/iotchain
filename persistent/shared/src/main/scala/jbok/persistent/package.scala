@@ -1,14 +1,13 @@
 package jbok
-import scodec.bits.ByteVector
 
 package object persistent {
-  type Put = (ColumnFamily, ByteVector, ByteVector)
+  type Put = (ColumnFamily, Array[Byte], Array[Byte])
   object Put {
-    def apply(cf: ColumnFamily, key: ByteVector, value: ByteVector): Put = (cf, key, value)
+    def apply(cf: ColumnFamily, key: Array[Byte], value: Array[Byte]): Put = (cf, key, value)
   }
 
-  type Del = (ColumnFamily, ByteVector)
+  type Del = (ColumnFamily, Array[Byte])
   object Del {
-    def apply(cf: ColumnFamily, key: ByteVector): Del = (cf, key)
+    def apply(cf: ColumnFamily, key: Array[Byte]): Del = (cf, key)
   }
 }

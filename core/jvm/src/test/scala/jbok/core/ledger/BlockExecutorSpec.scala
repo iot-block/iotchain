@@ -114,8 +114,8 @@ class BlockExecutorSpec extends CoreSpec {
         txs <- SignedTransaction.sign[IO](tx, testKeyPair, chainId).map(_ :: Nil)
         block = random(StatefulGen.block(None, Some(txs)))
         _ <- executor.executeBlock(block)
-        hash            = (testAllocAddress, UInt256(0)).asBytes.kec256
-        contractAddress = Address.apply(hash)
+        hash            = (testAllocAddress, UInt256(0)).encoded.bytes.kec256
+        contractAddress = Address(hash)
         contract <- history.getAccount(contractAddress, BigInt(1)).map(_.get)
         code     <- history.getCode(contract.codeHash).map(_.get)
         _ = code shouldBe ByteVector.fromValidHex(

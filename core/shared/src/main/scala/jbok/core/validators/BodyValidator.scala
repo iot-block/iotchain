@@ -3,10 +3,9 @@ package jbok.core.validators
 import cats.effect.Sync
 import cats.implicits._
 
-import jbok.codec.rlp.implicits._
 import jbok.core.models._
 import jbok.core.validators.BodyInvalid._
-import jbok.crypto.authds.mpt.MerklePatriciaTrie
+import jbok.persistent.mpt.MerklePatriciaTrie
 
 object BodyInvalid {
   case object BodyTransactionsHashInvalid extends Exception("BlockTransactionsHashInvalid")

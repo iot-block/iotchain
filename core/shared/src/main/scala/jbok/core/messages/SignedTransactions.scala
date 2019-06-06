@@ -1,8 +1,8 @@
 package jbok.core.messages
 
 import io.circe.generic.extras.ConfiguredJsonCodec
-import jbok.codec.rlp.implicits._
 import jbok.codec.json.implicits._
+import jbok.codec.rlp.RlpCodec
 import jbok.core.models.SignedTransaction
 
 @ConfiguredJsonCodec
@@ -12,4 +12,3 @@ object SignedTransactions {
 
   implicit val rlpCodec: RlpCodec[SignedTransactions] = RlpCodec.gen[SignedTransactions]
 }
-

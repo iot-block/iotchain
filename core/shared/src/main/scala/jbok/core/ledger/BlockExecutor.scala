@@ -17,11 +17,9 @@ import jbok.core.peer.{Peer, PeerSelector}
 import jbok.core.pool.{BlockPool, TxPool}
 import jbok.core.queue.{Consumer, Producer}
 import jbok.core.validators.{HeaderValidator, TxValidator}
-import jbok.crypto.authds.mpt.MerklePatriciaTrie
+import jbok.persistent.mpt.MerklePatriciaTrie
 import jbok.evm._
-import jbok.persistent.DBErr
 import scodec.bits.ByteVector
-import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
 import jbok.common.math.N
 import jbok.common.math.implicits._
@@ -37,7 +35,7 @@ final class BlockExecutor[F[_]](
     blockPool: BlockPool[F],
     semaphore: Semaphore[F],
     inbound: Consumer[F, Peer[F], Block],
-    outbound: Producer[F, PeerSelector[F], Block],
+    outbound: Producer[F, PeerSelector[F], Block]
 )(implicit F: Sync[F], T: Timer[F]) {
   private[this] val log = Logger[F]
 
@@ -64,7 +62,6 @@ final class BlockExecutor[F[_]](
   def handlePendingBlock(pending: PendingBlock): F[ExecutedBlock[F]] =
     for {
       best             <- history.getBestBlock
-      currentTd        <- history.getTotalDifficultyByHash(best.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
       (result, txs)    <- executeTransactions(pending.block, shortCircuit = false)
       transactionsRoot <- MerklePatriciaTrie.calcMerkleRoot[F, SignedTransaction](txs)
       receiptsRoot     <- MerklePatriciaTrie.calcMerkleRoot[F, Receipt](result.receipts)
@@ -80,8 +77,7 @@ final class BlockExecutor[F[_]](
         Block(header, body),
         result.world,
         result.gasUsed,
-        result.receipts,
-        currentTd + header.difficulty
+        result.receipts
       )
       persisted <- executed.world.persisted
       header2 = header.copy(stateRoot = persisted.stateRootHash)
@@ -137,8 +133,7 @@ final class BlockExecutor[F[_]](
   private[jbok] def executeBlock(block: Block): F[ExecutedBlock[F]] =
     for {
       (result, _) <- executeTransactions(block, shortCircuit = true)
-      parentTd    <- history.getTotalDifficultyByHash(block.header.parentHash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
-      executed = ExecutedBlock(block, result.world, result.gasUsed, result.receipts, parentTd + block.header.difficulty)
+      executed = ExecutedBlock(block, result.world, result.gasUsed, result.receipts)
       persisted <- executed.world.persisted
       _ <- HeaderValidator.postExecValidate[F](
         executed.block.header,
@@ -146,7 +141,7 @@ final class BlockExecutor[F[_]](
         executed.receipts,
         executed.gasUsed
       )
-      _ <- history.putBlockAndReceipts(executed.block, executed.receipts, executed.td)
+      _ <- history.putBlockAndReceipts(executed.block, executed.receipts)
     } yield executed
 
   private def importBlock(block: Block): F[List[Block]] = {
@@ -190,7 +185,7 @@ final class BlockExecutor[F[_]](
       shortCircuit: Boolean,
       accGas: N = 0,
       accReceipts: List[Receipt] = Nil,
-      accExecuted: List[SignedTransaction] = Nil,
+      accExecuted: List[SignedTransaction] = Nil
   ): F[(BlockExecResult[F], List[SignedTransaction])] = transactions match {
     case Nil =>
       F.pure((BlockExecResult(world = world, gasUsed = accGas, receipts = accReceipts), accExecuted))

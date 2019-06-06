@@ -3,52 +3,41 @@ package jbok.persistent.rocksdb
 import java.nio.file.Path
 import java.util
 
-import scala.collection.JavaConverters._
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import fs2._
-import jbok.codec.rlp.RlpCodec
 import jbok.common.FileUtil
 import jbok.common.log.Logger
 import jbok.persistent.{ColumnFamily, Del, KVStore, Put}
 import org.rocksdb.{RocksDB => Underlying, Logger => _, _}
-import scodec.bits.ByteVector
-import jbok.codec.rlp.implicits._
+
+import scala.collection.JavaConverters._
 
 final class RocksKVStore[F[_]](db: Underlying, readOptions: ReadOptions, writeOptions: WriteOptions, cfs: Map[ColumnFamily, ColumnFamilyHandle])(implicit F: Sync[F])
     extends KVStore[F] {
-  override def put(cf: ColumnFamily, key: ByteVector, value: ByteVector): F[Unit] =
-    F.delay(db.put(handle(cf), writeOptions, key.toArray, value.toArray))
+  override def put(cf: ColumnFamily, key: Array[Byte], value: Array[Byte]): F[Unit] =
+    F.delay(db.put(handle(cf), writeOptions, key, value))
 
-  override def get(cf: ColumnFamily, key: ByteVector): F[Option[ByteVector]] =
-    F.delay(Option(db.get(handle(cf), readOptions, key.toArray)).map(ByteVector.apply))
+  override def del(cf: ColumnFamily, key: Array[Byte]): F[Unit] =
+    F.delay(db.delete(handle(cf), writeOptions, key))
 
-  override def getAs[A: RlpCodec](cf: ColumnFamily, key: ByteVector): F[Option[A]] =
-    get(cf, key).flatMap {
-      case Some(value) => F.fromEither(value.asEither[A]).map(_.some)
-      case None        => F.pure(None)
-    }
-
-  override def del(cf: ColumnFamily, key: ByteVector): F[Unit] =
-    F.delay(db.delete(handle(cf), writeOptions, key.toArray))
-
-  override def writeBatch(cf: ColumnFamily, puts: List[(ByteVector, ByteVector)], dels: List[ByteVector]): F[Unit] =
+  override def writeBatch(cf: ColumnFamily, puts: List[(Array[Byte], Array[Byte])], dels: List[Array[Byte]]): F[Unit] =
     batchResource.use { batch =>
       F.delay {
-        puts.foreach { case (key, value) => batch.put(handle(cf), key.toArray, value.toArray) }
+        puts.foreach { case (key, value) => batch.put(handle(cf), key, value) }
         dels.foreach { key =>
-          batch.delete(handle(cf), key.toArray)
+          batch.delete(handle(cf), key)
         }
         db.write(writeOptions, batch)
       }
     }
 
-  override def writeBatch(cf: ColumnFamily, ops: List[(ByteVector, Option[ByteVector])]): F[Unit] =
+  override def writeBatch(cf: ColumnFamily, ops: List[(Array[Byte], Option[Array[Byte]])]): F[Unit] =
     batchResource.use { batch =>
       F.delay {
         ops.foreach {
-          case (key, Some(value)) => batch.put(handle(cf), key.toArray, value.toArray)
-          case (key, None)        => batch.delete(handle(cf), key.toArray)
+          case (key, Some(value)) => batch.put(handle(cf), key, value)
+          case (key, None)        => batch.delete(handle(cf), key)
         }
         db.write(writeOptions, batch)
       }
@@ -57,13 +46,16 @@ final class RocksKVStore[F[_]](db: Underlying, readOptions: ReadOptions, writeOp
   override def writeBatch(puts: List[Put], dels: List[Del]): F[Unit] =
     batchResource.use { batch =>
       F.delay {
-        puts.foreach { case (cf, key, value) => batch.put(handle(cf), key.toArray, value.toArray) }
-        dels.foreach { case (cf, key)        => batch.delete(handle(cf), key.toArray) }
+        puts.foreach { case (cf, key, value) => batch.put(handle(cf), key, value) }
+        dels.foreach { case (cf, key)        => batch.delete(handle(cf), key) }
         db.write(writeOptions, batch)
       }
     }
 
-  override def toStream(cf: ColumnFamily): Stream[F, (ByteVector, ByteVector)] = {
+  override def get(cf: ColumnFamily, key: Array[Byte]): F[Option[Array[Byte]]] =
+    F.delay(Option(db.get(handle(cf), readOptions, key)))
+
+  override def toStream(cf: ColumnFamily): Stream[F, (Array[Byte], Array[Byte])] = {
     val iterator = Resource {
       F.delay(db.newIterator(handle(cf), readOptions))
         .map { it =>
@@ -73,24 +65,24 @@ final class RocksKVStore[F[_]](db: Underlying, readOptions: ReadOptions, writeOp
     }
 
     Stream.resource(iterator).flatMap { iter =>
-      Stream.unfoldEval[F, RocksIterator, (ByteVector, ByteVector)](iter)(
+      Stream.unfoldEval[F, RocksIterator, (Array[Byte], Array[Byte])](iter)(
         iter =>
           for {
             hn <- F.delay(iter.isValid)
             opt <- if (hn) {
-              F.delay(iter.next()).as(Some((ByteVector(iter.key()), ByteVector(iter.value())) -> iter))
+              F.delay(iter.next()).as(Some((iter.key(), iter.value()) -> iter))
             } else {
-              none.pure[F]
+              F.pure(None)
             }
           } yield opt
       )
     }
   }
 
-  override def toList(cf: ColumnFamily): F[List[(ByteVector, ByteVector)]] =
+  override def toList(cf: ColumnFamily): F[List[(Array[Byte], Array[Byte])]] =
     toStream(cf).compile.toList
 
-  override def toMap(cf: ColumnFamily): F[Map[ByteVector, ByteVector]] =
+  override def toMap(cf: ColumnFamily): F[Map[Array[Byte], Array[Byte]]] =
     toStream(cf).compile.toList.map(_.toMap)
 
   override def size(cf: ColumnFamily): F[Int] =
@@ -122,7 +114,7 @@ object RocksKVStore {
       columnFamilies: List[ColumnFamily],
       options: DBOptions = defaultOptions,
       readOptions: ReadOptions = defaultReadOptions,
-      writeOptions: WriteOptions = defaultWriteOptions,
+      writeOptions: WriteOptions = defaultWriteOptions
   )(implicit F: Sync[F]): Resource[F, KVStore[F]] =
     Resource {
       for {

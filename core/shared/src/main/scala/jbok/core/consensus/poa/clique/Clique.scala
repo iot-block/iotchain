@@ -4,6 +4,7 @@ import cats.data.OptionT
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import jbok.codec.rlp.RlpEncoded
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
 import jbok.common.math.N
@@ -42,18 +43,20 @@ final class Clique[F[_]](
     for {
       bytes      <- Clique.sigHash[F](header)
       signed     <- sign(bytes)
-      extraBytes <- proposal.get.map(CliqueExtra(Nil, signed, _).asBytes)
+      extraBytes <- proposal.get.map(CliqueExtra(Nil, signed, _).encoded)
     } yield header.copy(extra = extraBytes)
 
   def clearProposalIfMine(header: BlockHeader): F[Unit] =
     for {
-      extra       <- header.extraAs[F, CliqueExtra]
+      extra       <- F.fromEither(header.extraAs[CliqueExtra])
       bytes       <- Clique.sigHash[F](header)
       mySigned    <- sign(bytes)
       proposalOpt <- proposal.get
       _ <- if (extra.signature == mySigned && extra.proposal == proposalOpt) {
         proposal.update(_ => None)
-      } else { F.unit }
+      } else {
+        F.unit
+      }
     } yield ()
 
   def ballot(address: Address, auth: Boolean): F[Unit] =
@@ -103,7 +106,7 @@ final class Clique[F[_]](
   private def genesisSnapshot: F[Snapshot] =
     for {
       genesis <- history.genesisHeader
-      extra   <- genesis.extraAs[F, CliqueExtra]
+      extra   <- F.fromEither(genesis.extraAs[CliqueExtra])
       snap = Snapshot(config, 0, genesis.hash, extra.miners.toSet)
       _ <- Snapshot.storeSnapshot[F](snap, store)
       _ <- log.i(s"stored genesis with ${extra.miners.size} miners")
@@ -123,7 +126,7 @@ object Clique {
       genesisConfig: GenesisConfig,
       db: KVStore[F],
       history: History[F],
-      keystore: KeyStore[F],
+      keystore: KeyStore[F]
   )(implicit F: Concurrent[F]): F[Clique[F]] =
     for {
       keyPair      <- keystore.unlockAccount(config.address, config.passphrase).map(_.keyPair)
@@ -137,18 +140,18 @@ object Clique {
       proposal <- Ref[F].of(Option.empty[Proposal])
     } yield new Clique[F](config, store, history, proposal, keyPair)
 
-  def fillExtraData(miners: List[Address]): ByteVector =
-    CliqueExtra(miners, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).asBytes
+  def fillExtraData(miners: List[Address]): RlpEncoded =
+    CliqueExtra(miners, CryptoSignature(ByteVector.fill(65)(0.toByte).toArray)).encoded
 
   def sigHash[F[_]](header: BlockHeader)(implicit F: Sync[F]): F[ByteVector] = F.delay {
-    val bytes = header.copy(extra = ByteVector.empty).asBytes
-    bytes.kec256
+    val encoded = header.copy(extra = RlpEncoded.emptyList).encoded
+    encoded.bytes.kec256
   }
 
   /** Retrieve the signature from the header extra-data */
   def ecrecover[F[_]](header: BlockHeader, chainId: ChainId)(implicit F: Sync[F]): F[Option[Address]] =
     for {
-      extra <- header.extraAs[F, CliqueExtra]
+      extra <- F.fromEither(header.extraAs[CliqueExtra])
       sig = extra.signature
       hash <- sigHash[F](header)
     } yield {

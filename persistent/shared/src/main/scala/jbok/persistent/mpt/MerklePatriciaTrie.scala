@@ -1,38 +1,36 @@
-package jbok.crypto.authds.mpt
+package jbok.persistent.mpt
 
 import cats.data.OptionT
 import cats.effect.Sync
-import cats.implicits._
 import cats.effect.concurrent.Ref
+import cats.implicits._
+import fs2._
 import jbok.codec.HexPrefix
 import jbok.codec.HexPrefix.Nibbles
-import jbok.codec.rlp.implicits.RlpCodec
-import jbok.persistent._
-import scodec.bits.ByteVector
-import jbok.crypto.authds.mpt.MptNode._
-import MerklePatriciaTrie._
 import jbok.codec.rlp.implicits._
-import fs2._
+import jbok.codec.rlp.{RlpCodec, RlpEncoded}
 import jbok.crypto._
+import jbok.persistent._
+import jbok.persistent.mpt.MerklePatriciaTrie._
+import jbok.persistent.mpt.MptNode._
+import scodec.bits.{BitVector, ByteVector}
 
 final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFamily, store: KVStore[F], rootHash: Ref[F, Option[ByteVector]])(implicit F: Sync[F])
     extends SingleColumnKVStore[F, K, V] {
   override def put(key: K, value: V): F[Unit] =
     for {
-      k       <- key.asBytes.pure[F]
-      v       <- value.asBytes.pure[F]
       hashOpt <- rootHash.get
-      nibbles = HexPrefix.bytesToNibbles(k)
+      nibbles = HexPrefix.encodedToNibbles(key.encoded)
       _ <- hashOpt match {
         case Some(hash) if hash != MerklePatriciaTrie.emptyRootHash =>
           for {
             root        <- getRootOpt.flatMap(opt => F.fromOption(opt, DBErr.NotFound))
-            newRootHash <- putNode(root, nibbles, v) >>= commitPut
+            newRootHash <- putNode(root, nibbles, value.encoded) >>= commitPut
             _           <- rootHash.set(Some(newRootHash))
           } yield ()
 
         case _ =>
-          val newRoot = LeafNode(nibbles, v)
+          val newRoot = LeafNode(nibbles, value.encoded)
           commitPut(NodeInsertResult(newRoot, newRoot :: Nil)).flatMap(newRootHash => rootHash.set(Some(newRootHash)))
       }
     } yield ()
@@ -40,9 +38,9 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
   override def get(key: K): F[Option[V]] =
     (for {
       root <- OptionT(getRootOpt)
-      nibbles = HexPrefix.bytesToNibbles(key.asBytes)
+      nibbles = HexPrefix.encodedToNibbles(key.encoded)
       v     <- OptionT(getNodeValue(root, nibbles))
-      value <- OptionT.liftF(F.fromEither(v.asEither[V]))
+      value <- OptionT.liftF(F.fromEither(v.decoded[V]))
     } yield value).value
 
   override def del(key: K): F[Unit] =
@@ -50,7 +48,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
       hashOpt <- rootHash.get
       _ <- hashOpt match {
         case Some(hash) if hash != MerklePatriciaTrie.emptyRootHash =>
-          val nibbles = HexPrefix.bytesToNibbles(key.asBytes)
+          val nibbles = HexPrefix.encodedToNibbles(key.encoded)
           for {
             root        <- getRootOpt.flatMap(opt => F.fromOption(opt, DBErr.NotFound))
             newRootHash <- delNode(root, nibbles) >>= commitDel
@@ -76,7 +74,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
     toMap.map(_.toList)
 
   override def toMap: F[Map[K, V]] = {
-    def toMap0(node: Option[MptNode]): F[Map[String, ByteVector]] = node match {
+    def toMap0(node: Option[MptNode]): F[Map[Nibbles, RlpEncoded]] = node match {
       case None =>
         F.pure(Map.empty)
       case Some(LeafNode(key, value)) =>
@@ -89,16 +87,19 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
       case Some(bn @ BranchNode(_, value)) =>
         for {
           xs <- bn.activated.traverse { case (i, e) => (getNodeByBranch(e) >>= toMap0).map(_ -> i) }
-          m = xs.foldLeft(Map.empty[String, ByteVector]) {
+          m = xs.foldLeft(Map.empty[Nibbles, RlpEncoded]) {
             case (acc, (cur, i)) => acc ++ cur.map { case (k, v) => MerklePatriciaTrie.alphabet(i) ++ k -> v }
           }
-        } yield value.fold(m)(v => m + ("" -> v))
+        } yield value.fold(m)(v => m + (Nibbles("") -> v))
     }
 
     for {
       root <- getRootOpt
       m    <- toMap0(root)
-      res  <- m.map { case (k, v) => ByteVector.fromValidHex(k) -> v }.toList.traverse(decodeTuple)
+      res <- m
+        .map { case (k, v) => HexPrefix.nibblesToEncoded(k) -> v }
+        .toList
+        .traverse(decodeTuple)
     } yield res.toMap
   }
 
@@ -115,17 +116,14 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
     getRootOpt >>= size0
   }
 
-  override def encodeTuple(kv: (K, V)): (ByteVector, ByteVector) =
-    (kv._1.asBytes, kv._2.asBytes)
-
-  override def decodeTuple(kv: (ByteVector, ByteVector)): F[(K, V)] =
+  private def decodeTuple(kv: (RlpEncoded, RlpEncoded)): F[(K, V)] =
     for {
-      key   <- F.fromEither(kv._1.asEither[K])
-      value <- F.fromEither(kv._2.asEither[V])
+      key   <- F.fromEither(kv._1.decoded[K])
+      value <- F.fromEither(kv._2.decoded[V])
     } yield key -> value
 
-  private[jbok] def getNodes: F[Map[String, MptNode]] = {
-    def getNodes0(prefix: String, node: Option[MptNode]): F[Map[String, MptNode]] = node match {
+  private[jbok] def getNodes: F[Map[Nibbles, MptNode]] = {
+    def getNodes0(prefix: Nibbles, node: Option[MptNode]): F[Map[Nibbles, MptNode]] = node match {
       case None =>
         F.pure(Map.empty)
 
@@ -141,9 +139,9 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
       case Some(bn @ BranchNode(_, _)) =>
         for {
           xs <- bn.activated.traverse {
-            case (i, e) => getNodeByBranch(e).flatMap(node => getNodes0(prefix + MerklePatriciaTrie.alphabet(i), node))
+            case (i, e) => getNodeByBranch(e).flatMap(node => getNodes0(prefix ++ MerklePatriciaTrie.alphabet(i), node))
           }
-          m = xs.foldLeft(Map.empty[String, MptNode]) {
+          m = xs.foldLeft(Map.empty[Nibbles, MptNode]) {
             case (acc, cur) => acc ++ cur
           }
         } yield m + (prefix -> bn)
@@ -151,17 +149,17 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
 
     for {
       root <- getRootOpt
-      m    <- getNodes0("", root)
+      m    <- getNodes0(Nibbles.coerce(""), root)
     } yield m
   }
 
   private[jbok] def getRootHash: F[ByteVector] = rootHash.get.map(_.getOrElse(MerklePatriciaTrie.emptyRootHash))
 
   private[jbok] def getNodeByHash(nodeHash: ByteVector): F[Option[MptNode]] =
-    for {
-      v <- store.get(cf, nodeHash)
-      node = v.map(x => nodeCodec.decode(x.bits).require.value)
-    } yield node
+    store.get(cf, nodeHash.encoded.byteArray).flatMap {
+      case None        => F.pure(None)
+      case Some(value) => F.fromEither(RlpEncoded.coerce(BitVector(value)).decoded[MptNode]).map(_.some)
+    }
 
   private[jbok] def getRootOpt: F[Option[MptNode]] = getRootHash >>= getNodeByHash
 
@@ -175,8 +173,8 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
     case Some(e) => getNodeByEntry(e)
   }
 
-  private[jbok] def getNodeByKey(node: MptNode, key: ByteVector): F[Option[MptNode]] =
-    getNodeByNibbles(node, HexPrefix.bytesToNibbles(key))
+  private[jbok] def getNodeByKey(node: MptNode, key: RlpEncoded): F[Option[MptNode]] =
+    getNodeByNibbles(node, HexPrefix.encodedToNibbles(key))
 
   private[jbok] def getNodeByNibbles(node: MptNode, nibbles: Nibbles): F[Option[MptNode]] =
     node match {
@@ -214,9 +212,12 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
       .withFilter { node =>
         node.entry.isLeft || node.capped == newRootBytes
       }
-      .map(x => x.hash -> x.bytes)
+      .map(x => x.hash.encoded.byteArray -> x.bytes.byteArray)
 
-    store.writeBatch(cf, putOps, Nil).map(_ => newRootHash)
+    for {
+      r <- store.writeBatch(cf, putOps, Nil).as(newRootHash)
+    } yield r
+
   }
 
   private def commitPut(nodeInsertResult: NodeInsertResult): F[ByteVector] =
@@ -231,10 +232,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
         getRootHash
     }
 
-  private def longestCommonPrefix(a: Nibbles, b: Nibbles): Int =
-    a.zip(b).takeWhile(t => t._1 == t._2).length
-
-  private def getNodeValue(node: MptNode, nibbles: Nibbles): F[Option[ByteVector]] =
+  private def getNodeValue(node: MptNode, nibbles: Nibbles): F[Option[RlpEncoded]] =
     node match {
       case LeafNode(k, v) => F.pure(if (k == nibbles) Some(v) else None)
 
@@ -262,14 +260,14 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
         }
     }
 
-  private def putNode(node: MptNode, key: Nibbles, value: ByteVector): F[NodeInsertResult] = node match {
+  private def putNode(node: MptNode, key: Nibbles, value: RlpEncoded): F[NodeInsertResult] = node match {
     case leafNode: LeafNode     => putLeafNode(leafNode, key, value)
     case extNode: ExtensionNode => putExtensionNode(extNode, key, value)
     case branchNode: BranchNode => putBranchNode(branchNode, key, value)
   }
 
-  private def putLeafNode(leafNode: LeafNode, key: Nibbles, value: ByteVector): F[NodeInsertResult] =
-    longestCommonPrefix(leafNode.key, key) match {
+  private def putLeafNode(leafNode: LeafNode, key: Nibbles, value: RlpEncoded): F[NodeInsertResult] =
+    leafNode.key.longestCommonPrefix(key) match {
       case l if l == leafNode.key.length && l == key.length =>
         // same keys, update value
         val newNode = leafNode.copy(value = value)
@@ -287,7 +285,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
           } else {
             // create branch node with one branch
             val newLeafNode = LeafNode(leafNode.key.tail, leafNode.value)
-            BranchNode.withSingleBranch(leafNode.key.head, newLeafNode.entry, None) -> Some(newLeafNode)
+            BranchNode.withSingleBranch(leafNode.key.head, newLeafNode.entry) -> Some(newLeafNode)
           }
 
         putNode(branchNode, key, value).map { r =>
@@ -313,17 +311,17 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
         }
     }
 
-  private def putExtensionNode(extNode: ExtensionNode, key: Nibbles, value: ByteVector): F[NodeInsertResult] =
-    longestCommonPrefix(extNode.key, key) match {
+  private def putExtensionNode(extNode: ExtensionNode, key: Nibbles, value: RlpEncoded): F[NodeInsertResult] =
+    extNode.key.longestCommonPrefix(key) match {
       case 0 =>
         // split
         val (branchNode, maybeNewExtNode) = {
           if (extNode.key.length == 1) {
-            BranchNode.withSingleBranch(extNode.key.head, extNode.child, None) -> None
+            BranchNode.withSingleBranch(extNode.key.head, extNode.child) -> None
           } else {
             // The new branch node will have an extension that replaces current one
             val newExtNode = ExtensionNode(extNode.key.tail, extNode.child)
-            BranchNode.withSingleBranch(extNode.key.head, newExtNode.entry, None) -> Some(newExtNode)
+            BranchNode.withSingleBranch(extNode.key.head, newExtNode.entry) -> Some(newExtNode)
           }
         }
 
@@ -363,7 +361,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
         }
     }
 
-  private def putBranchNode(branchNode: BranchNode, key: Nibbles, value: ByteVector): F[NodeInsertResult] =
+  private def putBranchNode(branchNode: BranchNode, key: Nibbles, value: RlpEncoded): F[NodeInsertResult] =
     if (key.isEmpty) {
       // the key is empty, update the branch node value
       val newBranchNode = branchNode.copy(value = Some(value))
@@ -415,7 +413,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
     }
 
   private def delExtensionNode(node: ExtensionNode, key: Nibbles): F[NodeRemoveResult] =
-    longestCommonPrefix(node.key, key) match {
+    node.key.longestCommonPrefix(key) match {
       case l if l == node.key.length =>
         // recursively delete the child
         for {
@@ -508,7 +506,7 @@ final case class MerklePatriciaTrie[F[_], K: RlpCodec, V: RlpCodec](cf: ColumnFa
             case None =>
               F.raiseError(new Exception(s"unexpected empty branches at ${index}"))
           }
-        case (Nil, Some(v)) => F.pure(LeafNode("", v))
+        case (Nil, Some(v)) => F.pure(LeafNode(Nibbles.coerce(""), v))
         case _              => node.pure[F]
       }
 
@@ -554,9 +552,10 @@ object MerklePatriciaTrie {
       root <- mpt.getRootHash
     } yield root
 
-  val emptyRootHash: ByteVector = ().asBytes.kec256
+  val emptyRootHash: ByteVector =
+    RlpEncoded.emptyItem.bytes.kec256
 
-  val alphabet: Vector[String] = "0123456789abcdef".map(_.toString).toVector
+  val alphabet: Array[Nibbles] = "0123456789abcdef".map(char => Nibbles.coerce(char.toString)).toArray
 
   final case class NodeInsertResult(
       newNode: MptNode,

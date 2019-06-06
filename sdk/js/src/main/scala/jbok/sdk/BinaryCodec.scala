@@ -1,32 +1,27 @@
 package jbok.sdk
 
+import jbok.codec.rlp.RlpEncoded
 import jbok.codec.rlp.implicits._
 import jbok.core.models.{BlockHeader, SignedTransaction}
-import scodec.bits.ByteVector
+import scodec.bits.BitVector
 
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
-import scala.scalajs.js.typedarray.{Int8Array, int8Array2ByteArray}
+import scala.scalajs.js.typedarray.Int8Array
 
 @JSExportTopLevel("BinaryCodec")
 @JSExportAll
 object BinaryCodec {
-  implicit private def byteVectorToTypedArray(bytes: ByteVector): Int8Array =
-    new Int8Array(bytes.toArray.toJSArray)
-
-  private def Int8Array8Bytes(bytes: Int8Array): ByteVector =
-    ByteVector(int8Array2ByteArray(bytes))
-
   def encodeBlockHeader(header: BlockHeader): Int8Array =
-    header.asBytes
+    new Int8Array(header.encoded.byteArray.toJSArray)
 
   def decodeBlockHeader(bytes: Int8Array): js.UndefOr[BlockHeader] =
-    Int8Array8Bytes(bytes).asOpt[BlockHeader].orUndefined
+    RlpEncoded.coerce(BitVector(bytes.toArray)).decoded[BlockHeader].toOption.orUndefined
 
   def encodeTx(tx: SignedTransaction): Int8Array =
-    tx.asBytes
+    new Int8Array(tx.encoded.byteArray.toJSArray)
 
   def decodeTx(bytes: Int8Array): js.UndefOr[SignedTransaction] =
-    Int8Array8Bytes(bytes).asOpt[SignedTransaction].orUndefined
+    RlpEncoded.coerce(BitVector(bytes.toArray)).decoded[SignedTransaction].toOption.orUndefined
 }

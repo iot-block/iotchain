@@ -5,7 +5,6 @@ import _root_.io.circe.parser._
 import _root_.io.circe.syntax._
 import cats.data.OptionT
 import jbok.codec.json.implicits._
-import jbok.codec.rlp.implicits._
 import jbok.core.consensus.poa.clique.Snapshot._
 import jbok.core.models.{Address, BlockHeader, ChainId}
 import jbok.persistent.SingleColumnKVStore
@@ -17,16 +16,16 @@ import jbok.core.config.MiningConfig
 
 @ConfiguredJsonCodec
 final case class Vote(
-    miner: Address, // Authorized miner that cast this vote
-    block: N, // Block number the vote was cast in (expire old votes)
-    address: Address, // Account being voted on to change its authorization
+    miner: Address,    // Authorized miner that cast this vote
+    block: N,          // Block number the vote was cast in (expire old votes)
+    address: Address,  // Account being voted on to change its authorization
     authorize: Boolean // Whether to authorize or deauthorize the voted account
 )
 
 @ConfiguredJsonCodec
 final case class Tally(
     authorize: Boolean, // Whether the vote is about authorizing or kicking someone
-    votes: Int // Number of votes until now wanting to pass the proposal
+    votes: Int          // Number of votes until now wanting to pass the proposal
 )
 
 /**
@@ -36,11 +35,11 @@ final case class Tally(
 @ConfiguredJsonCodec
 final case class Snapshot(
     config: MiningConfig,
-    number: N, // Block number where the snapshot was created
-    hash: ByteVector, // Block hash where the snapshot was created
-    miners: Set[Address], // Set of authorized miners at this moment
-    recents: Map[N, Address] = Map.empty, // Set of recent miners for spam protections
-    votes: List[Vote] = Nil, // List of votes cast in chronological order
+    number: N,                             // Block number where the snapshot was created
+    hash: ByteVector,                      // Block hash where the snapshot was created
+    miners: Set[Address],                  // Set of authorized miners at this moment
+    recents: Map[N, Address] = Map.empty,  // Set of recent miners for spam protections
+    votes: List[Vote] = Nil,               // List of votes cast in chronological order
     tally: Map[Address, Tally] = Map.empty // Current vote tally to avoid recalculating
 ) {
 
@@ -175,36 +174,39 @@ object Snapshot {
     }
 
   /** create a new snapshot by applying a given header */
-  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader, chainId: ChainId)(implicit F: Sync[F]): F[Snapshot] = {
-    val number = header.number
-    val extra  = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value
-    Clique.ecrecover[F](header, chainId).map {
-      case None                                              => throw new Exception("recover none from signature")
-      case Some(miner) if !snap.miners.contains(miner)       => throw new Exception("unauthorized miner")
-      case Some(miner) if snap.recents.exists(_._2 == miner) => throw new Exception("miner has mined recently")
-      case Some(miner)                                       =>
-        // Tally up the new vote from the miner
-        val authorize = extra.proposal.exists(_.auth == true)
-        val address   = extra.proposal.map(_.address).getOrElse(Address.empty)
-        val casted = snap.cast(miner, address, authorize)
+  private def applyHeader[F[_]](snap: Snapshot, header: BlockHeader, chainId: ChainId)(implicit F: Sync[F]): F[Snapshot] =
+    for {
+      extra    <- F.fromEither(header.extraAs[CliqueExtra])
+      minerOpt <- Clique.ecrecover[F](header, chainId)
+      snapshot <- minerOpt match {
+        case None                                              => F.raiseError[Snapshot](new Exception("recover none from signature"))
+        case Some(miner) if !snap.miners.contains(miner)       => F.raiseError[Snapshot](new Exception("unauthorized miner"))
+        case Some(miner) if snap.recents.exists(_._2 == miner) => F.raiseError[Snapshot](new Exception("miner has mined recently"))
+        case Some(miner)                                       =>
+          // Tally up the new vote from the miner
+          val authorize = extra.proposal.exists(_.auth == true)
+          val address   = extra.proposal.map(_.address).getOrElse(Address.empty)
+          val casted    = snap.cast(miner, address, authorize)
 
-        // If the vote passed, update the list of miners
-        val result = casted.tally.get(address) match {
-          case Some(t) if t.votes > snap.miners.size / 2 && t.authorize =>
-            casted.authorized(address)
+          // If the vote passed, update the list of miners
+          val result = casted.tally.get(address) match {
+            case Some(t) if t.votes > snap.miners.size / 2 && t.authorize =>
+              casted.authorized(address)
 
-          case Some(t) if t.votes > snap.miners.size / 2 =>
-            casted.deauthorized(address, number)
+            case Some(t) if t.votes > snap.miners.size / 2 =>
+              casted.deauthorized(address, header.number)
 
-          case _ =>
-            casted
-        }
+            case _ =>
+              casted
+          }
 
-        result.copy(
-          number = snap.number + 1,
-          hash = header.hash,
-          recents = result.recents + (number -> miner)
-        )
-    }
-  }
+          F.pure(
+            result.copy(
+              number = snap.number + 1,
+              hash = header.hash,
+              recents = result.recents + (header.number -> miner)
+            )
+          )
+      }
+    } yield snapshot
 }

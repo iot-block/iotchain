@@ -3,7 +3,7 @@ package jbok.core.models
 import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
 import jbok.crypto._
-import jbok.crypto.authds.mpt.MerklePatriciaTrie
+import jbok.persistent.mpt.MerklePatriciaTrie
 import scodec.bits.ByteVector
 
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}

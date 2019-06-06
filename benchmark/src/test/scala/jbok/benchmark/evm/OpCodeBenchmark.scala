@@ -29,8 +29,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = ADD.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    ADD.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -39,8 +39,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(UInt256(hex"802431afcbce1fc194c9eaa417b2fb"))
       .push(UInt256(hex"a1f5aac137876480252e5dcac62c35"))
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = ADD.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    ADD.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -49,8 +49,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SUB.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SUB.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -59,8 +59,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = MUL.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    MUL.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -69,8 +69,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(c)
       .push(a)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = DIV.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    DIV.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -79,8 +79,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(c)
       .push(a)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SDIV.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SDIV.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -89,8 +89,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = MOD.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    MOD.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -99,8 +99,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SMOD.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SMOD.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -109,8 +109,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = EXP.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    EXP.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -119,8 +119,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SIGNEXTEND.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SIGNEXTEND.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -129,8 +129,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = LT.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    LT.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -139,8 +139,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SLT.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SLT.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -149,8 +149,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = GT.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    GT.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -159,8 +159,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SGT.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SGT.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -169,8 +169,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = EQ.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    EQ.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -179,8 +179,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = AND.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    AND.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -189,8 +189,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = OR.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    OR.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -199,8 +199,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = XOR.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    XOR.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -209,8 +209,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(b)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = BYTE.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    BYTE.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -220,8 +220,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .push(c)
       .push(b)
       .push(a)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = ADDMOD.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    ADDMOD.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -231,8 +231,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .push(c)
       .push(b)
       .push(a)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = MULMOD.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    MULMOD.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -241,8 +241,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(d)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SHL.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SHL.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -251,8 +251,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(d)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SHR.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SHR.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -261,8 +261,8 @@ class OpCodeBenchmark extends JbokBenchmark {
       .empty()
       .push(a)
       .push(d)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = SAR.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    SAR.execute(stateIn).unsafeRunSync()
   }
 
   @Benchmark
@@ -270,8 +270,8 @@ class OpCodeBenchmark extends JbokBenchmark {
     val stack = Stack
       .empty()
       .push(a)
-    val stateIn  = state.copy(stack = stack)
-    val stateOut = ISZERO.execute(stateIn).unsafeRunSync()
+    val stateIn = state.copy(stack = stack)
+    ISZERO.execute(stateIn).unsafeRunSync()
   }
 
 }

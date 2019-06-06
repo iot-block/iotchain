@@ -40,7 +40,7 @@ final class TxGen[F[_]] private (accounts: Ref[F, Map[Address, SimAccount]], rea
 
   val minBalance: N = N(100000)
 
-  def genValue(account: SimAccount): N = N(25000)
+  def genValue: N = N(25000)
 
   def getValidSenderReceiver: F[(SimAccount, SimAccount)] =
     for {
@@ -56,7 +56,7 @@ final class TxGen[F[_]] private (accounts: Ref[F, Map[Address, SimAccount]], rea
     } yield result
 
   def genExternalTx(sender: SimAccount, receiver: SimAccount): F[SignedTransaction] = {
-    val value = genValue(sender)
+    val value = genValue
     val tx = Transaction(
       sender.nonce,
       gasPrice,

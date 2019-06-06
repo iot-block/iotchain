@@ -16,8 +16,8 @@ class KVStoreBenchmark extends JbokBenchmark {
 
   var i = 0
 
-  val keyGen   = gen.sizedByteVector(16)
-  val valueGen = gen.sizedByteVector(100)
+  val keyGen   = gen.sizedByteArray(16)
+  val valueGen = gen.sizedByteArray(100)
 
   val keys   = Gen.listOfN(size, keyGen).sample.get
   val values = Gen.listOfN(size, valueGen).sample.get
@@ -58,6 +58,6 @@ class KVStoreBenchmark extends JbokBenchmark {
   def tearDown(): Unit = {
     close.unsafeRunSync()
     dbMem = MemoryKVStore[IO].unsafeRunSync()
-    RocksKVStore.destroy[IO](dirRocks.path).unsafeToFuture()
+    RocksKVStore.destroy[IO](dirRocks.path).unsafeRunSync()
   }
 }

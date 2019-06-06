@@ -1,6 +1,7 @@
 package jbok.core.validators
 
 import cats.effect.IO
+import jbok.codec.rlp.RlpEncoded
 import jbok.common.math.N
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
@@ -23,7 +24,7 @@ class HeaderValidatorSpec extends CoreSpec {
     gasLimit = 131620495,
     gasUsed = 0,
     unixTimestamp = 1486752441,
-    extra = ByteVector.empty
+    extra = RlpEncoded.emptyList
   )
 
   val validParent = BlockHeader(
@@ -38,7 +39,7 @@ class HeaderValidatorSpec extends CoreSpec {
     gasLimit = 131749155,
     gasUsed = 0,
     unixTimestamp = 1486752440,
-    extra = ByteVector.empty
+    extra = RlpEncoded.emptyList
   )
 
   history.putBlockHeader(validParent).unsafeRunSync()

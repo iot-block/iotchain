@@ -41,7 +41,7 @@ object ABIDescription {
       outputs: List[ParameterDescription],
       stateMutability: String
   ) {
-    lazy val methodID = ByteVector(methodWithOutReturn.getBytes.kec256.take(4))
+    lazy val methodID: ByteVector = ByteVector(methodWithOutReturn.getBytes).kec256.take(4)
 
     lazy val methodWithOutReturn =
       s"$name(${inputs.map(_.parameterType.typeString).mkString(",").trim})"

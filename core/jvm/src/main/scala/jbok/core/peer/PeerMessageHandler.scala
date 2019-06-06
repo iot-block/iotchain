@@ -60,8 +60,8 @@ class PeerMessageHandler[F[_]](
 
   val produce: Stream[F, Unit] = {
     Stream(
-      blockOutbound.consume.map { case (selector, block) => selector -> Request.binary[F, NewBlock](NewBlock.name, NewBlock(block).asBytes) },
-      txOutbound.consume.map { case (selector, tx)       => selector -> Request.binary[F, SignedTransactions](SignedTransactions.name, tx.asBytes) }
+      blockOutbound.consume.map { case (selector, block) => selector -> Request.binary[F, NewBlock](NewBlock.name, NewBlock(block).encoded) },
+      txOutbound.consume.map { case (selector, tx)       => selector -> Request.binary[F, SignedTransactions](SignedTransactions.name, tx.encoded) }
     ).parJoinUnbounded
       .through(peerManager.outbound)
   }

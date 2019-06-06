@@ -6,7 +6,7 @@ import jbok.crypto._
 
 object ContractAddress {
   def getContractAddress(address: Address, nonce: UInt256): Address = {
-    val hash = (address, UInt256(nonce)).asBytes.kec256
-    Address.apply(hash)
+    val hash = (address, UInt256(nonce)).encoded.bytes.kec256
+    Address(hash)
   }
 }

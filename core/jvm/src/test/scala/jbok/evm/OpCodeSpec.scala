@@ -62,7 +62,7 @@ trait OpCodeSpec extends CoreSpec {
         fail("Unregistered opcodes: " + untested.mkString(", "))
     }
 
-  def verifyGas(expectedGas: N, stateIn: ProgramState[IO], stateOut: ProgramState[IO], allowOOG: Boolean = true): Unit =
+  def verifyGas(expectedGas: N, stateIn: ProgramState[IO], stateOut: ProgramState[IO], allowOOG: Boolean = true) =
     if (stateOut.error.contains(OutOfGas) && allowOOG)
       stateIn.gas < expectedGas shouldBe true
     else if (stateOut.error.contains(OutOfGas) && !allowOOG)

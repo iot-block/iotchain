@@ -2,8 +2,8 @@ package jbok.core.messages
 
 import io.circe.generic.extras.ConfiguredJsonCodec
 import scodec.bits.ByteVector
-import jbok.codec.rlp.implicits._
 import jbok.codec.json.implicits._
+import jbok.codec.rlp.RlpCodec
 import jbok.common.math.N
 import jbok.core.models.ChainId
 

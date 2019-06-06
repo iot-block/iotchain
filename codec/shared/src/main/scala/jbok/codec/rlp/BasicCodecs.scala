@@ -9,6 +9,8 @@ import spire.math.SafeLong
 
 import scala.concurrent.duration.Duration
 
+// custom `scodec.Codec`
+// mainly for unsigned numbers
 private[rlp] trait BasicCodecs {
   val uSafeLong: Codec[SafeLong] = codecs.bytes.xmap[SafeLong](
     bytes => if (bytes.isEmpty) SafeLong.zero else SafeLong(BigInt(1, bytes.toArray)),
@@ -71,18 +73,6 @@ private[rlp] trait BasicCodecs {
 
   val uri: Codec[URI] =
     codecs.utf8.xmap(str => new URI(str), _.toString)
-
-  val arrayByte: Codec[Array[Byte]] =
-    codecs.bytes.xmap(_.toArray, ByteVector.apply)
-
-  def nop[A](implicit codec: Codec[A]): RlpCodec[A] =
-    RlpCodec[A](PrefixType.NoPrefix, codec)
-
-  def rlp[A](implicit codec: Codec[A]): RlpCodec[A] =
-    RlpCodec[A](PrefixType.ItemLenPrefix, codec)
-
-  def rlplist[A](implicit codec: Codec[A]): RlpCodec[A] =
-    RlpCodec[A](PrefixType.ListLenPrefix, codec)
 }
 
 object BasicCodecs extends BasicCodecs

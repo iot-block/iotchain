@@ -12,8 +12,8 @@ case class CreateOpFixture(evmConfig: EvmConfig) extends CoreSpec {
 
   val creatorAddr        = Address(0xcafe)
   val endowment: UInt256 = 123
-  val store            = MemoryKVStore[IO].unsafeRunSync()
-  val history       = History(store)
+  val store              = MemoryKVStore[IO].unsafeRunSync()
+  val history            = History(store, chainId)
   val initWorld =
     history
       .getWorldState()

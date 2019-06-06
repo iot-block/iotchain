@@ -1,7 +1,6 @@
-package jbok.crypto.authds.mpt
+package jbok.persistent.mpt
 
 import cats.effect.{IO, Resource}
-import jbok.codec.rlp.implicits._
 import jbok.common.{CommonSpec, FileUtil}
 import jbok.persistent._
 import jbok.persistent.rocksdb.RocksKVStore

@@ -2,7 +2,6 @@ package jbok.core.consensus.poa.clique
 
 import cats.effect.IO
 import cats.effect.concurrent.Ref
-import jbok.codec.rlp.RlpCodec
 import jbok.core.CoreSpec
 import jbok.core.ledger.History
 import jbok.core.models.{Address, BlockHeader, ChainId}
@@ -23,10 +22,10 @@ final case class Test(miners: List[String], votes: List[TestVote], results: List
 
 trait SnapshotFixture extends CoreSpec {
   def mkHistory(miners: List[Address]) = {
-    val config           = genesis.copy(miners = miners)
-    implicit val chainId = config.chainId
-    val store               = MemoryKVStore[IO].unsafeRunSync()
-    val history          = History(store)
+    val config  = genesis.copy(miners = miners)
+    val chainId = config.chainId
+    val store   = MemoryKVStore[IO].unsafeRunSync()
+    val history = History(store, chainId)
     history.initGenesis(config).unsafeRunSync()
     history
   }
@@ -47,10 +46,10 @@ trait SnapshotFixture extends CoreSpec {
     val sig = Signature[ECDSA]
       .sign[IO](Clique.sigHash[IO](header).unsafeRunSync().toArray, accounts(miner), chainId.value.toBigInt)
       .unsafeRunSync()
-    val extra      = RlpCodec.decode[CliqueExtra](header.extra.bits).require.value.copy(signature = sig)
-    val extraBytes = extra.asBytes
-    val signed    = header.copy(extra = extraBytes)
-    val recovered = Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get
+    val extra      = IO.fromEither(header.extraAs[CliqueExtra]).unsafeRunSync().copy(signature = sig)
+    val extraBytes = extra.encoded
+    val signed     = header.copy(extra = extraBytes)
+    val recovered  = Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get
     require(recovered == Address(accounts(miner)), s"recovered: ${recovered}, miner: ${accounts(miner)}")
     signed
   }
@@ -59,10 +58,10 @@ trait SnapshotFixture extends CoreSpec {
 class SnapshotSpec extends CoreSpec {
   def check(test: Test) = new SnapshotFixture {
     val miningConfig  = config.mining.copy(epoch = test.epoch)
-    val miners       = test.miners.map(miner => address(miner))
+    val miners        = test.miners.map(miner => address(miner))
     val genesisConfig = genesis.copy(miners = miners)
-    val db = MemoryKVStore[IO].unsafeRunSync()
-    val history       = History(db)
+    val db            = MemoryKVStore[IO].unsafeRunSync()
+    val history       = History(db, chainId)
 
     history.initGenesis(genesisConfig).unsafeRunSync()
 
@@ -77,22 +76,22 @@ class SnapshotSpec extends CoreSpec {
           CryptoSignature(ByteVector.fill(65)(0).toArray),
           Some(Proposal(coinbase, v.auth))
         )
-        val extraBytes = extra.asBytes
+        val extraBytes = extra.encoded
         val header = random[BlockHeader]
           .copy(
             number = number,
             unixTimestamp = time,
-            extra = extraBytes,
+            extra = extraBytes
           )
         sign(header, v.miner) // miner vote to authorize/deauthorize the beneficiary
     }
 
-    val head           = headers.last
-    val kp             = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
-    val proposal = Ref.of[IO, Option[Proposal]](None).unsafeRunSync()
-    val store = SingleColumnKVStore[IO, ByteVector, String](ColumnFamilies.Snapshot, db)
-    val clique         = new Clique[IO](miningConfig, store, history, proposal, kp)
-    val snap           = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
+    val head          = headers.last
+    val kp            = Signature[ECDSA].generateKeyPair[IO]().unsafeRunSync()
+    val proposal      = Ref.of[IO, Option[Proposal]](None).unsafeRunSync()
+    val store         = SingleColumnKVStore[IO, ByteVector, String](ColumnFamilies.Snapshot, db)
+    val clique        = new Clique[IO](miningConfig, store, history, proposal, kp)
+    val snap          = clique.applyHeaders(head.number, head.hash, headers).unsafeRunSync()
     val updatedMiners = snap.sortedMiners
     import Snapshot.addressOrd
     val expectedMiners = test.results.map(address).sorted
@@ -102,14 +101,14 @@ class SnapshotSpec extends CoreSpec {
 
   "Snapshot" should {
     "sigHash and ecrecover" in new SnapshotFixture {
-      val miner   = address("A")
+      val miner    = address("A")
       val coinbase = address("B")
       val extra = CliqueExtra(
         Nil,
         CryptoSignature(ByteVector.fill(65)(0).toArray),
         Some(Proposal(coinbase, true))
       )
-      val extraBytes = extra.asBytes
+      val extraBytes = extra.encoded
       val header     = random[BlockHeader].copy(extra = extraBytes)
       val signed     = sign(header, "A")(genesis.chainId)
       Clique.ecrecover[IO](signed, genesis.chainId).unsafeRunSync().get shouldBe miner
@@ -392,7 +391,7 @@ class SnapshotSpec extends CoreSpec {
           TestVote("B", "A", false), // Deauthorize A, 3 votes needed
           TestVote("C", "A", false), // Deauthorize A, 3 votes needed
           TestVote("D", "A", false), // Deauthorize A, 3 votes needed
-          TestVote("B", "F", true) // Finish authorizing F, 3/3 votes needed
+          TestVote("B", "F", true)   // Finish authorizing F, 3/3 votes needed
         ),
         "B" :: "C" :: "D" :: "E" :: "F" :: Nil
       )

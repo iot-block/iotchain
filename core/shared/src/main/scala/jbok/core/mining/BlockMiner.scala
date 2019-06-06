@@ -4,7 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{ConcurrentEffect, Timer}
 import cats.implicits._
 import fs2._
-import jbok.codec.rlp.implicits._
+import jbok.codec.rlp.RlpCodec
 import jbok.common.log.Logger
 import jbok.common.math.N
 import jbok.core.NodeStatus
@@ -14,7 +14,7 @@ import jbok.core.ledger.BlockExecutor
 import jbok.core.ledger.TypedBlock._
 import jbok.core.models.{SignedTransaction, _}
 import jbok.core.pool.TxPool
-import jbok.crypto.authds.mpt.MerklePatriciaTrie
+import jbok.persistent.mpt.MerklePatriciaTrie
 import jbok.persistent.{ColumnFamily, MemoryKVStore}
 import scodec.bits.ByteVector
 

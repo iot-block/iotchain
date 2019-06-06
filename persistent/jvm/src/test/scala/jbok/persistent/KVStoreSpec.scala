@@ -3,8 +3,8 @@ package jbok.persistent
 import cats.effect.{IO, Resource}
 import cats.implicits._
 import jbok.common.CommonSpec
-import scodec.bits.ByteVector
 import jbok.persistent.testkit._
+import scodec.bits.ByteVector
 
 class KVStoreSpec extends CommonSpec {
   val default = ColumnFamily.default
@@ -15,9 +15,9 @@ class KVStoreSpec extends CommonSpec {
   def test(name: String, resource: Resource[IO, KVStore[IO]]): Unit =
     s"KVStore ${name}" should {
       "respect column family" in withResource(resource) { store =>
-        val key = ByteVector("key".getBytes)
-        val a   = ByteVector("a".getBytes)
-        val b   = ByteVector("b".getBytes)
+        val key = "key".getBytes
+        val a   = "a".getBytes
+        val b   = "b".getBytes
         for {
           _ <- store.put(cfa, key, a)
           _ <- store.put(cfb, key, b)
@@ -28,12 +28,12 @@ class KVStoreSpec extends CommonSpec {
           _ = size shouldBe 0
 
           value <- store.get(cfa, key)
-          _ = value shouldBe Some(a)
+          _ = value.get shouldEqual a
           size <- store.size(cfa)
           _ = size shouldBe 1
 
           value <- store.get(cfb, key)
-          _ = value shouldBe Some(b)
+          _ = value.get shouldEqual b
           size <- store.size(cfb)
           _ = size shouldBe 1
         } yield ()
@@ -41,12 +41,13 @@ class KVStoreSpec extends CommonSpec {
 
       "write batch" in {
         val cf = default
-        forAll { kvs: Map[ByteVector, ByteVector] =>
+        forAll { m: Map[ByteVector, ByteVector] =>
           val p = resource.use { store =>
+            val kvs = m.toList.map { case (k, v) => k.toArray -> v.toArray }
             for {
-              _   <- store.writeBatch(cf, kvs.toList, Nil)
-              res <- store.toMap(cf)
-              _ = res shouldBe kvs
+              _   <- store.writeBatch(cf, kvs, Nil)
+              res <- store.toList(cf)
+              _ = res.map { case (k, v) => ByteVector(k) -> ByteVector(v) }.toMap shouldBe m
 
               res <- store.size(cf)
               _ = res shouldBe kvs.size
@@ -56,16 +57,18 @@ class KVStoreSpec extends CommonSpec {
         }
       }
 
-      "toMap" in {
-        forAll { (kv1: Map[ByteVector, ByteVector], kv2: Map[ByteVector, ByteVector]) =>
+      "toList" in {
+        forAll { (m1: Map[ByteVector, ByteVector], m2: Map[ByteVector, ByteVector]) =>
+          val kvs1 = m1.toList.map { case (k, v) => k.toArray -> v.toArray }
+          val kvs2 = m2.toList.map { case (k, v) => k.toArray -> v.toArray }
           val p = resource.use { store =>
             for {
-              _   <- kv1.toList.traverse(t => store.put(cfa, t._1, t._2))
-              _   <- kv2.toList.traverse(t => store.put(cfb, t._1, t._2))
-              res <- store.toMap(cfa)
-              _ = res shouldBe kv1
-              res <- store.toMap(cfb)
-              _ = res shouldBe kv2
+              _   <- kvs1.traverse(t => store.put(cfa, t._1, t._2))
+              _   <- kvs2.traverse(t => store.put(cfb, t._1, t._2))
+              res <- store.toList(cfa)
+              _ = res.map { case (k, v) => ByteVector(k) -> ByteVector(v) }.toMap shouldBe m1
+              res <- store.toList(cfb)
+              _ = res.map { case (k, v) => ByteVector(k) -> ByteVector(v) }.toMap shouldBe m2
             } yield ()
           }
           p.unsafeRunSync()

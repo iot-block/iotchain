@@ -37,27 +37,23 @@ trait History[F[_]] {
 
   def getBlockByNumber(number: N): F[Option[Block]]
 
-  def putBlockAndReceipts(block: Block, receipts: List[Receipt], totalDifficulty: N): F[Unit]
+  def putBlockAndReceipts(block: Block, receipts: List[Receipt]): F[Unit]
 
   def delBlock(hash: ByteVector): F[Unit]
 
   // accounts, storage and codes
-  def getMptNode(hash: ByteVector): F[Option[ByteVector]]
-
-  def putMptNode(hash: ByteVector, bytes: ByteVector): F[Unit]
-
   def getAccount(address: Address, blockNumber: N): F[Option[Account]]
 
   def getStorage(rootHash: ByteVector, position: N): F[ByteVector]
 
   def getCode(codeHash: ByteVector): F[Option[ByteVector]]
 
-  def putCode(hash: ByteVector, evmCode: ByteVector): F[Unit]
+  def putCode(evmCode: ByteVector): F[Unit]
 
   def getWorldState(
-                     accountStartNonce: UInt256 = UInt256.zero,
-                     stateRootHash: Option[ByteVector] = None,
-                     noEmptyAccounts: Boolean = true
+      accountStartNonce: UInt256 = UInt256.zero,
+      stateRootHash: Option[ByteVector] = None,
+      noEmptyAccounts: Boolean = true
   ): F[WorldState[F]]
 
   // helpers
@@ -81,12 +77,6 @@ trait History[F[_]] {
 }
 
 object History {
-  def apply[F[_]](store: KVStore[F])(implicit F: Sync[F], chainId: ChainId, T: Timer[F]): History[F] =
-    new HistoryImpl[F](chainId, store, Metrics.nop[F])
-
   def apply[F[_]](store: KVStore[F], chainId: ChainId)(implicit F: Sync[F], T: Timer[F]): History[F] =
     new HistoryImpl[F](chainId, store, Metrics.nop[F])
-
-  def apply[F[_]](store: KVStore[F], metrics: Metrics[F])(implicit F: Sync[F], chainId: ChainId, T: Timer[F]): History[F] =
-    new HistoryImpl[F](chainId, store, metrics)
 }

@@ -18,7 +18,7 @@ class PrecompiledContractsSpec extends CoreSpec {
     val env    = ExecEnv(recipient, origin, origin, 1000, inputData, 0, Program(ByteVector.empty), null, 0)
 
     val store   = MemoryKVStore[IO].unsafeRunSync()
-    val history = History(store)
+    val history = History(store, chainId)
     val world = history
       .getWorldState()
       .unsafeRunSync()

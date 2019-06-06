@@ -2,7 +2,7 @@ package jbok.network.tcp
 
 import cats.effect.{Concurrent, ContextShift, IO, Sync}
 import cats.implicits._
-import fs2.Chunk.ByteVectorChunk
+import fs2.Chunk
 import fs2.io.tcp.Socket
 import javax.net.ssl.SSLContext
 import jbok.common.thread.ThreadUtil
@@ -25,10 +25,8 @@ object implicits {
         case None        => F.raiseError(new Exception(s"socket already closed"))
       }
 
-    def writeMessage(message: Message[F])(implicit F: Sync[F]): F[Unit] =
-      Message.encodeBytes(message).flatMap { bytes =>
-        socket.write(ByteVectorChunk(bytes), timeout)
-      }
+    def writeMessage(message: Message[F]): F[Unit] =
+      socket.write(Chunk.array(Message.encodeBytes(message).byteArray), timeout)
 
     def toTLSSocket(sslOpt: Option[SSLContext], client: Boolean)(implicit F: Concurrent[F], cs: ContextShift[F]): F[Socket[F]] =
       sslOpt match {

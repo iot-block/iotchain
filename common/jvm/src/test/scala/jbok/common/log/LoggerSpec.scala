@@ -15,11 +15,10 @@ class LoggerSpec extends CommonSpec {
     "set file sink" in {
       val p = FileUtil[IO].temporaryDir().use { file =>
         for {
-          _ <- Logger.setRootLevel[IO](Level.Info)
-          _ <- Logger.setRootHandlers[IO](Logger.consoleHandler(Some(Level.Info)), LoggerPlatform.fileHandler(file.path, Some(Level.Info)))
-          _ <- Logger[IO].i("should be written into file")
-          _ <- Logger[IO].t("should not be written into file")
-          _ = println(file.list.toList)
+          _    <- Logger.setRootLevel[IO](Level.Info)
+          _    <- Logger.setRootHandlers[IO](Logger.consoleHandler(Some(Level.Info)), LoggerPlatform.fileHandler(file.path, Some(Level.Info)))
+          _    <- Logger[IO].i("should be written into file")
+          _    <- Logger[IO].t("should not be written into file")
           text <- FileUtil[IO].read(file.path.resolve("jbok.log"))
           _ = text.contains("should be written into file") shouldBe true
           _ = text.contains("should not be written into file") shouldBe false

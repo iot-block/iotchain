@@ -1,5 +1,6 @@
 package jbok.core.api
 
+import jbok.codec.rlp.RlpEncoded
 import jbok.core.models.{Receipt, SignedTransaction}
 import jbok.network.rpc.PathName
 import scodec.bits.ByteVector
@@ -18,5 +19,5 @@ trait TransactionAPI[F[_]] {
 
   def sendTx(stx: SignedTransaction): F[ByteVector]
 
-  def sendRawTx(data: ByteVector): F[ByteVector]
+  def sendRawTx(data: RlpEncoded): F[ByteVector]
 }

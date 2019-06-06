@@ -10,7 +10,7 @@ import jbok.core.ledger.History
 import jbok.core.models.{Account, Address, UInt256}
 import jbok.core.store.ColumnFamilies
 import jbok.crypto._
-import jbok.crypto.authds.mpt.MerklePatriciaTrie
+import jbok.persistent.mpt.MerklePatriciaTrie
 import jbok.persistent._
 import scodec.bits._
 import scodec.bits.ByteVector
@@ -133,8 +133,8 @@ final case class WorldState[F[_]](
     for {
       creatorAccount <- getAccount(creatorAddr)
     } yield {
-      val hash = (creatorAddr, creatorAccount.nonce - 1).asBytes.kec256
-      Address.apply(hash)
+      val hash = (creatorAddr, creatorAccount.nonce - 1).encoded.bytes.kec256
+      Address(hash)
     }
 
   def createContractAddressWithSalt(creatorAddr: Address, salt: ByteVector, initCode: ByteVector): F[Address] =
@@ -188,11 +188,10 @@ final case class WorldState[F[_]](
       case (updatedWorldState, (address, code)) =>
         for {
           account <- updatedWorldState.getAccount(address)
-          codeHash = code.kec256
-          _ <- updatedWorldState.history.putCode(codeHash, code)
+          _       <- updatedWorldState.history.putCode(code)
         } yield {
           updatedWorldState.copy(
-            accountProxy = updatedWorldState.accountProxy + (address -> account.copy(codeHash = codeHash)),
+            accountProxy = updatedWorldState.accountProxy + (address -> account.copy(codeHash = code.kec256)),
             contractCodes = Map.empty
           )
         }

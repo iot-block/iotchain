@@ -22,29 +22,29 @@ class BN256Benchmark extends JbokBenchmark {
   val g2 = TwistPoint.twistGen * BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495616")
 
   @Benchmark
-  def Fp12Square(): Unit = fp12.square()
+  def Fp12Square() = fp12.square()
 
   @Benchmark
-  def Fp12SquareByMul(): Unit = fp12 * fp12
+  def Fp12SquareByMul() = fp12 * fp12
 
   @Benchmark
-  def Fp2Add(): Unit = fp2 + fp2
+  def Fp2Add() = fp2 + fp2
 
   @Benchmark
-  def Fp2AddByMul(): Unit = fp2 * 2
+  def Fp2AddByMul() = fp2 * 2
 
   @Benchmark
-  def Fp2Square(): Unit = fp2.square()
+  def Fp2Square() = fp2.square()
 
   @Benchmark
-  def Fp2SquareByMul(): Unit = fp2 * fp2
+  def Fp2SquareByMul() = fp2 * fp2
 
   @Benchmark
-  def G1AddG1(): Unit = g1 + g1
+  def G1AddG1() = g1 + g1
 
   @Benchmark
-  def G1MulBigInt(): Unit = g1 * BigInt("123456789")
+  def G1MulBigInt() = g1 * BigInt("123456789")
 
   @Benchmark
-  def pair(): Unit = BN256.pair(g1, g2)
+  def pair() = BN256.pair(g1, g2)
 }

@@ -1,8 +1,8 @@
 package jbok.core.models
 
-import cats.effect.Sync
 import io.circe.generic.extras.ConfiguredJsonCodec
 import jbok.codec.json.implicits._
+import jbok.codec.rlp.{RlpCodec, RlpEncoded}
 import jbok.codec.rlp.implicits._
 import jbok.common.math.N
 import jbok.crypto._
@@ -25,12 +25,12 @@ final case class BlockHeader(
     gasLimit: N,
     gasUsed: N,
     unixTimestamp: Long,
-    extra: ByteVector
+    extra: RlpEncoded
 ) {
-  lazy val bytes: ByteVector = this.asBytes
+  lazy val bytes: RlpEncoded = this.encoded
 
-  lazy val hash: ByteVector = bytes.kec256
+  lazy val hash: ByteVector = bytes.bytes.kec256
 
-  def extraAs[F[_], A](implicit F: Sync[F], C: RlpCodec[A]): F[A] =
-    F.delay(C.decode(extra.bits).require.value)
+  def extraAs[A: RlpCodec]: Either[Throwable, A] =
+    extra.decoded[A]
 }

@@ -2,6 +2,7 @@ package jbok.core.validators
 
 import cats.effect.IO
 import cats.implicits._
+import jbok.codec.rlp.RlpEncoded
 import jbok.common.math.N
 import jbok.core.CoreSpec
 import jbok.core.models._
@@ -42,7 +43,7 @@ class TxValidatorSpec extends CoreSpec {
       gasLimit = 4699996,
       gasUsed = 84000,
       unixTimestamp = 1486131165,
-      extra = hex"d5830104098650617269747986312e31332e30826c69"
+      extra = RlpEncoded.coerce(hex"d5830104098650617269747986312e31332e30826c69".bits)
     )
 
   val accumGasUsed = 0

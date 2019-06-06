@@ -11,6 +11,12 @@ trait CommonArb {
   implicit val arbBigInt: Arbitrary[BigInt] =
     Arbitrary(gen.bigInt)
 
+  implicit val arbByte: Arbitrary[Byte] =
+    Arbitrary.arbByte
+
+  implicit val arbByteArray: Arbitrary[Array[Byte]] =
+    Arbitrary(gen.byteArray)
+
   implicit val arbByteVector: Arbitrary[ByteVector] =
     Arbitrary(gen.byteVector)
 }

@@ -9,8 +9,8 @@ import scodec.bits.ByteVector
 
 class CallOpcodesSpecByzantium extends CoreSpec {
   val evmConfig  = EvmConfig.ByzantiumConfigBuilder(None)
-  val store            = MemoryKVStore[IO].unsafeRunSync()
-  val history       = History(store)
+  val store      = MemoryKVStore[IO].unsafeRunSync()
+  val history    = History(store, chainId)
   val startState = history.getWorldState(noEmptyAccounts = true).unsafeRunSync()
 
   val fxt = new CallOpFixture(evmConfig, startState)

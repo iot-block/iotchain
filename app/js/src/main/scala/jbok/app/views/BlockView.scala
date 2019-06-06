@@ -8,6 +8,7 @@ import jbok.app.components.{TabPane, Tabs}
 import jbok.core.api.HistoryTransaction
 import jbok.core.models._
 import org.scalajs.dom._
+import scodec.bits.ByteVector
 
 import scala.scalajs.js.Date
 
@@ -34,9 +35,9 @@ final case class BlockView(state: AppState, block: Block) {
   val overview: Binding[Element] =
     <div>
       <table class="table-view"> {
-        val header = block.header
-        val size = block.body.transactionList.size
-        <tr>
+      val header = block.header
+      val size   = block.body.transactionList.size
+      <tr>
           <th>Height:</th>
           <td>{header.number.toString}</td>
         </tr>
@@ -74,8 +75,9 @@ final case class BlockView(state: AppState, block: Block) {
         </tr>
         <tr>
           <th>Extra Data:</th>
-          <td>{header.extra.toHex}</td>
-        </tr>}
+          <td>{header.extra.bytes.toHex}</td>
+        </tr>
+    }
       </table>
     </div>
 

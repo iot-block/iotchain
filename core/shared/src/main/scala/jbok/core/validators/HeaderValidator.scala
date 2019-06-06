@@ -2,14 +2,13 @@ package jbok.core.validators
 
 import cats.effect.Sync
 import cats.implicits._
-import jbok.codec.rlp.implicits._
 import jbok.common.ByteUtils
 import jbok.common.math.N
 import jbok.common.math.implicits._
 import jbok.core.ledger.BloomFilter
 import jbok.core.models.{Address, BlockHeader, Receipt}
 import jbok.core.validators.HeaderInvalid._
-import jbok.crypto.authds.mpt.MerklePatriciaTrie
+import jbok.persistent.mpt.MerklePatriciaTrie
 import scodec.bits.ByteVector
 
 import scala.math.BigDecimal.RoundingMode
@@ -28,8 +27,8 @@ object HeaderInvalid {
 
 object HeaderValidator {
   private val GasLimitBoundDivisor: Int = 1024
-  private val MinGasLimit: N       = 5000
-  private val MaxGasLimit: N       = N(2).pow(63) - 1
+  private val MinGasLimit: N            = 5000
+  private val MaxGasLimit: N            = N(2).pow(63) - 1
 
   def preExecValidate[F[_]: Sync](parentOpt: F[Option[BlockHeader]], header: BlockHeader): F[Unit] =
     for {
@@ -65,8 +64,7 @@ object HeaderValidator {
   ////////////////////////////////////
   ////////////////////////////////////
 
-  private[jbok] def validateStateRoot[F[_]](blockHeader: BlockHeader, stateRoot: ByteVector)(
-      implicit F: Sync[F]): F[Unit] =
+  private[jbok] def validateStateRoot[F[_]](blockHeader: BlockHeader, stateRoot: ByteVector)(implicit F: Sync[F]): F[Unit] =
     if (blockHeader.stateRoot == stateRoot) F.unit
     else F.raiseError(new Exception(s"expected stateRoot ${blockHeader.stateRoot}, actually ${stateRoot}"))
 
@@ -96,8 +94,7 @@ object HeaderValidator {
     * @param receipts     Receipts to use
     * @return
     */
-  private def validateLogBloom[F[_]](blockHeader: BlockHeader, receipts: List[Receipt])(
-      implicit F: Sync[F]): F[Unit] = {
+  private def validateLogBloom[F[_]](blockHeader: BlockHeader, receipts: List[Receipt])(implicit F: Sync[F]): F[Unit] = {
     val logsBloomOr =
       if (receipts.isEmpty) BloomFilter.EmptyBloomFilter
       else ByteUtils.or(receipts.map(_.logsBloomFilter): _*)

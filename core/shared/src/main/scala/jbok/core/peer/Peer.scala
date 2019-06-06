@@ -24,14 +24,14 @@ final case class Peer[F[_]](
     knownBlocks.get.map(_.contains(blockHash))
 
   def hasTxs(stxs: SignedTransactions): F[Boolean] =
-    knownTxs.get.map(_.contains(stxs.asBytes.kec256))
+    knownTxs.get.map(_.contains(stxs.encoded.bytes.kec256))
 
   def markBlock(blockHash: ByteVector, number: N): F[Unit] =
     knownBlocks.update(s => s.take(MaxKnownBlocks - 1) + blockHash) >>
       status.update(s => s.copy(bestNumber = s.bestNumber.max(number)))
 
   def markTxs(stxs: SignedTransactions): F[Unit] =
-    knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs.asBytes.kec256)
+    knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs.encoded.bytes.kec256)
 }
 
 object Peer {
