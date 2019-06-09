@@ -12,6 +12,7 @@ genesis:
 log:
   logDir: /dev/null
   level: INFO
+  maxLogs: 15
 
 history:
   frontierBlockNumber: "0"

@@ -54,27 +54,32 @@ object InputValidator {
     data.length >= 2 && data.startsWith("\"") && data.endsWith("\"")
 
   def getValidator(parameterType: ParameterType): Option[String => Boolean] =
-    parameterType.solidityType match {
-      case AddressType()            => Some(isValidAddress)
-      case UIntType(_) | IntType(_) => Some(isValidNumber)
-      case StringType()             => Some(isValidString)
-      case BoolType()               => Some(isValidBool)
-      case BytesType() =>
-        def isValidBytesNone(data: String) = isValidString(data) && isValidBytes(data.substring(1, data.length - 1))
-        Some(isValidBytesNone)
-      case BytesNType(n) =>
-        def isValidBytesN(data: String) = isValidString(data) && isValidBytes(data.substring(1, data.length - 1), Some(n))
-        Some(isValidBytesN)
-      case _ => None
+    if (parameterType.arrayList.isEmpty) {
+      parameterType.solidityType match {
+        case AddressType()            => Some(isValidAddress)
+        case UIntType(_) | IntType(_) => Some(isValidNumber)
+        case StringType()             => Some(isValidString)
+        case BoolType()               => Some(isValidBool)
+        case BytesType() =>
+          def isValidBytesNone(data: String) = isValidString(data) && isValidBytes(data.substring(1, data.length - 1))
 
-    }
+          Some(isValidBytesNone)
+        case BytesNType(n) =>
+          def isValidBytesN(data: String) = isValidString(data) && isValidBytes(data.substring(1, data.length - 1), Some(n))
+
+          Some(isValidBytesN)
+        case _ => None
+      }
+    } else { None }
 
   def getInputPrefixAndSuffix(parameterType: ParameterType): (String, String) = {
     val fix   = "\""
     val empty = ""
-    parameterType.solidityType match {
-      case AddressType() | StringType() | BytesType() | BytesNType(_) => fix   -> fix
-      case _                                                          => empty -> empty
-    }
+    if (parameterType.arrayList.isEmpty) {
+      parameterType.solidityType match {
+        case AddressType() => fix   -> fix
+        case _             => empty -> empty
+      }
+    } else { empty -> empty }
   }
 }

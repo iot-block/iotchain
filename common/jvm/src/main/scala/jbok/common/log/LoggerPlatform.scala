@@ -20,16 +20,17 @@ object LoggerPlatform {
           FileUtil[F].open(Paths.get(config.logDir), create = true, asDirectory = true) >>
             Logger.setRootHandlers(
               Logger.consoleHandler(level.some),
-              fileHandler(Paths.get(dir), level.some)
+              fileHandler(Paths.get(dir), level.some, config.maxLogs)
             )
       })
   }
 
-  def fileHandler(directory: Path, minimumLevel: Option[Level] = None): LogHandler = LogHandler(
+  def fileHandler(directory: Path, minimumLevel: Option[Level] = None, maxLogs: Int = 15): LogHandler = LogHandler(
     Logger.fileFormatter,
     FileWriter().nio
       .path(LogPath.simple("jbok.log", directory = directory))
-      .rolling(LogPath.daily(prefix = "jbok", directory = directory)),
+      .rolling(LogPath.daily(prefix = "jbok", directory = directory))
+      .maxLogs(maxLogs, checkRate = 1.seconds),
     minimumLevel.map(Logger.fromJbokLevel)
   )
 }

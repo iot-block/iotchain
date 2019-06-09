@@ -76,8 +76,9 @@ final case class CallTxView(state: AppState) {
               _.contractsABI.value.get(Address.fromHex(v))
             }
             .map(_.abi)
-          function.value = None
         }
+        function.value = None
+        paramInputs.value.clear()
       case _ =>
     }
   }
@@ -152,18 +153,19 @@ final case class CallTxView(state: AppState) {
       _       <- if (paramInputs.value.toList.forall(_.isValid)) Right(()) else Left("no valid params input.")
       _       <- if (client.nonEmpty) Right(()) else Left("no connect client.")
       abiFunc <- Either.fromOption(function.value, "error contract abi function.")
-    } yield execute(from, to, abiFunc)
+      _ = println(paramInputs.value.toList.map(_.value).mkString("[", ",", "]"))
+      data <- if (abiFunc.inputs.isEmpty) {
+        Right(abiFunc.methodID)
+      } else {
+        abiFunc.encode(paramInputs.value.toList.map(_.value).mkString("[", ",", "]")).leftMap(e => e.toString)
+      }
+    } yield execute(from, to, data)
   }
 
-  def execute(from: String, to: String, functionDescription: FunctionDescription) = {
+  def execute(from: String, to: String, data: ByteVector) = {
     val fromSubmit = Address(ByteVector.fromValidHex(from))
     val toSubmit   = Some(Address(ByteVector.fromValidHex(to)))
-    val data =
-      if (functionDescription.inputs.isEmpty) functionDescription.methodID
-      else {
-        functionDescription.encode(paramInputs.value.toList.map(_.value).mkString("[", ",", "]")).right.get
-      }
-    val callTx = CallTx(Some(fromSubmit), toSubmit, None, 1, 0, data)
+    val callTx     = CallTx(Some(fromSubmit), toSubmit, None, 1, 0, data)
     if (txType.value == "Call") {
       reset()
       val p = for {

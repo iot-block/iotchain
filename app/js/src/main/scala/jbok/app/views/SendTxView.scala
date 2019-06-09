@@ -23,21 +23,21 @@ final case class SendTxView(state: AppState) {
   val currentId                     = state.activeNode.value
   val client                        = currentId.flatMap(state.clients.value.get)
   val account: Var[Option[Account]] = Var(None)
+  val lock: Var[Boolean]            = Var(false)
   val moreOption: Var[Boolean]      = Var(false)
+  val regularGasLimit               = BigInt(21000)
 
   val fromInput       = AddressOptionInput(nodeAccounts, validator = InputValidator.isValidAddress, onchange = (address: String) => updateAccount(address))
   val toInput         = Input("To", "address", validator = InputValidator.isValidAddress)
   val valueInput      = Input("Value", "0", defaultValue = "0", validator = isValidValue)
+  val gasLimitInput   = Input("GasLimit", "21000", defaultValue = regularGasLimit.toString, validator = InputValidator.isValidNumber)
   val dataInput       = Input("Data", "0x...", validator = InputValidator.isValidData, `type` = "textarea")
   val passphraseInput = Input("Passphrase", `type` = "password")
 
   val statusMessage: Var[Option[String]] = Var(None)
 
-  val regularGasLimit = N(21000)
-  val callGasLimit    = N(4000000)
-
   private def isValidValue(value: String) =
-    InputValidator.isValidNumber(value) && account.value.forall(N(value) <= _.balance.toN)
+    InputValidator.isValidNumber(value) && account.value.forall(account => N(value) <= account.balance.toN)
 
   private def updateAccount(address: String) = {
     val p = for {
@@ -59,17 +59,20 @@ final case class SendTxView(state: AppState) {
   def checkAndGenerateInput() = {
     statusMessage.value = None
     for {
-      from  <- if (fromInput.isValid) Right(fromInput.value) else Left("not valid from address.")
-      to    <- if (toInput.isValid) Right(toInput.value) else Left("not valid to address.")
-      value <- if (valueInput.isValid) Right(valueInput.value) else Left("not valid send value.")
-      extra <- if (!moreOption.value || (moreOption.value && dataInput.value == "")) Right(regularGasLimit -> None)
-      else if (moreOption.value && dataInput.isValid) Right(callGasLimit -> Some(dataInput.value))
+      _        <- if (!lock.value) Right(()) else Left("please wait for last tx.")
+      from     <- if (fromInput.isValid) Right(fromInput.value) else Left("not valid from address.")
+      to       <- if (toInput.isValid) Right(toInput.value) else Left("not valid to address.")
+      value    <- if (valueInput.isValid) Right(valueInput.value) else Left("not valid send value.")
+      gasLimit <- if (gasLimitInput.isValid) Right(gasLimitInput.value) else Left("not valid gas limit.")
+      data <- if (!moreOption.value || (moreOption.value && dataInput.value == "")) Right(None)
+      else if (moreOption.value && dataInput.isValid) Right(Some(dataInput.value))
       else Left("not valid data.")
       _ <- if (client.nonEmpty) Right(()) else Left("no connect client.")
-    } yield sendTx(from, to, value, extra._1, extra._2, passphraseInput.value)
+    } yield sendTx(from, to, value, N(gasLimit), data, passphraseInput.value)
   }
 
   def sendTx(from: String, to: String, value: String, gasLimit: N, data: Option[String], password: String): Unit = {
+    lock.value = true
     statusMessage.value = Some("sending")
     val fromSubmit     = Address(ByteVector.fromValidHex(from))
     val toSubmit       = Some(Address(ByteVector.fromValidHex(to)))
@@ -84,15 +87,19 @@ final case class SendTxView(state: AppState) {
         stxInPool    <- client.transaction.getPendingTx(hash)
         stxInHistory <- client.transaction.getTx(hash)
         stx = stxInPool.fold(stxInHistory)(Some(_))
-        _ = stx.fold(
+        _ = stx.fold {
+          lock.value = false
           statusMessage.value = Some("send failed.")
-        ) { tx =>
+        } { tx =>
           state.addStx(state.activeNode.value.getOrElse(""), tx)
+          lock.value = false
           statusMessage.value = Some("send success.")
         }
       } yield ()
 
-      p.timeout(state.config.value.clientTimeout).handleErrorWith(e => IO.delay(statusMessage.value = Some(s"send failed: ${e}"))).unsafeToFuture()
+      p.timeout(state.config.value.clientTimeout)
+        .handleErrorWith(e => IO.delay(lock.value = false) >> IO.delay(statusMessage.value = Some(s"send failed: ${e}")))
+        .unsafeToFuture()
     }
   }
 
@@ -128,6 +135,13 @@ final case class SendTxView(state: AppState) {
           </b>
         </label>
         {valueInput.render.bind}
+      </div>
+
+      <div>
+        <label for="GasLimit">
+          <b>Gas Limit</b>
+          {gasLimitInput.render.bind}
+        </label>
       </div>
 
       <button onclick={onClickMoreOption}>show more option</button>

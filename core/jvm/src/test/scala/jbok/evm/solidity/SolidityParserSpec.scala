@@ -1,10 +1,13 @@
 package jbok.evm.solidity
 
+import jbok.common.CommonSpec
 import scodec.bits._
 import io.circe.syntax._
-import jbok.core.CoreSpec
+import jbok.codec.json.implicits._
+import jbok.evm.solidity.Ast.ModifierList
+import jbok.evm.solidity.Ast.ModifierList.{Invocation, Public, View}
 
-class SolidityParserSpec extends CoreSpec {
+class SolidityParserSpec extends CommonSpec {
   val code =
     """contract TokenERC20 {
       |    event LogNote(
@@ -2055,9 +2058,32 @@ class SolidityParserSpec extends CoreSpec {
       contract.get.value.toABI()
     }
 
+    "parse identifier" in {
+      val id1 = SolidityParser.parseIdentifier("public")
+      id1.isSuccess shouldBe false
+
+      val id2 = SolidityParser.parseIdentifier("public1")
+      id2.isSuccess shouldBe true
+    }
+
+    "parse modifierInvocation" in {
+      val mi1 = SolidityParser.parseModifierInvocation("public")
+      mi1.isSuccess shouldBe false
+
+      val mi2 = SolidityParser.parseModifierInvocation("public1")
+      mi2.isSuccess shouldBe true
+      mi2.get.value shouldBe Invocation("public1")
+    }
+
+    "pares modifierList" in {
+      val modifierList = SolidityParser.parseModifierList("view onlyBy public public1")
+      modifierList.isSuccess shouldBe true
+      modifierList.get.value shouldBe ModifierList(Set(Invocation("onlyBy"), Invocation("public1")), Some(Public), Some(View))
+    }
+
     "parse function" in {
       val code =
-        """function burnFrom(bytes32 _from, address _value) onlyBy public returns (bool success) {
+        """function burnFrom(bytes32 _from, address _value) view onlyBy public public1 returns (bool success) {
           |    require(balanceOf[_from] >= _value);                // Check if the targeted balance is enough
           |    require(_value <= allowance[_from][msg.sender]);    // Check allowance
           |    balanceOf[_from] -= _value;                         // Subtract from the targeted balance
@@ -2070,8 +2096,11 @@ class SolidityParserSpec extends CoreSpec {
         """.stripMargin
 
       val func = SolidityParser.parseFunc(code)
+      println(func)
       func.isSuccess shouldBe true
-      func.get.value.name shouldBe "burnFrom"
+      val function = func.get.value
+      function.name shouldBe "burnFrom"
+      function.modifiers shouldBe ModifierList(Set(Invocation("onlyBy"), Invocation("public1")), Some(Public), Some(View))
     }
 
     "parse expr" in {
@@ -2093,15 +2122,13 @@ class SolidityParserSpec extends CoreSpec {
 
       val name = erc20Methods("name")
         .decode(
-          hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c494f54206f6e20436861696e0000000000000000000000000000000000000000"
-        )
+          hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c494f54206f6e20436861696e0000000000000000000000000000000000000000")
       name.isRight shouldBe true
       name.right.get shouldBe List("IOT on Chain").asJson
 
       val symbol = erc20Methods("symbol")
         .decode(
-          hex"0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000034954430000000000000000000000000000000000000000000000000000000000"
-        )
+          hex"0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000034954430000000000000000000000000000000000000000000000000000000000")
       symbol.isRight shouldBe true
       symbol.right.get shouldBe List("ITC").asJson
 
@@ -2160,17 +2187,19 @@ class SolidityParserSpec extends CoreSpec {
       setValue.isRight shouldBe true
       setValue.right.get shouldBe hex"0xec86cfad0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000046b6579310000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000203132333435363738393031323334353637383930313233343536373839303838"
 
+      val getValueEncode = vaccineMethods("getValue").encode("[\"key1\"]")
+      getValueEncode.isRight shouldBe true
+      getValueEncode.right.get shouldBe hex"0x960384a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000046b65793100000000000000000000000000000000000000000000000000000000"
+
       val getValue = vaccineMethods("getValue").decode(
-        hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c494f54206f6e20436861696e0000000000000000000000000000000000000000"
-      )
+        hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000c494f54206f6e20436861696e0000000000000000000000000000000000000000")
       getValue.isRight shouldBe true
       getValue.right.get shouldBe List("IOT on Chain").asJson
 
       val getValue2 = vaccineMethods("getValue").decode(
-        hex"0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000203132333435363738393031323334353637383930313233343536373839303838"
-      )
+        hex"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000676616c7565310000000000000000000000000000000000000000000000000000")
       getValue2.isRight shouldBe true
-      getValue2.right.get shouldBe List("12345678901234567890123456789088").asJson
+      getValue2.right.get shouldBe List("value1").asJson
 
       val batchSetValues = vaccineMethods("batchSetValues").encode("[[\"key2\", \"key3\"], [\"value2\", \"value3\"]]")
       batchSetValues.isRight shouldBe true
@@ -2179,6 +2208,11 @@ class SolidityParserSpec extends CoreSpec {
       val batchGetValues = vaccineMethods("batchGetValues").encode("[[\"key1\", \"key2\", \"key3\"]]")
       batchGetValues.isRight shouldBe true
       batchGetValues.right.get shouldBe hex"0xbd7166a800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000046b6579310000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000046b6579320000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000046b65793300000000000000000000000000000000000000000000000000000000"
+
+      val batchGetValuesDecode = vaccineMethods("batchGetValues").decode(
+        hex"0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000000676616c7565310000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000676616c7565320000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000676616c7565330000000000000000000000000000000000000000000000000000")
+      batchGetValuesDecode.isRight shouldBe true
+      batchGetValuesDecode.right.get shouldBe List(List("value1", "value2", "value3")).asJson
     }
 
     "parse EOS contract" in {
@@ -2214,6 +2248,188 @@ class SolidityParserSpec extends CoreSpec {
         """.stripMargin)
 
       parseResult.isSuccess shouldBe false
+    }
+
+    "parse vaccine code" in {
+      val parseResult = SolidityParser.parseSource("""pragma solidity >=0.4.0 <0.6.0;
+          |pragma experimental ABIEncoderV2;
+          |
+          |contract Vaccine {
+          |    address public minter;
+          |
+          |    mapping (string => string) private values;
+          |
+          |    function Vaccine() public {
+          |        minter = msg.sender;
+          |    }
+          |
+          |    function setValue(string memory key, string memory newValue) public {
+          |        // require(msg.sender == minter,"没有权限");
+          |        values[key] = newValue;
+          |    }
+          |
+          |    function batchSetValues(string[] memory keys,string[] memory newValues) public {
+          |        // require(msg.sender == minter,"没有权限");
+          |        // require(keys.length == newValues.length,"参数不匹配");
+          |        for (uint i = 0;i<keys.length;i++) {
+          |            values[keys[i]] = newValues[i];
+          |        }
+          |    }
+          |
+          |    function getValue(string memory key) public view returns (string memory){
+          |        // require(msg.sender == minter,"没有权限");
+          |        return values[key];
+          |    }
+          |
+          |    function batchGetValues(string[] memory keys) public view returns (string[] memory){
+          |        // require(msg.sender == minter,"没有权限");
+          |        string[] memory list = new string[](keys.length);
+          |        for (uint i = 0;i<keys.length;i++) {
+          |            list[i] = values[keys[i]];
+          |        }
+          |        return list;
+          |    }
+          |}
+        """.stripMargin)
+
+      parseResult.isSuccess shouldBe true
+      println(parseResult.get.value.ABI)
+    }
+
+    "parse itc mapping code" in {
+      val parseResult = SolidityParser.parseSource("""pragma solidity >=0.4.0 <0.5.0;
+          |
+          |
+          |/**
+          | * @title SafeMath
+          | * @dev Unsigned math operations with safety checks that revert on error.
+          | * https://github.com/OpenZeppelin/openzeppelin-solidity/blob/master/contracts/math/SafeMath.sol
+          | */
+          |library SafeMath {
+          |
+          |    function div(uint256 a, uint256 b) internal pure returns (uint256) {
+          |
+          |        require(b > 0);
+          |        uint256 c = a / b;
+          |        return c;
+          |    }
+          |}
+          |
+          |/**
+          | * @title Token
+          | * @dev API interface for interacting with the ITC Token contract
+          | */
+          |interface Token {
+          |
+          |  function transfer(address _to, uint256 _value) external;
+          |
+          |  function balanceOf(address _owner) external returns (uint256 balance);
+          |}
+          |
+          |
+          |/**
+          | * @title Ownable
+          | * @dev The Ownable contract has an owner address, and provides basic authorization control
+          | * https://github.com/OpenZeppelin/openzeppelin-solidity/blob/master/contracts/ownership/Ownable.sol
+          | */
+          |contract Ownable {
+          |     address public _owner;
+          |
+          |    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+          |
+          |    constructor () internal {
+          |        _owner = msg.sender;
+          |        emit OwnershipTransferred(address(0), _owner);
+          |    }
+          |
+          |    modifier onlyOwner() {
+          |        require(isOwner());
+          |        _;
+          |    }
+          |
+          |    function isOwner() public view returns (bool) {
+          |        return msg.sender == _owner;
+          |    }
+          |
+          |    function transferOwnership(address newOwner) public onlyOwner {
+          |        _transferOwnership(newOwner);
+          |    }
+          |
+          |    function _transferOwnership(address newOwner) internal {
+          |        require(newOwner != address(0));
+          |        emit OwnershipTransferred(_owner, newOwner);
+          |        _owner = newOwner;
+          |    }
+          |}
+          |
+          |contract ITCMapping is Ownable{
+          |
+          |    using SafeMath for uint256;
+          |
+          |    //ITC合约
+          |    Token public token;
+          |
+          |    //ITC和ITG发放比例
+          |    uint ratio = 1;
+          |
+          |    constructor(address tokenAddress) public{
+          |
+          |        token = Token(tokenAddress);
+          |    }
+          |
+          |    /**
+          |    * @dev 接收
+          |    */
+          |    function() payable external{
+          |    }
+          |
+          |    /**
+          |    * @dev 批量映射ITC和ITG
+          |    */
+          |    function batchTransfer(address[] memory addresses,uint256[] memory values) public payable onlyOwner{
+          |
+          |        require(addresses.length == values.length,'param error');
+          |
+          |        uint length = addresses.length;
+          |        for (uint i=0 ; i< length ; i++){
+          |
+          |            uint256 itgBalance = SafeMath.div(values[i],ratio);
+          |
+          |            require(token.balanceOf(address(this))>values[i],'Insufficient ITC balance');
+          |            require(address(this).balance>itgBalance,'Insufficient ITG balance');
+          |
+          |            //发放ITC
+          |            token.transfer(addresses[i],values[i]);
+          |
+          |            //发放ITG
+          |            addresses[i].transfer(itgBalance);
+          |        }
+          |    }
+          |
+          |    /**
+          |    * @dev 发送剩余ITC至合约拥有人
+          |    */
+          |    function transferITCToOwner() public onlyOwner{
+          |
+          |        address contractAddress = address(this);
+          |        uint256 balance = token.balanceOf(contractAddress);
+          |        token.transfer(msg.sender,balance);
+          |    }
+          |
+          |    /**
+          |    * @dev 销毁合约
+          |    */
+          |    function destruct() payable public onlyOwner {
+          |
+          |        //销毁合约前，先确保合约地址的ITC已经转移完毕
+          |        address contractAddress = address(this);
+          |        require(token.balanceOf(contractAddress) == 0,'ITC balance is not empty, please transfer ITC first');
+          |
+          |        selfdestruct(msg.sender); // 销毁合约
+          |    }
+          |}""".stripMargin)
+
+      parseResult.isSuccess shouldBe true
     }
   }
 }

@@ -13,6 +13,7 @@ genesis:
 log:
   logDir: /var/log/jbok
   level: INFO
+  maxLogs: 15
 history:
     frontierBlockNumber: '0'
     homesteadBlockNumber: '0'

@@ -60,7 +60,7 @@ final case class RegisterView(state: AppState) {
       },
       (r, i) =>
         currentId.foreach(id => {
-          state.nodes.value.get(id).foreach(_.contractsABI.value += contractAddress -> Contract(contractAddress, r.contractDefs.last.toABI().methods))
+          state.nodes.value.get(id).foreach(_.contractsABI.value += contractAddress -> Contract(contractAddress, r.ABI.last.methods))
           statusMessage.value = Some("register success.")
         })
     )

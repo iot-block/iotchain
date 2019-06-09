@@ -3,6 +3,7 @@ package jbok.evm.solidity
 import fastparse.ScalaWhitespace._
 import fastparse._
 import scala.language.postfixOps
+import jbok.evm.solidity.Ast.ModifierList.Invocation
 
 import scala.util.Try
 
@@ -12,6 +13,12 @@ import scala.util.Try
 @SuppressWarnings(Array("org.wartremover.warts.While", "org.wartremover.warts.StringPlusAny"))
 object SolidityParser {
   import Ast._
+
+  def parseIdentifier(code: String) = parse(code, identifier(_))
+
+  def parseModifierInvocation(code: String) = parse(code, modifierInvocation(_))
+
+  def parseModifierList(code: String) = parse(code, modifierList(_))
 
   def parseFunc[T](code: String) = parse(code, functionDefinition(_))
 
@@ -132,10 +139,10 @@ object SolidityParser {
       "modifier" ~ identifier ~ parameterList.? ~ block
     ).!.map(OtherDef.apply)
 
-  def modifierInvocation[_: P]: P[String] =
+  def modifierInvocation[_: P]: P[ModifierList.Invocation] =
     P(
       identifier.! ~ ("(" ~ expressionList.? ~ ")").?
-    ).map { case (name, _) => name }
+    ).map { case (name, _) => ModifierList.Invocation(name) }
 
   def functionDefinition[_: P] =
     P(
@@ -150,7 +157,7 @@ object SolidityParser {
 
   def modifierList[_: P]: P[ModifierList] =
     P(
-      (modifierInvocation.map(s => ModifierList.Invocation(s))
+      (modifierInvocation
         | stateMutability
         | ExternalKeyword.map(_ => ModifierList.External)
         | PublicKeyword.map(_ => ModifierList.Public)
@@ -672,11 +679,14 @@ object SolidityParser {
         | "typeof"
     )
 
-  def keyword[_: P] =
+  def keyword[_: P] = {
+    import fastparse.NoWhitespace._
+
     P(
       (AnonymousKeyword | BreakKeyword | ConstantKeyword | ContinueKeyword | ExternalKeyword | IndexedKeyword | InternalKeyword | PayableKeyword
         | PrivateKeyword | PublicKeyword | PureKeyword | ViewKeyword | ReturnsKeyword | reservedKeyword | elementaryTypeName) ~
         !CharPred(c => Character.isLetter(c) | Character.isDigit(c) | c == '$' | c == '_'))
+  }
 
   def AnonymousKeyword[_: P] = P("anonymous")
   def BreakKeyword[_: P]     = P("break")
@@ -695,11 +705,8 @@ object SolidityParser {
   def AddressKeyword[_: P]   = P("address")
   def FromKeyword[_: P]      = P("from")
 
-  def Identifier[_: P] = {
-    import fastparse.NoWhitespace._
-
+  def Identifier[_: P] =
     P(!keyword ~ identifierStart ~ CharsWhileIn("a-zA-Z0-9$_", 0))
-  }
 
   def identifierStart[_: P] = P(CharIn("a-zA-Z$_"))
 
