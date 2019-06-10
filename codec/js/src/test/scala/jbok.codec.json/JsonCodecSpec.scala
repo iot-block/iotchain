@@ -8,7 +8,7 @@ import io.circe.syntax._
 
 class JsonCodecSpec extends CommonSpec {
   "JsonCodec" should {
-    "codec large BigInt" in {
+    "codec large BigInt" in withIO {
       val bigInt  = "\"999999999999999989998999958000\""
       val bigInt2 = "999999999999999989998999958e3"
       for {
@@ -23,7 +23,7 @@ class JsonCodecSpec extends CommonSpec {
       } yield ()
     }
 
-    "codec large BigInt custom" in {
+    "codec large BigInt custom" in withIO {
       import jbok.codec.json.implicits._
       for {
         json <- BigInt("999999999999999989998999958000").asJson.noSpaces.pure[IO]

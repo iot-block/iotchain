@@ -7,7 +7,7 @@ import jbok.network.facade.Config
 class HttpClientSpec extends CommonSpec {
 
   "HttpClient" should {
-    "get" in {
+    "get" in withIO {
       for {
         resp <- HttpClient.get[IO]("http://www.baidu.com")
         _ = println(resp.status)
@@ -16,7 +16,7 @@ class HttpClientSpec extends CommonSpec {
       } yield ()
     }
 
-    "request" in {
+    "request" in withIO {
       val config = new Config("http://www.baidu.com") {
         override val responseType: String = "text"
       }
