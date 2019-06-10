@@ -13,6 +13,7 @@ final case class ServiceConfig(
     secure: Boolean,
     logHeaders: Boolean,
     logBody: Boolean,
+    enableMetrics: Boolean,
     host: String,
     port: Int,
     apis: List[String]

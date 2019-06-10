@@ -13,8 +13,12 @@ object MetricsMiddleware {
       _ <- PrometheusExportService.addDefaults[F](PrometheusMetrics.registry)
     } yield PrometheusExportService.service[F](PrometheusMetrics.registry)
 
-  def apply[F[_]](routes: HttpRoutes[F])(implicit F: Effect[F], clock: Clock[F]): F[HttpRoutes[F]] =
-    Prometheus[F](PrometheusMetrics.registry, "jbok_http_server").map { metricsOps =>
-      middleware.Metrics[F](metricsOps)(routes)
+  def apply[F[_]](routes: HttpRoutes[F], enableMetrics: Boolean)(implicit F: Effect[F], clock: Clock[F]): F[HttpRoutes[F]] =
+    if (enableMetrics) {
+      Prometheus[F](PrometheusMetrics.registry, "jbok_http_server").map { metricsOps =>
+        middleware.Metrics[F](metricsOps)(routes)
+      }
+    } else {
+      F.pure(routes)
     }
 }

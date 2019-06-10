@@ -99,6 +99,7 @@ service:
   secure: false
   logHeaders: true
   logBody: true
+  enableMetrics: false
   host: localhost
   port: 30315
   apis:
