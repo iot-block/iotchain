@@ -15,7 +15,7 @@ class SignatureSpec extends CommonSpec {
   "ECDSA" should {
     val ecdsa = Signature[ECDSA]
 
-    "guarantee generate keypair length" in {
+    "guarantee generate keyPair length" in withIO {
       for {
         keyPair <- ecdsa.generateKeyPair[IO]()
         _ = keyPair.public.bytes.length shouldBe 64
@@ -23,7 +23,7 @@ class SignatureSpec extends CommonSpec {
       } yield ()
     }
 
-    "sign and verify for right keypair" in {
+    "sign and verify for right keyPair" in withIO {
 
       for {
         keyPair <- ecdsa.generateKeyPair[IO]()
@@ -33,7 +33,7 @@ class SignatureSpec extends CommonSpec {
       } yield ()
     }
 
-    "not verified for wrong keypair" in {
+    "not verified for wrong keyPair" in withIO {
       for {
         kp1    <- ecdsa.generateKeyPair[IO]()
         kp2    <- ecdsa.generateKeyPair[IO]()
@@ -43,7 +43,7 @@ class SignatureSpec extends CommonSpec {
       } yield ()
     }
 
-    "generate keypair from secret" in {
+    "generate keyPair from secret" in withIO {
       for {
         keyPair <- ecdsa.generateKeyPair[IO]()
         bytes      = keyPair.secret.bytes
@@ -54,7 +54,7 @@ class SignatureSpec extends CommonSpec {
       } yield ()
     }
 
-    "roundtrip signature" in {
+    "roundtrip signature" in withIO {
       for {
         kp  <- ecdsa.generateKeyPair[IO]()
         sig <- ecdsa.sign[IO](hash, kp, chainId)
@@ -65,7 +65,7 @@ class SignatureSpec extends CommonSpec {
       } yield ()
     }
 
-    "recover public key from signature" in {
+    "recover public key from signature" in withIO {
       for {
         kp     <- ecdsa.generateKeyPair[IO]()
         sig    <- ecdsa.sign[IO](hash, kp, chainId)
@@ -77,7 +77,29 @@ class SignatureSpec extends CommonSpec {
       } yield ()
     }
 
-    "encrypt message by known secret key" in {
+    "verify signature to false if different chainId" in withIO {
+      for {
+        kp  <- ecdsa.generateKeyPair[IO]()
+        sig <- ecdsa.sign[IO](hash, kp, chainId)
+        res <- ecdsa.verify[IO](hash, sig, kp.public, chainId)
+        _ = res shouldBe true
+        res <- ecdsa.verify[IO](hash, sig, kp.public, chainId + 1)
+        _ = res shouldBe false
+      } yield ()
+    }
+
+    "recover public key to None if different chainId" in withIO {
+      for {
+        kp  <- ecdsa.generateKeyPair[IO]()
+        sig <- ecdsa.sign[IO](hash, kp, chainId)
+        res1 = ecdsa.recoverPublic(hash, sig, chainId)
+        _    = res1 shouldBe Some(kp.public)
+        res2 = ecdsa.recoverPublic(hash, sig, chainId + 1)
+        _    = res2 shouldBe None
+      } yield ()
+    }
+
+    "encrypt message by known secret key" in withIO {
       for {
         secret <- KeyPair
           .Secret("0xcfb8493e50c4aacda5813b2b48f13b4af17106993dbf142877e2e346dfc40668")

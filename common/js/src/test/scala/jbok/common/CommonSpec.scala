@@ -22,7 +22,6 @@ trait CommonSpec extends AsyncWordSpec with Matchers with AsyncTimeLimitedTests 
 
   Logger.setRootHandlers(Logger.consoleHandler(minimumLevel = Some(Level.Info))).unsafeRunSync()
 
-  implicit def futureUnitToFutureAssertion(fu: Future[Unit]): Future[Assertion] = fu.map(_ => Succeeded)
-
-  implicit def ioUnitToFutureAssertion(iou: IO[Unit]): Future[Assertion] = iou.map(_ => Succeeded).unsafeToFuture()
+  def withIO[A](ioa: IO[A]): Future[Assertion] =
+    ioa.map(_ => Succeeded).unsafeToFuture()
 }

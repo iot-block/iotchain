@@ -1,6 +1,7 @@
 package jbok.common
 
 import cats.effect.{IO, Resource}
+import cats.implicits._
 import jbok.common.log.{Level, Logger}
 import jbok.common.thread.ThreadUtil
 import org.scalacheck.{Arbitrary, Gen}
@@ -36,6 +37,9 @@ trait CommonSpec
 
   def withResource[A](res: Resource[IO, A])(f: A => IO[Unit]): Unit =
     res.use(a => f(a)).unsafeRunSync()
+
+  def withIO[A](ioa: IO[A]): Unit =
+    ioa.void.unsafeRunSync()
 
   def random[A](implicit arb: Arbitrary[A]): A =
     arb.arbitrary.sample.get
