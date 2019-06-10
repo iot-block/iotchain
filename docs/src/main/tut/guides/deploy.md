@@ -17,11 +17,9 @@ build the jbok node, `app/jvm/target/universal/stage/bin/app-main`
 $ bin/build.sh
 ```
 
-the default node config in `conf/config.yaml`
-
-then start the node
+then start the node, given a node config path.
 ```bash
-$ bin/start-node.sh
+$ app/jvm/target/universal/stage/bin/app-main ~/.jbok/node-0/config.yaml
 ```
 
 *install mysql follow: https://dev.mysql.com/doc/refman/8.0/en/linux-installation.html*
@@ -54,6 +52,8 @@ Create your own testnet.
 We will be using 3 node in testnet, 1 for miner, 2 for sync.
 
 ```bash
+$ bin/create-ca.sh
+$ bin/build.sbt
 $ bin/start-testnet.sh
 ```
 
