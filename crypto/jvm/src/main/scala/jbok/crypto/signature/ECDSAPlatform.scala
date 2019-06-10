@@ -45,8 +45,7 @@ object ECDSAPlatform extends Signature[ECDSA] {
     KeyPair.Public(q)
   }
 
-  override def sign[F[_]](hash: Array[Byte], keyPair: KeyPair, chainId: BigInt)(
-      implicit F: Sync[F]): F[CryptoSignature] = F.delay {
+  override def sign[F[_]](hash: Array[Byte], keyPair: KeyPair, chainId: BigInt)(implicit F: Sync[F]): F[CryptoSignature] = F.delay {
     val signer = new ECDSASigner(new HMacDSAKCalculator(new SHA256Digest()))
     signer.init(true, new ECPrivateKeyParameters(keyPair.secret.d, domain))
     val Array(r, s) = signer.generateSignature(hash)
@@ -60,12 +59,13 @@ object ECDSAPlatform extends Signature[ECDSA] {
     CryptoSignature(r, toCanonicalS(s), rid)
   }
 
-  override def verify[F[_]](hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt)(
-      implicit F: Sync[F]): F[Boolean] = F.delay {
-    val signer = new ECDSASigner()
-    val q      = curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR_BYTE +: public.bytes.toArray)
-    signer.init(false, new ECPublicKeyParameters(q, domain))
-    signer.verifySignature(hash, sig.r.bigInteger, sig.s.bigInteger)
+  override def verify[F[_]](hash: Array[Byte], sig: CryptoSignature, public: KeyPair.Public, chainId: BigInt)(implicit F: Sync[F]): F[Boolean] = F.delay {
+    getPointSign(chainId, sig.v).exists { _ =>
+      val signer = new ECDSASigner()
+      val q      = curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR_BYTE +: public.bytes.toArray)
+      signer.init(false, new ECPublicKeyParameters(q, domain))
+      signer.verifySignature(hash, sig.r.bigInteger, sig.s.bigInteger)
+    }
   }
 
   override def recoverPublic(hash: Array[Byte], sig: CryptoSignature, chainId: BigInt): Option[KeyPair.Public] = {
@@ -104,11 +104,7 @@ object ECDSAPlatform extends Signature[ECDSA] {
   private[jbok] def toECPublicKeyParameters(public: KeyPair.Public) =
     new ECPublicKeyParameters(curve.getCurve.decodePoint(UNCOMPRESSED_INDICATOR_BYTE +: public.bytes.toArray), domain)
 
-  private[jbok] def calculatePointSign(r: BigInt,
-                                       s: BigInt,
-                                       keyPair: KeyPair,
-                                       hash: Array[Byte],
-                                       chainId: BigInt): Option[BigInt] =
+  private[jbok] def calculatePointSign(r: BigInt, s: BigInt, keyPair: KeyPair, hash: Array[Byte], chainId: BigInt): Option[BigInt] =
     allowedPointSigns.find(
       v =>
         recoverPublic(hash, CryptoSignature(r, s, getRecoveryId(chainId, v).getOrElse(v)), chainId)
