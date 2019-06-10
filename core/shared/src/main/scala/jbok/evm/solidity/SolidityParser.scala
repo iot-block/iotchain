@@ -3,7 +3,6 @@ package jbok.evm.solidity
 import fastparse.ScalaWhitespace._
 import fastparse._
 import scala.language.postfixOps
-import jbok.evm.solidity.Ast.ModifierList.Invocation
 
 import scala.util.Try
 

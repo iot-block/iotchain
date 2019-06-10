@@ -88,13 +88,12 @@ final case class SendTxView(state: AppState) {
         stxInHistory <- client.transaction.getTx(hash)
         stx = stxInPool.fold(stxInHistory)(Some(_))
         _ = stx.fold {
-          lock.value = false
           statusMessage.value = Some("send failed.")
         } { tx =>
           state.addStx(state.activeNode.value.getOrElse(""), tx)
-          lock.value = false
           statusMessage.value = Some("send success.")
         }
+        _ = lock.value = false
       } yield ()
 
       p.timeout(state.config.value.clientTimeout)

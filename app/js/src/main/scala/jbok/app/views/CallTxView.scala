@@ -1,5 +1,6 @@
 package jbok.app.views
 
+import cats.effect.IO
 import cats.implicits._
 import com.thoughtworks.binding
 import com.thoughtworks.binding.Binding
@@ -13,8 +14,10 @@ import scodec.bits.ByteVector
 import io.circe.parser._
 import jbok.app.components.{AddressOptionInput, Input, Notification}
 import jbok.app.helper.InputValidator
+import jbok.common.math.N
 import jbok.core.api.{BlockTag, CallTx}
 import jbok.evm.solidity.ABIDescription.FunctionDescription
+import jbok.app.execution._
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.EitherProjectionPartial"))
 final case class CallTxView(state: AppState) {
@@ -23,6 +26,7 @@ final case class CallTxView(state: AppState) {
 
   val currentId                                           = state.activeNode.value
   val client                                              = currentId.flatMap(state.clients.value.get(_))
+  val lock: Var[Boolean]                                  = Var(false)
   val account: Var[Option[Account]]                       = Var(None)
   val to: Var[String]                                     = Var("")
   val toSyntax: Var[Boolean]                              = Var(true)
@@ -33,7 +37,7 @@ final case class CallTxView(state: AppState) {
   val contractSelected: Var[Boolean]                      = Var(false)
   val function: Var[Option[FunctionDescription]]          = Var(None)
   val txType: Var[String]                                 = Var("Send")
-  val txStatus: Var[Option[String]]                       = Var(None)
+  val statusMessage: Var[Option[String]]                  = Var(None)
 
   val paramInputs: Vars[Input] = Vars.empty[Input]
 
@@ -146,8 +150,9 @@ final case class CallTxView(state: AppState) {
   }
 
   def checkAndGenerateInput() = {
-    txStatus.value = None
+    statusMessage.value = None
     for {
+      _       <- if (!lock.value) Right(()) else Left("please wait for last tx.")
       from    <- if (addressOptionInput.isValid) Right(addressOptionInput.value) else Left("not valid from address.")
       to      <- if (toSyntax.value) Right(to.value) else Left("not valid to address.")
       _       <- if (paramInputs.value.toList.forall(_.isValid)) Right(()) else Left("no valid params input.")
@@ -163,38 +168,41 @@ final case class CallTxView(state: AppState) {
   }
 
   def execute(from: String, to: String, data: ByteVector) = {
+    lock.value = true
+    reset()
     val fromSubmit = Address(ByteVector.fromValidHex(from))
     val toSubmit   = Some(Address(ByteVector.fromValidHex(to)))
-    val callTx     = CallTx(Some(fromSubmit), toSubmit, None, 1, 0, data)
-    if (txType.value == "Call") {
-      reset()
-      val p = for {
+    val callTx     = CallTx(Some(fromSubmit), toSubmit, None, N(1), N(0), data)
+    val p = if (txType.value == "Call") {
+      for {
         ret <- client.get.contract.call(callTx, BlockTag.latest)
         _ = rawResult.value = ret
         _ = result.value = decodeByteVector("decode")
-        _ = txStatus.value = Some("call succcess")
+        _ = statusMessage.value = Some("call success")
+        _ = lock.value = false
       } yield ()
-      txStatus.value = Some("wait for result...")
-      p.unsafeToFuture()
     } else {
       val password = if (passphrase.value.isEmpty) "" else passphrase.value
-      val p = for {
-        account <- client.get.account.getAccount(fromSubmit, BlockTag.latest)
-        _ = txStatus.value = Some("estimate gas...")
+      for {
+        account  <- client.get.account.getAccount(fromSubmit, BlockTag.latest)
         gasLimit <- client.get.contract.getEstimatedGas(callTx, BlockTag.latest)
         gasPrice <- client.get.contract.getGasPrice
-        _ = txStatus.value = Some(s"gas limit: $gasLimit, gas price: $gasPrice")
+        _ = statusMessage.value = Some(s"gas limit: $gasLimit, gas price: $gasPrice")
         txHash <- client.get.personal
           .sendTransaction(fromSubmit, password, toSubmit, None, Some(gasLimit), Some(gasPrice), Some(account.nonce), Some(data))
         stx <- client.get.transaction.getTx(txHash)
         _ = stx.foreach(state.addStx(currentId.get, _))
-        _ = txStatus.value = Some(s"send transaction success: ${txHash.toHex}")
+        _ = statusMessage.value = Some(s"send transaction success: ${txHash.toHex}")
+        _ = lock.value = false
       } yield ()
-      p.unsafeToFuture()
     }
+
+    p.timeout(state.config.value.clientTimeout)
+      .handleErrorWith(e => IO.delay(lock.value = false) >> IO.delay(statusMessage.value = Some(s"deploy failed: ${e}")))
+      .unsafeToFuture()
   }
 
-  val executeOnClick = (_: Event) => checkAndGenerateInput().leftMap(error => txStatus.value = Some(error))
+  val executeOnClick = (_: Event) => checkAndGenerateInput().leftMap(error => statusMessage.value = Some(error))
 
   val addressOptionInput = AddressOptionInput(nodeAccounts)
 
@@ -290,13 +298,13 @@ final case class CallTxView(state: AppState) {
       }
 
       {
-        val onclose = (_: Event) => txStatus.value = None
+        val onclose = (_: Event) => statusMessage.value = None
         @binding.dom def content(status: String):Binding[Element] =
           <div style="padding-left: 10px">{status}</div>
-        txStatus.bind match {
+        statusMessage.bind match {
           case None => <div/>
-          case Some(status) =>
-            Notification.renderInfo(content(status), onclose).bind
+          case Some(status) if status.contains("success") => Notification.renderSuccess(content(status), onclose).bind
+          case Some(status) => Notification.renderWarning(content(status), onclose).bind
         }
       }
 

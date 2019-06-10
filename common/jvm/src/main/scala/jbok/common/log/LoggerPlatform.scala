@@ -9,6 +9,8 @@ import scribe.handler.LogHandler
 import scribe.writer.FileWriter
 import scribe.writer.file.LogPath
 
+import scala.concurrent.duration._
+
 object LoggerPlatform {
   def initConfig[F[_]: Sync](config: LogConfig): F[Unit] = {
     val level = Level.fromName(config.level)
