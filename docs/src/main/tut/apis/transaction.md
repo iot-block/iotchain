@@ -4,7 +4,11 @@ title:  "Transaction"
 number: 1
 ---
 
-```scala
+```scala mdoc
+import scodec.bits.ByteVector
+import jbok.core.models._
+import jbok.core.api.BlockTag
+
 trait TransactionAPI[F[_]] {
   def getTx(hash: ByteVector): F[Option[SignedTransaction]]
 

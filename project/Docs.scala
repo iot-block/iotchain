@@ -1,10 +1,11 @@
-import sbt._
-import sbt.Keys._
+import _root_.io.github.davidgregory084.TpolecatPlugin.autoImport.filterConsoleScalacOptions
 import microsites.MicrositesPlugin.autoImport._
-import tut.TutPlugin.autoImport._
+import sbt.Keys._
+import sbt._
+import mdoc.MdocPlugin.autoImport._
 
 object Docs {
-  lazy val settings = micrositeSettings ++ tutSettings
+  lazy val settings = micrositeSettings ++ mdocSettings
 
   private lazy val micrositeSettings = Seq(
     libraryDependencies += "com.47deg" %% "github4s" % "0.18.6",
@@ -28,18 +29,13 @@ object Docs {
       "white-color"     -> "#FFFFFF"
     ),
     micrositePushSiteWith := GitHub4s,
-    micrositeGithubToken := sys.env.get("GITHUB_TOKEN")
+    micrositeGithubToken := sys.env.get("GITHUB_TOKEN"),
+    micrositeCompilingDocsTool := WithMdoc,
+    mdocIn := sourceDirectory.value / "main" / "tut"
   )
 
-  private lazy val tutSettings = Seq(
-    fork in tut := true,
-    scalacOptions in Tut --= Seq(
-      "-Xfatal-warnings",
-      "-Ywarn-unused-import",
-      "-Ywarn-numeric-widen",
-      "-Ywarn-dead-code",
-      "-Ywarn-unused:imports",
-      "-Xlint:-missing-interpolator,_"
-    )
+  private lazy val mdocSettings = Seq(
+    fork in mdoc := true,
+    scalacOptions in mdoc ~= filterConsoleScalacOptions
   )
 }

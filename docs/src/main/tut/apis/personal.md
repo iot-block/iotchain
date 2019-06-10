@@ -5,6 +5,10 @@ number: 1
 ---
 
 ```scala
+import scodec.bits.ByteVector
+import jbok.core.models.Address
+import jbok.common.math.N
+
 trait PersonalAPI[F[_]] {
   def importRawKey(privateKey: ByteVector, passphrase: String): F[Address]
 
@@ -20,10 +24,10 @@ trait PersonalAPI[F[_]] {
       from: Address,
       passphrase: String,
       to: Option[Address] = None,
-      value: Option[BigInt] = None,
-      gasLimit: Option[BigInt] = None,
-      gasPrice: Option[BigInt] = None,
-      nonce: Option[BigInt] = None,
+      value: Option[N] = None,
+      gasLimit: Option[N] = None,
+      gasPrice: Option[N] = None,
+      nonce: Option[N] = None,
       data: Option[ByteVector] = None,
   ): F[ByteVector]
 }

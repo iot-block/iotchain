@@ -4,7 +4,11 @@ title:  "Admin"
 number: 1
 ---
 
-```scala
+```scala mdoc
+import jbok.core.models._
+import jbok.core.peer.PeerUri
+import jbok.core.config.FullConfig
+
 trait AdminAPI[F[_]] {
   def peerUri: F[String]
 

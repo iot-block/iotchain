@@ -5,6 +5,9 @@ number: 1
 ---
 
 ```scala
+import jbok.core.models.Address
+import jbok.core.consensus.poa.clique.Proposal
+
 trait MinerAPI[F[_]] {
   def ballot(address: Address, auth: Boolean): F[Unit]
 
