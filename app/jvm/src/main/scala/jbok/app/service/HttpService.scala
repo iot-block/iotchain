@@ -52,7 +52,7 @@ final class HttpService[F[_]](
   private val builder: F[BlazeServerBuilder[F]] = {
     val httpApp = for {
       exportRoute <- MetricsMiddleware.exportService[F]
-      withMetrics <- MetricsMiddleware[F](routes)
+      withMetrics <- MetricsMiddleware[F](routes, config.enableMetrics)
       withLogger = LoggerMiddleware[F](config.logHeaders, config.logBody)((withMetrics <+> exportRoute).orNotFound)
       withCORS   = CORS(withLogger)
       app        = GzipMiddleware[F](withCORS)

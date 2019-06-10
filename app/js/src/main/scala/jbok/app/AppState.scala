@@ -158,6 +158,12 @@ final case class AppState(
   def clearSearch(): Unit =
     search.value = None
 
+  def addAddress(id: String, address: Address): Unit =
+    nodes.value.get(id).foreach { node =>
+      if (!node.addresses.value.contains(address))
+        node.addresses.value += address -> None
+    }
+
   def updateStatus(status: ClientStatus, client: JbokClient[IO]): IO[Unit] =
     for {
       bestBlockNumber <- client.block.getBestBlockNumber
@@ -200,13 +206,12 @@ final case class AppState(
     val addrs = addresses.value.keys.toList
     for {
       simuAccounts <- addrs.traverse[IO, Account](addr => client.account.getAccount(addr, BlockTag.latest))
-      _            <- log.i(simuAccounts.map(_.balance).mkString("\n"))
       _ = addresses.value ++= addrs.zip(simuAccounts.map(Some(_)))
     } yield ()
   }
 
   def updateReceipts(stxs: Vars[SignedTransaction], receipts: Var[Map[ByteVector, Var[Option[Receipt]]]], client: JbokClient[IO]): IO[Unit] = {
-    val txHashes = stxs.value.map(_.hash).toList
+    val txHashes = stxs.value.map(_.hash).filter(v => !receipts.value.contains(v)).toList
     for {
       txReceipts <- txHashes.traverse[IO, Option[Receipt]](client.transaction.getReceipt)
       _ = receipts.value ++= txHashes.zip(txReceipts.map(Var(_))).toMap

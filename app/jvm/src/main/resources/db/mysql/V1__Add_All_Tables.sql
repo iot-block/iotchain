@@ -1,20 +1,20 @@
 CREATE TABLE transactions
 (
-  id          int unsigned primary key auto_increment,
-  txHash      varchar(255) not null unique,
+  txHash      char(64) not null,
   nonce       int unsigned not null,
-  fromAddress varchar(255) not null,
-  toAddress   varchar(255) not null,
-  value       varchar(255) not null,
-  payload     varchar(255) not null,
+  fromAddress char(64) not null,
+  toAddress   char(64) not null,
+  value       char(64) not null,
+  payload     text         not null,
   v           varchar(255) not null,
   r           varchar(255) not null,
   s           varchar(255) not null,
-  gasUsed     varchar(255) not null,
-  gasPrice    varchar(255) not null,
-  blockNumber int unsigned not null,
-  blockHash   varchar(255) not null,
-  location    int unsigned not null
+  gasUsed     char(64) not null,
+  gasPrice    char(64) not null,
+  blockHash   char(64) not null,
+  blockNumber bigint unsigned not null,
+  location    int unsigned not null,
+  primary key (blockHash, txHash)
 );
 
 CREATE INDEX `from_address_index` ON transactions (fromAddress);
@@ -22,6 +22,8 @@ CREATE INDEX `to_address_index` ON transactions (toAddress);
 
 CREATE TABLE blocks
 (
-  blockNumber int unsigned not null unique,
-  blockHash varchar(255) not null unique
+  blockNumber bigint unsigned not null unique,
+  blockHash char(64) not null unique
 );
+
+CREATE INDEX `block_number_index` ON blocks (blockNumber);

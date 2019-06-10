@@ -84,6 +84,24 @@ class AbiSpec extends CoreSpec {
       result.isRight shouldBe true
       result.right.get shouldBe
         BigInt("8234104122419153896766082834368325185836758793849283143825308940974890684980").asJson
+
+      val value2  = hex"0x000000000000000000000000000000000000000000000000000009184e72a000"
+      val result2 = IntType(256).decode(value2)
+      result2.isRight shouldBe true
+      result2.right.get shouldBe
+        BigInt("10000000000000").asJson
+
+      val value3  = hex"0x0000000000000000000000000000000000000000000000000000000000002710"
+      val result3 = IntType(256).decode(value3)
+      result3.isRight shouldBe true
+      result3.right.get shouldBe
+        BigInt("10000").asJson
+
+      val value4  = hex"0x000000000000000000000000000000000000000000000000000009184e7278f0"
+      val result4 = IntType(256).decode(value4)
+      result4.isRight shouldBe true
+      result4.right.get shouldBe
+        BigInt("9999999990000").asJson
     }
 
     "decode bool" in {

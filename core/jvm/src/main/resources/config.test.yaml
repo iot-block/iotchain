@@ -12,6 +12,7 @@ genesis:
 log:
   logDir: /dev/null
   level: INFO
+  maxLogs: 15
 
 history:
   frontierBlockNumber: "0"
@@ -98,6 +99,7 @@ service:
   secure: false
   logHeaders: true
   logBody: true
+  enableMetrics: false
   host: localhost
   port: 30315
   apis:

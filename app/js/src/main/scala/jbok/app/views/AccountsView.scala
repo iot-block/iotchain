@@ -16,10 +16,8 @@ final case class AccountsView(state: AppState) {
       if (data.values.forall(_.isValid))
         state.activeNode.value.map { id =>
           val p = for {
-            address <- state.clients.value
-              .get(id)
-              .map(_.personal.newAccount(data("Password").value))
-              .getOrElse(IO.pure(""))
+            address <- state.clients.value(id).personal.newAccount(data("Password").value)
+            _ = state.addAddress(id, address)
           } yield address
           p.unsafeToFuture()
         }
@@ -86,7 +84,7 @@ final case class AccountsView(state: AppState) {
           val visible = newAccountVisible.bind
           val content = state.activeNode.bind match {
             case Some(id) => newAccountForm.render
-            case _ => Modal.render(Modal.ModalInfo, "no node connect. please select node first!")
+            case _ => Modal.render(Modal.ModalInfo, "no node connect. please select connect node and retry.")
           }
 
           val onOk = (_: Event) => {

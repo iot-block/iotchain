@@ -157,7 +157,7 @@ final class KeyStorePlatform[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]) 
 object KeyStorePlatform {
   def withInitKey[F[_]](config: KeyStoreConfig)(implicit F: Sync[F]): F[KeyStorePlatform[F]] = {
     val keyStorePlatform = new KeyStorePlatform(config)
-    val initKeyFile      = Try(Paths.get(config.initkey)).toOption
+    val initKeyFile      = Try(Paths.get(config.initkey)).toOption.filter(path => !File(path).isDirectory)
 
     initKeyFile.fold(F.delay(keyStorePlatform)) { keyFile =>
       for {
