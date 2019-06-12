@@ -9,13 +9,13 @@ object Docs {
 
   private lazy val micrositeSettings = Seq(
     libraryDependencies += "com.47deg" %% "github4s" % "0.18.6",
-    micrositeName := "JBOK",
-    micrositeBaseUrl := "/jbok",
-    micrositeDescription := "Just a Bunch Of Keys",
-    micrositeAuthor := "JBOK contributors",
-    micrositeGithubOwner := "c-block",
-    micrositeGithubRepo := "jbok",
-    micrositeDocumentationUrl := "https://c-block.github.io/jbok",
+    micrositeName := Settings.projectName,
+    micrositeBaseUrl := s"/${Settings.projectGithubRepo}",
+    micrositeDescription := Settings.projectDescription,
+    micrositeAuthor := Settings.projectAuthors,
+    micrositeGithubOwner := Settings.projectGithubOwner,
+    micrositeGithubRepo := Settings.projectGithubRepo,
+    micrositeDocumentationUrl := s"https://${Settings.projectGithubOwner}.github.io/${Settings.projectGithubRepo}",
     micrositeFooterText := None,
     micrositeHighlightTheme := "atom-one-light",
     micrositePalette := Map(

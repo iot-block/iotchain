@@ -2,13 +2,21 @@ import sbt.Keys._
 import sbt._
 
 object Settings {
+  val projectOrg         = "org.jbok"
+  val projectName        = "jbok"
+  val projectDescription = "Just a Bunch Of Keys"
+  val projectAuthors     = s"${projectName} authors"
+  val projectLicense     = ("MIT", url("http://opensource.org/licenses/MIT"))
+  val projectGithubOwner = "c-block"
+  val projectGithubRepo  = "jbok"
+
   lazy val common = compilerPlugins ++ WartRemoverPlugin.settings ++ Seq(
     cancelable in Global := true,
-    organization := "org.jbok",
-    name := "jbok",
-    description := "Just a Bunch Of Keys",
+    organization := projectOrg,
+    name := projectName,
+    description := projectDescription,
     version := Versions.version,
-    licenses ++= Seq(("MIT", url("http://opensource.org/licenses/MIT"))),
+    licenses += projectLicense,
     scalaVersion := Versions.scala212Version,
     test / parallelExecution := false,
     scalacOptions --= Seq(
