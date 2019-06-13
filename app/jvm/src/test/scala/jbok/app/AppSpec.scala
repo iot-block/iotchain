@@ -7,14 +7,17 @@ import jbok.core.config.FullConfig
 
 trait AppSpec extends CoreSpec {
 
-  val testAppModule =
+  def testAppModule(config: FullConfig) =
     testCoreModule(config) ++ new AppModule[IO]
 
-  val testAppResource =
-    Injector().produceF[IO](testAppModule).toCats
+  def testAppResource(config: FullConfig) =
+    Injector().produceF[IO](testAppModule(config)).toCats
+
+  override def check(f: Locator => IO[Unit]): Unit =
+    check(config)(f)
 
   override def check(config: FullConfig)(f: Locator => IO[Unit]): Unit = {
-    val p = testAppResource.use { objects =>
+    val p = testAppResource(config).use { objects =>
       f(objects)
     }
     p.unsafeRunSync()

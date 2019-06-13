@@ -9,6 +9,7 @@ import jbok.core.config.FullConfig
 import jbok.core.mining.BlockMiner
 import jbok.core.models.Address
 import scodec.bits.ByteVector
+import monocle.macros.syntax.lens._
 
 class HttpServiceSpec extends AppSpec {
   "HttpService" should {
@@ -25,6 +26,22 @@ class HttpServiceSpec extends AppSpec {
         }
       }
     }
+
+    "respect service config(enabled apis)" in check(config.lens(_.service.apis).set(Nil)) { objects =>
+      val config      = objects.get[FullConfig]
+      println(config.service)
+      val httpService = objects.get[HttpService[IO]]
+      val ssl         = objects.get[Option[SSLContext]]
+      httpService.resource.use { server =>
+        JbokClientPlatform.resource[IO](server.baseUri.toString(), ssl).use { client =>
+          for {
+            resp <- client.account.getAccount(config.mining.address, BlockTag("2")).attempt
+            _ = resp.isLeft shouldBe true
+          } yield ()
+        }
+      }
+    }
+
     "test contract vaccine" in check { objects =>
       val httpService = objects.get[HttpService[IO]]
       val miner       = objects.get[BlockMiner[IO]]

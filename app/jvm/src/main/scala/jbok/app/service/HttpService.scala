@@ -35,15 +35,17 @@ final class HttpService[F[_]](
   import _root_.io.circe.generic.auto._
   import jbok.codec.json.implicits._
 
-  val rpcService: RpcService[F, Json] =
-    RpcService[F, Json]
-      .mount(account)
-      .mount(admin)
-      .mount(block)
-      .mount(contract)
-      .mount(miner)
-      .mount(personal)
-      .mount(transaction)
+  val rpcService: RpcService[F, Json] = {
+    var service = RpcService[F, Json]
+    if (config.apis.contains("account")) service = service.mount(account) else ()
+    if (config.apis.contains("admin")) service = service.mount(admin) else ()
+    if (config.apis.contains("block")) service = service.mount(block) else ()
+    if (config.apis.contains("contract")) service = service.mount(contract) else ()
+    if (config.apis.contains("miner")) service = service.mount(miner) else ()
+    if (config.apis.contains("personal")) service = service.mount(personal) else ()
+    if (config.apis.contains("transaction")) service = service.mount(transaction) else ()
+    service
+  }
 
   val routes: HttpRoutes[F] = Http4sRpcServer.routes(rpcService)
 
