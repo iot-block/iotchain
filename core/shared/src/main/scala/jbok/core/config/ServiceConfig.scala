@@ -14,6 +14,7 @@ final case class ServiceConfig(
     logHeaders: Boolean,
     logBody: Boolean,
     enableMetrics: Boolean,
+    allowedOrigins: List[String],
     host: String,
     port: Int,
     apis: List[String]

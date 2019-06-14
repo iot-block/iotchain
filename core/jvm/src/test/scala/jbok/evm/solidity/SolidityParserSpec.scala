@@ -2096,7 +2096,6 @@ class SolidityParserSpec extends CommonSpec {
         """.stripMargin
 
       val func = SolidityParser.parseFunc(code)
-      println(func)
       func.isSuccess shouldBe true
       val function = func.get.value
       function.name shouldBe "burnFrom"
@@ -2293,7 +2292,6 @@ class SolidityParserSpec extends CommonSpec {
         """.stripMargin)
 
       parseResult.isSuccess shouldBe true
-      println(parseResult.get.value.ABI)
     }
 
     "parse itc mapping code" in {

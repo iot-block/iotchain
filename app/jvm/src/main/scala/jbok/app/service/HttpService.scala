@@ -5,7 +5,7 @@ import io.circe.Json
 import cats.implicits._
 import fs2._
 import javax.net.ssl.SSLContext
-import jbok.network.http.server.middleware.{GzipMiddleware, LoggerMiddleware, MetricsMiddleware}
+import jbok.network.http.server.middleware.{CORSMiddleware, GzipMiddleware, LoggerMiddleware, MetricsMiddleware}
 import jbok.core.config.ServiceConfig
 import jbok.core.api._
 import jbok.crypto.ssl.SSLConfig
@@ -49,14 +49,12 @@ final class HttpService[F[_]](
 
   val routes: HttpRoutes[F] = Http4sRpcServer.routes(rpcService)
 
-  val methodConfig = CORSConfig(anyOrigin = true, anyMethod = false, allowedMethods = Some(Set("GET", "POST")), allowCredentials = true, maxAge = 1.day.toSeconds)
-
   private val builder: F[BlazeServerBuilder[F]] = {
     val httpApp = for {
       exportRoute <- MetricsMiddleware.exportService[F]
       withMetrics <- MetricsMiddleware[F](routes, config.enableMetrics)
       withLogger = LoggerMiddleware[F](config.logHeaders, config.logBody)((withMetrics <+> exportRoute).orNotFound)
-      withCORS   = CORS(withLogger)
+      withCORS   = CORSMiddleware[F](withLogger, config.allowedOrigins)
       app        = GzipMiddleware[F](withCORS)
     } yield app
 
