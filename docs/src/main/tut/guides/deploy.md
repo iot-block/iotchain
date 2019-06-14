@@ -12,11 +12,20 @@ we have 2 way to deploy jbok node
 
 ### binary app-main
 
-build the jbok node, `app/jvm/target/universal/stage/bin/app-main`
+build the jbok node
 ```bash
 $ bin/build.sh
 ```
 
+in `app/jvm/target/universal/stage/bin`, we get 4 program
+```
+app-main: node
+cli-main: a commod line connect to node
+network-builder-main: build testnet config in ~/.jbok, follow config doc to build configs.
+tx-generator-main:  gen random txs and send to testnet
+```
+
+`app/jvm/target/universal/stage/bin/app-main`
 then start the node, given a node config path.
 ```bash
 $ app/jvm/target/universal/stage/bin/app-main ~/.jbok/node-0/config.yaml
@@ -52,8 +61,8 @@ Create your own testnet.
 We will be using 3 node in testnet, 1 for miner, 2 for sync.
 
 ```bash
+$ bin/build.sh
 $ bin/create-ca.sh
-$ bin/build.sbt
 $ bin/start-testnet.sh
 ```
 
