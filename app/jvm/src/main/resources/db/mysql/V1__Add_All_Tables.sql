@@ -19,6 +19,7 @@ CREATE TABLE transactions
 
 CREATE INDEX `from_address_index` ON transactions (fromAddress);
 CREATE INDEX `to_address_index` ON transactions (toAddress);
+CREATE INDEX `tx_block_number_index` ON transactions (blockNumber);
 
 CREATE TABLE blocks
 (
@@ -26,4 +27,4 @@ CREATE TABLE blocks
   blockHash char(64) not null unique
 );
 
-CREATE INDEX `block_number_index` ON blocks (blockNumber);
+CREATE INDEX `b_block_number_index` ON blocks (blockNumber);
