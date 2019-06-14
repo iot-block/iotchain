@@ -46,6 +46,7 @@ final case class NetworkBuilder(
       .lens(_.rootPath).set(rootPath.toAbsolutePath.toString)
       .lens(_.peer.host).set(host)
       .lens(_.service.host).set(host)
+      .lens(_.service.enableMetrics).set(true)
 //      .lens(_.service.secure).set(true)
       .lens(_.mining.enabled).set(true)
       .lens(_.mining.address).set(Address(keyPair))

@@ -28,8 +28,8 @@ class HttpServiceSpec extends AppSpec {
     }
 
     "respect service config(enabled apis)" in check(config.lens(_.service.apis).set(Nil)) { objects =>
-      val config      = objects.get[FullConfig]
-      println(config.service)
+      val config = objects.get[FullConfig]
+      config.service.apis shouldBe Nil
       val httpService = objects.get[HttpService[IO]]
       val ssl         = objects.get[Option[SSLContext]]
       httpService.resource.use { server =>
@@ -40,6 +40,11 @@ class HttpServiceSpec extends AppSpec {
           } yield ()
         }
       }
+    }
+
+    "service config(allowedOrigins)" in check(config.lens(_.service.allowedOrigins).set(List("allowed.com"))) { objects =>
+      val config = objects.get[FullConfig]
+      IO.delay(config.service.allowedOrigins shouldBe List("allowed.com"))
     }
 
     "test contract vaccine" in check { objects =>

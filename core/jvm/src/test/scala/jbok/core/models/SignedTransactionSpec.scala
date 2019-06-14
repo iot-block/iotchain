@@ -1,15 +1,13 @@
 package jbok.core.models
 
-import cats.effect.ExitCase.Error
 import cats.effect.IO
 import io.circe.CursorOp.DownField
-import io.circe.{DecodingFailure, Json}
+import io.circe.DecodingFailure
 import jbok.core.CoreSpec
 import jbok.core.validators.TxValidator
 import jbok.crypto._
 import jbok.crypto.signature.{ECDSA, Signature}
 import io.circe.parser._
-import org.http4s.DecodeFailure
 
 class SignedTransactionSpec extends CoreSpec {
   "SignedTransaction" should {
@@ -52,8 +50,7 @@ class SignedTransactionSpec extends CoreSpec {
         }
       }
       val json = genJson(value, 5000)
-      println(json)
-      val res = parse(json)
+      parse(json)
 
       val error = decode[SignedTransaction](json)
       error shouldBe Left(DecodingFailure("Attempt to decode value on failed cursor", List(DownField("nonce"))))
