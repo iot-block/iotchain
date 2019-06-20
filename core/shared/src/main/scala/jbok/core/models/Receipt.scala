@@ -19,7 +19,8 @@ final case class Receipt(
     logs: List[TxLogEntry],
     txHash: ByteVector,
     contractAddress: Option[Address],
-    gasUsed: N
+    gasUsed: N,
+    status: Boolean
 )
 
 object Receipt {
