@@ -112,7 +112,8 @@ object StatelessGen {
         logs = Nil,
         txHash = txHash,
         contractAddress = None,
-        gasUsed = gasUsed
+        gasUsed = gasUsed,
+        status = true
       )
 
   // messages

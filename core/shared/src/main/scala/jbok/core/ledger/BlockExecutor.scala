@@ -110,7 +110,7 @@ final class BlockExecutor[F[_]](
     if (highLimit < lowLimit)
       F.pure(highLimit)
     else {
-      binaryChop(lowLimit, highLimit)(gasLimit => simulateTransaction(stx.copy(gasLimit = gasLimit), senderAddress, blockHeader).map(_.vmError))
+      binaryChop(lowLimit, highLimit)(gasLimit => simulateTransaction(stx.copy(gasLimit = gasLimit), senderAddress, blockHeader).map(r => r.vmError.isDefined || r.isRevert))
     }
   }
 
@@ -211,6 +211,7 @@ final class BlockExecutor[F[_]](
                })
 
           case Right(txResult) =>
+            val status        = !(txResult.vmError.isDefined || txResult.isRevert)
             val stateRootHash = txResult.world.stateRootHash
             val receipt = Receipt(
               postTransactionStateHash = stateRootHash,
@@ -219,7 +220,8 @@ final class BlockExecutor[F[_]](
               logs = txResult.logs,
               txHash = stx.hash,
               gasUsed = txResult.gasUsed,
-              contractAddress = txResult.contractAddress
+              contractAddress = txResult.contractAddress,
+              status = status
             )
             executeTransactions(
               tail,
@@ -270,7 +272,7 @@ final class BlockExecutor[F[_]](
       worldAfterPayments <- refundGasFn(resultWithErrorHandling.world) >>= payMinerForGasFn
       world2             <- (deleteAccountsFn(worldAfterPayments) >>= deleteTouchedAccountsFn).flatMap(_.persisted)
     } yield {
-      TxExecResult(world2, executionGasToPayToMiner, resultWithErrorHandling.logs, result.returnData, result.error, result.contractAddress)
+      TxExecResult(world2, executionGasToPayToMiner, resultWithErrorHandling.logs, result.returnData, result.error, result.contractAddress, result.isRevert)
     }
 
   private def updateSenderAccountBeforeExecution(
@@ -375,14 +377,14 @@ final class BlockExecutor[F[_]](
       .map(_.clearTouchedAccounts)
   }
 
-  private def binaryChop[E](min: N, max: N)(f: N => F[Option[E]]): F[N] = {
+  private def binaryChop[E](min: N, max: N)(f: N => F[Boolean]): F[N] = {
     assert(min <= max)
     if (min == max)
       F.pure(max)
     else {
       val mid           = min + (max - min) / 2
       val possibleError = f(mid)
-      F.ifM(possibleError.map(_.isEmpty))(ifTrue = binaryChop(min, mid)(f), ifFalse = binaryChop(mid + 1, max)(f))
+      F.ifM(possibleError)(ifTrue = binaryChop(mid + 1, max)(f), ifFalse = binaryChop(min, mid)(f))
     }
   }
 
@@ -406,6 +408,7 @@ object BlockExecutor {
       logs: List[TxLogEntry],
       vmReturnData: ByteVector,
       vmError: Option[ProgramError],
-      contractAddress: Option[Address] = None
+      contractAddress: Option[Address] = None,
+      isRevert: Boolean = false
   )
 }
