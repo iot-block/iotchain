@@ -15,9 +15,6 @@ import org.http4s.HttpRoutes
 import org.http4s.implicits._
 import org.http4s.server.{SSLClientAuthMode, Server}
 import org.http4s.server.blaze.BlazeServerBuilder
-import org.http4s.server.middleware.{CORS, CORSConfig}
-
-import scala.concurrent.duration._
 
 final class HttpService[F[_]](
     config: ServiceConfig,
