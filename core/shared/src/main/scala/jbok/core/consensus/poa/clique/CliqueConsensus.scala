@@ -37,7 +37,6 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
       blockNumber = parent.header.number + 1
       timestamp   = parent.header.unixTimestamp + config.period.toMillis
       snap <- clique.applyHeaders(parent.header.number, parent.header.hash, Nil)
-      _    <- clique.clearProposalIfMine(parent.header)
       header <- if (!snap.miners.contains(clique.minerAddress)) {
         F.raiseError[BlockHeader](new Exception(s"unauthorized miner ${clique.minerAddress}"))
       } else {
@@ -57,13 +56,13 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
         )
 
         snap.recents.find(_._2 == clique.minerAddress) match {
-          case Some((seen, _)) if amongstRecent(header.number, seen, snap.miners.size)=>
+          case Some((seen, _)) if amongstRecent(header.number, seen, snap.miners.size) =>
             val wait: Long  = math.max(0, snap.miners.size / 2 + 1 - (header.number - seen).toInt) * config.period.toMillis
             val delay: Long = math.max(0, header.unixTimestamp - System.currentTimeMillis()) + wait
 
             log.i(s"mined recently, sleep (${delay}) millis") >> T.sleep(delay.millis) >> prepareHeader(parentOpt)
           case _ =>
-            header.pure[F]
+            clique.clearProposalIfMine(parent.header) >> header.pure[F]
         }
       }
     } yield header

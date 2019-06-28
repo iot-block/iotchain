@@ -1,7 +1,6 @@
 package jbok.app.service
 
 import cats.effect.IO
-import cats.implicits._
 import jbok.app.AppSpec
 import jbok.core.api.MinerAPI
 import jbok.core.consensus.poa.clique.{CliqueExtra, Proposal}
@@ -25,10 +24,6 @@ class MinerAPISpec extends AppSpec {
 
         extra <- IO.fromEither(minedBlock.block.header.extraAs[CliqueExtra])
         _ = extra.proposal shouldBe expectedProposal
-
-        _         <- miner.prepare(minedBlock.block.some)
-        proposal2 <- minerAPI.getBallot
-        _ = proposal2 shouldBe None
       } yield ()
     }
 
