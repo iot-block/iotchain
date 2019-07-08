@@ -61,7 +61,7 @@ final class HttpService[F[_]](
         .withNio2(true)
         .enableHttp2(config.enableHttp2)
         .withWebSockets(config.enableWebsockets)
-        .bindHttp(config.port, config.host)
+        .bindHttp(config.port, config.local)
     }
 
     val sslLClientAuthMode = sslConfig.clientAuth match {

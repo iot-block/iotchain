@@ -15,11 +15,12 @@ final case class ServiceConfig(
     logBody: Boolean,
     enableMetrics: Boolean,
     allowedOrigins: List[String],
+    local: String,
     host: String,
     port: Int,
     apis: List[String]
 ) {
-  val addr = new InetSocketAddress(host, port)
+  val addr = new InetSocketAddress(local, port)
 
   val uri: String = (if (secure) "https:" else "http:") + s"//${host}:${port}"
 }

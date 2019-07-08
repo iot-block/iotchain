@@ -57,7 +57,9 @@ final class OutgoingManager[F[_]](config: FullConfig, history: History[F], ssl: 
             peer.queue.dequeue.through(Message.encodePipe).through(socket.writes(None))
           ).parJoinUnbounded
       }
-      .handleErrorWith(e => Stream.sleep(15.seconds) ++ connect(peerUri))
+      .handleErrorWith(e => {
+        Stream.eval(log.error(s"connect ${peerUri.address} error",e)) ++ Stream.sleep(15.seconds) ++ connect(peerUri)
+      })
 
   val connects: Stream[F, Unit] =
     Stream.eval(store.add(config.peer.seedUris: _*)) ++
