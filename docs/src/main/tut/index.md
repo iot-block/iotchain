@@ -4,7 +4,7 @@ layout: home
 ---
 
 # IotChain
-[![Build Status](https://travis-ci.com/iot-block/iotchain.svg?branch=master)](https://travis-ci.com/iot-block/iotchain)
+[![Build Status](https://travis-ci.org/iot-block/iotchain.svg?branch=master)](https://travis-ci.org/iot-block/iotchain)
 
 
 ## Quick Start
