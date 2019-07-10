@@ -1,4 +1,4 @@
-Scala implementation of the IotChain
+IotChain
 ===
 
 [![Build Status](https://travis-ci.com/c-block/jbok.svg?branch=master)](https://travis-ci.com/c-block/jbok)
