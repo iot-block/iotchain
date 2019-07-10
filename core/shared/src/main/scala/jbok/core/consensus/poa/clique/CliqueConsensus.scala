@@ -104,18 +104,18 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
 
   override def run(block: Block): F[Consensus.Result] = {
     val result: F[Consensus.Result] = for {
-      _ <- verify(block)
-      _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap {
-        case Some(parent) =>
-          BlockValidator.preExecValidate[F](parent, block) >>
-            clique.applyHeaders(parent.number, parent.hash, List(block.header)).void
-        case None =>
-          F.raiseError[Unit](HeaderParentNotFoundInvalid)
-      }
       best   <- history.getBestBlock
       bestTd <- history.getTotalDifficultyByHash(best.header.hash).flatMap(opt => F.fromOption(opt, DBErr.NotFound))
-      result <- if (block.header.number == best.header.number + 1) {
+      result <- if (block.header.parentHash == best.header.hash && block.header.number == best.header.number + 1) {
         (for {
+          _ <- verify(block)
+          _ <- history.getBlockHeaderByHash(block.header.parentHash).flatMap {
+            case Some(parent) =>
+              BlockValidator.preExecValidate[F](parent, block) >>
+                clique.applyHeaders(parent.number, parent.hash, List(block.header)).void
+            case None =>
+              F.raiseError[Unit](HeaderParentNotFoundInvalid)
+          }
           topBlockHash <- pool.addBlock(block).map {
             case Some(leaf) => leaf.hash
             case None       => ???
