@@ -159,7 +159,7 @@ final class BlockExecutor[F[_]](
           blockPool.addBlock(block).as(Nil)
 
         case Consensus.Discard(e) =>
-          log.d(s"discard ${block.tag} because ${e}").as(Nil)
+          log.i(s"discard ${block.tag} because ${e}").as(Nil)
       }
     }
   }
