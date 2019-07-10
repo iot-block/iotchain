@@ -6,7 +6,7 @@ IotChain
 
 **IotChain**, to be a type-safe, functional and flexible blockchain.
 
-Go to the [**microsite**](https://c-block.github.io/jbok/) for more information.
+Go to the [**microsite**](https://iot-block.github.io/iotchain/) for more information.
 
 WIP.
 
