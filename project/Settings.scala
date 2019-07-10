@@ -3,12 +3,12 @@ import sbt._
 
 object Settings {
   val projectOrg         = "org.jbok"
-  val projectName        = "jbok"
-  val projectDescription = "Just a Bunch Of Keys"
+  val projectName        = "iotchain"
+  val projectDescription = "To be a type-safe, functional and flexible blockchain."
   val projectAuthors     = s"${projectName} authors"
   val projectLicense     = ("MIT", url("http://opensource.org/licenses/MIT"))
-  val projectGithubOwner = "c-block"
-  val projectGithubRepo  = "jbok"
+  val projectGithubOwner = "iot-block"
+  val projectGithubRepo  = "iotchain"
 
   lazy val common = compilerPlugins ++ WartRemoverPlugin.settings ++ Seq(
     cancelable in Global := true,

@@ -3,8 +3,8 @@ layout: home
 
 ---
 
-# JBOK - Just a Bunch Of Keys
-[![Build Status](https://travis-ci.com/c-block/jbok.svg?branch=master)](https://travis-ci.com/c-block/jbok)
+# IotChain
+[![Build Status](https://travis-ci.com/iot-block/iotchain.svg?branch=master)](https://travis-ci.com/iot-block/iotchain)
 
 
 ## Quick Start
@@ -57,7 +57,7 @@ and great libraries:
 ```
 MIT License
 
-Copyright (c) 2018 - 2019 The JBOK Authors
+Copyright (c) 2018 - 2019 The IotChain Authors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
