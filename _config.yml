@@ -1,11 +1,11 @@
-name: jbok
-baseurl: /jbok
-description: Just a Bunch Of Keys
+name: IotChain
+baseurl: /iotchain
+description: IotChain, to be a type-safe, functional and flexible blockchain
 highlighter: rouge
 docs: true
 collections:
   tut:
     output: true
 version: 0.0.1-SNAPSHOT
-org: org.jbok
+org: org.iotchain
 markdown: kramdown
