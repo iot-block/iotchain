@@ -79,24 +79,26 @@ modify `~/.jbok/node-$#/config.yaml` to change node config.
 - Docker
 - Docker-Compose
 
-Before deploying, you need a keystore file.
+And before deploying, you need a keystore file.
 
-- Generate keystore. 
+- Keystore file. 
 
-You can create your account using our wallet app, then export the keystore.
+You can create your account using our [Wallet App](https://iotchain.io/wallet), export the keystore from app.
 
 
-There are 2 ways to deploy MainNet node: deploy with docker, deploy with docker-compose.
+There are 2 ways to deploy MainNet Node: 
+
+- deploy with docker
+- deploy with docker-compose.
 
 In this guide, I will deploy node in directory `/iotchain`.
 
-####Deploy with Docker step-by-step
+#### Deploy with Docker step-by-step
 1. create directory for config datas and keystore file.
 
     ```bash
     $ cd /iotchain
-    $ mkdir -p etc/iotchain
-    $ mkdir etc/iotchain/keystore
+    $ mkdir -p etc/iotchain/keystore
     ```
 
 2. upload file `config.yaml` to `/iotchain/etc/iotchain/config.yaml`
@@ -106,11 +108,11 @@ In this guide, I will deploy node in directory `/iotchain`.
     
 4. run docker.
     ```bash
-    $ docker run -v $(pwd)/etc/iotchain:/etc/iotchain:ro 
-        -v $(pwd)/var/lib/iotchain:/var/lib/iotchain 
-        -v $(pwd)/var/log/iotchain:/var/log/iotchain 
-        -p 30314:30314 
-        -p 30315:30315 
+    $ docker run -v $(pwd)/etc/iotchain:/etc/iotchain:ro \
+        -v $(pwd)/var/lib/iotchain:/var/lib/iotchain \
+        -v $(pwd)/var/log/iotchain:/var/log/iotchain \
+        -p 30314:30314 \
+        -p 30315:30315 \
         -d iotchain/iotchain:<version>
     ```
 5. stop docker container.
@@ -124,8 +126,7 @@ Docker-Compose will running prometheus for node metrics, and you can monitor thi
 
     ```bash
     $ cd /iotchain
-    $ mkdir -p etc/iotchain
-    $ mkdir etc/iotchain/keystore
+    $ mkdir -p etc/iotchain/keystore
     ```
 2. upload file `docker-compose.yaml` to `/iotchain/docker-compose.yaml`.
 3. upload file `config.yaml` to `/iotchain/etc/iotchain/config.yaml`
