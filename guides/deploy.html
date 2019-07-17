@@ -78,13 +78,10 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
 <p>And before deploying, you need a keystore file.</p>
 
 <ul>
-  <li>
-    <p>Keystore file</p>
-
-    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>You can create your account using our [Wallet App](https://iotchain.io/wallet), export the keystore from app.
-</code></pre></div>    </div>
-  </li>
+  <li>Keystore file.</li>
 </ul>
+
+<p>You can create your account using our <a href="https://iotchain.io/wallet">Wallet App</a>, export the keystore from app.</p>
 
 <p>There are 2 ways to deploy MainNet Node:</p>
 
@@ -102,8 +99,7 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
     <p>create directory for config datas and keystore file.</p>
 
     <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> /iotchain
-<span class="nv">$ </span>mkdir <span class="nt">-p</span> etc/iotchain
-<span class="nv">$ </span>mkdir etc/iotchain/keystore
+<span class="nv">$ </span>mkdir <span class="nt">-p</span> etc/iotchain/keystore
 </code></pre></div>    </div>
   </li>
   <li>
@@ -118,11 +114,11 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
   <li>
     <p>run docker.</p>
 
-    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker run <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/etc/iotchain:/etc/iotchain:ro 
-    <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/var/lib/iotchain:/var/lib/iotchain 
-    <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/var/log/iotchain:/var/log/iotchain 
-    <span class="nt">-p</span> 30314:30314 
-    <span class="nt">-p</span> 30315:30315 
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker run <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/etc/iotchain:/etc/iotchain:ro <span class="se">\</span>
+    <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/var/lib/iotchain:/var/lib/iotchain <span class="se">\</span>
+    <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/var/log/iotchain:/var/log/iotchain <span class="se">\</span>
+    <span class="nt">-p</span> 30314:30314 <span class="se">\</span>
+    <span class="nt">-p</span> 30315:30315 <span class="se">\</span>
     <span class="nt">-d</span> iotchain/iotchain:&lt;version&gt;
 </code></pre></div>    </div>
   </li>
@@ -143,8 +139,7 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
     <p>create directory for config datas and keystore file.</p>
 
     <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> /iotchain
-<span class="nv">$ </span>mkdir <span class="nt">-p</span> etc/iotchain
-<span class="nv">$ </span>mkdir etc/iotchain/keystore
+<span class="nv">$ </span>mkdir <span class="nt">-p</span> etc/iotchain/keystore
 </code></pre></div>    </div>
   </li>
   <li>
