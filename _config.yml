@@ -1,11 +1,11 @@
-name: IotChain
+name: iotchain
 baseurl: /iotchain
-description: IotChain, to be a type-safe, functional and flexible blockchain
+description: To be a type-safe, functional and flexible blockchain.
 highlighter: rouge
 docs: true
 collections:
   tut:
     output: true
 version: 0.0.1-SNAPSHOT
-org: org.iotchain
+org: org.jbok
 markdown: kramdown

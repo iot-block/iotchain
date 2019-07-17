@@ -66,6 +66,105 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
 
 <p><em>WARN: do not modify genesis part</em></p>
 
+<h3 id="deploy-mainnet-node">Deploy MainNet Node</h3>
+
+<p><em>dependencies</em></p>
+
+<ul>
+  <li>Docker</li>
+  <li>Docker-Compose</li>
+</ul>
+
+<p>Before deploying, you need a keystore file.</p>
+
+<ul>
+  <li>Generate keystore.</li>
+</ul>
+
+<p>You can create your account using our wallet app, then export the keystore.</p>
+
+<p>There are 2 ways to deploy MainNet node: deploy with docker, deploy with docker-compose.</p>
+
+<p>In this guide, I will deploy node in directory <code class="highlighter-rouge">/iotchain</code>.</p>
+
+<p>####Deploy with Docker step-by-step</p>
+<ol>
+  <li>
+    <p>create directory for config datas and keystore file.</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> /iotchain
+<span class="nv">$ </span>mkdir <span class="nt">-p</span> etc/iotchain
+<span class="nv">$ </span>mkdir etc/iotchain/keystore
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>upload file <code class="highlighter-rouge">config.yaml</code> to <code class="highlighter-rouge">/iotchain/etc/iotchain/config.yaml</code></p>
+  </li>
+  <li>
+    <p>upload your keystore file to <code class="highlighter-rouge">/iotchain/etc/iotchain/keystore/&lt;address&gt;.json</code>.</p>
+
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>For example, if my address is `0eef064fd13402379b285d25f90af1beeb4f73eb`, it's filename will be `0eef064fd13402379b285d25f90af1beeb4f73eb.json`.
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>run docker.</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker run <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/etc/iotchain:/etc/iotchain:ro 
+    <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/var/lib/iotchain:/var/lib/iotchain 
+    <span class="nt">-v</span> <span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/var/log/iotchain:/var/log/iotchain 
+    <span class="nt">-p</span> 30314:30314 
+    <span class="nt">-p</span> 30315:30315 
+    <span class="nt">-d</span> iotchain/iotchain:&lt;version&gt;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>stop docker container.</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker stop &lt;CONTAINER_ID&gt;
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<h4 id="deploy-with-docker-compose-step-by-step">Deploy with Docker-Compose step-by-step</h4>
+
+<p>Docker-Compose will running prometheus for node metrics, and you can monitor this metrics in grafana.</p>
+
+<ol>
+  <li>
+    <p>create directory for config datas and keystore file.</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span><span class="nb">cd</span> /iotchain
+<span class="nv">$ </span>mkdir <span class="nt">-p</span> etc/iotchain
+<span class="nv">$ </span>mkdir etc/iotchain/keystore
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>upload file <code class="highlighter-rouge">docker-compose.yaml</code> to <code class="highlighter-rouge">/iotchain/docker-compose.yaml</code>.</p>
+  </li>
+  <li>
+    <p>upload file <code class="highlighter-rouge">config.yaml</code> to <code class="highlighter-rouge">/iotchain/etc/iotchain/config.yaml</code></p>
+  </li>
+  <li>
+    <p>upload <code class="highlighter-rouge">etc/grafana</code>, <code class="highlighter-rouge">etc/mysql</code>, <code class="highlighter-rouge">etc/prometheus</code> to <code class="highlighter-rouge">/iotchain/etc/grafana</code>, <code class="highlighter-rouge">/iotchain/etc/mysql</code>, <code class="highlighter-rouge">/iotchain/etc/prometheus</code>.</p>
+  </li>
+  <li>
+    <p>run docker-compose.</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker-compose up <span class="nt">-d</span>
+</code></pre></div>    </div>
+
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Open `http://yourip:3000`, monitoring node state.
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>stop docker-compose</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker-compose stop
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+
 
 <link rel="stylesheet" type="text/css" href="/iotchain/css/toc.css"></link>
 <script type="text/javascript" src="/iotchain/js/toc.js"></script>
