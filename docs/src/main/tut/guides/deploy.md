@@ -71,3 +71,72 @@ the `~/.jbok`, will be root directory of nodes. every node's data will save into
 modify `~/.jbok/node-$#/config.yaml` to change node config.
 
 *WARN: do not modify genesis part*
+
+### Deploy MainNet Node
+
+*dependencies*
+
+- Docker
+- Docker-Compose
+
+Before deploying, you need a keystore file.
+
+- Generate keystore. 
+
+You can create your account using our wallet app, then export the keystore.
+
+
+There are 2 ways to deploy MainNet node: deploy with docker, deploy with docker-compose.
+
+In this guide, I will deploy node in directory `/iotchain`.
+
+####Deploy with Docker step-by-step
+1. create directory for config datas and keystore file.
+
+    ```bash
+    $ cd /iotchain
+    $ mkdir -p etc/iotchain
+    $ mkdir etc/iotchain/keystore
+    ```
+
+2. upload file `config.yaml` to `/iotchain/etc/iotchain/config.yaml`
+3. upload your keystore file to `/iotchain/etc/iotchain/keystore/<address>.json`.
+
+    For example, if my address is `0eef064fd13402379b285d25f90af1beeb4f73eb`, it's filename will be `0eef064fd13402379b285d25f90af1beeb4f73eb.json`.
+    
+4. run docker.
+    ```bash
+    $ docker run -v $(pwd)/etc/iotchain:/etc/iotchain:ro 
+        -v $(pwd)/var/lib/iotchain:/var/lib/iotchain 
+        -v $(pwd)/var/log/iotchain:/var/log/iotchain 
+        -p 30314:30314 
+        -p 30315:30315 
+        -d iotchain/iotchain:<version>
+    ```
+5. stop docker container.
+    ```bash
+    $ docker stop <CONTAINER_ID>
+    ```
+#### Deploy with Docker-Compose step-by-step
+Docker-Compose will running prometheus for node metrics, and you can monitor this metrics in grafana. 
+
+1. create directory for config datas and keystore file.
+
+    ```bash
+    $ cd /iotchain
+    $ mkdir -p etc/iotchain
+    $ mkdir etc/iotchain/keystore
+    ```
+2. upload file `docker-compose.yaml` to `/iotchain/docker-compose.yaml`.
+3. upload file `config.yaml` to `/iotchain/etc/iotchain/config.yaml`
+4. upload `etc/grafana`, `etc/mysql`, `etc/prometheus` to `/iotchain/etc/grafana`, `/iotchain/etc/mysql`, `/iotchain/etc/prometheus`.
+5. run docker-compose.
+    ```bash
+    $ docker-compose up -d
+    ```
+    
+    Open `http://yourip:3000`, monitoring node state.
+6. stop docker-compose
+    ```bash
+    $ docker-compose stop
+    ```
