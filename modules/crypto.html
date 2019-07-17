@@ -11,7 +11,7 @@
 
 <span class="k">val</span> <span class="n">bytes</span> <span class="k">=</span> <span class="nc">ByteVector</span><span class="o">(</span><span class="s">"jbok"</span><span class="o">.</span><span class="n">getBytes</span><span class="o">())</span>
 <span class="c1">// bytes: ByteVector = Chunk(
-//   View(scodec.bits.ByteVector$AtArray@3448a248, 0L, 4L)
+//   View(scodec.bits.ByteVector$AtArray@6d398b6c, 0L, 4L)
 // )
 </span><span class="n">bytes</span><span class="o">.</span><span class="n">kec256</span><span class="o">.</span><span class="n">toHex</span>
 <span class="c1">// res0: String = "ec2efe5a15b243d8e1de351847914f166c4ac52c1ecbebe6743503360511f728"
@@ -32,25 +32,25 @@
 
 <span class="k">val</span> <span class="n">keyPair</span> <span class="k">=</span> <span class="nc">Signature</span><span class="o">[</span><span class="kt">ECDSA</span><span class="o">].</span><span class="n">generateKeyPair</span><span class="o">[</span><span class="kt">IO</span><span class="o">]().</span><span class="n">unsafeRunSync</span><span class="o">()</span>
 <span class="c1">// keyPair: KeyPair = KeyPair(
-//   Public(Chunk(View(scodec.bits.ByteVector$AtArray@35d44cd3, 0L, 64L))),
-//   Secret(Chunk(View(scodec.bits.ByteVector$AtArray@7b06dce0, 1L, 32L)))
+//   Public(Chunk(View(scodec.bits.ByteVector$AtArray@6ae1d5f1, 0L, 64L))),
+//   Secret(Chunk(View(scodec.bits.ByteVector$AtArray@56d4481f, 1L, 32L)))
 // )
 </span><span class="k">val</span> <span class="n">message</span> <span class="k">=</span> <span class="nc">ByteVector</span><span class="o">(</span><span class="s">"jbok"</span><span class="o">.</span><span class="n">getBytes</span><span class="o">)</span>
 <span class="c1">// message: ByteVector = Chunk(
-//   View(scodec.bits.ByteVector$AtArray@556a5e70, 0L, 4L)
+//   View(scodec.bits.ByteVector$AtArray@625430f8, 0L, 4L)
 // )
 </span><span class="k">val</span> <span class="n">chainId</span> <span class="k">=</span> <span class="nc">BigInt</span><span class="o">(</span><span class="mi">1</span><span class="o">)</span>
 <span class="c1">// chainId: BigInt = 1
 </span><span class="k">val</span> <span class="n">signature</span> <span class="k">=</span> <span class="nc">Signature</span><span class="o">[</span><span class="kt">ECDSA</span><span class="o">].</span><span class="n">sign</span><span class="o">[</span><span class="kt">IO</span><span class="o">](</span><span class="n">message</span><span class="o">.</span><span class="n">kec256</span><span class="o">.</span><span class="n">toArray</span><span class="o">,</span> <span class="n">keyPair</span><span class="o">,</span> <span class="n">chainId</span><span class="o">).</span><span class="n">unsafeRunSync</span><span class="o">()</span>
 <span class="c1">// signature: CryptoSignature = CryptoSignature(
-//   43743993633538551673151556288717342683768929084392695676582233999327416976755,
-//   50303526336515774444812686545661643765441862443255678229828067756785545179860,
+//   53815276265974235344411921755926197376755928109652002948231198496625533813194,
+//   24721796211230255437509995472686571587302542951568448058387852291111585276941,
 //   30
 // )
 </span>
 <span class="nc">Signature</span><span class="o">[</span><span class="kt">ECDSA</span><span class="o">].</span><span class="n">recoverPublic</span><span class="o">(</span><span class="n">message</span><span class="o">.</span><span class="n">kec256</span><span class="o">.</span><span class="n">toArray</span><span class="o">,</span> <span class="n">signature</span><span class="o">,</span> <span class="n">chainId</span><span class="o">)</span>
 <span class="c1">// res4: Option[KeyPair.Public] = Some(
-//   Public(Chunk(View(scodec.bits.ByteVector$AtArray@47fca369, 0L, 64L)))
+//   Public(Chunk(View(scodec.bits.ByteVector$AtArray@627f678d, 0L, 64L)))
 // )
 </span>
 <span class="c1">// change chainId
