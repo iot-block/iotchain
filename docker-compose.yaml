@@ -48,7 +48,7 @@ services:
       - 9104:9104
 
   jbok:
-    image: jbok:latest
+    image: iotchain/iotchain:0.0.2beta
     restart: always
     volumes:
       - ./etc/jbok:/etc/jbok:ro

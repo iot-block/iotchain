@@ -99,6 +99,7 @@ object StatelessGen {
 
   val receipt: Gen[Receipt] =
     for {
+      header <- blockHeader
       postTransactionStateHash <- gen.sizedByteVector(32)
       cumulativeGasUsed        <- gen.N
       logsBloomFilter          <- gen.sizedByteVector(256)
@@ -113,7 +114,8 @@ object StatelessGen {
         txHash = txHash,
         contractAddress = None,
         gasUsed = gasUsed,
-        status = true
+        status = true,
+        blockNumber = header.number
       )
 
   // messages

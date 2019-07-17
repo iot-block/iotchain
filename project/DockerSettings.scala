@@ -6,7 +6,7 @@ import sbt.Keys._
 object DockerSettings {
   val settings = Seq(
     packageName in Docker := "iotchain/"+Settings.projectName,
-    version in Docker := "0.0.1beta",
+    version in Docker := "0.0.2beta",
     dockerCommands := Seq(
       Cmd("FROM", "openjdk:8-jre"),
       Cmd("RUN", "groupadd -r jbok && useradd -r -g jbok jbok"),

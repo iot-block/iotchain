@@ -92,7 +92,8 @@ class BodyValidatorSpec extends CoreSpec {
       txHash = txs(0).hash,
       contractAddress = None,
       gasUsed = 21000,
-      status = true
+      status = true,
+      blockNumber = 1
     ),
     Receipt(
       postTransactionStateHash = hex"b927d361126302acaa1fa5e93d0b7e349e278231fe2fc2846bfd54f50377f20a",
@@ -102,7 +103,8 @@ class BodyValidatorSpec extends CoreSpec {
       txHash = txs(1).hash,
       contractAddress = None,
       gasUsed = 21000,
-      status = true
+      status = true,
+      blockNumber = 1
     ),
     Receipt(
       postTransactionStateHash = hex"1e913d6bdd412d71292173d7908f8792adcf958b84c89575bc871a1decaee56d",
@@ -112,7 +114,8 @@ class BodyValidatorSpec extends CoreSpec {
       txHash = txs(2).hash,
       contractAddress = None,
       gasUsed = 21000,
-      status = true
+      status = true,
+      blockNumber = 1
     ),
     Receipt(
       postTransactionStateHash = hex"0c6e052bc83482bafaccffc4217adad49f3a9533c69c820966d75ed0154091e6",
@@ -122,7 +125,8 @@ class BodyValidatorSpec extends CoreSpec {
       txHash = txs(3).hash,
       contractAddress = None,
       gasUsed = 21000,
-      status = true
+      status = true,
+      blockNumber = 1
     )
   )
 

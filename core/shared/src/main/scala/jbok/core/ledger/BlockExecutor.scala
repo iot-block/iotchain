@@ -221,7 +221,8 @@ final class BlockExecutor[F[_]](
               txHash = stx.hash,
               gasUsed = txResult.gasUsed,
               contractAddress = txResult.contractAddress,
-              status = status
+              status = status,
+              blockNumber = header.number
             )
             executeTransactions(
               tail,
