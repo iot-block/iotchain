@@ -75,7 +75,16 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
   <li>Docker-Compose</li>
 </ul>
 
-<p>And before deploying, you need a keystore file.</p>
+<h4 id="install-docker--docker-compose">Install Docker &amp; Docker-Compose</h4>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>yum  install docker <span class="nt">-y</span>
+<span class="nv">$ </span><span class="nb">sudo </span>curl <span class="nt">-L</span> <span class="s2">"https://github.com/docker/compose/releases/download/1.24.0/docker-compose-</span><span class="k">$(</span>uname <span class="nt">-s</span><span class="k">)</span><span class="s2">-</span><span class="k">$(</span>uname <span class="nt">-m</span><span class="k">)</span><span class="s2">"</span> <span class="nt">-o</span> /usr/local/bin/docker-compose
+<span class="nv">$ </span><span class="nb">sudo </span>chmod +x /usr/local/bin/docker-compose
+<span class="nv">$ </span>service docker start
+<span class="nv">$ </span>chkconfig docker on
+</code></pre></div></div>
+
+<p>Before deploying, we need a keystore file.</p>
 
 <ul>
   <li>Keystore file.</li>
@@ -83,7 +92,7 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
 
 <p>You can create your account using our <a href="https://iotchain.io/wallet">Wallet App</a>, export the keystore from app.</p>
 
-<p>There are 2 ways to deploy MainNet Node:</p>
+<p>We have 2 ways to deploy mainnet Node:</p>
 
 <ul>
   <li>deploy with docker</li>
