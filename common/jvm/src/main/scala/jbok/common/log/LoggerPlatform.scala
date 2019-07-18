@@ -30,8 +30,8 @@ object LoggerPlatform {
   def fileHandler(directory: Path, minimumLevel: Option[Level] = None, maxLogs: Int = 15): LogHandler = LogHandler(
     Logger.fileFormatter,
     FileWriter().nio
-      .path(LogPath.simple("jbok.log", directory = directory))
-      .rolling(LogPath.daily(prefix = "jbok", directory = directory))
+      .path(LogPath.simple("iotchain.log", directory = directory))
+      .rolling(LogPath.daily(prefix = "iotchain", directory = directory))
       .maxLogs(maxLogs, checkRate = 1.seconds),
     minimumLevel.map(Logger.fromJbokLevel)
   )

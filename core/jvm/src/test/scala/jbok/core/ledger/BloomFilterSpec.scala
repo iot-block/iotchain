@@ -17,7 +17,8 @@ class BloomFilterSpec extends CommonSpec {
       txHash = ByteVector.empty,
       contractAddress = None,
       gasUsed = N(21000),
-      status = true
+      status = true,
+      blockNumber = N(1)
     )
 
     "properly create the bloom filter for without logs" in {

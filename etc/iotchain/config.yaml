@@ -1,4 +1,4 @@
-rootPath: /var/lib/jbok
+rootPath: /var/lib/iotchain
 genesis:
   chainId: '10'
   alloc:
@@ -11,7 +11,7 @@ genesis:
   difficulty: '0'
   gasLimit: '16716680'
 log:
-  logDir: /var/log/jbok
+  logDir: /var/log/iotchain
   level: INFO
   maxLogs: 15
 history:
@@ -22,8 +22,8 @@ history:
     byzantiumBlockNumber: '0'
     constantinopleBlockNumber: '1000000000000000000000'
 keystore:
-  initkey: /etc/jbok/init.key
-  dir: /var/lib/jbok/keystore
+  initkey: ''
+  dir: /etc/iotchain/keystore
 peer:
   host: 0.0.0.0
   port: 30314
@@ -33,7 +33,7 @@ peer:
   updatePeersInterval: 10 seconds
   maxOutgoingPeers: 10
   maxIncomingPeers: 10
-  minPeers: 0
+  minPeers: 1
   bufferSize: 4194304
   timeout: 10 seconds
 sync:
@@ -59,7 +59,7 @@ mining:
   minBroadcastPeers: 4
 persist:
   driver: rocksdb
-  path: /var/lib/jbok/data
+  path: /var/lib/iotchain/data
   columnFamilies:
     - default
     - BlockHeader
@@ -75,13 +75,13 @@ persist:
     - TxLocation
 ssl:
   enabled: false
-  keyStorePath: /etc/jbok/server.jks
-  trustStorePath: /etc/jbok/cacert.jks
+  keyStorePath: /etc/iotchain/cert/server.jks
+  trustStorePath: /etc/iotchain/cert/cacert.jks
   protocol: TLS
   clientAuth: NotRequested
 db:
-  driver: com.mysql.cj.jdbc.MysqlDataSource
-  url: jdbc:mysql://mysql:3306/jbok?useSSL=false
+  driver: org.sqlite.JDBC
+  url: jdbc:sqlite:/var/lib/iotchain/service.db
   user: root
   password: password
 service:
@@ -93,7 +93,8 @@ service:
   logBody: false
   enableMetrics: true
   allowedOrigins: []
-  host: 0.0.0.0
+  local: 0.0.0.0
+  host: 127.0.0.2
   port: 30315
   apis:
     - account

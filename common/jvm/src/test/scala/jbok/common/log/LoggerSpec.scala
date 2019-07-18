@@ -19,7 +19,7 @@ class LoggerSpec extends CommonSpec {
           _    <- Logger.setRootHandlers[IO](Logger.consoleHandler(Some(Level.Info)), LoggerPlatform.fileHandler(file.path, Some(Level.Info)))
           _    <- Logger[IO].i("should be written into file")
           _    <- Logger[IO].t("should not be written into file")
-          text <- FileUtil[IO].read(file.path.resolve("jbok.log"))
+          text <- FileUtil[IO].read(file.path.resolve("iotchain.log"))
           _ = text.contains("should be written into file") shouldBe true
           _ = text.contains("should not be written into file") shouldBe false
         } yield ()

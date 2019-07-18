@@ -4,6 +4,8 @@ title:  "Admin"
 number: 1
 ---
 
+ApiPrefix: `admin`
+
 ```scala mdoc
 import jbok.core.models._
 import jbok.core.peer.PeerUri

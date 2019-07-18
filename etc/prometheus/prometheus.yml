@@ -18,7 +18,7 @@ scrape_configs:
   - job_name: 'mysql'
     static_configs:
       - targets: ['mysqld-exporter:9104']
-  - job_name: 'jbok'
+  - job_name: 'iotchain'
     scrape_interval: 5s
     static_configs:
-      - targets: ['jbok:30315']
+      - targets: ['iotchain:30315']

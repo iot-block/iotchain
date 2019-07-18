@@ -63,7 +63,7 @@ trait Metrics[F[_]] extends EffectMetrics[F] with StreamMetrics[F] {
 }
 
 object Metrics {
-  val METRIC_PREFIX = "jbok"
+  val METRIC_PREFIX = "iotchain"
   val TIMER_SUFFIX  = "seconds"
   val GAUGE_SUFFIX  = "active"
 

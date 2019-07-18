@@ -4,6 +4,8 @@ title:  "Transaction"
 number: 1
 ---
 
+ApiPrefix: `transaction`
+
 ```scala mdoc
 import scodec.bits.ByteVector
 import jbok.core.models._

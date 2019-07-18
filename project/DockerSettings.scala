@@ -6,22 +6,22 @@ import sbt.Keys._
 object DockerSettings {
   val settings = Seq(
     packageName in Docker := "iotchain/"+Settings.projectName,
-    version in Docker := "0.0.1beta",
+    version in Docker := "0.0.2beta",
     dockerCommands := Seq(
       Cmd("FROM", "openjdk:8-jre"),
-      Cmd("RUN", "groupadd -r jbok && useradd -r -g jbok jbok"),
+      Cmd("RUN", "groupadd -r iotchain && useradd -r -g iotchain iotchain"),
       Cmd(
         "RUN",
-        s"""rm -rf /var/lib/jbok /var/log/jbok && \\
-           |mkdir -p /var/lib/jbok /var/log/jbok && \\
-           |chown -R jbok:jbok /var/lib/jbok /var/log/jbok && \\
-           |chmod 777 /var/lib/jbok /var/log/jbok
+        s"""rm -rf /var/lib/iotchain /var/log/iotchain && \\
+           |mkdir -p /var/lib/iotchain /var/log/iotchain && \\
+           |chown -R iotchain:iotchain /var/lib/iotchain /var/log/iotchain && \\
+           |chmod 777 /var/lib/iotchain /var/log/iotchain
          """.stripMargin
       ),
       Cmd("WORKDIR", "/opt/docker"),
-      Cmd("ADD", "--chown=jbok:jbok opt /opt"),
+      Cmd("ADD", "--chown=iotchain:iotchain opt /opt"),
       Cmd("EXPOSE", "30314 30315"),
-      Cmd("VOLUME", "/var/lib/jbok, /var/log/jbok"),
+      Cmd("VOLUME", "/var/lib/iotchain, /var/log/iotchain"),
       Cmd("ENTRYPOINT", "/opt/docker/bin/app-main")
     )
   )

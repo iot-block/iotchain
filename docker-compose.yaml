@@ -30,7 +30,7 @@ services:
     image: mysql:5.7
     hostname: mysql
     environment:
-      MYSQL_DATABASE: jbok
+      MYSQL_DATABASE: iotchain
       MYSQL_USER: user
       MYSQL_PASSWORD: password
       MYSQL_ROOT_PASSWORD: password
@@ -47,13 +47,13 @@ services:
     ports:
       - 9104:9104
 
-  jbok:
-    image: jbok:latest
+  iotchain:
+    image: iotchain/iotchain:0.0.2beta
     restart: always
     volumes:
-      - ./etc/jbok:/etc/jbok:ro
-      - ./var/lib/jbok:/var/lib/jbok
-      - ./var/log/jbok:/var/log/jbok
+      - ./etc/iotchain:/etc/iotchain:ro
+      - ./var/lib/iotchain:/var/lib/iotchain
+      - ./var/log/iotchain:/var/log/iotchain
     ports:
       - 30314:30314
       - 30315:30315

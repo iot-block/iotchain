@@ -4,6 +4,8 @@ title:  "Account"
 number: 1
 ---
 
+ApiPrefix: `account`
+
 ```scala mdoc
 import scodec.bits.ByteVector
 import jbok.common.math.N

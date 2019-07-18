@@ -20,7 +20,8 @@ final case class Receipt(
     txHash: ByteVector,
     contractAddress: Option[Address],
     gasUsed: N,
-    status: Boolean
+    status: Boolean,
+    blockNumber: N
 )
 
 object Receipt {

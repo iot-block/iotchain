@@ -4,6 +4,8 @@ title:  "Block"
 number: 1
 ---
 
+ApiPrefix: `block`
+
 ```scala mdoc
 import jbok.core.models._
 import scodec.bits.ByteVector 

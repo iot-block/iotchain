@@ -42,8 +42,6 @@ to choose specified project on `JVM` or `JavaScript`
 
 Inspired by the following projects:
 - [Ethereum](https://github.com/ethereum/go-ethereum)
-- [Mantis](https://github.com/input-output-hk/mantis)
-- [Scorex](https://github.com/ScorexFoundation/Scorex)
 - etc.
 
 and great libraries:
