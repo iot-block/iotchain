@@ -86,7 +86,7 @@ final class PrometheusMetrics[F[_]](val registry: CollectorRegistry = Prometheus
 object PrometheusMetrics {
   lazy val registry = new CollectorRegistry()
 
-  val METRIC_PREFIX = "jbok"
+  val METRIC_PREFIX = "iotchain"
   val TIMER_SUFFIX  = "seconds"
   val GAUGE_SUFFIX  = "active"
 

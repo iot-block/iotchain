@@ -90,7 +90,7 @@
         "for": "2m",
         "frequency": "1m",
         "handler": 1,
-        "name": "jbok down alert",
+        "name": "iotchain down alert",
         "noDataState": "no_data",
         "notifications": [
           {
@@ -136,7 +136,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "up{job=\"jbok\"}",
+          "expr": "up{job=\"iotchain\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -161,7 +161,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "jbok status",
+      "title": "IoTChain status",
       "tooltip": {
         "shared": true,
         "sort": 0,

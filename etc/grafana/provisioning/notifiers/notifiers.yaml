@@ -13,8 +13,8 @@ notifiers:
     # See `Supported Settings` section for settings supporter for each
     # alert notification type.
     settings:
-      recipient: "@playjokes"
-      username: JBOK
+      recipient: "@iotchain"
+      username: iotchain
       token: ""
       url: https://hooks.slack.com/services/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
       iconUrl: https://a.slack-edge.com/37d58/img/emoji_2017_12_06/apple/1f41e.png
@@ -33,4 +33,4 @@ notifiers:
     # See `Supported Settings` section for settings supporter for each
     # alert notification type.
     settings:
-      addresses: example@jbok.com;test@jbok.com;
+      addresses: example@iotchain.com;test@iotchain.com;

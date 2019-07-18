@@ -1765,8 +1765,8 @@
       },
       {
         "current": {
-          "text": "jbok",
-          "value": "jbok"
+          "text": "iotchain",
+          "value": "iotchain"
         },
         "hide": 0,
         "label": "job",
@@ -1785,8 +1785,8 @@
       {
         "allValue": ".*",
         "current": {
-          "text": "jbok:30315",
-          "value": "jbok:30315"
+          "text": "iotchain:30315",
+          "value": "iotchain:30315"
         },
         "datasource": "$datasource",
         "definition": "",

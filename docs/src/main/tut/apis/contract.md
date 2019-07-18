@@ -4,6 +4,8 @@ title:  "Contract"
 number: 1
 ---
 
+ApiPrefix: `contract`
+
 ```scala mdoc
 import jbok.core.api._
 import scodec.bits.ByteVector

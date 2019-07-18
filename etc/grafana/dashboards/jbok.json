@@ -103,7 +103,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "up{job=\"jbok\"}",
+          "expr": "up{job=\"iotchain\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -196,7 +196,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "(time() - process_start_time_seconds{job=\"jbok\"})",
+          "expr": "(time() - process_start_time_seconds{job=\"iotchain\"})",
           "format": "time_series",
           "intervalFactor": 2,
           "refId": "A"
@@ -287,7 +287,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "jbok_BestBlockNumber_active",
+          "expr": "iotchain_BestBlockNumber_active",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -363,7 +363,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "process_start_time_seconds{job=\"jbok\"}*1000",
+          "expr": "process_start_time_seconds{job=\"iotchain\"}*1000",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -434,7 +434,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_http_server_request_count[5m])",
+          "expr": "rate(iotchain_http_server_request_count[5m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -444,7 +444,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Jbok Http Sever QPS",
+      "title": "Http Sever QPS",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -520,7 +520,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_http_server_response_duration_seconds_sum[5m])/rate(jbok_http_server_response_duration_seconds_count[5m])",
+          "expr": "rate(iotchain_http_server_response_duration_seconds_sum[5m])/rate(iotchain_http_server_response_duration_seconds_count[5m])",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "",
@@ -531,7 +531,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Jbok Http Server Latency",
+      "title": "Http Server Latency",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -618,7 +618,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getBlockBodyByHash_seconds_sum[1m])",
+          "expr": "rate(iotchain_getBlockBodyByHash_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -702,7 +702,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getBlockHeaderByHash_seconds_count[1m])",
+          "expr": "rate(iotchain_getBlockHeaderByHash_seconds_count[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -786,7 +786,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getBlockBodyByHash_seconds_sum[1m])",
+          "expr": "rate(iotchain_getBlockBodyByHash_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -870,7 +870,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getBlockByNumber_seconds_sum[1m])",
+          "expr": "rate(iotchain_getBlockByNumber_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -954,7 +954,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getBlockHeaderByNumber_seconds_sum[1m])",
+          "expr": "rate(iotchain_getBlockHeaderByNumber_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1038,7 +1038,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getHashByBlockNumber_seconds_sum[1m])",
+          "expr": "rate(iotchain_getHashByBlockNumber_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1122,7 +1122,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getBestBlockNumber_seconds_sum[1m])",
+          "expr": "rate(iotchain_getBestBlockNumber_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1206,7 +1206,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getReceiptsByHash_seconds_sum[1m])",
+          "expr": "rate(iotchain_getReceiptsByHash_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1290,7 +1290,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getTotalDifficultyByHash_seconds_sum[1m])",
+          "expr": "rate(iotchain_getTotalDifficultyByHash_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1374,7 +1374,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_getTotalDifficultyByNumber_seconds_sum[1m])",
+          "expr": "rate(iotchain_getTotalDifficultyByNumber_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1471,7 +1471,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_putBestBlockNumber_seconds_sum[1m])",
+          "expr": "rate(iotchain_putBestBlockNumber_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1555,7 +1555,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_putBlockHeader_seconds_sum[1m])",
+          "expr": "rate(iotchain_putBlockHeader_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1639,7 +1639,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_putBlockBody_seconds_sum[1m])",
+          "expr": "rate(iotchain_putBlockBody_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1723,7 +1723,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_putReceipts_seconds_sum[1m])",
+          "expr": "rate(iotchain_putReceipts_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1807,7 +1807,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(jbok_putBlockAndReceipts_seconds_sum[1m])",
+          "expr": "rate(iotchain_putBlockAndReceipts_seconds_sum[1m])",
           "format": "time_series",
           "intervalFactor": 1,
           "refId": "A"
@@ -1892,7 +1892,7 @@
     ]
   },
   "timezone": "",
-  "title": "jbok",
+  "title": "iotchain",
   "uid": "Pl2xGNRZz",
   "version": 1
 }

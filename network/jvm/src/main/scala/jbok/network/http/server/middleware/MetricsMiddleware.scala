@@ -15,7 +15,7 @@ object MetricsMiddleware {
 
   def apply[F[_]](routes: HttpRoutes[F], enableMetrics: Boolean)(implicit F: Effect[F], clock: Clock[F]): F[HttpRoutes[F]] =
     if (enableMetrics) {
-      Prometheus[F](PrometheusMetrics.registry, "jbok_http_server").map { metricsOps =>
+      Prometheus[F](PrometheusMetrics.registry, "iotchain_http_server").map { metricsOps =>
         middleware.Metrics[F](metricsOps)(routes)
       }
     } else {

@@ -4,6 +4,8 @@ title:  "Personal"
 number: 1
 ---
 
+ApiPrefix: `personal`
+
 ```scala
 import scodec.bits.ByteVector
 import jbok.core.models.Address
