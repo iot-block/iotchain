@@ -15,9 +15,9 @@
 
 <p>in <code class="highlighter-rouge">app/jvm/target/universal/stage/bin</code>, we get 4 program</p>
 
-<div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>app-main: node
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>app-main: node
 cli-main: a commod line connect to node
-network-builder-main: build testnet config in ~/.jbok, follow config doc to build configs.
+network-builder-main: build testnet config <span class="k">in</span> ~/.jbok, follow config doc to build configs.
 tx-generator-main:  gen random txs and send to testnet
 </code></pre></div></div>
 
@@ -156,8 +156,13 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
 
     <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker-compose up <span class="nt">-d</span>
 </code></pre></div>    </div>
+  </li>
+  <li>
+    <p>monitor</p>
 
-    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Open `http://yourip:3000`, monitoring node state.
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>open http://&lt;yourIp&gt;:3000,
+login with admin/admin,
+monitoring node state in grafana.
 </code></pre></div>    </div>
   </li>
   <li>
