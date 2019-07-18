@@ -24,29 +24,29 @@ Url path is `<host>:<port>/<apiPrefix>/<functionName>`, you can find `apiPrefix`
 - query accounts' history transactions
 
 ### [Admin](./admin.html)
-- apiPrefix: `admin'
+- apiPrefix: `admin`
 - mange peers manually
 - consider turn it off or bind it to a local address
 
 ### [Block](./block.html)
-- apiPrefix: `block'
+- apiPrefix: `block`
 - query blocks
 - query chain state
 
 ### [Contract](./contract.html)
-- apiPrefix: `contract'
+- apiPrefix: `contract`
 - call a contract's method
 
 ### [Miner](./miner.html)
-- apiPrefix: `miner'
+- apiPrefix: `miner`
 - miner voting
 
 ### [Personal](./personal.html)
-- apiPrefix: `personal'
+- apiPrefix: `personal`
 - private keystore management
 - consider turn it off or bind it to a local address if not necessary.
 
 ### [Transaction](./transaction.html)
-- apiPrefix: `transaction'
+- apiPrefix: `transaction`
 - query transactions and receipts
 - send signed transactions
