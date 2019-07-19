@@ -92,7 +92,7 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
   <li>
     <p><strong>Docker</strong></p>
 
-    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>yum  install docker <span class="nt">-y</span>
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>yum install docker <span class="nt">-y</span>
 <span class="nv">$ </span>service docker start
 <span class="nv">$ </span>chkconfig docker on
 </code></pre></div>    </div>
@@ -104,6 +104,14 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
   
 <span class="nv">$ </span><span class="nb">sudo </span>curl <span class="nt">-L</span> <span class="s2">"https://github.com/docker/compose/releases/download/1.24.0/docker-compose-</span><span class="k">$(</span>uname <span class="nt">-s</span><span class="k">)</span><span class="s2">-</span><span class="k">$(</span>uname <span class="nt">-m</span><span class="k">)</span><span class="s2">"</span> <span class="nt">-o</span> /usr/local/bin/docker-compose
 <span class="nv">$ </span><span class="nb">sudo </span>chmod +x /usr/local/bin/docker-compose
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p><strong>[Optional] docker-compose.yaml</strong></p>
+
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code> If you deploy with docker-compose, you must have a docker-compose.yaml file,
+  
+ Get it from https://github.com/iot-block/iotchain/blob/master/docker-compose.yaml, 
 </code></pre></div>    </div>
   </li>
   <li>
