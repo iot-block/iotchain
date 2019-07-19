@@ -18,7 +18,7 @@ $ bin/build.sh
 ```
 
 in `app/jvm/target/universal/stage/bin`, we get 4 program
-```
+```bash
 app-main: node
 cli-main: a commod line connect to node
 network-builder-main: build testnet config in ~/.jbok, follow config doc to build configs.
@@ -79,14 +79,23 @@ modify `~/.jbok/node-$#/config.yaml` to change node config.
 - Docker
 - Docker-Compose
 
-And before deploying, you need a keystore file.
+#### Install Docker & Docker-Compose
+```bash
+$ yum  install docker -y
+$ sudo curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+$ sudo chmod +x /usr/local/bin/docker-compose
+$ service docker start
+$ chkconfig docker on
+```
+
+Before deploying, we need a keystore file.
 
 - Keystore file. 
 
 You can create your account using our [Wallet App](https://iotchain.io/wallet), export the keystore from app.
 
 
-There are 2 ways to deploy MainNet Node: 
+We have 2 ways to deploy mainnet Node: 
 
 - deploy with docker
 - deploy with docker-compose.
@@ -132,12 +141,20 @@ Docker-Compose will running prometheus for node metrics, and you can monitor thi
 3. upload file `config.yaml` to `/iotchain/etc/iotchain/config.yaml`
 4. upload `etc/grafana`, `etc/mysql`, `etc/prometheus` to `/iotchain/etc/grafana`, `/iotchain/etc/mysql`, `/iotchain/etc/prometheus`.
 5. run docker-compose.
+
     ```bash
     $ docker-compose up -d
     ```
-    
-    Open `http://yourip:3000`, monitoring node state.
-6. stop docker-compose
+6. monitor
+
+    ```
+    open http://<yourIp>:3000,
+    login with admin/admin,
+    monitoring node state in grafana.
+    ```
+
+7. stop docker-compose
+
     ```bash
     $ docker-compose stop
     ```
