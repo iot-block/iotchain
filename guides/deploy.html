@@ -158,6 +158,12 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
     <p>upload file <code class="highlighter-rouge">config.yaml</code> to <code class="highlighter-rouge">/iotchain/etc/iotchain/config.yaml</code></p>
   </li>
   <li>
+    <p>upload your keystore file to <code class="highlighter-rouge">/iotchain/etc/iotchain/keystore/&lt;address&gt;.json</code>.</p>
+
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>For example, if my address is `0eef064fd13402379b285d25f90af1beeb4f73eb`, it's filename will be `0eef064fd13402379b285d25f90af1beeb4f73eb.json`.
+</code></pre></div>    </div>
+  </li>
+  <li>
     <p>upload <code class="highlighter-rouge">etc/grafana</code>, <code class="highlighter-rouge">etc/mysql</code>, <code class="highlighter-rouge">etc/prometheus</code> to <code class="highlighter-rouge">/iotchain/etc/grafana</code>, <code class="highlighter-rouge">/iotchain/etc/mysql</code>, <code class="highlighter-rouge">/iotchain/etc/prometheus</code>.</p>
   </li>
   <li>
@@ -169,9 +175,9 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
   <li>
     <p>monitor</p>
 
-    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>open http://&lt;yourIp&gt;:3000,
-login with admin/admin,
-monitoring node state in grafana.
+    <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>1. open http://&lt;yourIp&gt;:3000,
+2. login with admin/admin,
+3. monitoring node state in grafana.
 </code></pre></div>    </div>
   </li>
   <li>
