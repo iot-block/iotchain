@@ -48,7 +48,7 @@ services:
       - 9104:9104
 
   iotchain:
-    image: iotchain/iotchain:0.0.2beta
+    image: iotchain/iotchain:v1.0.0
     restart: always
     volumes:
       - ./etc/iotchain:/etc/iotchain:ro

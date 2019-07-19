@@ -92,7 +92,7 @@ modify `~/.jbok/node-$#/config.yaml` to change node config.
 - **Docker**
     
     ```bash
-    $ yum  install docker -y
+    $ yum install docker -y
     $ service docker start
     $ chkconfig docker on
     ```
@@ -104,6 +104,12 @@ modify `~/.jbok/node-$#/config.yaml` to change node config.
     $ sudo curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     $ sudo chmod +x /usr/local/bin/docker-compose
     ```
+
+- **[Optional] docker-compose.yaml**
+    
+    If you deploy with docker-compose, you must have a docker-compose.yaml file,
+  
+    Get it from https://github.com/iot-block/iotchain/blob/master/docker-compose.yaml, 
 
 - **[Optional] Grafana/MySQL/Prometheus config files**
     
