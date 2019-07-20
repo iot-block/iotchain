@@ -3,7 +3,6 @@ genesis:
   chainId: '10'
   alloc:
     '0x42405c55b353ff24e09b02374a0d8abdbf11d052': '1000000000000000000000000000000'
-    '0xa490d92a1945744acb9700e5c3df74d7ffffd1ba': '1000000000000000000000000000000'
   miners:
     - '0xa490d92a1945744acb9700e5c3df74d7ffffd1ba'
   timestamp: 1558964460504
@@ -11,7 +10,7 @@ genesis:
   difficulty: '0'
   gasLimit: '16716680'
 log:
-  logDir: /var/log/iotchain
+  logDir: /var/log/iotchain/logs
   level: INFO
   maxLogs: 15
 history:
@@ -28,11 +27,12 @@ peer:
   host: 0.0.0.0
   port: 30314
   seeds:
-    - tcp://127.0.0.3:30314
-    - tcp://127.0.0.4:30314
+    - tcp://47.102.121.72:30314
+    - tcp://139.196.160.72:30314
+    - tcp://139.196.160.93:30314
   updatePeersInterval: 10 seconds
-  maxOutgoingPeers: 10
-  maxIncomingPeers: 10
+  maxOutgoingPeers: 1000
+  maxIncomingPeers: 1000
   minPeers: 1
   bufferSize: 4194304
   timeout: 10 seconds
@@ -50,10 +50,10 @@ blockPool:
   maxBlockAhead: 10
   maxBlockBehind: 10
 mining:
-  enabled: true
-  address: '0xa490d92a1945744acb9700e5c3df74d7ffffd1ba'
+  enabled: false
+  address: '0x0000000000000000000000000000000000000000'
   passphrase: changeit
-  coinbase: '0xc0e5f5502f906c55382090448b4a122fdf7db192'
+  coinbase: '0x0000000000000000000000000000000000000000'
   period: 5000 milliseconds
   epoch: 30000
   minBroadcastPeers: 4
@@ -94,13 +94,11 @@ service:
   enableMetrics: true
   allowedOrigins: []
   local: 0.0.0.0
-  host: 127.0.0.2
+  host: <your host external ip>
   port: 30315
   apis:
     - account
-    - admin
     - block
     - contract
     - miner
-    - personal
     - transaction

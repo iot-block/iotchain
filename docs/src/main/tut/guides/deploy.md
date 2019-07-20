@@ -74,33 +74,53 @@ modify `~/.jbok/node-$#/config.yaml` to change node config.
 
 ### Deploy MainNet Node
 
-*dependencies*
+*requires*
+- **Keystore file**
 
-- Docker
-- Docker-Compose
+    Keystore file is your node's identity, you can create your account using our Wallet App(https://iotchain.io/wallet), export the keystore from app.
+    
+    For example, if your address is `0x0eef064fd13402379b285d25f90af1beeb4f73eb`, your keystore filename will be `0eef064fd13402379b285d25f90af1beeb4f73eb.json`.
 
-#### Install Docker & Docker-Compose
-```bash
-$ yum  install docker -y
-$ sudo curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-$ sudo chmod +x /usr/local/bin/docker-compose
-$ service docker start
-$ chkconfig docker on
-```
+- **config.yaml**
+    
+    Make your own config.yaml by following steps:
+    1. Get sample config.yaml in https://github.com/iot-block/iotchain/blob/master/etc/iotchain/config.yaml
+    2. Make sure you have same genesis with our mainnet
+    3. Change field 'service.host' in config.yaml
+    4. Put your 'address' and 'coinbase' in relevant field
+    5. Set 'miner.enabled = true' if you are a miner
+- **Docker**
+    
+    ```bash
+    $ yum install docker -y
+    $ service docker start
+    $ chkconfig docker on
+    ```
+- **[Optional] Docker-Compose**
 
-Before deploying, we need a keystore file.
+    ```bash
+    # If you deploy with docker-compose, you need install it.
+  
+    $ sudo curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    $ sudo chmod +x /usr/local/bin/docker-compose
+    ```
 
-- Keystore file. 
+- **[Optional] docker-compose.yaml**
+    
+    If you deploy with docker-compose, you must have a docker-compose.yaml file,
+  
+    Get it from https://github.com/iot-block/iotchain/blob/master/docker-compose.yaml, 
 
-You can create your account using our [Wallet App](https://iotchain.io/wallet), export the keystore from app.
+- **[Optional] Grafana & MySQL & Prometheus config files**
+    
+    You can get them in  https://github.com/iot-block/iotchain/tree/master/etc
 
-
-We have 2 ways to deploy mainnet Node: 
+There are 2 ways to deploy mainnet node: 
 
 - deploy with docker
 - deploy with docker-compose.
 
-In this guide, I will deploy node in directory `/iotchain`.
+In this guide, I use directory `/iotchain` to deploy my node.
 
 #### Deploy with Docker step-by-step
 1. create directory for config datas and keystore file.
@@ -112,8 +132,15 @@ In this guide, I will deploy node in directory `/iotchain`.
 
 2. upload file `config.yaml` to `/iotchain/etc/iotchain/config.yaml`
 3. upload your keystore file to `/iotchain/etc/iotchain/keystore/<address>.json`.
-
-    For example, if my address is `0eef064fd13402379b285d25f90af1beeb4f73eb`, it's filename will be `0eef064fd13402379b285d25f90af1beeb4f73eb.json`.
+    ```bash
+    #This is all files in directory /iotchain after this step.
+    .
+    ├── etc
+    │   ├── iotchain
+    │   │   ├── config.yaml
+    │   │   └── keystore
+    │   │       └── 0eef064fd13402379b285d25f90af1beeb4f73eb.json
+    ```
     
 4. run docker.
     ```bash
@@ -139,21 +166,59 @@ Docker-Compose will running prometheus for node metrics, and you can monitor thi
     ```
 2. upload file `docker-compose.yaml` to `/iotchain/docker-compose.yaml`.
 3. upload file `config.yaml` to `/iotchain/etc/iotchain/config.yaml`
-4. upload `etc/grafana`, `etc/mysql`, `etc/prometheus` to `/iotchain/etc/grafana`, `/iotchain/etc/mysql`, `/iotchain/etc/prometheus`.
-5. run docker-compose.
+4. upload your keystore file to `/iotchain/etc/iotchain/keystore/<address>.json`.    
+5. upload grafana & mysql & prometheus config files for metrics
+    
+    ```bash
+    Config         |           Server Path
+    -----------------------------------------------
+    grafana        =>      /iotchain/etc/grafana 
+    mysql          =>      /iotchain/etc/mysql 
+    prometheus     =>      /iotchain/etc/prometheus 
+ 
+    #This is all files in directory /iotchain after this step.
+    .
+    ├── docker-compose.yaml
+    ├── etc
+    │   ├── grafana
+    │   │   ├── dashboards
+    │   │   │   ├── alerts.json
+    │   │   │   ├── iotchain.json
+    │   │   │   ├── JVM dashboard.json
+    │   │   │   ├── mysql.json
+    │   │   │   └── node-exporter.json
+    │   │   ├── grafana.ini
+    │   │   └── provisioning
+    │   │       ├── dashboards
+    │   │       │   └── dashboard.yaml
+    │   │       ├── datasources
+    │   │       │   └── datasource.yaml
+    │   │       └── notifiers
+    │   │           └── notifiers.yaml
+    │   ├── iotchain
+    │   │   ├── config.yaml
+    │   │   └── keystore
+    │   │       └── 502a2d562e4ab07c111c833ecea0b29f034fdef9.json
+    │   ├── mysql
+    │   │   └── init.sql
+    │   └── prometheus
+    │       ├── alert.rules
+    │       └── prometheus.yml
+    ```
+6. run docker-compose.
 
     ```bash
     $ docker-compose up -d
     ```
-6. monitor
+7. monitor
 
     ```
-    open http://<yourIp>:3000,
-    login with admin/admin,
-    monitoring node state in grafana.
+    1. open http://<yourIp>:3000,
+    2. login with admin/admin,
+    3. monitoring node state in grafana.
     ```
 
-7. stop docker-compose
+8. stop docker-compose
 
     ```bash
     $ docker-compose stop
