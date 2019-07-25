@@ -43,9 +43,9 @@
 <span class="c1">// chainId: BigInt = 1
 </span><span class="k">val</span> <span class="n">signature</span> <span class="k">=</span> <span class="nc">Signature</span><span class="o">[</span><span class="kt">ECDSA</span><span class="o">].</span><span class="n">sign</span><span class="o">[</span><span class="kt">IO</span><span class="o">](</span><span class="n">message</span><span class="o">.</span><span class="n">kec256</span><span class="o">.</span><span class="n">toArray</span><span class="o">,</span> <span class="n">keyPair</span><span class="o">,</span> <span class="n">chainId</span><span class="o">).</span><span class="n">unsafeRunSync</span><span class="o">()</span>
 <span class="c1">// signature: CryptoSignature = CryptoSignature(
-//   76394668286366027125697654723566765929108253777850433522914467810293569921667,
-//   32741263744533222874267839314596254905850197413937562185441626729422833763279,
-//   29
+//   94550864503142049781132152218441926429619582755619782475171081568693307945171,
+//   21947562711314657989226427568534875495569811361621772182640231161479801520311,
+//   30
 // )
 </span>
 <span class="nc">Signature</span><span class="o">[</span><span class="kt">ECDSA</span><span class="o">].</span><span class="n">recoverPublic</span><span class="o">(</span><span class="n">message</span><span class="o">.</span><span class="n">kec256</span><span class="o">.</span><span class="n">toArray</span><span class="o">,</span> <span class="n">signature</span><span class="o">,</span> <span class="n">chainId</span><span class="o">)</span>
