@@ -111,7 +111,7 @@ modify `~/.jbok/node-$#/config.yaml` to change node config.
   
     Get it from https://github.com/iot-block/iotchain/blob/master/docker-compose.yaml, 
 
-- **[Optional] Grafana & MySQL & Prometheus config files**
+- **[Optional] Grafana & Prometheus config files**
     
     You can get them in  https://github.com/iot-block/iotchain/tree/master/etc
 
@@ -173,7 +173,6 @@ Docker-Compose will running prometheus for node metrics, and you can monitor thi
     Config         |           Server Path
     -----------------------------------------------
     grafana        =>      /iotchain/etc/grafana 
-    mysql          =>      /iotchain/etc/mysql 
     prometheus     =>      /iotchain/etc/prometheus 
  
     #This is all files in directory /iotchain after this step.
@@ -185,7 +184,6 @@ Docker-Compose will running prometheus for node metrics, and you can monitor thi
     │   │   │   ├── alerts.json
     │   │   │   ├── iotchain.json
     │   │   │   ├── JVM dashboard.json
-    │   │   │   ├── mysql.json
     │   │   │   └── node-exporter.json
     │   │   ├── grafana.ini
     │   │   └── provisioning
@@ -199,8 +197,6 @@ Docker-Compose will running prometheus for node metrics, and you can monitor thi
     │   │   ├── config.yaml
     │   │   └── keystore
     │   │       └── 502a2d562e4ab07c111c833ecea0b29f034fdef9.json
-    │   ├── mysql
-    │   │   └── init.sql
     │   └── prometheus
     │       ├── alert.rules
     │       └── prometheus.yml
