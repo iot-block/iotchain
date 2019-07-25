@@ -115,7 +115,7 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
 </code></pre></div>    </div>
   </li>
   <li>
-    <p><strong>[Optional] Grafana &amp; MySQL &amp; Prometheus config files</strong></p>
+    <p><strong>[Optional] Grafana &amp; Prometheus config files</strong></p>
 
     <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>You can get them in  https://github.com/iot-block/iotchain/tree/master/etc
 </code></pre></div>    </div>
@@ -202,7 +202,6 @@ Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code cl
     <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Config         |           Server Path
 <span class="nt">-----------------------------------------------</span>
 grafana        <span class="o">=&gt;</span>      /iotchain/etc/grafana 
-mysql          <span class="o">=&gt;</span>      /iotchain/etc/mysql 
 prometheus     <span class="o">=&gt;</span>      /iotchain/etc/prometheus 
    
 <span class="c">#This is all files in directory /iotchain after this step.</span>
@@ -214,7 +213,6 @@ prometheus     <span class="o">=&gt;</span>      /iotchain/etc/prometheus
 │   │   │   ├── alerts.json
 │   │   │   ├── iotchain.json
 │   │   │   ├── JVM dashboard.json
-│   │   │   ├── mysql.json
 │   │   │   └── node-exporter.json
 │   │   ├── grafana.ini
 │   │   └── provisioning
@@ -228,8 +226,6 @@ prometheus     <span class="o">=&gt;</span>      /iotchain/etc/prometheus
 │   │   ├── config.yaml
 │   │   └── keystore
 │   │       └── 502a2d562e4ab07c111c833ecea0b29f034fdef9.json
-│   ├── mysql
-│   │   └── init.sql
 │   └── prometheus
 │       ├── alert.rules
 │       └── prometheus.yml
