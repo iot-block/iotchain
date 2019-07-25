@@ -167,7 +167,7 @@ Docker-Compose will running prometheus for node metrics, and you can monitor thi
 2. upload file `docker-compose.yaml` to `/iotchain/docker-compose.yaml`.
 3. upload file `config.yaml` to `/iotchain/etc/iotchain/config.yaml`
 4. upload your keystore file to `/iotchain/etc/iotchain/keystore/<address>.json`.    
-5. upload grafana & mysql & prometheus config files for metrics
+5. upload grafana & prometheus config files for metrics
     
     ```bash
     Config         |           Server Path
