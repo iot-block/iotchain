@@ -30,8 +30,8 @@ object NetworkBuilderMain extends IOApp {
 
     val genesis = GenesisBuilder()
       .withChainId(ChainId(10))
-      .addAlloc(Address(alloc), N("1" + "0" * 30))
-      .addAlloc(Address(miner0), N("1" + "0" * 30))
+      .addAlloc(Address(alloc), N("1" + "0" * 27))
+      .addAlloc(Address(miner0), N("1" + "0" * 27))
       .addMiner(Address(miner0))
 //      .addMiner(Address(miner1))
 //      .addMiner(Address(miner2))
@@ -40,7 +40,7 @@ object NetworkBuilderMain extends IOApp {
     val config = CoreModule.testConfig.copy(genesis = genesis)
 
     val home = System.getProperty("user.home")
-    val root = Paths.get(home).resolve(".jbok")
+    val root = Paths.get(home).resolve(".iotchain")
 
     val builder = NetworkBuilder(config)
       .withBlockPeriod(10000)
