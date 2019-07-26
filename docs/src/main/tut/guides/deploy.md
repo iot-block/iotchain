@@ -21,8 +21,8 @@ number: 2
     1. Get sample config.yaml in https://github.com/iot-block/iotchain/blob/master/etc/iotchain/config.yaml
     2. Make sure you have same genesis with our mainnet
     3. Change field 'service.host' in config.yaml
-    4. Put your 'miner.address' & 'minder.coinbase' for your node. This 'minder.address' if your keystore's address.
-    5. Set 'miner.enabled = true' if you are a miner
+    4. Put your 'mining.address' & 'mining.coinbase' for your node. This 'mining.address' is your keystore's address.
+    5. Set 'mining.enabled = true' if you are a miner
 - **Docker**
     
     ```bash
