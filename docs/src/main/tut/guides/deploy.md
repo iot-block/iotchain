@@ -11,7 +11,10 @@ number: 2
 *requires*
 - **Keystore file**
 
-    Keystore file is your node's identity, you can create your account using our Wallet App(https://iotchain.io/wallet), export the keystore from app.
+    Keystore file is your node's identity, you can create your account using our tool from `https://github.com/iot-block/iotchain/releases`.
+    
+    First, download `tool.jar`.
+    then `java -jar tool.jar password`, you will get a keystore in current path.
     
     For example, if your address is `0x0eef064fd13402379b285d25f90af1beeb4f73eb`, your keystore filename will be `0eef064fd13402379b285d25f90af1beeb4f73eb.json`.
 
