@@ -2,71 +2,7 @@
 
 <h3 id="getting-started">Getting Started</h3>
 
-<p><em>before we start deploy, please follow develop doc first to install the dependency</em></p>
-
-<p>we have 2 way to deploy jbok node</p>
-
-<h3 id="binary-app-main">binary app-main</h3>
-
-<p>build the jbok node</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>bin/build.sh
-</code></pre></div></div>
-
-<p>in <code class="highlighter-rouge">app/jvm/target/universal/stage/bin</code>, we get 4 program</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>app-main: node
-cli-main: a commod line connect to node
-network-builder-main: build testnet config <span class="k">in</span> ~/.jbok, follow config doc to build configs.
-tx-generator-main:  gen random txs and send to testnet
-</code></pre></div></div>
-
-<p><code class="highlighter-rouge">app/jvm/target/universal/stage/bin/app-main</code>
-then start the node, given a node config path.</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>app/jvm/target/universal/stage/bin/app-main ~/.jbok/node-0/config.yaml
-</code></pre></div></div>
-
-<p><em>install mysql follow: https://dev.mysql.com/doc/refman/8.0/en/linux-installation.html</em></p>
-
-<h3 id="docker">docker</h3>
-
-<p><em>install docker follow: https://docs.docker.com/compose/install/</em></p>
-
-<p>first we should build image and publish to local.</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>bin/build-docker.sh
-</code></pre></div></div>
-
-<p>the docker image based on openjdk:8-jre and expose ports 30314 and 30315.</p>
-
-<p>Running node with docker-compose.
-<code class="highlighter-rouge">docker-compose</code> will start prometheus, node-exporter, grafana, mysql,  mysqld-exporter, jbok services.
-Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code class="highlighter-rouge">./var</code>, for more info to config file <code class="highlighter-rouge">./docker-compose.yaml</code>.</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker-compose up
-</code></pre></div></div>
-
-<p>open http://localhost:3000/ to analytics and monitoring the services.</p>
-
-<h3 id="jbok-testnet">jbok testnet</h3>
-
-<p>Create your own testnet.</p>
-
-<p>We will be using 3 node in testnet, 1 for miner, 2 for sync.</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>bin/build.sh
-<span class="nv">$ </span>bin/create-ca.sh
-<span class="nv">$ </span>bin/start-testnet.sh
-</code></pre></div></div>
-
-<p>the <code class="highlighter-rouge">~/.jbok</code>, will be root directory of nodes. every node’s data will save into <code class="highlighter-rouge">node-#</code> directory.</p>
-
-<p>modify <code class="highlighter-rouge">~/.jbok/node-$#/config.yaml</code> to change node config.</p>
-
-<p><em>WARN: do not modify genesis part</em></p>
-
-<h3 id="deploy-mainnet-node">Deploy MainNet Node</h3>
+<h3 id="deploy">Deploy</h3>
 
 <p><em>requires</em></p>
 <ul>
@@ -252,6 +188,68 @@ prometheus     <span class="o">=&gt;</span>      /iotchain/etc/prometheus
 </code></pre></div>    </div>
   </li>
 </ol>
+
+<p>##Only for developer</p>
+
+<p>We have 2 ways to build the iotchain node.</p>
+
+<h3 id="build-binary-app-main">build binary app-main</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>bin/build.sh
+</code></pre></div></div>
+
+<p>in <code class="highlighter-rouge">app/jvm/target/universal/stage/bin</code>, we get 4 program</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>app-main: node
+cli-main: a commod line connect to node
+network-builder-main: build testnet config <span class="k">in</span> ~/.jbok, follow config doc to build configs.
+tx-generator-main:  gen random txs and send to testnet
+</code></pre></div></div>
+
+<p><code class="highlighter-rouge">app/jvm/target/universal/stage/bin/app-main</code>
+then start the node, given a node config path.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>app/jvm/target/universal/stage/bin/app-main ~/.jbok/node-0/config.yaml
+</code></pre></div></div>
+
+<p><em>install mysql follow: https://dev.mysql.com/doc/refman/8.0/en/linux-installation.html</em></p>
+
+<h3 id="build-docker-image">build docker image</h3>
+
+<p><em>install docker follow: https://docs.docker.com/compose/install/</em></p>
+
+<p>first we should build image and publish to local.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>bin/build-docker.sh
+</code></pre></div></div>
+
+<p>the docker image based on openjdk:8-jre and expose ports 30314 and 30315.</p>
+
+<p>Running node with docker-compose.
+<code class="highlighter-rouge">docker-compose</code> will start prometheus, node-exporter, grafana, mysql,  mysqld-exporter, jbok services.
+Jbok using data volume <code class="highlighter-rouge">./etc</code> and <code class="highlighter-rouge">./var</code>, for more info to config file <code class="highlighter-rouge">./docker-compose.yaml</code>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>docker-compose up
+</code></pre></div></div>
+
+<p>open http://localhost:3000/ to analytics and monitoring the services.</p>
+
+<h3 id="testnet">testnet</h3>
+
+<p>Create your own testnet.</p>
+
+<p>We will be using 3 node in testnet, 1 for miner, 2 for sync.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>bin/build.sh
+<span class="nv">$ </span>bin/create-ca.sh
+<span class="nv">$ </span>bin/start-testnet.sh
+</code></pre></div></div>
+
+<p>the <code class="highlighter-rouge">~/.jbok</code>, will be root directory of nodes. every node’s data will save into <code class="highlighter-rouge">node-#</code> directory.</p>
+
+<p>modify <code class="highlighter-rouge">~/.jbok/node-$#/config.yaml</code> to change node config.</p>
+
+<p><em>WARN: do not modify genesis part</em></p>
 
 
 
