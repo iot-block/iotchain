@@ -31,7 +31,7 @@ $ sbt compile
 
 build a sub project and its dependencies
 ```
-$ sbt ";project coreJVM; commpile"
+$ sbt ";project coreJVM; compile"
 ```
 
 build docs
