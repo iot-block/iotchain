@@ -40,3 +40,5 @@ addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.9.2")
 // scalac
 addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat"        % "0.1.6")
 addSbtPlugin("org.lyranthe.sbt"          % "partial-unification" % "1.1.2")
+
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.10")

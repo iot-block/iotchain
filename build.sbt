@@ -61,6 +61,15 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
   )
   .dependsOn(core % CompileAndTest, common % CompileAndTest, sdk % CompileAndTest)
 
+lazy val tool = project
+  .settings(Settings.common)
+  .settings(name := "jbok-tool")
+  .settings(
+    mainClass in assembly := Some("iotchain.tool.ToolMain"),
+    assemblyJarName in assembly := "tool.jar"
+  )
+  .dependsOn(core.jvm)
+
 lazy val sdk = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Full)
   .settings(Settings.common)

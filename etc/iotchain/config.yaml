@@ -104,5 +104,4 @@ service:
     - account
     - block
     - contract
-    - miner
     - transaction

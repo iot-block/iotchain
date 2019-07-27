@@ -6,78 +6,16 @@ number: 2
 
 ### Getting Started
 
-*before we start deploy, please follow develop doc first to install the dependency*
-
-we have 2 way to deploy jbok node
-
-### binary app-main
-
-build the jbok node
-```bash
-$ bin/build.sh
-```
-
-in `app/jvm/target/universal/stage/bin`, we get 4 program
-```bash
-app-main: node
-cli-main: a commod line connect to node
-network-builder-main: build testnet config in ~/.jbok, follow config doc to build configs.
-tx-generator-main:  gen random txs and send to testnet
-```
-
-`app/jvm/target/universal/stage/bin/app-main`
-then start the node, given a node config path.
-```bash
-$ app/jvm/target/universal/stage/bin/app-main ~/.jbok/node-0/config.yaml
-```
-
-*install mysql follow: https://dev.mysql.com/doc/refman/8.0/en/linux-installation.html*
-
-### docker
-
-*install docker follow: https://docs.docker.com/compose/install/*
-
-first we should build image and publish to local.
-
-```bash
-$ bin/build-docker.sh
-``` 
-
-the docker image based on openjdk:8-jre and expose ports 30314 and 30315.
-
-Running node with docker-compose.
-`docker-compose` will start prometheus, node-exporter, grafana, mysql,  mysqld-exporter, jbok services.
-Jbok using data volume `./etc` and `./var`, for more info to config file `./docker-compose.yaml`.
-```bash
-$ docker-compose up
-```
-
-open http://localhost:3000/ to analytics and monitoring the services.
-
-### jbok testnet
-
-Create your own testnet. 
-
-We will be using 3 node in testnet, 1 for miner, 2 for sync.
-
-```bash
-$ bin/build.sh
-$ bin/create-ca.sh
-$ bin/start-testnet.sh
-```
-
-the `~/.jbok`, will be root directory of nodes. every node's data will save into `node-#` directory.
-
-modify `~/.jbok/node-$#/config.yaml` to change node config.
-
-*WARN: do not modify genesis part*
-
-### Deploy MainNet Node
+### Deploy
 
 *requires*
 - **Keystore file**
 
-    Keystore file is your node's identity, you can create your account using our Wallet App(https://iotchain.io/wallet), export the keystore from app.
+    Keystore file is your node's identity, you can create your account using our tool from `https://github.com/iot-block/iotchain/releases`.
+    
+    First, download `tool.jar`.
+    
+    Then `java -jar tool.jar password`, you will get a keystore in current path.
     
     For example, if your address is `0x0eef064fd13402379b285d25f90af1beeb4f73eb`, your keystore filename will be `0eef064fd13402379b285d25f90af1beeb4f73eb.json`.
 
@@ -87,8 +25,8 @@ modify `~/.jbok/node-$#/config.yaml` to change node config.
     1. Get sample config.yaml in https://github.com/iot-block/iotchain/blob/master/etc/iotchain/config.yaml
     2. Make sure you have same genesis with our mainnet
     3. Change field 'service.host' in config.yaml
-    4. Put your 'address' and 'coinbase' in relevant field
-    5. Set 'miner.enabled = true' if you are a miner
+    4. Put your 'mining.address' & 'mining.coinbase' for your node. This 'mining.address' is your keystore's address.
+    5. Set 'mining.enabled = true' if you are a miner
 - **Docker**
     
     ```bash
@@ -219,3 +157,69 @@ Docker-Compose will running prometheus for node metrics, and you can monitor thi
     ```bash
     $ docker-compose stop
     ```
+    
+##Only for developer
+
+We have 2 ways to build the iotchain node.
+
+### build binary app-main
+
+```bash
+$ bin/build.sh
+```
+
+in `app/jvm/target/universal/stage/bin`, we get 4 program
+```bash
+app-main: node
+cli-main: a commod line connect to node
+network-builder-main: build testnet config in ~/.jbok, follow config doc to build configs.
+tx-generator-main:  gen random txs and send to testnet
+```
+
+`app/jvm/target/universal/stage/bin/app-main`
+then start the node, given a node config path.
+```bash
+$ app/jvm/target/universal/stage/bin/app-main ~/.jbok/node-0/config.yaml
+```
+
+*install mysql follow: https://dev.mysql.com/doc/refman/8.0/en/linux-installation.html*
+
+### build docker image
+
+*install docker follow: https://docs.docker.com/compose/install/*
+
+first we should build image and publish to local.
+
+```bash
+$ bin/build-docker.sh
+``` 
+
+the docker image based on openjdk:8-jre and expose ports 30314 and 30315.
+
+Running node with docker-compose.
+`docker-compose` will start prometheus, node-exporter, grafana, mysql,  mysqld-exporter, jbok services.
+Jbok using data volume `./etc` and `./var`, for more info to config file `./docker-compose.yaml`.
+```bash
+$ docker-compose up
+```
+
+open http://localhost:3000/ to analytics and monitoring the services.
+
+### testnet
+
+Create your own testnet. 
+
+We will be using 3 node in testnet, 1 for miner, 2 for sync.
+
+```bash
+$ bin/build.sh
+$ bin/create-ca.sh
+$ bin/start-testnet.sh
+```
+
+the `~/.jbok`, will be root directory of nodes. every node's data will save into `node-#` directory.
+
+modify `~/.jbok/node-$#/config.yaml` to change node config.
+
+*WARN: do not modify genesis part*
+
