@@ -9,7 +9,7 @@ final class RpcServiceImpl[F[_], P](implicit F: Sync[F]) {
   def execute[A <: Product, B](payload: P)(call: A => F[B])(implicit decoder: Decoder[A, P], encoder: Encoder[B, P]): F[RpcResponse[P]] =
     decoder.decode(payload) match {
       case Left(err) =>
-        F.pure(RpcResponse.Failure[P](400, s"decode error: ${err}"))
+        F.pure(RpcResponse.Failure[P](400, s"decode error"))
 
       case Right(arguments) =>
         call(arguments).map { result =>
