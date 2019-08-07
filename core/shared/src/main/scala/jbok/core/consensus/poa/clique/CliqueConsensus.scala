@@ -59,8 +59,10 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
           case Some((seen, _)) if amongstRecent(header.number, seen, snap.miners.size) =>
             val wait: Long  = math.max(0, snap.miners.size / 2 + 1 - (header.number - seen).toInt) * config.period.toMillis
             val delay: Long = math.max(0, header.unixTimestamp - System.currentTimeMillis()) + wait
-
-            log.i(s"mined recently, sleep (${delay}) millis") >> T.sleep(delay.millis) >> prepareHeader(parentOpt)
+            log.i(s"amongstRecent: currentNumber(${header.number}),seen($seen),minerSize(${snap.miners.size})") >>
+              log.i(s"miners:${snap.miners}") >>
+              log.i(s"recents:${snap.recents}") >>
+              log.i(s"mined recently, sleep (${delay}) millis") >> T.sleep(delay.millis) >> prepareHeader(parentOpt)
           case _ =>
             clique.clearProposalIfMine(parent.header) >> header.pure[F]
         }

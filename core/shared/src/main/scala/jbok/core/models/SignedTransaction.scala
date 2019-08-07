@@ -2,7 +2,8 @@ package jbok.core.models
 
 import cats.effect.Sync
 import cats.implicits._
-import io.circe.generic.extras.ConfiguredJsonCodec
+import io.circe._
+import io.circe.generic.semiauto._
 import jbok.codec.json.implicits._
 import jbok.codec.rlp.RlpEncoded
 import jbok.codec.rlp.implicits._
@@ -17,7 +18,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("SignedTransaction")
 @JSExportAll
-@ConfiguredJsonCodec
+//@ConfiguredJsonCodec
 final case class SignedTransaction(
     nonce: N,
     gasPrice: N,
@@ -44,7 +45,41 @@ final case class SignedTransaction(
     receivingAddress == Address.empty
 }
 
+
 object SignedTransaction {
+  implicit val txEncoder:Encoder[SignedTransaction] = Encoder.forProduct10(
+    "nonce",
+    "gasPrice",
+    "gasLimit",
+    "receivingAddress",
+    "value",
+    "payload",
+    "v",
+    "r",
+    "s",
+    "hash")((tx:SignedTransaction) => (tx.nonce,tx.gasPrice,tx.gasLimit,tx.receivingAddress,tx.value,tx.payload,tx.v,tx.r,tx.s,tx.hash))
+  implicit val txDecoder:Decoder[SignedTransaction] = Decoder.forProduct9(
+    "nonce",
+    "gasPrice",
+    "gasLimit",
+    "receivingAddress",
+    "value",
+    "payload",
+    "v",
+    "r",
+    "s"
+  )((
+    nonce: N,
+    gasPrice: N,
+    gasLimit: N,
+    receivingAddress: Address,
+    value: N,
+    payload: ByteVector,
+    v: N,
+    r: N,
+    s: N
+  )=>SignedTransaction(nonce,gasPrice,gasLimit,receivingAddress,value,payload,v,r,s))
+
   def apply(
       tx: Transaction,
       v: N,
