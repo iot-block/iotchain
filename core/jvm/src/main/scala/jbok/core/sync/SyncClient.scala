@@ -16,6 +16,8 @@ import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager, PeerSelector}
 
+import scala.util.Random
+
 final class SyncClient[F[_]](
     peerConfig: PeerConfig,
     syncConfig: SyncConfig,
@@ -43,17 +45,27 @@ final class SyncClient[F[_]](
         } yield status
     }
 
+  def checkSeedConnect: Stream[F, Unit] =
+    Stream.eval{
+      for {
+        seeds <- peerManager.outgoing.seedConnects
+        _ <- Random.shuffle(seeds).headOption match {
+          case Some(uri) => peerManager.outgoing.store.add(uri)
+          case _ => F.unit
+        }
+      }yield ()
+    }
+
   val stream: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient")) ++
       Stream
         .eval(checkStatus)
         .evalTap(status.set)
         .flatMap {
-          case _: NodeStatus.WaitForPeers     => Stream.sleep_(syncConfig.checkInterval)
-          case NodeStatus.Done                => Stream.sleep_(syncConfig.checkInterval)
+          case _: NodeStatus.WaitForPeers     => checkSeedConnect ++ Stream.sleep_(syncConfig.checkInterval)
+          case NodeStatus.Done                => checkSeedConnect ++ Stream.sleep_(syncConfig.checkInterval)
           case syncing: NodeStatus.Syncing[F] => Stream.eval_(requestHeaders(syncing.peer)).flatMap(Stream.emits)
         }
-        .handleErrorWith(e => Stream.eval_(log.w(s"SyncClient failure, ${e}")))
         .repeat
 
   def mkClient(peer: Peer[F]): Resource[F, JbokClient[F]] =

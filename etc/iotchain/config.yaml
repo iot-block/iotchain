@@ -6,8 +6,6 @@ genesis:
     '0xee2a526ef8d2bc09a0a6f1201c0a691349ce4c41': '300000000000000000000000000'
   miners:
     - '0xfba6ebcb8a45cec3019e1dcd39ad74353b64935a'
-    - '0x076dd078fbdd4b7cfec501cc2623448bd29a79d7'
-    - '0xeca4d3e1c636b207ba2c65024e6244a7c9e6fd0e'
   timestamp: 1565171034000
   coinbase: '0x0000000000000000000000000000000000000000'
   difficulty: '0'
@@ -17,12 +15,12 @@ log:
   level: INFO
   maxLogs: 15
 history:
-    frontierBlockNumber: '0'
-    homesteadBlockNumber: '0'
-    tangerineWhistleBlockNumber: '0'
-    spuriousDragonBlockNumber: '0'
-    byzantiumBlockNumber: '0'
-    constantinopleBlockNumber: '1000000000000000000000'
+  frontierBlockNumber: '0'
+  homesteadBlockNumber: '0'
+  tangerineWhistleBlockNumber: '0'
+  spuriousDragonBlockNumber: '0'
+  byzantiumBlockNumber: '0'
+  constantinopleBlockNumber: '1000000000000000000000'
 keystore:
   initkey: ''
   dir: /etc/iotchain/keystore
@@ -34,8 +32,8 @@ peer:
     - tcp://139.196.160.72:30314
     - tcp://139.196.160.93:30314
   updatePeersInterval: 10 seconds
-  maxOutgoingPeers: 1000
-  maxIncomingPeers: 1000
+  maxOutgoingPeers: 10000
+  maxIncomingPeers: 10000
   minPeers: 1
   bufferSize: 4194304
   timeout: 10 seconds
@@ -57,7 +55,7 @@ mining:
   address: '0x0000000000000000000000000000000000000000'
   passphrase: changeit
   coinbase: '0x0000000000000000000000000000000000000000'
-  period: 5000 milliseconds
+  period: 10000 milliseconds
   epoch: 30000
   minBroadcastPeers: 4
 persist:
