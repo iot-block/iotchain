@@ -26,6 +26,8 @@ abstract class BaseManager[F[_]](config: FullConfig, history: History[F])(implic
 
   val connected: Ref[F, Map[PeerUri, (Peer[F], Socket[F])]] = Ref.unsafe(Map.empty)
 
+  def isConnected(uri: PeerUri): F[Boolean] = connected.get.map(_.get(uri).isDefined)
+
   def close(uri: PeerUri): F[Unit] =
     connected.get.map(_.get(uri)).flatMap {
       case Some((_, socket)) => socket.endOfOutput >> socket.close

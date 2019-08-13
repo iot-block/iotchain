@@ -57,7 +57,7 @@ mining:
   address: '0x0000000000000000000000000000000000000000'
   passphrase: changeit
   coinbase: '0x0000000000000000000000000000000000000000'
-  period: 5000 milliseconds
+  period: 10000 milliseconds
   epoch: 30000
   minBroadcastPeers: 4
 persist:
