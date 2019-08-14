@@ -27,7 +27,7 @@ services:
       - 3000:3000
 
   iotchain:
-    image: iotchain/iotchain:v1.0.0
+    image: iotchain/iotchain:v1.0.3
     restart: always
     volumes:
       - ./etc/iotchain:/etc/iotchain:ro
