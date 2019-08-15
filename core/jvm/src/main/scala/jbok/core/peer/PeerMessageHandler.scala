@@ -7,7 +7,7 @@ import fs2._
 import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
 import jbok.core.NodeStatus
-import jbok.core.messages.{BlockHash, NewBlock, NewBlockHashes, SignedTransactions}
+import jbok.core.messages.{BlockHash, NewBlock, NewBlockHashes, SignedTransactions, Status}
 import jbok.core.models.Block
 import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.core.queue.{Consumer, Producer}
@@ -18,6 +18,8 @@ class PeerMessageHandler[F[_]](
     txOutbound: Consumer[F, PeerSelector[F], SignedTransactions],
     blockInbound: Producer[F, Peer[F], Block],
     blockOutbound: Consumer[F, PeerSelector[F], Block],
+    statusInbound: Producer[F, Peer[F], Status],
+    statusOutbound: Consumer[F, PeerSelector[F], Status],
     peerManager: PeerManager[F],
     status: Ref[F, NodeStatus]
 )(implicit F: Concurrent[F]) {
@@ -34,6 +36,17 @@ class PeerMessageHandler[F[_]](
 
   def onSignedTransactions(peer: Peer[F], stxs: SignedTransactions): F[Unit] =
     txInbound.produce(peer, stxs)
+
+  def onStatus(peer: Peer[F], remoteStatus: Status):F[Unit] =
+//    statusInbound.produce(peer, remoteStatus)
+    for {
+      localStatus <- peerManager.outgoing.localStatus
+      _ <- if (!localStatus.isCompatible(remoteStatus)) {
+        F.raiseError(Incompatible(localStatus, remoteStatus))
+      }else{
+        peer.markStatus(remoteStatus)
+      }
+    } yield ()
 
   val consume: Stream[F, Unit] =
     peerManager.inbound.evalMap {
@@ -55,13 +68,20 @@ class PeerMessageHandler[F[_]](
           _    <- onSignedTransactions(peer, stxs)
         } yield ()
 
+      case (peer, req @ Request(_, Status.name, _, _)) =>
+        for {
+          status <- req.as[Status]
+          _ <- onStatus(peer, status)
+        } yield ()
+
       case _ => F.unit
     }
 
   val produce: Stream[F, Unit] = {
     Stream(
       blockOutbound.consume.map { case (selector, block) => selector -> Request.binary[F, NewBlock](NewBlock.name, NewBlock(block).encoded) },
-      txOutbound.consume.map { case (selector, tx)       => selector -> Request.binary[F, SignedTransactions](SignedTransactions.name, tx.encoded) }
+      txOutbound.consume.map { case (selector, tx)       => selector -> Request.binary[F, SignedTransactions](SignedTransactions.name, tx.encoded) },
+      statusOutbound.consume.map { case (selector, st)       => selector -> Request.binary[F, Status](Status.name, st.encoded) }
     ).parJoinUnbounded
       .through(peerManager.outbound)
   }

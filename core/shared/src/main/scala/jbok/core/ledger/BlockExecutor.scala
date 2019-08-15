@@ -6,7 +6,7 @@ import cats.effect.{Resource, Sync, Timer}
 import cats.implicits._
 import fs2._
 import jbok.common.ByteUtils
-import jbok.core.config.HistoryConfig
+import jbok.core.config.{HistoryConfig, MiningConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock._
 import jbok.core.messages.SignedTransactions
@@ -28,6 +28,7 @@ import scala.concurrent.duration._
 
 final class BlockExecutor[F[_]](
     config: HistoryConfig,
+    miningConfig: MiningConfig,
     history: History[F],
     consensus: Consensus[F],
     txValidator: TxValidator[F],
@@ -57,7 +58,7 @@ final class BlockExecutor[F[_]](
     } yield blocks
 
   def mkBroadcast(block: Block) =
-    PeerSelector.withoutBlock(block).andThen(PeerSelector.randomSelectSqrt(4)) -> block
+    PeerSelector.withoutBlock(block).andThen(PeerSelector.randomSelectSqrt(miningConfig.minBroadcastPeers)) -> block
 
   def handlePendingBlock(pending: PendingBlock): F[ExecutedBlock[F]] =
     for {
@@ -120,7 +121,7 @@ final class BlockExecutor[F[_]](
         .evalMap { case (peer, block) => handleReceivedBlock(ReceivedBlock(block, peer)) }
         .map {
           case block :: _ =>
-            Some(PeerSelector.withoutBlock(block).andThen(PeerSelector.randomSelectSqrt(4)) -> block)
+            Some(PeerSelector.withoutBlock(block).andThen(PeerSelector.randomSelectSqrt(miningConfig.minBroadcastPeers)) -> block)
           case _ =>
             None
         }

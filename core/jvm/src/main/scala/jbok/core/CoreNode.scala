@@ -44,6 +44,8 @@ final case class CoreNode[F[_]](
     executor.stream,
     handler.stream,
     syncClient.stream,
+    syncClient.checkSeedConnect,
+    syncClient.heartBeatStream,
     logStatus
   ).parJoinUnbounded
     .handleErrorWith(e => Stream.eval(log.e("CoreNode has an unhandled failure", e)))

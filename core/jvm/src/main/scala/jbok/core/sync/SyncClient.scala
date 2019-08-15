@@ -5,6 +5,7 @@ import cats.effect.{ConcurrentEffect, ContextShift, Resource, Timer}
 import cats.implicits._
 import fs2._
 import javax.net.ssl.SSLContext
+import jbok.codec.rlp.implicits._
 import jbok.common.log.Logger
 import jbok.common.math.N
 import jbok.core.NodeStatus
@@ -13,10 +14,13 @@ import jbok.core.config.{PeerConfig, SyncConfig}
 import jbok.core.consensus.Consensus
 import jbok.core.ledger.TypedBlock.SyncBlocks
 import jbok.core.ledger.{BlockExecutor, History}
+import jbok.core.messages.Status
 import jbok.core.models._
 import jbok.core.peer.{Peer, PeerManager, PeerSelector}
+import jbok.network.Request
 
 import scala.util.Random
+import scala.concurrent.duration._
 
 final class SyncClient[F[_]](
     peerConfig: PeerConfig,
@@ -45,16 +49,29 @@ final class SyncClient[F[_]](
         } yield status
     }
 
-  def checkSeedConnect: Stream[F, Unit] =
-    Stream.eval{
-      for {
-        seeds <- peerManager.outgoing.seedConnects
-        _ <- Random.shuffle(seeds).headOption match {
-          case Some(uri) => peerManager.outgoing.store.add(uri)
-          case _ => F.unit
-        }
-      }yield ()
-    }
+  val checkSeedConnect: Stream[F, Unit] =
+    Stream.eval_(log.i(s"starting Core/SyncClient-seedConnect")) ++ Stream.sleep_(1.minutes) ++
+      Stream.eval{
+        for {
+          _ <- log.i(s"check seed connect")
+          seeds <- peerManager.outgoing.seedConnects
+          _ <- Random.shuffle(seeds).headOption match {
+            case Some(uri) => peerManager.outgoing.store.add(uri)
+            case _ => F.unit
+          }
+        }yield ()
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval)).repeat
+
+  val heartBeatStream: Stream[F, Unit] =
+    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(1.minutes) ++
+      Stream.eval{
+        for {
+          _ <- log.i(s"sync status")
+          localStatus <- peerManager.outgoing.localStatus
+          message = Request.binary[F, Status](Status.name, localStatus.encoded)
+          _ <- peerManager.distribute(PeerSelector.randomSelectSqrt(10), message)
+        }yield ()
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval)).repeat
 
   val stream: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient")) ++
@@ -62,8 +79,8 @@ final class SyncClient[F[_]](
         .eval(checkStatus)
         .evalTap(status.set)
         .flatMap {
-          case _: NodeStatus.WaitForPeers     => checkSeedConnect ++ Stream.sleep_(syncConfig.checkInterval)
-          case NodeStatus.Done                => checkSeedConnect ++ Stream.sleep_(syncConfig.checkInterval)
+          case _: NodeStatus.WaitForPeers     => Stream.sleep_(syncConfig.checkInterval)
+          case NodeStatus.Done                => Stream.sleep_(syncConfig.checkInterval)
           case syncing: NodeStatus.Syncing[F] => Stream.eval_(requestHeaders(syncing.peer)).flatMap(Stream.emits)
         }
         .repeat

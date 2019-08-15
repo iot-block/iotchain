@@ -32,6 +32,9 @@ final case class Peer[F[_]](
 
   def markTxs(stxs: SignedTransactions): F[Unit] =
     knownTxs.update(known => known.take(MaxKnownTxs - 1) + stxs.encoded.bytes.kec256)
+
+  def markStatus(newStatus: Status): F[Unit] =
+    status.update(s => if (newStatus.td > s.td) s.copy(bestNumber = newStatus.bestNumber, td = newStatus.td) else s)
 }
 
 object Peer {

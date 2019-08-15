@@ -4,7 +4,10 @@ import cats.effect._
 import cats.implicits._
 import fs2._
 import jbok.common.log.Logger
+import jbok.core.messages.Status
+import jbok.core.models.Block
 import jbok.core.peer.PeerSelector.PeerSelector
+import jbok.core.queue.Producer
 import jbok.network.Message
 
 final class PeerManager[F[_]](
