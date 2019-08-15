@@ -60,10 +60,10 @@ final class SyncClient[F[_]](
             case _ => F.unit
           }
         }yield ()
-      }.flatMap(_ => Stream.sleep_(1.minutes)).repeat
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval)).repeat
 
   val heartBeatStream: Stream[F, Unit] =
-    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++
+    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(1.minutes) ++
       Stream.eval{
         for {
           _ <- log.i(s"sync status")
@@ -71,7 +71,7 @@ final class SyncClient[F[_]](
           message = Request.binary[F, Status](Status.name, localStatus.encoded)
           _ <- peerManager.distribute(PeerSelector.randomSelectSqrt(10), message)
         }yield ()
-      }.flatMap(_ => Stream.sleep_(1.minutes)).repeat
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval)).repeat
 
   val stream: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient")) ++

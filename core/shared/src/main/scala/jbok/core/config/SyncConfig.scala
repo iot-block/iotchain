@@ -4,6 +4,7 @@ import io.circe.generic.extras.ConfiguredJsonCodec
 
 import scala.concurrent.duration.FiniteDuration
 import jbok.codec.json.implicits._
+import scala.concurrent.duration._
 
 @ConfiguredJsonCodec
 final case class SyncConfig(
@@ -12,5 +13,6 @@ final case class SyncConfig(
     offset: Int,
     checkInterval: FiniteDuration,
     banDuration: FiniteDuration,
-    requestTimeout: FiniteDuration
+    requestTimeout: FiniteDuration,
+    keepaliveInterval: FiniteDuration = 30.seconds
 )

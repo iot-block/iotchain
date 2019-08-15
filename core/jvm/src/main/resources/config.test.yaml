@@ -44,6 +44,7 @@ sync:
   checkInterval: "5 seconds"
   banDuration: "200 seconds"
   requestTimeout: "10 seconds"
+  keepaliveInterval: "60 seconds"
 
 txPool:
   poolSize: 4096
@@ -60,7 +61,7 @@ mining:
   coinbase: "0000000000000000000000000000000000000000"
   period: "100 millis"
   epoch: "30000"
-  minBroadcastPeers: 4
+  minBroadcastPeers: 10
 
 persist:
   driver: memory
