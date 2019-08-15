@@ -1,5 +1,6 @@
 package jbok.core.api
 
+import jbok.common.math.N
 import jbok.core.config.FullConfig
 import jbok.core.models.SignedTransaction
 import jbok.core.peer.PeerUri
@@ -20,4 +21,6 @@ trait AdminAPI[F[_]] {
   def pendingTransactions: F[List[SignedTransaction]]
 
   def getConfig: F[FullConfig]
+
+  def deleteBlockUntil(number: N): F[Unit]
 }
