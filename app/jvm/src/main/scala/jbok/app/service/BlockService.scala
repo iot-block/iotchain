@@ -7,10 +7,18 @@ import jbok.core.config.SyncConfig
 import jbok.core.ledger.History
 import jbok.core.models.{Block, BlockBody, BlockHeader}
 import jbok.core.api.BlockAPI
+import jbok.core.messages.Status
 import scodec.bits.ByteVector
 import spire.compat._
 
 final class BlockService[F[_]](history: History[F], config: SyncConfig)(implicit F: Concurrent[F]) extends BlockAPI[F] {
+  override def getStatus: F[Status] =
+    for {
+      genesis <- history.genesisHeader
+      number  <- history.getBestBlockNumber
+      td      <- history.getTotalDifficultyByNumber(number).map(_.getOrElse(N(0)))
+    } yield Status(history.chainId, genesis.hash, number, td, "")
+
   override def getBestBlockNumber: F[N] =
     history.getBestBlockNumber
 

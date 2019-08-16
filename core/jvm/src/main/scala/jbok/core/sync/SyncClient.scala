@@ -54,7 +54,7 @@ final class SyncClient[F[_]](
       Stream.eval{
         for {
           _ <- log.i(s"check seed connect")
-          seeds <- peerManager.outgoing.seedConnects
+          seeds <- peerManager.outgoing.seedDisconnects
           _ <- Random.shuffle(seeds).headOption match {
             case Some(uri) => peerManager.outgoing.store.add(uri)
             case _ => F.unit
@@ -72,6 +72,7 @@ final class SyncClient[F[_]](
           localStatus <- peerManager.outgoing.localStatus
           message = Request.binary[F, Status](Status.name, localStatus.encoded)
           _ <- peerManager.distribute(PeerSelector.randomSelectSqrt(10), message)
+          _ <- requestStatus()
         }yield ()
       }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
         .handleErrorWith(e => Stream.eval(log.e("SyncClient-status has an failure", e)))
@@ -101,6 +102,33 @@ final class SyncClient[F[_]](
       imported <- handleBlockHeaders(peer, start, headers)
     } yield imported
   }
+
+  def requestStatus(): F[Unit] =
+    for {
+      peers <- peerManager.outgoing.connected.get
+      seeds <- peerManager.outgoing.seedConnects
+      _ <- Random.shuffle(seeds).headOption match {
+        case Some(seed) if peers.get(seed).isDefined => {
+          peers.get(seed) match {
+            case Some(peer) => mkClient(peer._1).use{ client =>
+              for {
+                _ <- log.i(s"requestStatus from ${peer}")
+                status <- client.block.getStatus
+                _ <- log.i(s"requestStatus response ${status} from ${peer}")
+                localStatus <- peerManager.outgoing.localStatus
+                _ <- if (!localStatus.isCompatible(status)) {
+                  log.warn(s"peer incompatible")
+                }else{
+                  peer._1.markStatus(status)
+                }
+              }yield ()
+            }
+            case _ => F.unit
+          }
+        }
+        case _ => F.unit
+      }
+    }yield ()
 
   private def handleBlockHeaders(peer: Peer[F], startNumber: N, headers: List[BlockHeader]): F[List[Block]] =
     if (headers.isEmpty) {
