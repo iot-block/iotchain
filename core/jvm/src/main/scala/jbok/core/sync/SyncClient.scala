@@ -60,7 +60,9 @@ final class SyncClient[F[_]](
             case _ => F.unit
           }
         }yield ()
-      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval)).repeat
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
+        .handleErrorWith(e => Stream.eval(log.e("SyncClient-seedConnect has an failure", e)))
+        .repeat
 
   val heartBeatStream: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(1.minutes) ++
@@ -71,7 +73,9 @@ final class SyncClient[F[_]](
           message = Request.binary[F, Status](Status.name, localStatus.encoded)
           _ <- peerManager.distribute(PeerSelector.randomSelectSqrt(10), message)
         }yield ()
-      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval)).repeat
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
+        .handleErrorWith(e => Stream.eval(log.e("SyncClient-status has an failure", e)))
+        .repeat
 
   val stream: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient")) ++
@@ -83,6 +87,7 @@ final class SyncClient[F[_]](
           case NodeStatus.Done                => Stream.sleep_(syncConfig.checkInterval)
           case syncing: NodeStatus.Syncing[F] => Stream.eval_(requestHeaders(syncing.peer)).flatMap(Stream.emits)
         }
+        .handleErrorWith(e => Stream.eval(log.e("SyncClient has an failure", e)))
         .repeat
 
   def mkClient(peer: Peer[F]): Resource[F, JbokClient[F]] =
