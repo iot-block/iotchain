@@ -26,9 +26,19 @@ final class PeerManager[F[_]](
 
   val connected: F[List[Peer[F]]] =
     for {
-      in  <- incoming.connected.get
-      out <- outgoing.connected.get
+      in  <- incoming.connected.get.map(_.map(kv => (kv._1.uri -> kv._2)))
+      out <- outgoing.connected.get.map(_.map(kv => (kv._1.uri -> kv._2)))
     } yield (in ++ out).values.map(_._1).toList
+
+  val seedConnected: F[List[Peer[F]]] =
+    for {
+      in <- incoming.connected.get
+      inSeeds <- incoming.seedConnects
+      out <- outgoing.connected.get
+      outSeeds <- outgoing.seedConnects
+      inPeers = in.filter(peer => inSeeds.contains(peer._1))
+      outPeers = out.filter(peer => outSeeds.contains(peer._1))
+    } yield (inPeers ++ outPeers).values.map(_._1).toList
 
   def distribute(selector: PeerSelector[F], message: Message[F]): F[Unit] =
     for {

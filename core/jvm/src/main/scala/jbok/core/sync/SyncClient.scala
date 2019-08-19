@@ -35,10 +35,11 @@ final class SyncClient[F[_]](
   private[this] val log = Logger[F]
 
   def checkStatus: F[NodeStatus] =
-    peerManager.connected.flatMap {
+    peerManager.seedConnected.flatMap {
       case xs if xs.length < peerConfig.minPeers => F.pure(NodeStatus.WaitForPeers(xs.length, peerConfig.minPeers))
       case xs if xs.length >= peerConfig.minPeers =>
         for {
+          _ <- log.i(s"checkStatus:$xs")
           current <- history.getBestBlockNumber
           td      <- history.getTotalDifficultyByNumber(current).map(_.getOrElse(N(0)))
           peerOpt <- PeerSelector.bestPeer[F](td).run(xs).map(_.headOption)
@@ -49,12 +50,14 @@ final class SyncClient[F[_]](
         } yield status
     }
 
+
   val checkSeedConnect: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient-seedConnect")) ++ Stream.sleep_(1.minutes) ++
       Stream.eval{
         for {
           _ <- log.i(s"check seed connect")
           seeds <- peerManager.outgoing.seedDisconnects
+          _ <- log.i(s"seedDisconnects:$seeds")
           _ <- Random.shuffle(seeds).headOption match {
             case Some(uri) => peerManager.outgoing.store.add(uri)
             case _ => F.unit
@@ -64,15 +67,25 @@ final class SyncClient[F[_]](
         .handleErrorWith(e => Stream.eval(log.e("SyncClient-seedConnect has an failure", e)))
         .repeat
 
-  val heartBeatStream: Stream[F, Unit] =
-    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(1.minutes) ++
+  val statusStream: Stream[F, Unit] =
+    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(3.minutes) ++
       Stream.eval{
         for {
-          _ <- log.i(s"sync status")
+          _ <- log.i(s"request status")
+          _ <- requestStatus()
+        }yield ()
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
+        .handleErrorWith(e => Stream.eval(log.e("SyncClient-requestStatus has an failure", e)))
+        .repeat
+
+  val heartBeatStream: Stream[F, Unit] =
+    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(2.minutes) ++
+      Stream.eval{
+        for {
+          _ <- log.i(s"distribute status")
           localStatus <- peerManager.outgoing.localStatus
           message = Request.binary[F, Status](Status.name, localStatus.encoded)
           _ <- peerManager.distribute(PeerSelector.randomSelectSqrt(10), message)
-          _ <- requestStatus()
         }yield ()
       }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
         .handleErrorWith(e => Stream.eval(log.e("SyncClient-status has an failure", e)))

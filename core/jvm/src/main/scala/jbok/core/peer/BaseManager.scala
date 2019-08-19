@@ -54,4 +54,8 @@ abstract class BaseManager[F[_]](config: FullConfig, history: History[F])(implic
         Peer[F](PeerUri.fromTcpAddr(remote), remoteStatus)
       }
     } yield peer
+
+  val seedDisconnects: F[List[PeerUri]] = config.peer.seedUris.filterA(uri => isConnected(uri).map(b => !b))
+
+  val seedConnects: F[List[PeerUri]] = config.peer.seedUris.filterA(uri => isConnected(uri))
 }

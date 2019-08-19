@@ -72,9 +72,10 @@ final class BlockMiner[F[_]](
         Stream
           .eval(status.get)
           .flatMap {
-            case NodeStatus.Done => Stream.eval_(mine())
-            case _               => Stream.sleep_(5.seconds)
+            case NodeStatus.Done => Stream.eval_(log.i(s"mine")) ++ Stream.eval_(mine())
+            case s               => Stream.eval_(log.i(s"miner sleep, status = $s")) ++ Stream.sleep_(5.seconds)
           }
+          .handleErrorWith(e => Stream.eval(log.e("miner has an failure", e)))
           .repeat
     } else {
       Stream.empty
