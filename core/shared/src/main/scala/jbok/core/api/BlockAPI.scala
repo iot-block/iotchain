@@ -1,12 +1,15 @@
 package jbok.core.api
 
 import jbok.common.math.N
+import jbok.core.messages.Status
 import jbok.core.models.{Block, BlockBody, BlockHeader}
 import jbok.network.rpc.PathName
 import scodec.bits.ByteVector
 
 @PathName("block")
 trait BlockAPI[F[_]] {
+  def getStatus: F[Status]
+
   def getBestBlockNumber: F[N]
 
   def getBlockHeaderByNumber(number: N): F[Option[BlockHeader]]

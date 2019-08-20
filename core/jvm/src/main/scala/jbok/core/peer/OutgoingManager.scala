@@ -62,8 +62,6 @@ final class OutgoingManager[F[_]](config: FullConfig, history: History[F], ssl: 
         Stream.eval(log.error(s"connect ${peerUri.address} error",e)) ++ Stream.sleep(15.seconds) ++ connect(peerUri)
       })
 
-  def seedConnects: F[List[PeerUri]] = config.peer.seedUris.filterA(uri => isConnected(uri).map(b => !b))
-
   val connects: Stream[F, Unit] =
     Stream.eval(store.add(config.peer.seedUris: _*)) ++
       store.subscribe

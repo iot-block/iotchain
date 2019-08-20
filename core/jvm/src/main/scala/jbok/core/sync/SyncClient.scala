@@ -35,10 +35,11 @@ final class SyncClient[F[_]](
   private[this] val log = Logger[F]
 
   def checkStatus: F[NodeStatus] =
-    peerManager.connected.flatMap {
+    peerManager.seedConnected.flatMap {
       case xs if xs.length < peerConfig.minPeers => F.pure(NodeStatus.WaitForPeers(xs.length, peerConfig.minPeers))
       case xs if xs.length >= peerConfig.minPeers =>
         for {
+          _ <- log.i(s"checkStatus:$xs")
           current <- history.getBestBlockNumber
           td      <- history.getTotalDifficultyByNumber(current).map(_.getOrElse(N(0)))
           peerOpt <- PeerSelector.bestPeer[F](td).run(xs).map(_.headOption)
@@ -49,29 +50,46 @@ final class SyncClient[F[_]](
         } yield status
     }
 
+
   val checkSeedConnect: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient-seedConnect")) ++ Stream.sleep_(1.minutes) ++
       Stream.eval{
         for {
           _ <- log.i(s"check seed connect")
-          seeds <- peerManager.outgoing.seedConnects
+          seeds <- peerManager.outgoing.seedDisconnects
+          _ <- log.i(s"seedDisconnects:$seeds")
           _ <- Random.shuffle(seeds).headOption match {
             case Some(uri) => peerManager.outgoing.store.add(uri)
             case _ => F.unit
           }
         }yield ()
-      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval)).repeat
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
+        .handleErrorWith(e => Stream.eval(log.e("SyncClient-seedConnect has an failure", e)))
+        .repeat
 
-  val heartBeatStream: Stream[F, Unit] =
-    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(1.minutes) ++
+  val statusStream: Stream[F, Unit] =
+    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(3.minutes) ++
       Stream.eval{
         for {
-          _ <- log.i(s"sync status")
+          _ <- log.i(s"request status")
+          _ <- requestStatus()
+        }yield ()
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
+        .handleErrorWith(e => Stream.eval(log.e("SyncClient-requestStatus has an failure", e)))
+        .repeat
+
+  val heartBeatStream: Stream[F, Unit] =
+    Stream.eval_(log.i(s"starting Core/SyncClient-status")) ++ Stream.sleep_(2.minutes) ++
+      Stream.eval{
+        for {
+          _ <- log.i(s"distribute status")
           localStatus <- peerManager.outgoing.localStatus
           message = Request.binary[F, Status](Status.name, localStatus.encoded)
           _ <- peerManager.distribute(PeerSelector.randomSelectSqrt(10), message)
         }yield ()
-      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval)).repeat
+      }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
+        .handleErrorWith(e => Stream.eval(log.e("SyncClient-status has an failure", e)))
+        .repeat
 
   val stream: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/SyncClient")) ++
@@ -83,6 +101,7 @@ final class SyncClient[F[_]](
           case NodeStatus.Done                => Stream.sleep_(syncConfig.checkInterval)
           case syncing: NodeStatus.Syncing[F] => Stream.eval_(requestHeaders(syncing.peer)).flatMap(Stream.emits)
         }
+        .handleErrorWith(e => Stream.eval(log.e("SyncClient has an failure", e)))
         .repeat
 
   def mkClient(peer: Peer[F]): Resource[F, JbokClient[F]] =
@@ -96,6 +115,33 @@ final class SyncClient[F[_]](
       imported <- handleBlockHeaders(peer, start, headers)
     } yield imported
   }
+
+  def requestStatus(): F[Unit] =
+    for {
+      peers <- peerManager.outgoing.connected.get
+      seeds <- peerManager.outgoing.seedConnects
+      _ <- Random.shuffle(seeds).headOption match {
+        case Some(seed) if peers.get(seed).isDefined => {
+          peers.get(seed) match {
+            case Some(peer) => mkClient(peer._1).use{ client =>
+              for {
+                _ <- log.i(s"requestStatus from ${peer}")
+                status <- client.block.getStatus
+                _ <- log.i(s"requestStatus response ${status} from ${peer}")
+                localStatus <- peerManager.outgoing.localStatus
+                _ <- if (!localStatus.isCompatible(status)) {
+                  log.warn(s"peer incompatible")
+                }else{
+                  peer._1.markStatus(status)
+                }
+              }yield ()
+            }
+            case _ => F.unit
+          }
+        }
+        case _ => F.unit
+      }
+    }yield ()
 
   private def handleBlockHeaders(peer: Peer[F], startNumber: N, headers: List[BlockHeader]): F[List[Block]] =
     if (headers.isEmpty) {
