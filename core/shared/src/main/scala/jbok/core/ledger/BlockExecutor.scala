@@ -23,6 +23,7 @@ import scodec.bits.ByteVector
 import jbok.common.log.Logger
 import jbok.common.math.N
 import jbok.common.math.implicits._
+import jbok.core.validators.TxInvalid.TxNonceTooHigh
 
 import scala.concurrent.duration._
 
@@ -52,9 +53,12 @@ final class BlockExecutor[F[_]](
 
   def handleMinedBlock(mined: MinedBlock): F[List[Block]] =
     for {
+      _      <- log.i(s"handleMinedBlock:${mined.block.tag}")
       blocks <- importBlock(mined.block)
+      _      <- log.i(s"${mined.block.tag} is imported")
       messages = blocks.map(mkBroadcast)
       _ <- messages.traverse { case (selector, block) => outbound.produce(selector, block) }
+      _      <- log.i(s"handleMinedBlock:${mined.block.tag} end")
     } yield blocks
 
   def mkBroadcast(block: Block) =
@@ -199,7 +203,11 @@ final class BlockExecutor[F[_]](
               (if (shortCircuit) {
                  F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
                } else {
-                 txPool.removeTransactions(stx :: Nil) >>
+                 val removeTxIfNeed = e match {
+                   case nonceTooHigh: TxNonceTooHigh => F.unit
+                   case _ => txPool.removeTransactions(stx :: Nil)
+                 }
+                removeTxIfNeed >>
                    executeTransactions(
                      tail,
                      header,

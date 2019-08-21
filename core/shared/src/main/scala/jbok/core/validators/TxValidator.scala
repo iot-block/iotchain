@@ -12,6 +12,10 @@ import jbok.common.math.implicits._
 object TxInvalid {
   final case object TxSignatureInvalid             extends Exception("SignedTransactionInvalid")
   final case class TxSyntaxInvalid(reason: String) extends Exception(s"TransactionSyntaxInvalid: ${reason}")
+  final case class TxNonceTooHigh(txNonce: UInt256, senderNonce: UInt256)
+      extends Exception(
+        s"TxNonceTooHigh(got tx nonce $txNonce but sender nonce in mpt is: $senderNonce)"
+      )
   final case class TxNonceInvalid(txNonce: UInt256, senderNonce: UInt256)
       extends Exception(
         s"TxNonceInvalid(got tx nonce $txNonce but sender nonce in mpt is: $senderNonce)"
@@ -56,6 +60,7 @@ final class TxValidator[F[_]](historyConfig: HistoryConfig)(implicit F: Sync[F],
     */
   private def validateNonce(nonce: N, senderNonce: UInt256): F[Unit] =
     if (senderNonce == UInt256(nonce)) F.unit
+    else if (senderNonce < UInt256(nonce)) F.raiseError(TxNonceTooHigh(UInt256(nonce), senderNonce))
     else F.raiseError(TxNonceInvalid(UInt256(nonce), senderNonce))
 
   /**

@@ -46,6 +46,7 @@ final class PeerManager[F[_]](
       selected <- selector.run(peers)
       _        <- log.i(s"broadcasting ${message} to ${selected.map(_.uri).mkString(",")} peers")
       _        <- selected.traverse(_.queue.enqueue1(message))
+      _        <- log.i(s"broadcasting ${message} end")
     } yield ()
 
   def close(uri: PeerUri): F[Unit] =
