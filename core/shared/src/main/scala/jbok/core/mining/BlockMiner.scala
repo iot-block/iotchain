@@ -58,9 +58,13 @@ final class BlockMiner[F[_]](
   ): F[MinedBlock] =
     for {
       prepared <- prepare(parentOpt, stxsOpt)
+      _        <- log.i(s"${prepared.block.tag} is prepared")
       executed <- execute(prepared)
+      _        <- log.i(s"${executed.block.tag} is executed")
       mined    <- consensus.mine(executed)
+      _        <- log.i(s"${mined.block.tag} is mined")
       _        <- submit(mined)
+      _        <- log.i(s"${mined.block.tag} is submitted")
     } yield mined
 
   def mineN(n: Int): F[List[MinedBlock]] =
@@ -69,14 +73,17 @@ final class BlockMiner[F[_]](
   val stream: Stream[F, Unit] =
     if (config.enabled) {
       Stream.eval_(log.i(s"starting Core/BlockMiner")) ++
-        Stream
-          .eval(status.get)
-          .flatMap {
-            case NodeStatus.Done => Stream.eval_(log.i(s"mine")) ++ Stream.eval_(mine())
-            case s               => Stream.eval_(log.i(s"miner sleep, status = $s")) ++ Stream.sleep_(5.seconds)
-          }
-          .handleErrorWith(e => Stream.eval(log.e("miner has an failure", e)))
-          .repeat
+        (
+          Stream.eval_(log.i(s"minerStream start")) ++
+          Stream
+            .eval(status.get)
+            .flatMap {
+              case NodeStatus.Done => Stream.eval_(log.i(s"mine")) ++ Stream.eval_(mine())
+              case s               => Stream.eval_(log.i(s"miner sleep, status = $s")) ++ Stream.sleep_(5.seconds)
+            }
+            .handleErrorWith(e => Stream.eval(log.e("miner has an failure", e))) ++
+          Stream.eval_(log.i(s"minerStream end"))
+        ).repeat
     } else {
       Stream.empty
     }

@@ -38,7 +38,6 @@ class PeerMessageHandler[F[_]](
     txInbound.produce(peer, stxs)
 
   def onStatus(peer: Peer[F], remoteStatus: Status):F[Unit] =
-//    statusInbound.produce(peer, remoteStatus)
     for {
       localStatus <- peerManager.outgoing.localStatus
       _ <- if (!localStatus.isCompatible(remoteStatus)) {

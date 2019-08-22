@@ -65,6 +65,7 @@ class TxValidatorSpec extends CoreSpec {
           .attempt
           .unsafeRunSync()
         if (nonce > TxValidator.maxNonceValue) result.left.get shouldBe a[TxSyntaxInvalid]
+        else if (UInt256(nonce) > senderAccount.nonce) result.left.get shouldBe a[TxNonceTooHigh]
         else result.left.get shouldBe a[TxNonceInvalid]
       }
     }
@@ -120,6 +121,7 @@ class TxValidatorSpec extends CoreSpec {
           .attempt
           .unsafeRunSync()
         if (nonce == tx.nonce) result shouldBe Right(())
+        else if (UInt256(nonce) > senderAccount.nonce) result.left.get shouldBe a[TxNonceTooHigh]
         else result.left.get shouldBe a[TxNonceInvalid]
       }
     }

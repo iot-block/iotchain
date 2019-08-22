@@ -86,6 +86,7 @@ final class SyncClient[F[_]](
           localStatus <- peerManager.outgoing.localStatus
           message = Request.binary[F, Status](Status.name, localStatus.encoded)
           _ <- peerManager.distribute(PeerSelector.randomSelectSqrt(10), message)
+          _ <- log.i(s"distribute status end")
         }yield ()
       }.flatMap(_ => Stream.sleep_(syncConfig.keepaliveInterval))
         .handleErrorWith(e => Stream.eval(log.e("SyncClient-status has an failure", e)))
