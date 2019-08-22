@@ -59,8 +59,8 @@ class TransactionAPISpec extends AppSpec {
         _   <- miner.mine()
         res <- transaction.getTx(stx.hash)
         _ = res shouldBe None
-        res <- transaction.getPendingTx(stx.hash)
-        _ = res shouldBe None
+        res <- transaction.getPendingTx(stx.hash).map(_.isEmpty)
+        _ = res shouldBe false
         res <- transaction.getReceipt(stx.hash).map(_.isEmpty)
         _ = res shouldBe true
       } yield ()
