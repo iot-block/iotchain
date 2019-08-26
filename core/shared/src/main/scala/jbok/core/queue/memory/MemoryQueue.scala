@@ -19,5 +19,5 @@ final class MemoryQueue[F[_], K, V](queue: Fs2Queue[F, (K, V)]) extends Queue[F,
 
 object MemoryQueue {
   def apply[F[_], K, V](implicit F: Concurrent[F]): F[Queue[F, K, V]] =
-    Fs2Queue.fairUnbounded[F, (K, V)](10000).map(queue => new MemoryQueue(queue))
+    Fs2Queue.circularBuffer[F, (K, V)](10000).map(queue => new MemoryQueue(queue))
 }
