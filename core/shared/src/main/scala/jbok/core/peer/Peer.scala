@@ -43,7 +43,7 @@ object Peer {
 
   def apply[F[_]: Concurrent](uri: PeerUri, status: Status): F[Peer[F]] =
     for {
-      queue       <- Queue.bounded[F, Message[F]](10)
+      queue       <- Queue.circularBuffer[F, Message[F]](40)
       status      <- Ref.of[F, Status](status)
       knownBlocks <- Ref.of[F, Set[ByteVector]](Set.empty)
       knownTxs    <- Ref.of[F, Set[ByteVector]](Set.empty)

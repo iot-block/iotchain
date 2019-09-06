@@ -30,7 +30,7 @@ final class PeerStore[F[_]](store: SingleColumnKVStore[F, String, PeerUri], queu
 object PeerStore {
   def apply[F[_]](db: KVStore[F])(implicit F: Concurrent[F]): F[PeerStore[F]] =
     for {
-      queue <- Queue.bounded[F, PeerUri](100)
+      queue <- Queue.circularBuffer[F, PeerUri](1000)
       store = SingleColumnKVStore[F, String, PeerUri](ColumnFamilies.Peer, db)
     } yield new PeerStore[F](store, queue)
 }
