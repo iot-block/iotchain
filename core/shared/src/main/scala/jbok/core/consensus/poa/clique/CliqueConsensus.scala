@@ -42,7 +42,7 @@ final class CliqueConsensus[F[_]](config: MiningConfig, history: History[F], cli
       } else {
         val header = BlockHeader(
           parentHash = parent.header.hash,
-          beneficiary = ByteVector.empty,
+          beneficiary = config.coinbase.bytes,
           stateRoot = ByteVector.empty,
           transactionsRoot = ByteVector.empty,
           receiptsRoot = ByteVector.empty,
