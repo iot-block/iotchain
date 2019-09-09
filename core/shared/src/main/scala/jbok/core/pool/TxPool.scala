@@ -45,7 +45,7 @@ final class TxPool[F[_]](
         senderAccount <- world.getAccountOpt(senderAddress).getOrElse(Account.empty(UInt256.zero))
         nonceValid = tx.nonce+20 >= senderAccount.nonce
           _ <- if (!nonceValid){
-          log.d(s"ignore past transaction ${tx}, accountNonce is ${senderAccount.nonce}, but txNonce is ${tx.nonce}, nonce must be greater than ${senderAccount.nonce-20}")
+          log.i(s"ignore past transaction ${tx}, accountNonce is ${senderAccount.nonce}, but txNonce is ${tx.nonce}, nonce must be greater than ${senderAccount.nonce-20}")
         }else {
           F.unit
         }
