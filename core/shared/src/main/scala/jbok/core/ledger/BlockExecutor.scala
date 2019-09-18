@@ -23,7 +23,7 @@ import scodec.bits.ByteVector
 import jbok.common.log.Logger
 import jbok.common.math.N
 import jbok.common.math.implicits._
-import jbok.core.validators.TxInvalid.TxNonceTooHigh
+import jbok.core.validators.TxInvalid.{TxNonceTooHigh, TxSenderCantPayUpfrontCostInvalid}
 
 import scala.concurrent.duration._
 
@@ -204,7 +204,8 @@ final class BlockExecutor[F[_]](
                  F.raiseError[(BlockExecResult[F], List[SignedTransaction])](e)
                } else {
                  val removeTxIfNeed = e match {
-                   case nonceTooHigh: TxNonceTooHigh => F.unit
+                   case _: TxNonceTooHigh => F.unit
+                   case _: TxSenderCantPayUpfrontCostInvalid => F.unit
                    case _ => txPool.removeTransactions(stx :: Nil)
                  }
                 removeTxIfNeed >>

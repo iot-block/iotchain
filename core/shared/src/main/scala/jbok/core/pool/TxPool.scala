@@ -32,7 +32,7 @@ final class TxPool[F[_]](
 
   def addTransactions(stxs: SignedTransactions, notify: Boolean = false): F[Unit] =
     for {
-      _       <- log.debug(s"add ${stxs.txs.length} txs")
+      _       <- log.d(s"add ${stxs.txs.length} txs, ${stxs}")
       current <- T.clock.realTime(MILLISECONDS)
       parentStateRoot <- history.getBestBlockHeader.map(_.stateRoot)
       world <- history.getWorldState(
@@ -43,9 +43,9 @@ final class TxPool[F[_]](
       filteredTxs <- stxs.txs.filterA(tx => for {
         senderAddress <- tx.getSenderOrThrow[F]
         senderAccount <- world.getAccountOpt(senderAddress).getOrElse(Account.empty(UInt256.zero))
-        nonceValid = tx.nonce+20 >= senderAccount.nonce
+        nonceValid = tx.nonce+1 >= senderAccount.nonce
           _ <- if (!nonceValid){
-          log.i(s"ignore past transaction ${tx}, accountNonce is ${senderAccount.nonce}, but txNonce is ${tx.nonce}, nonce must be greater than ${senderAccount.nonce-20}")
+          log.d(s"ignore past transaction ${tx}, accountNonce is ${senderAccount.nonce}, but txNonce is ${tx.nonce}, nonce must be greater than ${senderAccount.nonce-1}")
         }else {
           F.unit
         }
@@ -64,7 +64,10 @@ final class TxPool[F[_]](
     } yield ()
 
   def receiveTransactions(peer: Peer[F], stxs: SignedTransactions): F[Unit] =
-    peer.markTxs(stxs) >> addTransactions(stxs, notify = true)
+    for {
+      _ <- log.d(s"receiveTransactions ${stxs} from ${peer}")
+      _ <- peer.markTxs(stxs) >> addTransactions(stxs, notify = true)
+    }yield()
 
   def reAddTransactions(stxs: SignedTransactions): F[Unit] =
     addTransactions(stxs, notify = false)
@@ -85,7 +88,7 @@ final class TxPool[F[_]](
           updated.toArray.sortBy(-_._2).take(config.poolSize).toMap
         }
       }
-      _ <- broadcast(SignedTransactions(newStx :: Nil))
+      _ <- broadcastToAll(SignedTransactions(newStx :: Nil))
     } yield ()
 
   def removeTransactions(signedTransactions: List[SignedTransaction]): F[Unit] =
@@ -105,8 +108,12 @@ final class TxPool[F[_]](
       }
     } yield alive
 
+  def broadcastToAll(stxs: SignedTransactions): F[Unit] =
+    outbound.produce(PeerSelector.all, stxs)
+
   def broadcast(stxs: SignedTransactions): F[Unit] =
-    outbound.produce(PeerSelector.withoutTxs(stxs), stxs)
+    if (stxs.txs.nonEmpty) outbound.produce(PeerSelector.withoutTxs(stxs), stxs)
+    else F.unit
 
   val stream: Stream[F, Unit] =
     Stream.eval_(log.i(s"starting Core/TxPool")) ++
