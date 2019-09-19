@@ -10,7 +10,7 @@ import jbok.common.math.N
 import jbok.core.NodeStatus
 import jbok.core.config.MiningConfig
 import jbok.core.consensus.Consensus
-import jbok.core.ledger.BlockExecutor
+import jbok.core.ledger.{BlockExecutor, History}
 import jbok.core.ledger.TypedBlock._
 import jbok.core.models.{SignedTransaction, _}
 import jbok.core.pool.TxPool
@@ -32,7 +32,8 @@ final class BlockMiner[F[_]](
     consensus: Consensus[F],
     executor: BlockExecutor[F],
     txPool: TxPool[F],
-    status: Ref[F, NodeStatus]
+    status: Ref[F, NodeStatus],
+    history: History[F]
 )(implicit F: ConcurrentEffect[F], T: Timer[F]) {
   private[this] val log = Logger[F]
 
@@ -91,38 +92,88 @@ final class BlockMiner[F[_]](
   /////////////////////////////////////
   /////////////////////////////////////
 
-  private[jbok] def prepareTransactions(stxs: List[SignedTransaction], blockGasLimit: N): F[List[SignedTransaction]] = {
-    val sortedByPrice = stxs
-      .groupBy(_.senderAddress.getOrElse(Address.empty))
-      .values
-      .toList
-      .flatMap { txsFromSender =>
-        val ordered = txsFromSender
-          .sortBy(-_.gasPrice)
-          .sortBy(_.nonce)
-          .foldLeft(List.empty[SignedTransaction]) {
-            case (acc, tx) =>
-              if (acc.exists(_.nonce == tx.nonce)) {
-                acc
-              } else {
-                acc :+ tx
-              }
+  private[jbok] def filterNonceInvalid(stxs: List[SignedTransaction]): F[List[SignedTransaction]] =
+    for {
+      parentStateRoot <- history.getBestBlockHeader.map(_.stateRoot)
+      world <- history.getWorldState(
+        UInt256.zero,
+        Some(parentStateRoot),
+        false
+      )
+      groupTxs = stxs
+        .sortBy(_.nonce)
+        .groupBy(_.senderAddress.getOrElse(Address.empty))
+      accountNonces = groupTxs.map{
+          case (senderAddress, _) => (senderAddress,world.getAccountOpt(senderAddress).getOrElse(Account.empty(UInt256.zero)).map(_.nonce))
+        }
+      refPoolNonces <- Ref.of(groupTxs.map{
+        case (senderAddress, txs) => (senderAddress,txs.map(_.nonce))
+      })
+      filteredStxs <- stxs.filterA(tx => for {
+        senderAddress <- F.pure(tx.senderAddress.getOrElse(Address.empty))
+        senderNonce <- accountNonces.get(senderAddress) match {
+          case Some(nonce) => nonce
+          case None => F.pure(UInt256.zero)
+        }
+        senderNonceMatch = senderNonce==tx.nonce
+        (poolContainPreNonce,filteredNonces) <- refPoolNonces.get.map(_.get(senderAddress) match {
+          case Some(nonces) => {
+            val contain = nonces.contains(tx.nonce-1)
+            if (!contain && !senderNonceMatch){
+              val filteredNonces = nonces.filter(n => n<tx.nonce)
+              (contain,filteredNonces)
+            }else{
+              (contain,nonces)
+            }
           }
-          .takeWhile(_.gasLimit <= blockGasLimit)
-        ordered.headOption.map(_.gasPrice -> ordered)
-      }
-      .sortBy { case (gasPrice, _) => -gasPrice }
-      .flatMap { case (_, txs) => txs }
+          case None => (false,List.empty)
+        })
+        _ <- if (!poolContainPreNonce && !senderNonceMatch){
+          refPoolNonces.update(_ + (senderAddress -> filteredNonces))
+        }else F.unit
+        nonceMatch = senderNonceMatch || poolContainPreNonce
+      }yield nonceMatch)
 
-    val transactionsForBlock = sortedByPrice
-      .scanLeft((N(0), None: Option[SignedTransaction])) {
-        case ((accGas, _), stx) => (accGas + stx.gasLimit, Some(stx))
-      }
-      .collect { case (gas, Some(stx)) => (gas, stx) }
-      .takeWhile { case (gas, _) => gas <= blockGasLimit }
-      .map { case (_, stx) => stx }
+    }yield filteredStxs
 
-    log.trace(s"prepare transaction, truncated: ${transactionsForBlock.length}").as(transactionsForBlock)
+  private[jbok] def prepareTransactions(stxs: List[SignedTransaction], blockGasLimit: N): F[List[SignedTransaction]] = {
+    for {
+      _ <- log.d(s"prepareTransactions")
+      sortedByPrice = stxs
+        .groupBy(_.senderAddress.getOrElse(Address.empty))
+        .values
+        .toList
+        .flatMap { txsFromSender =>
+          val txNonces = txsFromSender.map(_.nonce)
+          val ordered = txsFromSender
+            .sortBy(-_.gasPrice)
+            .sortBy(_.nonce)
+            .foldLeft(List.empty[SignedTransaction]) {
+              case (acc, tx) =>
+                if (acc.exists(_.nonce == tx.nonce)) {
+                  acc
+                } else {
+                  acc :+ tx
+                }
+            }
+            .takeWhile(_.gasLimit <= blockGasLimit)
+          ordered.headOption.map(_.gasPrice -> ordered)
+        }
+        .sortBy { case (gasPrice, _) => -gasPrice }
+        .flatMap { case (_, txs) => txs }
+
+      _ <- log.d(s"sortedByPrice: ${sortedByPrice}")
+      filteredStxs <- filterNonceInvalid(sortedByPrice)
+      _ <- log.d(s"filteredStxs: ${filteredStxs}")
+
+      transactionsForBlock = filteredStxs
+        .scanLeft((N(0), None: Option[SignedTransaction])) {
+          case ((accGas, _), stx) => (accGas + stx.gasLimit, Some(stx))
+        }
+        .collect { case (gas, Some(stx)) => (gas, stx) }
+        .takeWhile { case (gas, _) => gas <= blockGasLimit }
+        .map { case (_, stx) => stx }
+    }yield transactionsForBlock
   }
 
   private[jbok] def calcMerkleRoot[V: RlpCodec](entities: List[V]): F[ByteVector] =

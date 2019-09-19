@@ -8,6 +8,7 @@ import jbok.core.messages.{SignedTransactions, Status}
 import jbok.network.Message
 import scodec.bits.ByteVector
 import jbok.codec.rlp.implicits._
+import jbok.common.log.Logger
 import jbok.common.math.N
 import jbok.crypto._
 
@@ -19,6 +20,8 @@ final case class Peer[F[_]](
     knownTxs: Ref[F, Set[ByteVector]]
 )(implicit F: Sync[F]) {
   import Peer._
+
+  private[this] val log = Logger[F]
 
   def hasBlock(blockHash: ByteVector): F[Boolean] =
     knownBlocks.get.map(_.contains(blockHash))
@@ -43,7 +46,7 @@ object Peer {
 
   def apply[F[_]: Concurrent](uri: PeerUri, status: Status): F[Peer[F]] =
     for {
-      queue       <- Queue.circularBuffer[F, Message[F]](40)
+      queue       <- Queue.circularBuffer[F, Message[F]](100000)
       status      <- Ref.of[F, Status](status)
       knownBlocks <- Ref.of[F, Set[ByteVector]](Set.empty)
       knownTxs    <- Ref.of[F, Set[ByteVector]](Set.empty)

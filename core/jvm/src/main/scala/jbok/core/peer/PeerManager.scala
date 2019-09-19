@@ -4,11 +4,11 @@ import cats.effect._
 import cats.implicits._
 import fs2._
 import jbok.common.log.Logger
-import jbok.core.messages.Status
+import jbok.core.messages.{SignedTransactions, Status}
 import jbok.core.models.Block
 import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.core.queue.Producer
-import jbok.network.Message
+import jbok.network.{Message, Request}
 
 final class PeerManager[F[_]](
     val incoming: IncomingManager[F],
@@ -44,9 +44,18 @@ final class PeerManager[F[_]](
     for {
       peers    <- connected
       selected <- selector.run(peers)
-      _        <- log.d(s"broadcasting ${message} to ${selected.map(_.uri).mkString(",")} peers")
       _        <- selected.traverse(_.queue.enqueue1(message))
-      _        <- log.d(s"broadcasting ${message} end")
+      _ <- if(selected.length>0){
+        message match {
+          case Request(_, SignedTransactions.name, _, _) =>
+            for {
+              stxs <- message.as[SignedTransactions]
+              _ <- selected.traverse(_.markTxs(stxs))
+              _ <- log.d(s"distribute ${stxs} to ${selected} end")
+            }yield()
+          case _ => F.unit
+        }
+      }else F.unit
     } yield ()
 
   def close(uri: PeerUri): F[Unit] =
