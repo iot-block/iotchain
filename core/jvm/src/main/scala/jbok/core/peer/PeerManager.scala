@@ -4,7 +4,7 @@ import cats.effect._
 import cats.implicits._
 import fs2._
 import jbok.common.log.Logger
-import jbok.core.messages.{SignedTransactions, Status}
+import jbok.core.messages.{NewBlock, SignedTransactions, Status}
 import jbok.core.models.Block
 import jbok.core.peer.PeerSelector.PeerSelector
 import jbok.core.queue.Producer
@@ -53,6 +53,12 @@ final class PeerManager[F[_]](
               _ <- selected.traverse(_.markTxs(stxs))
               _ <- log.d(s"distribute ${stxs} to ${selected} end")
             }yield()
+          case Request(_, NewBlock.name, _, _) =>
+            for {
+              newBlock <- message.as[NewBlock]
+              blockHeader = newBlock.block.header
+              _ <- selected.traverse(_.markBlock(blockHeader.hash,blockHeader.number))
+            }yield ()
           case _ => F.unit
         }
       }else F.unit
