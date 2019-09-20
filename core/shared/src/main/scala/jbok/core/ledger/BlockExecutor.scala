@@ -46,6 +46,7 @@ final class BlockExecutor[F[_]](
   def handleReceivedBlock(received: ReceivedBlock[F]): F[List[Block]] =
     for {
       result <- importBlock(received.block)
+      _ <- received.peer.markBlock(received.block.header.hash,received.block.header.number)
     } yield result
 
   def handleSyncBlocks(requested: SyncBlocks[F]): F[List[Block]] =
