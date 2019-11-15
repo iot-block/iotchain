@@ -21,7 +21,7 @@ trait AccountAPI[F[_]] {
 
   def getStorageAt(address: Address, position: N, tag: BlockTag = BlockTag.latest): F[ByteVector]
 
-  def getTransactions(address: Address): F[List[HistoryTransaction]]
+  def getTransactions(address: Address, page: Int, size: Int): F[List[HistoryTransaction]]
 
   def getPendingTxs(address: Address): F[List[SignedTransaction]]
 
