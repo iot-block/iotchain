@@ -1,5 +1,5 @@
 object Versions {
-  val version         = "0.0.1-SNAPSHOT"
+  val version         = "v1.0.4.release"
   val scala212Version = "2.12.6"
   val catsEffect      = "1.3.0"
   val fs2             = "1.0.4"

@@ -57,7 +57,9 @@ lazy val app = crossProject(JSPlatform, JVMPlatform)
       "-J-Xms2g",
       "-J-Xmx4g",
       "-J-XX:+HeapDumpOnOutOfMemoryError"
-    )
+    ),
+    mainClass in assembly := Some("jbok.app.AppMain"),
+    assemblyJarName in assembly := s"iotchain-${Versions.version}.jar"
   )
   .dependsOn(core % CompileAndTest, common % CompileAndTest, sdk % CompileAndTest)
 
