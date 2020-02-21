@@ -29,8 +29,8 @@ peer:
   port: 30314
   seeds:
     - tcp://47.102.121.72:30314
-    - tcp://139.196.160.72:30314
-    - tcp://139.196.160.93:30314
+    - tcp://47.103.148.95:30314
+    - tcp://47.116.16.174:30314
   updatePeersInterval: 10 seconds
   maxOutgoingPeers: 10000
   maxIncomingPeers: 10000
